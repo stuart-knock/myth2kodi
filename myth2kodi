@@ -8,7 +8,7 @@
 #email: adamoutler gmail.com
 #Software the way it should be: Free and Open Source
 #Please contact me with any bug reports 
-#Tech Support: http://xbmc.org/forum/showthread.php?p=470402#post470402
+#Tech Support: http://forum.kodi.tv/showthread.php?pid=470402
 
 #SAK: Modified for me...
  
@@ -95,7 +95,7 @@
 #  depends on "curl", "agrep", "libnotify-bin" and Mythtv Backend for database
 #  access. install curl with:
 #    "apt-get install curl"
-#  curl downloads webpages and sends commands to XBMC. Install agrep with:
+#  curl downloads webpages and sends commands to KODI. Install agrep with:
 #    "apt-get install agrep"
 #  agrep provides fuzzy logic. Optionally, install libnotify-bin with:
 #    "apt-get install libnotify-bin" -allows GNOME desktop notifications
@@ -112,12 +112,12 @@
 #  script should be located in /usr/local/bin. You can get this script here:
 #    https://sourceforge.net/projects/mythicallibrari/files/mythicalLibrarianBeta/librarian-notify-send/download
 #
-#XBMC Notifications:
+#KODI Notifications:
 #   If options are enabled, mythicalLibrarian will send a http requests to a 
-#   specified XBMC Server to display library updates, to update the library and
-#   to clean out the library.  In order for this to work XBMC you must ensure
-#   that the setting in XBMC under System->Network->Services->Allow control of
-#   XBMC via HTTP and Allow programs on other systems to control XBMC are 
+#   specified KODI Server to display library updates, to update the library and
+#   to clean out the library.  In order for this to work KODI you must ensure
+#   that the setting in KODI under System->Network->Services->Allow control of
+#   KODI via HTTP and Allow programs on other systems to control KODI are 
 #   enabled.  
 
 #Show Name Translation:
@@ -180,7 +180,7 @@ Database=Enabled
 DatabaseType=MythTVPythonBindings
 #Guide data type: SchedulesDirect currently covers DataDirect, MC2XML and others.  NoLookup will bypass tvdb scanning
 #Options: SchedulesDirect|NoLookup
-GuideDataType=SchedulesDirect
+GuideDataType=SydFTA
 #The IP address or name of the server for MythTV Database (used in python bindings only)
 DBHostName=192.168.1.42
 #MySQL User name: Default="mythtv"
@@ -218,14 +218,14 @@ DailyReport=Enabled
 Notify=Enabled
 #If notifications are enabled, NotifyUserName should be the same as the user logged into the GNOME Session. (your username)
 NotifyUserName=librarian #<------THIS VALUE MUST BE SET-------
-#Send a notification to XBMC to Update library upon Successful move job Enabled|Disabled
-XBMCUpdate=Enabled
-#Send a notification to XBMC to cleanup the library upon Successful move job Enabled|Disabled
-XBMCClean=Enabled
-#Send Notifications to XBMC UI when library is updated Enabled|Disabled
-XBMCNotify=Enabled
-#Ip Address and port for XBMC Notifications Eg.XBMCIPs=( "192.168.1.110:8080" "192.168.1.111:8080" "XBOX:8080" )
-XBMCIPs=( "192.168.1.42:8080" ) #<------THIS VALUE MUST BE SET-------
+#Send a notification to KODI to Update library upon Successful move job Enabled|Disabled
+KODIUpdate=Enabled
+#Send a notification to KODI to cleanup the library upon Successful move job Enabled|Disabled
+KODIClean=Enabled
+#Send Notifications to KODI UI when library is updated Enabled|Disabled
+KODINotify=Enabled
+#Ip Address and port for KODI Notifications Eg.KODIIPs=( "192.168.1.110:8080" "192.168.1.111:8080" "XBOX:8080" )
+KODIIPs=( "192.168.1.42:8080" ) #<------THIS VALUE MUST BE SET-------
 #maxItems controls the number of items in the RSS. RSS Can be activated by creating a folder in /var/www/mythical-rss.  
 maxItems=8  
 ########################## END USER SETTINGS ###################################
@@ -321,12 +321,12 @@ RunJob(){
 # #Create tracking entry for the file 
 # performLoggingForMoveMode 
 # ####Move the .txt(comskip) and .nfo(Information) files if needed.
-# enable the XBMC communications
-# XBMCUpdate=Enabled
-# XBMCClean=Enabled
-# XBMCNotify=Enabled
-# #Tell mythicalLibrarian to do XBMC communications
-# XBMCAutomate
+# enable the KODI communications
+# KODIUpdate=Enabled
+# KODIClean=Enabled
+# KODINotify=Enabled
+# #Tell mythicalLibrarian to do KODI communications
+# KODIAutomate
 
 #Suggested examples are:
 # 1.string together multiple versions of mythicalLibrarian configured for 
@@ -397,11 +397,12 @@ TraditionalNamingConventions(){
   elif [ "$mythicalLibrarianProgramIDCheck" = "MV" ]; then
     Exx="Movie"
     MoveDir="$PrimaryMovieDir"
-      if [ "$MovieAirDate" != "" ]; then
-        ShowFileName="$NewShowName ($MovieAirDate)"
-      else
-       ShowFileName="$NewShowName"
-      fi
+    #TODO: If adding a year then we really want original release date so the kodi metadata lookup works reliably.
+    if [ "$MovieAirDate" != "" ]; then
+      ShowFileName="$NewShowName ($MovieAirDate)"
+    else
+      ShowFileName="$NewShowName"
+    fi
   #Format generic Shows
   else
     Exx="Generic"
@@ -526,20 +527,20 @@ GenComSkip(){
   return 0
 }
 
-#####XBMC COMMUNICATIONS#####
-#This function Automates communication with XBMC  
-XBMCAutomate(){
-  #Send notification to XBMC, Update Library, Clean Library
-  if [ "$XBMCNotify" = "Enabled" -o "$XBMCUpdate" = "Enabled" -o "$XBMCClean" = "Enabled" ]; then
-    for XBMCIP in ${XBMCIPs[@]} ; do
-      echo "SENDING REQUESTED COMMANDS TO:$XBMCIP"
+#####KODI COMMUNICATIONS#####
+#This function Automates communication with KODI  
+KODIAutomate(){
+  #Send notification to KODI, Update Library, Clean Library
+  if [ "$KODINotify" = "Enabled" -o "$KODIUpdate" = "Enabled" -o "$KODIClean" = "Enabled" ]; then
+    for KODIIP in ${KODIIPs[@]} ; do
+      echo "SENDING REQUESTED COMMANDS TO:$KODIIP"
       #SAK: REPLACED BELOW, SEE http://forum.kodi.tv/showthread.php?tid=65644&page=65&highlight=json
       #test "$XBMCNotify" = "Enabled" && curl -L -s -m3 --connect-timeout 5 "http://"$XBMCIP"/xbmcCmds/xbmcHttp?command=ExecBuiltIn(Notification(mythical%20Librarian%2Cadding%20show%20$tvdbshowname%20to%20library))" > /dev/null 2>&1
-      test "$XBMCNotify" = "Enabled" && curl -L -s -m3 --connect-timeout 5 -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","method":"GUI.ShowNotification","params":{"title":"mythical Librarian adding","message":"'$tvdbshowname'"},"id":1}' http://$XBMCIP/jsonrpc > /dev/null 2>&1
+      test "$KODINotify" = "Enabled" && curl -L -s -m3 --connect-timeout 5 -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","method":"GUI.ShowNotification","params":{"title":"mythical Librarian adding","message":"'$tvdbshowname'"},"id":1}' http://$KODIIP/jsonrpc > /dev/null 2>&1
       #test "$XBMCUpdate" = "Enabled" && curl -L -s -m3 --connect-timeout 5 "http://"$XBMCIP"/xbmcCmds/xbmcHttp?command=ExecBuiltIn(UpdateLibrary(video))" > /dev/null 2>&1
-      test "$XBMCNotify" = "Enabled" && curl -L -s -m3 --connect-timeout 5 -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","method":"VideoLibrary.Scan","id":1}' http://$XBMCIP/jsonrpc > /dev/null 2>&1
+      test "$KODINotify" = "Enabled" && curl -L -s -m3 --connect-timeout 5 -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","method":"VideoLibrary.Scan","id":1}' http://$KODIIP/jsonrpc > /dev/null 2>&1
       #test "$XBMCClean" = "Enabled" && curl -L  -s -m3 --connect-timeout 5 "http://"$XBMCIP"/xbmcCmds/xbmcHttp?command=ExecBuiltIn(CleanLibrary(video))" > /dev/null 2>&1
-      test "$XBMCNotify" = "Enabled" && curl -L -s -m3 --connect-timeout 5 -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","method":"VideoLibrary.Clean","id":1}' http://$XBMCIP/jsonrpc > /dev/null 2>&1
+      test "$KODINotify" = "Enabled" && curl -L -s -m3 --connect-timeout 5 -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","method":"VideoLibrary.Clean","id":1}' http://$KODIIP/jsonrpc > /dev/null 2>&1
     done
   fi
   return 0
@@ -547,7 +548,7 @@ XBMCAutomate(){
  
 #####GENERATE RSS ENTRY#####
 #This function generates an RSS feed for use on the web server. This can be used
-#in /home/xbmc/.xbmc/userdata/RssFeeds.xml replace the feeds.feedburner.com link
+#in /home/<kodi-user>/.kodi/userdata/RssFeeds.xml replace the feeds.feedburner.com link
 #with: 
 #  <feed updateinterval="30">http://[youripaddress]/mythical-rss/rss.xml</feed>  
 #Big thanks to barney_1!
@@ -580,7 +581,7 @@ generaterss() {
   echo -e '<rss version="2.0">' >> $rssDir/$TEMPrssFile
   echo -e '<channel>' >> $rssDir/$TEMPrssFile
   echo -e '\t<title>mythicalLibrarian</title>' >> $rssDir/$TEMPrssFile
-  echo -e '\t<link>http://xbmc.org</link>' >> $rssDir/$TEMPrssFile
+  echo -e '\t<link>http://kodi.tv</link>' >> $rssDir/$TEMPrssFile
   echo -e '\t<description>mythicalLibrary Daily Report Information</description>' >> $rssDir/$TEMPrssFile
  
   #write current recording information to first item.
@@ -865,17 +866,31 @@ ProcessSydFTA(){
   test "$ChanID" = "" && echo "%%%NO DATABASE INFORMATION. CHECK LOGIN/PASS OR FILE %%%%%">>$mythicalLibrarian/output.log
   #disqualify invalid movie airdates
   test ! -z "$MovieAirDate" && test $MovieAirDate -lt 1900 && MovieAirDate=$null 
-
+  
+  #TODO:#NOTE:The OriginalAirDate in TVdb is US specific, so not very useful for us, probably want to bypass it.
   test "$OriginalAirDate" = "None" && $OriginalAirDate=""
   test "$OriginalAirDate" = "none" && $OriginalAirDate=""
   
+  #TODO:#NOTE: Stars field in SydFTA data tends to be empty, consider what to do here.
   #Get rating from Stars
   rating=`printf "%0.f" $Stars`
   test $rating != "" && let rating=$rating*2
   test $rating = "" && rating=1
   
-  #Create MV/EP/SH Identification Type from ProgramID
-  mythicalLibrarianProgramIDCheck=${ProgramID:0:2}
+  ###The ProgramID field from FTA EPG data in Sydney?Australia? doesn't specify MV/EP/SH,
+  ###the Movie specification is "almost-always" found in the Category field of
+  ###the MythTV database. So, we'll use that.
+  ####Create MV/EP/SH Identification Type from ProgramID
+  ###mythicalLibrarianProgramIDCheck=${ProgramID:0:2}
+  if ["$ShowCategory" = "Movie"]; then
+    mythicalLibrarianProgramIDCheck="MV"
+  else #For now assume that if it's not a Movie it's an episode of a series
+    #TODO: For now we're mainly/only record Movies and Episodes of TV series, 
+    #  so, this is an ok approximation, but should look through more EPG data
+    #  and determine whether the Category field reliable distinguishes things
+    #  like news, sport, etc
+    mythicalLibrarianProgramIDCheck="EP"
+  fi
   
   #Extrapolate data from Programid
   test "$mythicalLibrarianProgramIDCheck" = "SH" && ProgramIDType="Generic Episode With No Data"
@@ -891,11 +906,16 @@ ProcessSydFTA(){
   test "${x:0:2}" = "EP" && echo woot
   test "$EpisodeSubtitle" != "" && GoForDoover=1 
   
+  #TODO:#NOTE: Zap2itSeriesID is again not really relevant outside of US
   #Get barebones zap2it series id.  
   Zap2itSeriesID=`echo $ProgramID| tr -d MVSHEP | sed 's/0*//' | sed 's/.\{4\}$//' `
   
   #strip needless chars from date
   datehour=`echo "$ShowStartTime"|tr ":" "."|tr " " "@"`
+  
+  #TODO:#NOTE: seasonyear is set but doesn't seem to be used anywhere, also not
+  #  going to be relevant unless you've recorded original showing rather than a
+  #  repeat.
   #get 4 digit year
   seasonyear=`echo "${ShowStartTime:0:4}"`
   
@@ -994,7 +1014,7 @@ determineIfDatabaseIsUpToDate(){
     LastUpdated=`cat "$mythicalLibrarian/$NewShowName/lastupdated.time"`
  
     #If no last updated time, then assign a never updated value and update now
-    elif [ ! -f "$mythicalLibrarian/$NewShowName/lastupdated.time" ]; then
+  elif [ ! -f "$mythicalLibrarian/$NewShowName/lastupdated.time" ]; then
     return 1
   fi   
  
@@ -1457,7 +1477,7 @@ genericUnspecifiedError(){
   echo "CHECK EPISODE NAME $InputSubtitle. CHECK INTERNET CONNECTION. CHECK API KEY.">>"$mythicalLibrarian"/output.log
   echo "NOT ENOUGH INFORMATION PULLED FROM DATABASE TO IDENTIFY FILE AS MOVIE OR EPISODE">>"$mythicalLibrarian"/output.log
   echo "CHECK www.TheTvDb.com  RUN mythicalLibrarian LINK COMMAND PROMPT.">>"$mythicalLibrarian"/output.log
-  echo "FOR MORE INFORMATION SEE http://xbmc.org/wiki/index.php?title=mythicalLibrarian">>"$mythicalLibrarian"/output.log
+  echo "FOR MORE INFORMATION SEE http://kodi.wiki/index.php?title=mythicalLibrarian">>"$mythicalLibrarian"/output.log
   echo "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%">>"$mythicalLibrarian"/output.log
   echo "%%%%%%%%%%%%%%OPERATION FAILED" `date` "%%%%%%%%%%%%%%%%%">>"$mythicalLibrarian/output.log">>"$mythicalLibrarian"/output.log
 }
@@ -1581,9 +1601,9 @@ GenerateEpisodeNFO(){
   
   if [ "$NamingConvention" = "" ] ; then
     if [ "$GoForDoover" = "1" ]; then
-        echo -e "\t<title>$EpisodeSubtitle Recorded $datehour -Episode in --doover Que</title>">>"$MoveDir/$ShowFileName.nfo"
+      echo -e "\t<title>$EpisodeSubtitle Recorded $datehour -Episode in --doover Que</title>">>"$MoveDir/$ShowFileName.nfo"
     else
-            echo -e "\t<title>$EpisodeSubtitle Recorded $datehour -Showing</title>">>"$MoveDir/$ShowFileName.nfo"
+      echo -e "\t<title>$EpisodeSubtitle Recorded $datehour -Showing</title>">>"$MoveDir/$ShowFileName.nfo"
     fi
   else
     echo -e "\t<title>$EpisodeSubtitle Recorded $datehour -Categoric</title>">>"$MoveDir/$ShowFileName.nfo" 
@@ -1865,20 +1885,20 @@ mythicalDiagnostics(){
     echo "MythTV Database Test $DBTest"
   fi
 
-  read -n1 -p "Press any key to perform XBMC Notification test..."
+  read -n1 -p "Press any key to perform KODI Notification test..."
   echo ""
-  echo "Performing XBMC Notifications test"
-  for XBMCIP in ${XBMCIPs[@]} ; do
-    echo "SENDING REQUESTED COMMANDS TO:$XBMCIP"
+  echo "Performing KODI Notifications test"
+  for KODIIP in ${KODIIPs[@]} ; do
+    echo "SENDING REQUESTED COMMANDS TO:$KODIIP"
     #SAK: REPLACED BELOW, SEE http://forum.kodi.tv/showthread.php?tid=65644&page=65&highlight=json
     #XBMCcomm=`curl -L -s --connect-timeout 3 "http://"$XBMCIP"/xbmcCmds/xbmcHttp?command=ExecBuiltIn(Notification(mythical%20Librarian%20Test%2CTesting%20Communication%20with%20mythicallibrarian))"|tr -d "</html>i^" `
-    XBMCcomm=`curl -L -s -m3 --connect-timeout 5 -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","method":"GUI.ShowNotification","params":{"title":"mythical Librarian Test","message":"'$PythonBindingsCheck'"},"id":1}' http://$XBMCIP/jsonrpc|tr -d "\"</html>i^" `
-    test "$XBMCcomm" != "" && echo "TESTING:$XBMCcomm" || echo "COMMUNICATIONS NOT ESTABLISHED: $XBMCIP"
+    KODIcomm=`curl -L -s -m3 --connect-timeout 5 -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","method":"GUI.ShowNotification","params":{"title":"mythical Librarian Test","message":"'$PythonBindingsCheck'"},"id":1}' http://$KODIIP/jsonrpc|tr -d "\"</html>i^" `
+    test "$KODIcomm" != "" && echo "TESTING:$KODIcomm" || echo "COMMUNICATIONS NOT ESTABLISHED: $KODIIP"
   done
   #SAK: REPLACED BELOW, SEE http://forum.kodi.tv/showthread.php?tid=65644&page=65&highlight=json
   #test "`echo $XBMCcomm`" = "OK" && XBMCcomm="***PASSED***" || XBMCcomm="***FAILED***"
-  test "`echo $XBMCcomm`" = "{d:1,jsonrpc:2.0,resu:OK}" && XBMCcomm="***PASSED***" || XBMCcomm="***FAILED***"
-  echo "XBMC Communications $XBMCcomm"
+  test "`echo $KODIcomm`" = "{d:1,jsonrpc:2.0,resu:OK}" && KODIcomm="***PASSED***" || KODIcomm="***FAILED***"
+  echo "KODI Communications $KODIcomm"
   read -n1 -p "Press any key to test file system permissions..."
   echo ""
   echo "Testing file system permissions"
@@ -1962,7 +1982,7 @@ mythicalDiagnostics(){
   test "$DatabaseType"="MythTVPythonBindings" && echo -e "  MythTV Database Test:     $DBTest"
   echo -e "  Installed Packages:       $packagecheck $checka$checkb$checkc$checkd$checke"
   echo -e "  Notifications Test:       $notifytest"
-  echo -e "  XBMC Communications:      $XBMCcomm"
+  echo -e "  KODI Communications:      $KODIcomm"
   echo -e "  File System Checks:       $folderchecks"
   echo -e "  mythicalTesting:          $mythicaltest"
   echo -e "  Overall mythicalReadiness:$overallchecks"
@@ -1983,9 +2003,9 @@ mythicalDiagnostics(){
     echo -e " librarian-notify-send and package lib-notify to display messages on"
     echo -e " GNOME desktop interface. These messages will not be displayed. "
   fi
-  if [ "$XBMCcomm" != "***PASSED***" ]; then
-    echo -e " XBMC Communications have failed.  Likely causes: Improper IP address,"
-    echo -e " or XBMC is not equipped to handle external network commands in settings."
+  if [ "$KODIcomm" != "***PASSED***" ]; then
+    echo -e " KODI Communications have failed.  Likely causes: Improper IP address,"
+    echo -e " or KODI is not equipped to handle external network commands in settings."
     echo -e " mythicalLibrarian will not send messages or library update requests."
   fi
   if [ "$folderchecks" != "***PASSED***" ]; then
@@ -2006,7 +2026,7 @@ mythicalDiagnostics(){
   if [ "$mythicaltest" != "***PASSED***" ]; then
     echo -e " mythicalLibrarian has encountered an error.  This may be due to "
     echo -e " lack of network connection.   If the problem persists, contact"
-    echo -e " outleradam here: http://forum.xbmc.org/showthread.php?t=65644"
+    echo -e " outleradam here: http://forum.kodi.tv/showthread.php?tid=65644"
   fi
   if [ "$overallchecks" != "***PASSED***" ]; then
     echo -e " "
@@ -2208,7 +2228,7 @@ special (){
   echo " #SYMLINK=Disabled              #"
   echo " #AlternateMoveDir=/media/usbDrive          #"
   echo " #NotifyUserName=adam          #"
-  echo " #XBMCIPs=( user:password@192.168.1.110:8080 )    #"
+  echo " #KODIIPs=( user:password@192.168.1.110:8080 )    #"
   echo " #Database=Disabled            #"        
   echo " ##############################################################"
   echo "Done."
@@ -2259,7 +2279,7 @@ improveConfidence(){
 #   echo " decisions based upon your selections and your system. mythicalSetup "
 #   echo " is designed to make updating easy and will set up the following:"
 #   echo " Episode naming, Movie naming, local RSS feeds, Daily Report,"
-#   echo " Desktop Notifications, XBMC notifications, XBMC library updates"
+#   echo " Desktop Notifications, KODI notifications, KODI library updates"
 #   echo " MythTV Database settings, and various operational modes. Upon"
 #   echo " completion, a diagnostic will be run.  This is designed to be" 
 #   echo " a fully automated process.  Please pay attention and report any"
@@ -2423,7 +2443,7 @@ ShowTranslations
 #Do not process files in files categoricIgnore or titleIgnore, just exit
 ignoreList
 SafeShowName=`echo "$ShowName"|sed 's/;.*//'|tr -d '|\?*<":>+[]/'`
-#Format Show name for Sending to www.TheTvDb.com and XBMC
+#Format Show name for Sending to www.TheTvDb.com and KODI
 tvdbshowname=`echo $ShowName | sed s/" "/"%20"/g|sed s/"&"/"%26"/g`
 #Setup paths if TargetPathIsInputPath is active.
 test "$TargetPathIsInputPath" = "Enabled" && setTargetFolderAsInputPathFolder
@@ -2857,7 +2877,7 @@ if [ "$SYMLINK" != "LINK" ]; then
       #Additional features, notifications, rss, daily report.
       test  "$RequiresNFO" = "1" && GenerateTVShowNFO
       test  "$RequiresNFO" = "1" && GenerateEpisodeNFO
-      XBMCAutomate 
+      KODIAutomate 
       performLoggingForMoveMode
       dailyreport 
       generaterss 
@@ -2905,7 +2925,7 @@ elif [ "$SYMLINK" = "LINK" ]; then
     #Additional features, notifications, rss, daily report.
     test  "$RequiresNFO" = "1"  && GenerateTVShowNFO
     test  "$RequiresNFO" = "1"  && GenerateEpisodeNFO 
-    XBMCAutomate 
+    KODIAutomate 
     performLoggingForLinkMode
     dailyreport
     generaterss

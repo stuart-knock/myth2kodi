@@ -22,6 +22,7 @@ plot="Subtitle with colon: then some other text."
 plot="(S01E42) - actually saw an example like this..." 
 plot="(S.01Ep.42) - Crap, and this..."
 
+#S01E42 | (01x42) | s01e42 | 1X2 | S1E4 | (S01Ep42) | (S1Ep42) | 42x1 | (S.01Ep.42) 
 
 # SeasonEpisode
 ###MERGE INTO ONE ###echo $plot | grep -i --only-matching '[0-9]*[0-9]x[0-9][0-9]*'
@@ -39,6 +40,7 @@ test $Sxx -gt 10 && echo "Few shows go for more than 10 seasons... Be careful" #
 Exx=`echo $SeasonEpisode | grep -i --only-matching '\(\(e\|ep\)\.*[0-9][0-9]*\)\|\(x[0-9][0-9]*\)' | sed 's/\(E\.*\|Ep\.*\)\|x//I'`
 
 #Single digit episode and show names are not allowed Ex and Sx replaced with Exx Sxx
+#Need to strip leading zeros for the below to work properly
 test $Exx -lt 10 && Exx="E0$Exx" || Exx="E$Exx"
 test $Sxx -lt 10 && Sxx="S0$Sxx" || Sxx="S$Sxx"
 
@@ -48,5 +50,6 @@ test $Sxx -lt 10 && Sxx="S0$Sxx" || Sxx="S$Sxx"
 ###MISSES HYPHENATED-WORDS ###echo $plot | grep --only-matching '\(\(\w\+\s\)\|\&\s\)\{,6\}-' | grep --only-matching '\(\(\w\+\s\)\|\&\s\)\{,8\}\(\w\+\)'
 ###MISSES APOSTROPHE ###echo $plot | grep --only-matching '\(\(\w\+\(\-\|\s\)\)\|\&\s\|\-\)\{1,8\}-' | grep --only-matching '\(\(\w\+\(\-\|\s\)\)\|\&\s\|\-\)\{0,8\}\(\w\+\)'
 ###MISSES commas ###echo $plot | grep --only-matching '\(\(\w\+\(\-\|\s\|.\)\)\|\&\s\|\-\)\{1,7\}-' | grep --only-matching '\(\(\w\+\(\-\|\s\|.\)\)\|\&\s\|\-\)\{,7\}\(\w\+\)' 
-###OVEMATCHES COMPLICATED EXAMPLE ###echo $plot | grep --only-matching '\(\(\w\+\(\-\|\s\|.\)\)\|\&\s\|\-\|.\s\)\{1,7\}-' | grep --only-matching '\(\(\w\+\(\-\|\s\|.\)\)\|\&\s\|\-\|.\s\)\{,7\}\(\w\+\)' 
-echo $plot | grep --only-matching '\(\(\(\w\+\)\(.*\s*\)\)\|\(\&\s*\)\)\{1,7\}\( -\|\:\)' | grep --only-matching '\(\(\(\w\+\)\(.*\s*\)\)\|\(\&\s*\)\)\{,7\}\(\w\+\)' 
+###OVEMATCHES COMPLICATED EXAMPLE ###echo $plot | grep --only-matching '\(\(\w\+\(\-\|\s\|.\)\)\|\&\s\|\-\|.\s\)\{1,7\}-' | grep --only-matching '\(\(\w\+\(\-\|\s\|.\)\)\|\&\s\|\-\|.\s\)\{,7\}\(\w\+\)'
+#NOTE: This currently matches SeasonSubtitle in the lead position of the Plot field, as in the last couple of examples above 
+EpisodeSubtitle=`echo $plot | grep --only-matching '\(\(\(\w\+\)\(.*\s*\)\)\|\(\&\s*\)\)\{1,7\}\( -\|\:\)' | grep --only-matching '\(\(\(\w\+\)\(.*\s*\)\)\|\(\&\s*\)\)\{,7\}\(\w\+\)'`

@@ -860,6 +860,24 @@ ProcessSchedulesDirect(){
   return 0 
 }
 
+ExtractSxxExx(){
+  #Given $SeasonEpisode of the form 1x2 | 01X02 | s1e2 | S01Ep02 | S.01Ep.02 | etc, 
+  #extract a season number Sxx and episode number Exx
+  #Assumes season and episode numbers in range 1-99
+  if [ "$SeasonEpisode" != "" ]; then
+    Sxx=`echo $SeasonEpisode | grep -i --only-matching '\(s\.*[0-9]*[0-9]\)\|\([0-9]*[0-9]x\)' | sed 's/s\.*\|x//I'`
+    Exx=`echo $SeasonEpisode | grep -i --only-matching '\(\(e\|ep\)\.*[0-9][0-9]*\)\|\(x[0-9][0-9]*\)' | sed 's/\(E\.*\|Ep\.*\)\|x//I'`
+    #Strip leading zero
+    Sxx=${Sxx#0}
+    Exx=${Exx#0}
+    #Single digit episode and show names are not allowed Ex and Sx replaced with Sxx Exx
+    test $Sxx -lt 10  && Sxx="S0$Sxx" || Sxx="S$Sxx"
+    test $Exx -lt 10  && Exx="E0$Exx" || Exx="E$Exx"
+  else
+    echo 'WARNING:$SeasonEpisode variable is expected to be set before calling ExtractSxxExx()'
+  fi
+}
+
 #SAK:#TODO: Add Process function compatible with Sydney over the air data...
 ProcessSydFTA(){
   #Check for database permissions
@@ -882,14 +900,28 @@ ProcessSydFTA(){
   ###the MythTV database. So, we'll use that.
   ####Create MV/EP/SH Identification Type from ProgramID
   ###mythicalLibrarianProgramIDCheck=${ProgramID:0:2}
-  if ["$ShowCategory" = "Movie"]; then
+  if [ "$ShowCategory" = "Movie" ]; then
     mythicalLibrarianProgramIDCheck="MV"
   else #For now assume that if it's not a Movie it's an episode of a series
     #TODO: For now we're mainly/only record Movies and Episodes of TV series, 
     #  so, this is an ok approximation, but should look through more EPG data
-    #  and determine whether the Category field reliable distinguishes things
+    #  and determine whether the Category field reliably distinguishes things
     #  like news, sport, etc
     mythicalLibrarianProgramIDCheck="EP"
+  fi
+
+  #TODO: Set SeasonEpisode if that field is completed in MythTV database, 
+  #  for us (Syd) now (2015) that's only channel 9 group programs.
+
+  if [ "$mythicalLibrarianProgramIDCheck" = "EP" ]; then
+    if [ "$SeasonEpisode" = "" ]; then
+      #Check the Plot field for the SeasonEpisode info, SBS is big on 
+      #including it in the plot/description field instead of where it belongs
+      #The below should work for any of the following forms:
+      #S01E42 | (01x42) | s01e42 | 1X2 | S1E4 | (S01Ep42) | (S1Ep42) | 42x1 | (S.01Ep.42) 
+      SeasonEpisode=`echo $plot | grep -i --only-matching '\(s\.*[0-9]*[0-9]\(e\|ep\)\.*[0-9][0-9]*\)\|\([0-9]*[0-9]x[0-9][0-9]*\)'`
+    fi
+    ExtractSxxExx
   fi
   
   #Extrapolate data from Programid

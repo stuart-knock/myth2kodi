@@ -352,7 +352,7 @@ RunJob(){
 #$ChanID = ChannelID
 #$ProgramID= Zap2it listing
 #$ShowStartTime = begin recording time
-#$ShowCategory = category like children or sports
+#$ShowCategory = category like children or sports also specifies Movie in SydFTA data
 #$mythicalLibrarianProgramIDCheck = "SH" for SHow or sports - "MV" for MoVie - "EP" for EPisode
 #$Plot = Plot
 #$Stars = Stars
@@ -898,6 +898,8 @@ ProcessSydFTA(){
   test "$mythicalLibrarianProgramIDCheck" = "EP" && ProgramIDType="Series With Episode Data"
   test "$mythicalLibrarianProgramIDCheck" = "SP" && ProgramIDType="Sports Programming" && mythicalLibrarianProgramIDCheck=SH
   
+  #TODO: The ProgramID field has something that looks like a web address for 
+  #  most stations, look into this and see if there is extra data we can get.
   #account for .0123's in EITonly data type 
   ProgramID=`echo $ProgramID|cut -f1 -d"."`
   
@@ -1664,6 +1666,7 @@ DoMaintenance() {
   #check for interrupted undo jobs
   test -f "$mythicalLibrarian/undo.lock" && test ! -f "$mythicalLibrarian/undo.sh" && mv "$mythicalLibrarian/undo.lock" "$mythicalLibrarian/undo.sh"
   
+  #TODO: The chmod on the 2nd test line below probably should be for undo.sh
   #Check and make doover.sh and undo.sh if it does not exist
   test ! -f "$mythicalLibrarian/doover.sh" && echo 'rm -f "'$mythicalLibrarian'"/doover.sh'>"$mythicalLibrarian/doover.sh" && chmod 666 "$mythicalLibrarian/doover.sh"
   test ! -f "$mythicalLibrarian/undo.sh" && echo 'rm -f "'$mythicalLibrarian'"/undo.sh'>"$mythicalLibrarian/undo.sh" && chmod 666 "$mythicalLibrarian/doover.sh"
@@ -2315,6 +2318,9 @@ fi
 #load variables from a file if required
 test -f ~/mythicalLibrarian/mythicalLibrarian.conf && . ~/mythicalLibrarian/mythicalLibrarian.conf
 
+#TODO: Should allow manual input of season and episode numbers in addition to 
+#  Title & Subtitle, with full information all searching should be overridden/bypassed...
+
 InputTitle="$2"
 InputSubtitle="$3"
 InputPath="$1"
@@ -2405,7 +2411,7 @@ if [ "$Database" = "Enabled" ]; then
     ;;
   esac
 
-  #determine apropriate processing for guide data
+  #determine appropriate processing for guide data
   case "$GuideDataType" in 
 
     SchedulesDirect)
@@ -2415,7 +2421,7 @@ if [ "$Database" = "Enabled" ]; then
       ProcessNoLookup
     ;;
     SydFTA)
-         ProcessSydFTA
+      ProcessSydFTA
     ;; 
     *)
       ProcessSchedulesDirect
@@ -2430,7 +2436,7 @@ echo "PLOT: $Plot"
 ShowName=$InputTitle
 test "$ShowName" = "" && mythicalHelp
 
-#split on semicolon, there will only be one episode looked up.  Remove nonfilesystem compliant chars.
+#split on semicolon, there will only be one episode looked up.  Remove non-filesystem-compliant chars.
 EpisodeSubtitle=`echo $InputSubtitle|sed 's/;.*//'|tr -d '!|\?*<":>+[]/'`
 ExtensionPrep=`basename "$InputPath"`
 OriginalExt=`echo "${ExtensionPrep#*.}"`
@@ -2518,6 +2524,7 @@ if [ "$SeriesID" != "" ] ; then
   makeShowDirIfNeeded
   
   #If database is out of date, download new database
+  #TODO: Without internet connection, this fails to run properly even when local information should be sufficient to properly name episode.
   determineIfDatabaseIsUpToDate
   if [ "$?" != "0" ]; then
     downloadInfoAboutMatchedTitleAndCreateTxtFileTables
@@ -2608,7 +2615,8 @@ if [ "$SeriesID" != "" ] ; then
   #Statistical Fuzzy Logic monitoring
   updateRunningTotalMatchesCount
   echo "TOTAL MATCHES:$FuzzyLogicMatches TOTAL VERIFIED FUZZY ERRORS:`test -f "$mythicalLibrarian"/FuzzyLogicError.log && cat "$mythicalLibrarian"/FuzzyLogicError.log || echo "0"`"
- 
+
+#TODO: The comment and conditional below seem incompatible, perhaps the last should be != "MV"
 #if series id is not obtained send failure message
 elif [ -z "$SeriesID" ] && [ "$mythicalLibrarianProgramIDCheck" != "SH" ] && [ "$mythicalLibrarianProgramIDCheck" = "MV" ]; then
   ConfidenceReasoning=$ConfidenceReasoning+"Failed; "
@@ -2637,6 +2645,7 @@ if [ "$mythicalLibrarianProgramIDCheck" = "EP" ] && [ "$Exx" = "E" -o "$Exx" = "
 
 #If it's a movie, give it a name.
 elif [ "$mythicalLibrarianProgramIDCheck" = "MV" ]; then
+  #TODO: Need to strip the "Movie: " that some stations prepend to their FTA EPG data... I'm looking at you 7
   NewShowName="$InputTitle"
   ConfidenceReasoning="$ConfidenceReasoning Guide Data reported this is a movie;"
 #If it's a showing, give it a name.
@@ -2753,7 +2762,7 @@ if [ "$Exx" = "" ] && [ "$InputPath" != "testfile.ext" ] ; then
     #Ensures the doover value was not set for the movie and use safe show name
     RequiresDoover=0
     NewShowName=$SafeShowName
-  #If user has determined that they do not want unrecognizable tv shows in their library
+  #If user has determined that they do not want unrecognisable tv shows in their library
   elif [ "$ShowStopper" = "Enabled" ]; then 
     tvDbIsIncomplete
     writeJobToDooverQue
@@ -2872,7 +2881,7 @@ if [ "$SYMLINK" != "LINK" ]; then
       fi 
  
       #Send notification of completion and exit
-      test $Notify = "Enabled" && sudo -u "$NotifyUserName" /usr/local/bin/librarian-notify-send "mythicalLibrarian Sucess" "$ShowFileName moved to $MoveDir" info
+      test $Notify = "Enabled" && sudo -u "$NotifyUserName" /usr/local/bin/librarian-notify-send "mythicalLibrarian Success" "$ShowFileName moved to $MoveDir" info
       
       #Additional features, notifications, rss, daily report.
       test  "$RequiresNFO" = "1" && GenerateTVShowNFO
@@ -2913,7 +2922,7 @@ elif [ "$SYMLINK" = "LINK" ]; then
     echo "Symlink created $MoveDir/$ShowFileName.$OriginalExt">>"$mythicalLibrarian"/output.log
     echo "@@@@@@@@@@@@@OPERATION COMPLETE" `date` "@@@@@@@@@@@@@@@@">>"$mythicalLibrarian"/output.log 
     if [ "$Notify" = "Enabled" ]; then
-      sudo -u "$NotifyUserName" /usr/local/bin/librarian-notify-send "mythicalLibrarian Sucess" "$ShowFileName linked to $MoveDir" info
+      sudo -u "$NotifyUserName" /usr/local/bin/librarian-notify-send "mythicalLibrarian Success" "$ShowFileName linked to $MoveDir" info
     fi
     
     #Move comskip data to proper folder

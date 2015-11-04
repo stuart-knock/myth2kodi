@@ -1,0 +1,44 @@
+
+#
+# A number of channels, while not properly filling out the subtitle and SeasonEpisode 
+# fields correctly, provide the required information in the Plot or Description field.
+#
+#
+
+
+#Bash - try to extract info from plot/description field
+
+#Examples
+plot="Subtitle - then some other text and finally an episode number S01E42 or 01X42"
+plot="A longer subtitle - then some other text and lowercase & parenthesis episode number s01e42 or (01x42)"
+plot="A longer subtitle with  spacing errors  - then some other text and finally an episode number S01E42 or 01x42"
+plot="A subtitle & non alpha numeric - then some other text and finally an episode number S1E2 or 1X2"
+plot="A subtitle with a hyphenated-word - then some other text and finally an episode number S01E42 or 01X42"
+plot="Subtitle - then some other text including a hyphenated-word."
+plot="Subtitle, with, commas - then some other text."
+plot="Subtitle's with's - then some other text."
+plot="Worst, subtitle in for-ever's - then, some other-stuff & shit 42x1 text #bummer."
+plot="Subtitle with colon: then some other text." 
+plot="(S01E42) - actually saw an example like this..." 
+plot="(S.01Ep.42) - Crap, and this..."
+
+
+# SeasonEpisode
+###MERGE INTO ONE ###echo $plot | grep -i --only-matching '[0-9]*[0-9]x[0-9][0-9]*'
+###MERGE INTO ONE ###echo $plot | grep -i --only-matching '[s[0-9]*[0-9]e[0-9][0-9]*'
+###MISSES S.01eP.42 ### echo $plot | grep -i --only-matching '\([s[0-9]*[0-9]e[0-9][0-9]*\)\|\([0-9]*[0-9]x[0-9][0-9]*\)'
+echo $plot | grep -i --only-matching '\(s.[0-9]*[0-9]\(e.\|ep.\)[0-9][0-9]*\)\|\([0-9]*[0-9]x[0-9][0-9]*\)'
+
+# Extract Season number only
+#TODO:
+
+# Extract Episode number only
+#TODO:
+
+# Leading subtitle (eg Walking Dead on SBS 2 )
+###MISSES & ###echo $plot | grep --only-matching '\(\w\+ \)\{,6\}-' | grep --only-matching '\(\w\+ \)\{,6\}\(\w\+\)'
+###MISSES HYPHENATED-WORDS ###echo $plot | grep --only-matching '\(\(\w\+\s\)\|\&\s\)\{,6\}-' | grep --only-matching '\(\(\w\+\s\)\|\&\s\)\{,8\}\(\w\+\)'
+###MISSES APOSTROPHE ###echo $plot | grep --only-matching '\(\(\w\+\(\-\|\s\)\)\|\&\s\|\-\)\{1,8\}-' | grep --only-matching '\(\(\w\+\(\-\|\s\)\)\|\&\s\|\-\)\{0,8\}\(\w\+\)'
+###MISSES commas ###echo $plot | grep --only-matching '\(\(\w\+\(\-\|\s\|.\)\)\|\&\s\|\-\)\{1,7\}-' | grep --only-matching '\(\(\w\+\(\-\|\s\|.\)\)\|\&\s\|\-\)\{,7\}\(\w\+\)' 
+###OVEMATCHES COMPLICATED EXAMPLE ###echo $plot | grep --only-matching '\(\(\w\+\(\-\|\s\|.\)\)\|\&\s\|\-\|.\s\)\{1,7\}-' | grep --only-matching '\(\(\w\+\(\-\|\s\|.\)\)\|\&\s\|\-\|.\s\)\{,7\}\(\w\+\)' 
+echo $plot | grep --only-matching '\(\(\(\w\+\)\(.*\s*\)\)\|\(\&\s*\)\)\{1,7\}\( -\|\:\)' | grep --only-matching '\(\(\(\w\+\)\(.*\s*\)\)\|\(\&\s*\)\)\{,7\}\(\w\+\)' 

@@ -177,7 +177,7 @@ Language=en
 #Database access Enabled|Disabled
 Database=Enabled
 #Database Type MythTV|MythTVPythonBindings  Default=MythTVPythonBinding
-DatabaseType=MythTVPythonBindings
+DatabaseType=MythTV  #TODO:NOTE: Have added stuff to method in this script but not to the python script yet...
 #Guide data type: SchedulesDirect currently covers DataDirect, MC2XML and others.  NoLookup will bypass tvdb scanning
 #Options: SchedulesDirect|NoLookup
 GuideDataType=SydFTA
@@ -722,6 +722,10 @@ GetMythTVDatabase(){
     test "$InputTitle" = "" && InputTitle=`mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select title from recorded where basename like '$InputFileBasename'; "|sed s/"title"/""/g|sed -n "2p"`
     #get Subtitle
     test "$InputSubtitle" = "" && InputSubtitle=`mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select subtitle from recorded where basename like '$InputFileBasename' ; "|sed s/"subtitle"/""/g|sed -n "2p"`
+    #get Season Number, SydFTA sometimes has a season field #TODO: change call to enable Season Number as an input
+    test "$InputSeasonNum" = "" && InputSeasonNum=`mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select season from recorded where basename like '$InputFileBasename' ;"|sed s/"season"/""/g`
+    #get Episode Number, SydFTA sometimes has an episode field  #TODO: change call to enable Episode Number as an input
+    test "$InputEpisodeNum" = "" && InputEpisodeNum=`mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select episode from recorded where basename like '$InputFileBasename' ; "|sed s/"episode"/""/g`
     #get chanid for recordings to identify program table
     ChanID=`mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select chanid from recorded where basename like '$InputFileBasename';"|sed s/"\/"/""/g|sed -n 2p|sed s/"chanid"/""/g|sed s/" "/""/g`
     #get ProgramID from recorded to identify program
@@ -790,9 +794,12 @@ GetMythTvPythonBindings(){
     GenComSkip
   fi
  
-  #Import mythtv values into mythicalLibrarian values, don't clobber title, subtitle.
+  #Import mythtv values into mythicalLibrarian values, don't clobber title, subtitle, season-number, or episode-number.
   test "$InputTitle" = "" && InputTitle=$title
-  test "$InputSubtitle" = "" && InputSubtitle=$subtitle; 
+  test "$InputSubtitle" = "" && InputSubtitle=$subtitle
+  test "$InputSeasonNum" = "" && InputSeasonNum=$season
+  test "$InputEpisodeNum" = "" && InputEpisodeNum=$episode
+
   #redefine database var names into mythicalLibrarian var names
   MovieAirDate=$airdate
   OriginalAirDate=$originalairdate
@@ -861,21 +868,46 @@ ProcessSchedulesDirect(){
 }
 
 ExtractSxxExx(){
-  #Given $SeasonEpisode of the form 1x2 | 01X02 | s1e2 | S01Ep02 | S.01Ep.02 | etc, 
+  #If available use the season and episode fields from MythTV database, otherwise,
+  #use or attempt to determine $SeasonEpisode 
   #extract a season number Sxx and episode number Exx
   #Assumes season and episode numbers in range 1-99
-  if [ "$SeasonEpisode" != "" ]; then
+  if [ "$SeasonEpisode" = "" ] && [ "$InputSeasonNum" = "" ] && [ "$InputEpisodeNum" = "" ]; then
+    #Check the Plot field for the SeasonEpisode info, SBS is big on 
+    #including it in the plot/description field instead of where it belongs
+    #The below should work for any of the following forms:
+    #S01E42 | (01x42) | s01e42 | 1X2 | S1E4 | (S01Ep42) | (S1Ep42) | 42x1 | (S.01Ep.42) 
+    SeasonEpisode=`echo $plot | grep -i --only-matching '\(s\.*[0-9]*[0-9]\(e\|ep\)\.*[0-9][0-9]*\)\|\([0-9]*[0-9]x[0-9][0-9]*\)'`
+  fi
+  if [ "$InputSeasonNum" != "" ] && [ "$InputEpisodeNum" != "" ]; then
+    Sxx="$InputSeasonNum"
+    Exx="$InputEpisodeNum"
+  elif [ "$SeasonEpisode" != "" ]; then
     Sxx=`echo $SeasonEpisode | grep -i --only-matching '\(s\.*[0-9]*[0-9]\)\|\([0-9]*[0-9]x\)' | sed 's/s\.*\|x//I'`
     Exx=`echo $SeasonEpisode | grep -i --only-matching '\(\(e\|ep\)\.*[0-9][0-9]*\)\|\(x[0-9][0-9]*\)' | sed 's/\(E\.*\|Ep\.*\)\|x//I'`
     #Strip leading zero
     Sxx=${Sxx#0}
     Exx=${Exx#0}
-    #Single digit episode and show names are not allowed Ex and Sx replaced with Sxx Exx
-    test $Sxx -lt 10  && Sxx="S0$Sxx" || Sxx="S$Sxx"
-    test $Exx -lt 10  && Exx="E0$Exx" || Exx="E$Exx"
   else
     echo 'WARNING:$SeasonEpisode variable is expected to be set before calling ExtractSxxExx()'
+    return 1
   fi
+  #Single digit episode and show names are not allowed Ex and Sx replaced with Sxx Exx
+  test $Sxx -lt 10  && Sxx="S0$Sxx" || Sxx="S$Sxx"
+  test $Exx -lt 10  && Exx="E0$Exx" || Exx="E$Exx"
+
+  return 0
+}
+
+GuessSubtitle(){
+  #NOTE: 
+  #Try to extract a subtitle from the plot field (Luv Ya SBS)
+  InputSubtitle=`echo $plot | grep --only-matching '\(\(\(\w\+\)\(.*\s*\)\)\|\(\&\s*\)\)\{1,7\}\( -\|\:\)'`
+  #Clean off the trailing " -" that we're using to identify it
+  InputSubtitle=`echo $InputSubtitle | grep --only-matching '\(\(\(\w\+\)\(.*\s*\)\)\|\(\&\s*\)\)\{,7\}\(\w\+\)'`
+  #TODO: If we have Sxx & Exx but no Subtitle, use Title plus Sxx and Exx to get it.
+  #TODO: Assuming we know the title, try NLP match plot against possible plots
+  return 0
 }
 
 #SAK:#TODO: Add Process function compatible with Sydney over the air data...
@@ -910,18 +942,13 @@ ProcessSydFTA(){
     mythicalLibrarianProgramIDCheck="EP"
   fi
 
-  #TODO: Set SeasonEpisode if that field is completed in MythTV database, 
-  #  for us (Syd) now (2015) that's only channel 9 group programs.
-
+  #If the information is already available, set the Sxx & Exx variables
   if [ "$mythicalLibrarianProgramIDCheck" = "EP" ]; then
-    if [ "$SeasonEpisode" = "" ]; then
-      #Check the Plot field for the SeasonEpisode info, SBS is big on 
-      #including it in the plot/description field instead of where it belongs
-      #The below should work for any of the following forms:
-      #S01E42 | (01x42) | s01e42 | 1X2 | S1E4 | (S01Ep42) | (S1Ep42) | 42x1 | (S.01Ep.42) 
-      SeasonEpisode=`echo $plot | grep -i --only-matching '\(s\.*[0-9]*[0-9]\(e\|ep\)\.*[0-9][0-9]*\)\|\([0-9]*[0-9]x[0-9][0-9]*\)'`
-    fi
     ExtractSxxExx
+    #If we haven't set a Subtitle yet, try and get one from plot
+    if [ "$InputSubtitle" = "" ]; then
+      GuessSubtitle
+    fi
   fi
   
   #Extrapolate data from Programid
@@ -936,9 +963,9 @@ ProcessSydFTA(){
   ProgramID=`echo $ProgramID|cut -f1 -d"."`
   
   #Check if database contains enough information to put into doover que
-  GoForDoover=0
-  test "${x:0:2}" = "EP" && echo woot
-  test "$EpisodeSubtitle" != "" && GoForDoover=1 
+  # GoForDoover=0
+  # test "${x:0:2}" = "EP" && echo woot
+  # test "$EpisodeSubtitle" != "" && GoForDoover=1 
   
   #TODO:#NOTE: Zap2itSeriesID is again not really relevant outside of US
   #Get barebones zap2it series id.  

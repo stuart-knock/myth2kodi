@@ -889,7 +889,7 @@ ExtractSxxExx(){
     Sxx=${Sxx#0}
     Exx=${Exx#0}
   else
-    echo 'WARNING:$SeasonEpisode variable is expected to be set before calling ExtractSxxExx()'
+    echo 'WARNING:ExtractSxxExx() - No Season & Episode number information is available.'
     return 1
   fi
   #Single digit episode and show names are not allowed Ex and Sx replaced with Sxx Exx
@@ -949,6 +949,11 @@ ProcessSydFTA(){
     if [ "$InputSubtitle" = "" ]; then
       GuessSubtitle
     fi
+  fi
+
+  #Strip the Movie tag that some stations very helpfully put in the title field...
+  if  [ "$mythicalLibrarianProgramIDCheck" = "MV" ]; then
+    InputTitle=`echo $InputTitle | sed s/"Movie:\s*"/""/I`
   fi
   
   #Extrapolate data from Programid

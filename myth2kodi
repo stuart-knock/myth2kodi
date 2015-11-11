@@ -714,7 +714,9 @@ doFailSafeMode(){
 #####MYTHTV DATABASE#####
 #This function gathers information from the mythtv database for use in the program
 GetMythTVDatabase(){
-  
+  #TODO: This conditional seems weird as PythonBindings isn't set anywhere and
+  #  even if it were set to True then this function would do nothing rather 
+  #  than accessing the database via the Python bindings...
   if [ "$PythonBindings" != "True" ]; then
     #Obtain MythTV Database Information
     echo "Accessing MythTV DataBase:"
@@ -769,6 +771,7 @@ GetMythTVDatabase(){
 }
 
 #####UTILIZE PYTHON BINDINGS TO GET MYTHTV DB##### Requires dependency
+#TODO: Check whether MythDataGrabber actually requires python version 2.6... see mythicalDiagnostics
 GetMythTvPythonBindings(){
   echo "Attempting to pull database information on $InputPath"
   #make a named pipe for database output
@@ -951,7 +954,7 @@ ProcessSydFTA(){
     fi
   fi
 
-  #Strip the Movie tag that some stations very helpfully put in the title field...
+  #Strip the Movie: tag that some stations very helpfully put in the title field...
   if  [ "$mythicalLibrarianProgramIDCheck" = "MV" ]; then
     InputTitle=`echo $InputTitle | sed s/"Movie:\s*"/""/I`
   fi
@@ -1079,7 +1082,7 @@ determineIfDatabaseIsUpToDate(){
   if [ -f "$mythicalLibrarian/$NewShowName/lastupdated.time" ]; then
     LastUpdated=`cat "$mythicalLibrarian/$NewShowName/lastupdated.time"`
  
-    #If no last updated time, then assign a never updated value and update now
+  #If no last updated time, then assign a never updated value and update now
   elif [ ! -f "$mythicalLibrarian/$NewShowName/lastupdated.time" ]; then
     return 1
   fi   
@@ -1889,6 +1892,7 @@ mythicalScan(){
 }
  
 setGroupPermissions (){
+  #Add read and write permissions for the group to the moved recording.
   chmod g=rw "$MoveDir/$ShowFileName.$OriginalExt"
 }
  
@@ -2380,15 +2384,18 @@ if [ ! -d "$mythicalLibrarian" ]; then
 fi
 
 #load variables from a file if required
+#TODO: Think the ~/mythicalLibrarian below should be $mythicalLibrarian which is ~/.mythicalLibrarian
 test -f ~/mythicalLibrarian/mythicalLibrarian.conf && . ~/mythicalLibrarian/mythicalLibrarian.conf
 
 #TODO: Should allow manual input of season and episode numbers in addition to 
 #  Title & Subtitle, with full information all searching should be overridden/bypassed...
 
+#TODO: Why the non-sequential order here? does it matter?
 InputTitle="$2"
 InputSubtitle="$3"
 InputPath="$1"
 InputOption="$4"
+#
 test "$InputPath" != "testfile.ext" && test ! -f "$InputPath" && test "$InputTitle" = "" && test "${InputPath:0:1}" != "-" && mythicalHelp
 test "$InputPath" = "" && mythicalHelp
 MythTVUserJobString="%DIR%/%FILE%"
@@ -2464,36 +2471,39 @@ InputFileBasename=`basename "$InputPath"`
 #Get information if database is enabled
 if [ "$Database" = "Enabled" ]; then 
   #determine proper database grabber
-  case "$DatabaseType" in 
-
+  case "$DatabaseType" in
     MythTV)
       GetMythTVDatabase   
     ;; 
     MythTVPythonBindings)
       test "$InputPath" != 'testfile.ext' && GetMythTvPythonBindings
+      #TODO:What's the purpose of resetting the DatabaseType here...???
       DatabaseType=MythTV
     ;;
   esac
 
   #determine appropriate processing for guide data
-  case "$GuideDataType" in 
-
+  case "$GuideDataType" in
     SchedulesDirect)
+      echo "Processing MythTV database info as SchedulesDirect."
       ProcessSchedulesDirect   
     ;; 
     NoLookup)
+      echo "Processing MythTV database info as NoLookup."
       ProcessNoLookup
     ;;
     SydFTA)
+      echo "Processing MythTV database info as SydFTA."
       ProcessSydFTA
     ;; 
     *)
+      echo "GuideDataType incorrectly specified, processing MythTV database info assuming SchedulesDirect."
       ProcessSchedulesDirect
     ;;
   esac
 fi
 
-#Report found data
+#Report found data #TODO: Report subtitle and season/episode numbers if we already have them.
 echo "RECSTART:$ShowStartTime DATE:$MovieAirDate $OriginalAirDate"
 echo "PROGRAMID:$ProgramID ShowCategory:$ShowCategory"
 echo "PLOT: $Plot"
@@ -2544,6 +2554,7 @@ if [ "$mythicalLibrarianProgramIDCheck" != "SH" ] && [ "$mythicalLibrarianProgra
   #Query thetvdb on show title, then return a list of Zap2itID, ShowName and seriesid.
   searchTheTvDbAndReturnTxtFileTables  
   ConfidenceReasoning="$ConfidenceReasoning Attempted Match On Zap2itID:"
+  #TODO: This function assumes a SchedulesDirect format for the data in $ProgramID,so will never work for SydFTA
   GetSeriesLineNumberFromTableWithZap2itID
   if [ $? = 0 ]; then 
     ((++SeriesConfidenceRating))

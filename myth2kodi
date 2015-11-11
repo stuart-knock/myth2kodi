@@ -1120,6 +1120,7 @@ determineIfDatabaseIsUpToDate(){
 downloadInfoAboutMatchedTitleAndCreateTxtFileTables(){
   #Download information from server
   echo -ne "Downloading Series: $SeriesID \r" 1>&2 
+  #TODO: Change this so that Overview isn't excluded
   curl -L -s -m"$Timeout" "http://www.thetvdb.com/api/$APIkey/series/$SeriesID/all/$Language.xml"| grep -vE "(</id>|</Combined_episodenumber>|</Combined_season>|</DVD_chapter>|</DVD_discid>|</DVD_episodenumber>|</DVD_season>|</Director>|</EpImgFlag>|</GuestStars>|</IMDB_ID>|</Language>|</Overview>|</ProductionCode>|</RatingCount>|</filename>|</seasonid>|</Writer>|</Rating>|</lastupdated>|</seriesid>|</absolute_number>)">"$mythicalLibrarian/$NewShowName/$NewShowName.xmlTest" && echo "$CurrentTime" > "$mythicalLibrarian/$NewShowName/lastupdated.time"
 
   #Validate that the show has a EpisodeName tag and is a valid download before clobering our old download.
@@ -1187,6 +1188,7 @@ downloadInfoAboutMatchedTitleAndCreateTxtFileTables(){
         line=${line/<\/EpisodeNumber>/}
         line=${line/<EpisodeNumber>/}
         EpisodeNr=$line
+      #TODO: Add a block to extract the episode Overview
       fi
     done < "$mythicalLibrarian/$NewShowName/$NewShowName.xml"
       
@@ -2383,6 +2385,19 @@ if [ ! -d "$mythicalLibrarian" ]; then
   echo "creating home/mythicalLibrarian and log file">>"$mythicalLibrarian"/output.log
 fi
 
+#setup defaults for searching Series information
+SeriesID=""
+NewShowName=""
+RequiresDoover=0
+ConfidenceRating=0
+SeriesConfidenceRating=0
+
+#setup defaults for searching Episode information
+Exx=""
+Sxx=""
+EpisodeConfidenceRating=0
+MythicalEpiShow=0
+
 #load variables from a file if required
 #TODO: Think the ~/mythicalLibrarian below should be $mythicalLibrarian which is ~/.mythicalLibrarian
 test -f ~/mythicalLibrarian/mythicalLibrarian.conf && . ~/mythicalLibrarian/mythicalLibrarian.conf
@@ -2536,16 +2551,6 @@ DoMaintenance
 ##TODO CHECK TO MAKE SURE WE CANT GET THIS FAR WITHOUT DATABASE INFORMATION OR A SUBTITLE
 
 #####SEARCH FOR SHOW AND BUILD INFORMATION#####
-#setup defaults for searching
-Exx=""
-Sxx=""
-SeriesID=""
-NewShowName=""
-RequiresDoover=0
-mythicalEpishow=0
-ConfidenceRating=0
-SeriesConfidenceRating=0
-EpisodeConfidenceRating=0
  
 if [ "$mythicalLibrarianProgramIDCheck" != "SH" ] && [ "$mythicalLibrarianProgramIDCheck" != "MV" ]; then
   echo "SEARCHING: www.TheTvDb.com SHOW NAME: $ShowName EPISODE: $EpisodeSubtitle"|tee -a "$mythicalLibrarian"/output.log
@@ -2576,7 +2581,7 @@ if [ "$mythicalLibrarianProgramIDCheck" != "SH" ] && [ "$mythicalLibrarianProgra
       else
         ((--SeriesConfidenceRating))
         ConfidenceReasoning="$ConfidenceReasoning Failed; Information not obtainable;"
-        mythicalEpiShow=1
+        MythicalEpiShow=1
       fi
     fi
   fi
@@ -2594,7 +2599,6 @@ fi
 test -z "$ShowName" && ShowName=$InputTitle
 test -z "$NewShowName" && NewShowName=$ShowName
 
-#####PROCESS EPISODE INFORMATION#####  
 if [ "$SeriesID" != "" ] ; then
   makeShowDirIfNeeded
   
@@ -2608,7 +2612,20 @@ if [ "$SeriesID" != "" ] ; then
       RequiresDoover=1
     fi
   fi
+#if series id is not obtained send failure message
+elif [ -z "$SeriesID" ] && [ "$mythicalLibrarianProgramIDCheck" != "SH" ] && [ "$mythicalLibrarianProgramIDCheck" != "MV" ]; then
+  ConfidenceReasoning=$ConfidenceReasoning+"Failed; "
+  echo "SERIES ID WAS NOT FOUND. THETVDB MAY BE DOWN. TRY USING A showTranslations">>"$mythicalLibrarian"/output.log
+  if [ "$Database" = "Enabled" ]; then
+    echo "DB ENTIRES- RECSTART:$ShowStartTime- MOVIE:$MovieAirDate- ORIGAIRDATE:$OriginalAirDate- CHID:$ChanID- CAT:$ShowCategory-">>"$mythicalLibrarian"/output.log
+    test  "${Exx:2:2}" = "" && Exx=$null
+  fi
+fi
 
+#####PROCESS EPISODE INFORMATION#####
+#TODO: Probably would be good to run this even when we have SxxExx already as a validation of those numbers.
+#If we have a SeriesID but don't already have Season and Episode information
+if [ "$SeriesID" != "" ] && [ "$Sxx" = "S" -o "$Sxx" = "" ] && [ "$Exx" = "E" -o "$Exx" = "" ] ; then
   #####GET ABSOLUTE EPISODE NUMBER#####
   ConfidenceReasoning="$ConfidenceReasoning Attempted match on OriginalAirDate:"
   #If info was pulled from database, then plug name into NewShowName 
@@ -2637,7 +2654,7 @@ if [ "$SeriesID" != "" ] ; then
       if [ "$?" = "0" ]; then
         ConfidenceReasoning="$ConfidenceReasoning Successful; "
       else
-        mythicalEpiShow=1
+        MythicalEpiShow=1
         ((--EpisodeConfidenceRating))
         ConfidenceReasoning="$ConfidenceReasoning Failed;"
       fi
@@ -2691,19 +2708,12 @@ if [ "$SeriesID" != "" ] ; then
   updateRunningTotalMatchesCount
   echo "TOTAL MATCHES:$FuzzyLogicMatches TOTAL VERIFIED FUZZY ERRORS:`test -f "$mythicalLibrarian"/FuzzyLogicError.log && cat "$mythicalLibrarian"/FuzzyLogicError.log || echo "0"`"
 
-#TODO: The comment and conditional below seem incompatible, perhaps the last should be != "MV"
-#if series id is not obtained send failure message
-elif [ -z "$SeriesID" ] && [ "$mythicalLibrarianProgramIDCheck" != "SH" ] && [ "$mythicalLibrarianProgramIDCheck" = "MV" ]; then
-  ConfidenceReasoning=$ConfidenceReasoning+"Failed; "
-  echo "SERIES ID WAS NOT FOUND. THETVDB MAY BE DOWN. TRY USING A showTranslations">>"$mythicalLibrarian"/output.log
-  if [ "$Database" = "Enabled" ]; then
-    echo "DB ENTIRES- RECSTART:$ShowStartTime- MOVIE:$MovieAirDate- ORIGAIRDATE:$OriginalAirDate- CHID:$ChanID- CAT:$ShowCategory-">>"$mythicalLibrarian"/output.log
-    Exx=$null
-  fi
 fi
 
-#Set EXX and SXX by matching Absolute Episode Number across mythicalLibrarian's database
-if [ "$AbsoluteEpisodeNumber" != "" ]; then
+#If we don't already have EXX and SXX set them by matching Absolute Episode Number across mythicalLibrarian's database
+if [ "$Sxx" != "S" ] && [ "$Sxx" != "" ] && [ "$Exx" != "E" ] && [ "$Exx" != "" ] ; then
+  echo "Already extracted episode number: $Sxx$Exx, for EPISODE:$EpisodeSubtitle, from MythTV database, so didn't bother with TvDb information."
+elif [ "$AbsoluteEpisodeNumber" != "" ]; then
   setSxxAndExxFromAbsoluteEpisodeNumber
 else
   ConfidenceReasoning="$ConfidenceReasoning Could not set Sxx and Exx, Failed; "
@@ -2714,7 +2724,7 @@ fi
 
 if [ "$mythicalLibrarianProgramIDCheck" = "EP" ] && [ "$Exx" = "E" -o "$Exx" = "" ]; then
   ConfidenceReasoning="$ConfidenceReasoning Guide Data did not match showing;"
-  MythicalEpishow=1
+  MythicalEpiShow=1
   RequiresDoover=1
   #TODO come up with a way to have a variable like DataWasNotObtainable to check and make it a SH later
 
@@ -2849,7 +2859,7 @@ if [ "$Exx" = "" ] && [ "$InputPath" != "testfile.ext" ] ; then
     DisplayShowWarning
   else
     #This marks Episodes as shows.  AKA EpiShows.  Episodes for which no information cannot be obtained currently.
-    mythicalEpiShow=1
+    MythicalEpiShow=1
     #change the show to a Generic type
     NewShowName=$SafeShowName
     DisplayEpiShowMessage 

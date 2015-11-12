@@ -148,7 +148,7 @@
 #Create symlink at InputPath after 'MOVE' | Do not move, just create a sym'LINK' | move the file, symlinking is 'Disabled'
 SYMLINK=MOVE
 #MoveDir is the folder which mythicalLibrarian will move the file. No trailing / is accepted eg. "~/videos"
-MoveDir="/media/tv"  #<------THIS VALUE MUST BE SET-------
+MoveDir="/media/video/tv"  #<------THIS VALUE MUST BE SET-------
 #AlternateMoveDir will act as a secondary MoveDir if the primary MoveDir fails.  No trailing / is accepted eg. "~/videos"
 AlternateMoveDir="/home/librarian/recordedTV"
 #If TargetPathIsInputPath is Enabled, original dir will override MoveDir. Useful
@@ -177,7 +177,7 @@ Language=en
 #Database access Enabled|Disabled
 Database=Enabled
 #Database Type MythTV|MythTVPythonBindings  Default=MythTVPythonBinding
-DatabaseType=MythTV  #TODO:NOTE: Have added stuff to method in this script but not to the python script yet...
+DatabaseType=MythTVPythonBindings
 #Guide data type: SchedulesDirect currently covers DataDirect, MC2XML and others.  NoLookup will bypass tvdb scanning
 #Options: SchedulesDirect|NoLookup
 GuideDataType=SydFTA
@@ -195,13 +195,13 @@ DBPin=8446
 #If utilizing mythconverg with Python Bindings, then it would be MySQLMythDb=PythonBindingsmythconverg
 MySQLMythDb=mythconverg
 #Primary Movie Dir. mythicalLibrarian will attempt to move to this dir first. No trailing / is accepted eg. "~/videos"
-PrimaryMovieDir="/media/movies" #<------THIS VALUE MUST BE SET-------
+PrimaryMovieDir="/media/video/movies" #<------THIS VALUE MUST BE SET-------
 #AlternateMovieDir will act as a Secondary move dir if the primary movie dir fails
 AlternateMovieDir="/home/librarian/recordedMovies"
 #ShowStopper = Enabled prevents generic shows and unrecognized episodes from being processed
 ShowStopper=Enabled
 #Primary Show Dir. mythicalLibrarian will attempt to move to this dir first. No trailing / is accepted eg. "~/videos"
-PrimaryShowDir="/media/recordedShows" #<------THIS VALUE MUST BE SET-------
+PrimaryShowDir="/media/video/recordedShows" #<------THIS VALUE MUST BE SET-------
 #AlternateMoveDir will act as a Seccondary move dir if the primary move dir fails
 AlternateShowDir="/home/librarian/recordedShows" 
 #CommercialMarkup will generate comskip files for recordings when they are moved. Enabled|Disabled
@@ -913,7 +913,7 @@ GuessSubtitle(){
   return 0
 }
 
-#SAK:#TODO: Add Process function compatible with Sydney over the air data...
+#A Process function compatible with Sydney over the air data...
 ProcessSydFTA(){
   #Check for database permissions
   test "$ChanID" = "" && echo "%%%NO DATABASE INFORMATION. CHECK LOGIN/PASS OR FILE %%%%%">>$mythicalLibrarian/output.log
@@ -969,15 +969,6 @@ ProcessSydFTA(){
   #  most stations, look into this and see if there is extra data we can get.
   #account for .0123's in EITonly data type 
   ProgramID=`echo $ProgramID|cut -f1 -d"."`
-  
-  #Check if database contains enough information to put into doover que
-  # GoForDoover=0
-  # test "${x:0:2}" = "EP" && echo woot
-  # test "$EpisodeSubtitle" != "" && GoForDoover=1 
-  
-  #TODO:#NOTE: Zap2itSeriesID is again not really relevant outside of US
-  #Get barebones zap2it series id.  
-  Zap2itSeriesID=`echo $ProgramID| tr -d MVSHEP | sed 's/0*//' | sed 's/.\{4\}$//' `
   
   #strip needless chars from date
   datehour=`echo "$ShowStartTime"|tr ":" "."|tr " " "@"`
@@ -1286,7 +1277,7 @@ ResolveMultipleAirdateMatches(){
     ConfidenceReasoning="$ConfidenceReasoning Failed; Attempted to resolve conflict with Fuzzy Logic:"
     #get instance line number
     IntermediateEpisodeNumber=`agrep -Byn "${EpisodeSubtitle:0:29}" "$mythicalLibrarian/$NewShowName/$NewShowName.InstanceEnames.txt"|grep -m1 ^|sed 's/:.*//'`
-    #translate instance line number to actual line number
+    #translate instance line number to actual line number  #TODO: Pretty sure the = = below is a typo, check there isn't an obscure Bash meaning them remove...
     test "$IntermediateEpisodeNumber" != "" && AbsoluteEpisodeNumber= AbsoluteEpisodeNumber=`sed -n $IntermediateEpisodeNumber'p' "$mythicalLibrarian/$NewShowName/$NewShowName.InstanceLineNumbers.txt"`
     if [ "$AbsoluteEpisodeNumber" != "" ]; then
       ConfidenceReasoning="$ConfidenceReasoning Successful;"

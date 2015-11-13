@@ -833,8 +833,8 @@ ProcessSchedulesDirect(){
   #disqualify invalid movie airdates
   test ! -z "$MovieAirDate" && test $MovieAirDate -lt 1900 && MovieAirDate=$null 
 
-  test "$OriginalAirDate" = "None" && $OriginalAirDate=""
-  test "$OriginalAirDate" = "none" && $OriginalAirDate=""
+  test "$OriginalAirDate" = "None" && OriginalAirDate=""
+  test "$OriginalAirDate" = "none" && OriginalAirDate=""
   
   #Get rating from Stars
   rating=`printf "%0.f" $Stars`

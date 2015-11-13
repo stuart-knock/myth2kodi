@@ -712,7 +712,8 @@ doFailSafeMode(){
 }
 
 #####MYTHTV DATABASE#####
-#This function gathers information from the mythtv database for use in the program
+#TODO: Also grab storagegroup from database, in both GetMythTVDatabase() & GetMythTvPythonBindings(), as a possible fallback for Movie identification
+#This function gathers information from the MythTV database for use in the program
 GetMythTVDatabase(){
   #TODO: This conditional seems weird as PythonBindings isn't set anywhere and
   #  even if it were set to True then this function would do nothing rather 
@@ -956,7 +957,7 @@ ProcessSydFTA(){
   #If the information is already available, set the Sxx & Exx variables
   if [ "$mythicalLibrarianProgramIDCheck" = "EP" ]; then
     ExtractSxxExx
-    #If we haven't set a Subtitle yet, try and get one from plot
+    #If we haven't set a Subtitle yet, try and get one from $Plot
     if [ "$InputSubtitle" = "" ]; then
       GuessSubtitle
     fi
@@ -1728,6 +1729,7 @@ ShowTranslations(){
 }
 
 #####MAINTENANCE ROUTINE#####
+#TODO: Need to go through this function line-by-line and make sure it behaves as expected in a do-no-harm sort of way...
 #DoMaintenance loops through all logged files and checks if their parent is there.  If no parent, then file is deleted.
 DoMaintenance() {
   echo "PERFORMING MAINTENANCE ROUTINE..."
@@ -1815,6 +1817,7 @@ DoMaintenance() {
 }
 
 #####SCAN MODE#####
+#TODO: Need to go through this function line-by-line and make sure it can be run without causing damage. 
 #This function will scan a folder and process the entire library
 mythicalScan(){
   DoMythTVPermissionsCheck
@@ -1896,8 +1899,9 @@ setGroupPermissions (){
   #Add read and write permissions for the group to the moved recording.
   chmod g=rw "$MoveDir/$ShowFileName.$OriginalExt"
 }
- 
+
 #####MYTHICAL DIAGNOSTICS#####
+#TODO: Need to go through this function line-by-line and make sure it's still a sensible Diagnostics function. 
 #This function provides a functions check on mythicalLibrarian
 mythicalDiagnostics(){
   echo "--You have entered diagnostic mode"
@@ -2447,7 +2451,7 @@ case "$InputPath" in
   ;;
   --update|--upgrade|--build|-u)
     #mythicalUpdater
-    echo "NOT MAINTAINING THE UPDATER, SO DON'T TRY AND UPDATE"
+    echo "NOT MAINTAINING THE UPDATER, SO DON'T TRY AND UPDATE..."
   ;;
   --doMaintenance)
     MaintenanceWarning

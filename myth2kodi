@@ -911,8 +911,6 @@ GuessSubtitle(){
   #Strip SeasonEpisode part when it's bundled with the Subtitle before the hyphen (SBS data entry plebs, one day I'll find out where you live...)
   InputSubtitle=`echo $InputSubtitle | sed 's/(*\(s\.*[0-9]*[0-9]\,*\(e\|ep\)\.*[0-9][0-9]*\))*\s*\|(*\([0-9]*[0-9]x[0-9][0-9]*\))*\s*//I'`
   echo "Guessed Subtitle from Plot field as '$InputSubtitle'"
-  #TODO: If we have Sxx & Exx but no Subtitle, use Title plus Sxx and Exx to get it. #NOTE: this belongs in main after Series is identified
-  #TODO: Assuming we know the title, try NLP match plot against possible plots
   return 0
 }
 
@@ -2622,6 +2620,9 @@ elif [ -z "$SeriesID" ] && [ "$mythicalLibrarianProgramIDCheck" != "SH" ] && [ "
     test  "${Exx:2:2}" = "" && Exx=$null
   fi
 fi
+
+#TODO: If we have Sxx & Exx but no Subtitle, use Title plus Sxx and Exx to get it.
+#TODO: Assuming we have identified the Series, but have no Sxx, Exx, or Subtitle, try NLP match $Plot against possible plots
 
 #####PROCESS EPISODE INFORMATION#####
 #TODO: Probably would be good to run this even when we have SxxExx already as a validation of those numbers.

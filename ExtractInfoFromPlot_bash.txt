@@ -21,6 +21,7 @@ plot="Worst, subtitle in for-ever's - then, some other-stuff & shit 42x1 text #b
 plot="Subtitle with colon: then some other text." 
 plot="(S01E42) - actually saw an example like this..." 
 plot="(S.01Ep.42) - Crap, and this..."
+plot="(S.01,Ep.42) A Subtitle - SBS work-experoience kids,oh how I hate thee..."
 
 #S01E42 | (01x42) | s01e42 | 1X2 | S1E4 | (S01Ep42) | (S1Ep42) | 42x1 | (S.01Ep.42) 
 
@@ -29,7 +30,8 @@ plot="(S.01Ep.42) - Crap, and this..."
 ###MERGE INTO ONE ###echo $plot | grep -i --only-matching '[s[0-9]*[0-9]e[0-9][0-9]*'
 ###MISSES S.01eP.42 ### echo $plot | grep -i --only-matching '\([s[0-9]*[0-9]e[0-9][0-9]*\)\|\([0-9]*[0-9]x[0-9][0-9]*\)'
 ###DOT ISN'T EXPLICIT AND SO MATCHES TOO BROADLY##SeasonEpisode=`echo $plot | grep -i --only-matching '\(s.[0-9]*[0-9]\(e.\|ep.\)[0-9][0-9]*\)\|\([0-9]*[0-9]x[0-9][0-9]*\)'`
-SeasonEpisode=`echo $plot | grep -i --only-matching '\(s\.*[0-9]*[0-9]\(e\|ep\)\.*[0-9][0-9]*\)\|\([0-9]*[0-9]x[0-9][0-9]*\)'`
+###MISSES COMMA SEPERATED SEASON,EPISODE###SeasonEpisode=`echo $plot | grep -i --only-matching '\(s\.*[0-9]*[0-9]\(e\|ep\)\.*[0-9][0-9]*\)\|\([0-9]*[0-9]x[0-9][0-9]*\)'`
+SeasonEpisode=`echo $plot | grep -i --only-matching '\(s\.*[0-9]*[0-9]\,*\(e\|ep\)\.*[0-9][0-9]*\)\|\([0-9]*[0-9]x[0-9][0-9]*\)'`
 
 # Extract Season number only
 Sxx=`echo $SeasonEpisode | grep -i --only-matching '\(s\.*[0-9]*[0-9]\)\|\([0-9]*[0-9]x\)' | sed 's/s\.*\|x//I'`

@@ -2377,7 +2377,7 @@ improveConfidence(){
 #####DEFINE ENVIRONMENT AND VARIABLES#####
 MyUserName=`whoami`
 # Set global values
-test -f "/etc/mythicalLibrarian/globalSettings" && . /etc/mythicalLibrarian/globalSettings
+test -f "/etc/mythicalLibrarian/globalSettings" && source /etc/mythicalLibrarian/globalSettings
 #make our working dir if it does not exist
 if [ ! -d "$mythicalLibrarian" ]; then 
   mkdir "$mythicalLibrarian"

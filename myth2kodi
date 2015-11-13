@@ -915,8 +915,10 @@ GuessSubtitle(){
   InputSubtitle=`echo $Plot | grep --only-matching '\(\(\(\w\+\)\(.*\s*\)\)\|\(\&\s*\)\)\{1,7\}\( -\|\:\)'`
   #Clean off the trailing " -" that we're using to identify it
   InputSubtitle=`echo $InputSubtitle | grep --only-matching '\(\(\(\w\+\)\(.*\s*\)\)\|\(\&\s*\)\)\{,7\}\(\w\+\)'`
-  echo "Guessed Subtitle from PLot field as $InputSubtitle"
-  #TODO: If we have Sxx & Exx but no Subtitle, use Title plus Sxx and Exx to get it.
+  #Strip SeasonEpisode part when it's bundled with the Subtitle before the hyphen (SBS data entry plebs, one day I'll find out where you live...)
+  InputSubtitle=`echo $InputSubtitle | sed 's/(*\(s\.*[0-9]*[0-9]\,*\(e\|ep\)\.*[0-9][0-9]*\))*\s*\|(*\([0-9]*[0-9]x[0-9][0-9]*\))*\s*//I'`
+  echo "Guessed Subtitle from Plot field as '$InputSubtitle'"
+  #TODO: If we have Sxx & Exx but no Subtitle, use Title plus Sxx and Exx to get it. #NOTE: this belongs in main after Series is identified
   #TODO: Assuming we know the title, try NLP match plot against possible plots
   return 0
 }

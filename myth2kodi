@@ -753,6 +753,10 @@ GetMythTVDatabase(){
     if [ ! -z "$MovieAirDate" ] && [ $MovieAirDate -lt 1900 ]; then
       MovieAirDate=$null
     fi
+
+
+    test "$InputSeasonNum" = 0 && InputSeasonNum=""
+    test "$InputEpisodeNum" = 0 && InputEpisodeNum=""
   
     #####COMSKIP DATA#####
     #Set up counter, remove old markup data and generate new markup file from markupstart and stop
@@ -802,6 +806,9 @@ GetMythTvPythonBindings(){
   test "$InputSubtitle" = "" && InputSubtitle=$subtitle
   test "$InputSeasonNum" = "" && InputSeasonNum=$season
   test "$InputEpisodeNum" = "" && InputEpisodeNum=$episode
+
+  test "$InputSeasonNum" = 0 && InputSeasonNum=""
+  test "$InputEpisodeNum" = 0 && InputEpisodeNum=""
 
   #redefine database var names into mythicalLibrarian var names
   MovieAirDate=$airdate
@@ -880,7 +887,7 @@ ExtractSxxExx(){
     #including it in the plot/description field instead of where it belongs
     #The below should work for any of the following forms:
     #S01E42 | (01x42) | s01e42 | 1X2 | S1E4 | (S01Ep42) | (S1Ep42) | 42x1 | (S.01Ep.42) 
-    SeasonEpisode=`echo $plot | grep -i --only-matching '\(s\.*[0-9]*[0-9]\(e\|ep\)\.*[0-9][0-9]*\)\|\([0-9]*[0-9]x[0-9][0-9]*\)'`
+    SeasonEpisode=`echo $Plot | grep -i --only-matching '\(s\.*[0-9]*[0-9]\(e\|ep\)\.*[0-9][0-9]*\)\|\([0-9]*[0-9]x[0-9][0-9]*\)'`
   fi
   if [ "$InputSeasonNum" != "" ] && [ "$InputEpisodeNum" != "" ]; then
     Sxx="$InputSeasonNum"
@@ -905,9 +912,10 @@ ExtractSxxExx(){
 GuessSubtitle(){
   #NOTE: 
   #Try to extract a subtitle from the plot field (Luv Ya SBS)
-  InputSubtitle=`echo $plot | grep --only-matching '\(\(\(\w\+\)\(.*\s*\)\)\|\(\&\s*\)\)\{1,7\}\( -\|\:\)'`
+  InputSubtitle=`echo $Plot | grep --only-matching '\(\(\(\w\+\)\(.*\s*\)\)\|\(\&\s*\)\)\{1,7\}\( -\|\:\)'`
   #Clean off the trailing " -" that we're using to identify it
   InputSubtitle=`echo $InputSubtitle | grep --only-matching '\(\(\(\w\+\)\(.*\s*\)\)\|\(\&\s*\)\)\{,7\}\(\w\+\)'`
+  echo "Guessed Subtitle from PLot field as $InputSubtitle"
   #TODO: If we have Sxx & Exx but no Subtitle, use Title plus Sxx and Exx to get it.
   #TODO: Assuming we know the title, try NLP match plot against possible plots
   return 0
@@ -921,8 +929,8 @@ ProcessSydFTA(){
   test ! -z "$MovieAirDate" && test $MovieAirDate -lt 1900 && MovieAirDate=$null 
   
   #TODO:#NOTE:The OriginalAirDate in TVdb is US specific, so not very useful for us, probably want to bypass it.
-  test "$OriginalAirDate" = "None" && $OriginalAirDate=""
-  test "$OriginalAirDate" = "none" && $OriginalAirDate=""
+  test "$OriginalAirDate" = "None" && OriginalAirDate=""
+  test "$OriginalAirDate" = "none" && OriginalAirDate=""
   
   #TODO:#NOTE: Stars field in SydFTA data tends to be empty, consider what to do here.
   #Get rating from Stars
@@ -2616,7 +2624,7 @@ fi
 #####PROCESS EPISODE INFORMATION#####
 #TODO: Probably would be good to run this even when we have SxxExx already as a validation of those numbers.
 #If we have a SeriesID but don't already have Season and Episode information
-if [ "$SeriesID" != "" ] && [ "$Sxx" = "S" -o "$Sxx" = "" ] && [ "$Exx" = "E" -o "$Exx" = "" ] ; then
+if [ "$SeriesID" != "" ] && [ "$Sxx" = "S" -o "$Sxx" = "" -o "$Sxx" = "S00" ] && [ "$Exx" = "E" -o "$Exx" = "" -o "$Exx" = "E00" ] ; then
   #####GET ABSOLUTE EPISODE NUMBER#####
   ConfidenceReasoning="$ConfidenceReasoning Attempted match on OriginalAirDate:"
   #If info was pulled from database, then plug name into NewShowName 

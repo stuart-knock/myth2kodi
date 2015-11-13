@@ -2398,8 +2398,7 @@ EpisodeConfidenceRating=0
 MythicalEpiShow=0
 
 #load variables from a file if required
-#TODO: Think the ~/mythicalLibrarian below should be $mythicalLibrarian which is ~/.mythicalLibrarian
-test -f ~/mythicalLibrarian/mythicalLibrarian.conf && . ~/mythicalLibrarian/mythicalLibrarian.conf
+test -f "$mythicalLibrarian"/mythicalLibrarian.conf && source "$mythicalLibrarian"/mythicalLibrarian.conf
 
 #TODO: Should allow manual input of season and episode numbers in addition to 
 #  Title & Subtitle, with full information all searching should be overridden/bypassed...

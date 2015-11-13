@@ -753,10 +753,6 @@ GetMythTVDatabase(){
     if [ ! -z "$MovieAirDate" ] && [ $MovieAirDate -lt 1900 ]; then
       MovieAirDate=$null
     fi
-
-
-    test "$InputSeasonNum" = 0 && InputSeasonNum=""
-    test "$InputEpisodeNum" = 0 && InputEpisodeNum=""
   
     #####COMSKIP DATA#####
     #Set up counter, remove old markup data and generate new markup file from markupstart and stop
@@ -806,9 +802,6 @@ GetMythTvPythonBindings(){
   test "$InputSubtitle" = "" && InputSubtitle=$subtitle
   test "$InputSeasonNum" = "" && InputSeasonNum=$season
   test "$InputEpisodeNum" = "" && InputEpisodeNum=$episode
-
-  test "$InputSeasonNum" = 0 && InputSeasonNum=""
-  test "$InputEpisodeNum" = 0 && InputEpisodeNum=""
 
   #redefine database var names into mythicalLibrarian var names
   MovieAirDate=$airdate
@@ -939,6 +932,13 @@ ProcessSydFTA(){
   rating=`printf "%0.f" $Stars`
   test $rating != "" && let rating=$rating*2
   test $rating = "" && rating=1
+
+  #TODO: Does this need to be more general, accounting for 00 | S0 | S00 | etc
+  #  On the other hand, if it's reliably 0, then remove this and just
+  #  change the conditionals to check for 0
+  #Default value for season and episode numbers is 0, not $null or ""
+  test "$InputSeasonNum" = 0 && InputSeasonNum=$null
+  test "$InputEpisodeNum" = 0 && InputEpisodeNum=$null
   
   ###The ProgramID field from FTA EPG data in Sydney?Australia? doesn't specify MV/EP/SH,
   ###the Movie specification is "almost-always" found in the Category field of

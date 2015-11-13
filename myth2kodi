@@ -230,7 +230,7 @@ KODIIPs=( "192.168.1.42:8080" ) #<------THIS VALUE MUST BE SET-------
 maxItems=8  
 ########################## END USER SETTINGS ###################################
 
-mythicalVersion="Revision 950ish 2015 - Modified SAK: Cleanup; integrated 953ish"
+mythicalVersion="myth2kodi Version 0.1.0; mythicalLibrarian 953ish+"
 
 ########################### BEGIN USER JOBS ####################################
 #The RunJob function is a place where you can put your custom script to be run 

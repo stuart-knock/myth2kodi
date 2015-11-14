@@ -872,6 +872,8 @@ ProcessSchedulesDirect(){
 }
 
 ExtractSxxExx(){
+  #TODO: Maybe change the * to \? in most cases below so the matching is less inclusive
+  #TODO: Maybe add warning in the case of 4x4 in case it's not actually an SxxExx 
   #If available use the season and episode fields from MythTV database, otherwise,
   #use or attempt to determine $SeasonEpisode 
   #extract a season number Sxx and episode number Exx

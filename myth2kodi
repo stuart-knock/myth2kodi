@@ -1073,7 +1073,7 @@ setSxxAndExxFromAbsoluteEpisodeNumber(){
 determineIfDatabaseIsUpToDate(){
   #Get current server time
   test -f "$mythicalLibrarian/$NewShowName/current.time" && rm -f "$mythicalLibrarian/$NewShowName/current.time"
-  curl -L  -s -m"$Timeout" "http://www.thetvdb.com/api/Updates.php?type=none">"$mythicalLibrarian/$NewShowName/current.time"
+  curl -L -s -m"$Timeout" "http://www.thetvdb.com/api/Updates.php?type=none">"$mythicalLibrarian/$NewShowName/current.time"
 
   #Get the time from the file
   test -f "$mythicalLibrarian/$NewShowName/current.time" && CurrentTime=`cat "$mythicalLibrarian/$NewShowName/current.time"|grep '<Time>'|sed s/"<Time>"/""/g|sed s/"<\/Time>"//g`
@@ -2420,6 +2420,7 @@ test "$InputPath" = "" && mythicalHelp
 MythTVUserJobString="%DIR%/%FILE%"
 
 #####COMMAND LINE SWITCHES#####
+#TODO: Add a --commskip option that just re/generates to commskip file for a given show, assuming/checking that show ahs already been myth2kodi'd
 #check for command line switches
 case "$InputPath" in 
 
@@ -2453,7 +2454,7 @@ case "$InputPath" in
   ;;
   --update|--upgrade|--build|-u)
     #mythicalUpdater
-    echo "NOT MAINTAINING THE UPDATER, SO DON'T TRY AND UPDATE..."
+    echo "ERROR: NOT MAINTAINING THE UPDATER, SO DON'T TRY AND UPDATE..."
   ;;
   --doMaintenance)
     MaintenanceWarning
@@ -2557,7 +2558,7 @@ DoMaintenance
 #####SEARCH FOR SHOW AND BUILD INFORMATION#####
  
 if [ "$mythicalLibrarianProgramIDCheck" != "SH" ] && [ "$mythicalLibrarianProgramIDCheck" != "MV" ]; then
-  echo "SEARCHING: www.TheTvDb.com SHOW NAME: $ShowName EPISODE: $EpisodeSubtitle"|tee -a "$mythicalLibrarian"/output.log
+  echo "SEARCHING: www.TheTvDb.com SHOW NAME: $ShowName" | tee -a "$mythicalLibrarian"/output.log
   echo "DATE:$MovieAirDate $OriginalAirDate FILE NAME: $InputPath">>"$mythicalLibrarian"/output.log
   
   #Query thetvdb on show title, then return a list of Zap2itID, ShowName and seriesid.
@@ -2568,7 +2569,7 @@ if [ "$mythicalLibrarianProgramIDCheck" != "SH" ] && [ "$mythicalLibrarianProgra
   if [ $? = 0 ]; then 
     ((++SeriesConfidenceRating))
     ConfidenceReasoning="$ConfidenceReasoning Successful;"
-    echo "MATCH FOUND BASED ON Zap2itID:$NewShowName"| tee -a "$mythicalLibrarian"/output.log
+    echo "MATCH FOUND BASED ON Zap2itID:$NewShowName" | tee -a "$mythicalLibrarian"/output.log
   else
     ((--SeriesConfidenceRating))
     ConfidenceReasoning="$ConfidenceReasoning Failed; Attempted match on Standard Logic:"
@@ -2593,9 +2594,9 @@ if [ "$mythicalLibrarianProgramIDCheck" != "SH" ] && [ "$mythicalLibrarianProgra
   #if we have a series line number then translate that into a series id
   if [ "$serieslinenumber" != "" ] && [ $serieslinenumber -gt 0 ]; then
     setSeriesIDandNewShowNameBasedOnSeriesLineNumber
-    echo "FOUND:$NewShowName ID#:$SeriesID WITH CONFIDENCE:$SeriesConfidenceRating"|tee -a "$mythicalLibrarian"/output.log
+    echo "FOUND:$NewShowName ID#:$SeriesID WITH CONFIDENCE:$SeriesConfidenceRating" | tee -a "$mythicalLibrarian"/output.log
   else
-    echo "WARNING: SERIESID COULD NOT BE DETERMINED"|tee -a "$mythicalLibrarian"/output.log
+    echo "WARNING: SERIESID COULD NOT BE DETERMINED" | tee -a "$mythicalLibrarian"/output.log
   fi
 fi
 
@@ -2612,7 +2613,7 @@ if [ "$SeriesID" != "" ] ; then
   if [ "$?" != "0" ]; then
     downloadInfoAboutMatchedTitleAndCreateTxtFileTables
     if [ "$?" != "0" ]; then
-      echo "WARNING: COULD NOT DOWNLOAD UP-TO-DATE INFORMATION!"|tee -a "$mythicalLibrarian"/output.log
+      echo "WARNING: COULD NOT DOWNLOAD UP-TO-DATE INFORMATION!" | tee -a "$mythicalLibrarian"/output.log
       RequiresDoover=1
     fi
   fi
@@ -2633,6 +2634,7 @@ fi
 #TODO: Probably would be good to run this even when we have SxxExx already as a validation of those numbers.
 #If we have a SeriesID but don't already have Season and Episode information
 if [ "$SeriesID" != "" ] && [ "$Sxx" = "S" -o "$Sxx" = "" -o "$Sxx" = "S00" ] && [ "$Exx" = "E" -o "$Exx" = "" -o "$Exx" = "E00" ] ; then
+  echo "SEARCHING: www.TheTvDb.com information for EPISODE: $EpisodeSubtitle" | tee -a "$mythicalLibrarian"/output.log
   #####GET ABSOLUTE EPISODE NUMBER#####
   ConfidenceReasoning="$ConfidenceReasoning Attempted match on OriginalAirDate:"
   #If info was pulled from database, then plug name into NewShowName 
@@ -2646,14 +2648,14 @@ if [ "$SeriesID" != "" ] && [ "$Sxx" = "S" -o "$Sxx" = "" -o "$Sxx" = "S00" ] &&
     ConfidenceReasoning="$ConfidenceReasoning Successful; "
     GotEpisodeNumber=1
   else 
-    echo "AIRDATE FAILED. TITLE MATCH ON ABSOLUTE EPISODE NUMBER: $AbsoluteEpisodeNumber"| tee -a "$mythicalLibrarian"/output.log
+    echo "AIRDATE FAILED. TITLE MATCH ON ABSOLUTE EPISODE NUMBER: $AbsoluteEpisodeNumber" | tee -a "$mythicalLibrarian"/output.log
     ((--EpisodeConfidenceRating))
     ConfidenceReasoning="$ConfidenceReasoning Failed; Attempted SubTitle match on Standard logic:"       
     getAbsoluteEpisodeNumberWithStandardLogic
     if [ "$?" = "0" ]; then
       ConfidenceReasoning="$ConfidenceReasoning Successful; "
     else
-      echo "AIRDATE/SANDARD LOGIC FAILED. FUZZY LOGIC ABSOLUTE: $AbsoluteEpisodeNumber"| tee -a "$mythicalLibrarian"/output.log
+      echo "AIRDATE/SANDARD LOGIC FAILED. FUZZY LOGIC ABSOLUTE: $AbsoluteEpisodeNumber" | tee -a "$mythicalLibrarian"/output.log
       RequiresDoover=1
       ((--EpisodeConfidenceRating))
       ConfidenceReasoning="$ConfidenceReasoning Failed; Attempted SubTitle match on Fuzzy logic:" 
@@ -2736,6 +2738,7 @@ if [ "$mythicalLibrarianProgramIDCheck" = "EP" ] && [ "$Exx" = "E" -o "$Exx" = "
   #TODO come up with a way to have a variable like DataWasNotObtainable to check and make it a SH later
 
 #If it's a movie, give it a name.
+#TODO: If it's a movie, try using imdb or similar with available $Plot to determine if the Title is correct...
 elif [ "$mythicalLibrarianProgramIDCheck" = "MV" ]; then
   #TODO: Need to strip the "Movie: " that some stations prepend to their FTA EPG data... I'm looking at you 7
   NewShowName="$InputTitle"

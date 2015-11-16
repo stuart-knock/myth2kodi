@@ -11,6 +11,9 @@
 #Tech Support: http://forum.kodi.tv/showthread.php?pid=470402
 
 #SAK: Modified for me...
+
+#TODO: A number of the long "test" lines would be much easier to read/debug
+#  if they were rewritten as "if ; then else" blocks.
  
 #Intention:
 #  This program is designed to be a user job in MythTV. It can be called by 
@@ -172,6 +175,7 @@ DirTracking=Enabled
 APIkey=6DF511BB2A64E0E9
 #TODO: If I ever put this on GitHub I should register a fresh APIkey - http://thetvdb.com/?tab=apiregister
 #SAK: This one was set at some point for some reason: APIkey=0F3A338F0FCB29A2
+#  but it seems to be rejected for certain uses...
 #Language setting
 Language=en
 
@@ -1917,7 +1921,8 @@ setGroupPermissions (){
 }
 
 #####MYTHICAL DIAGNOSTICS#####
-#TODO: Need to go through this function line-by-line and make sure it's still a sensible Diagnostics function. 
+#TODO: Need to go through this function line-by-line and make sure it's still a sensible Diagnostics function.
+#TODO: Should use | tee -a "$mythicalLibrarian"/diagnostics.log to write diagnostics info to a file
 #This function provides a functions check on mythicalLibrarian
 mythicalDiagnostics(){
   echo "--You have entered diagnostic mode"
@@ -1954,11 +1959,6 @@ mythicalDiagnostics(){
     read -n1 -p "Press any key to perform MythTV Database test..."
     echo ""
     echo "Performing MythTV Python Bindings database test"
-    # if which python2.6; then
-    #   echo "Python2.6 installed"
-    # else
-    #   echo "MISSING packange python2.6"
-    # fi
     #Assuming Python of 2.6+ is fine just not Python 3.*
     if which python ; then
       echo "Python: `which python`"
@@ -1978,7 +1978,11 @@ mythicalDiagnostics(){
       echo "MythTV Python Bindings are installed properly" 
     else
       python -c 'from MythTV import MythDB';
-      test $? != "0" && echo -e "MythTV PythonBindings are not installed properly\n    Debian Users:  apt-get install libmyth-python python-lxml " && Python1=1
+      if [ $? != "0" ] ; then 
+        echo "MythTV PythonBindings are not installed properly"
+        echo "    Debian Users:  apt-get install libmyth-python python-lxml "
+        Python1=1
+      fi
       if [ Python1 != 1 ]; then
         /usr/local/bin/MythDataGrabber --Diagnostic=True; 
         test $? != 0 && echo "there was a problem connecting to the database, check MythDatabase package" && Python2=1

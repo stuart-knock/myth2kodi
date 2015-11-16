@@ -2530,9 +2530,12 @@ if [ "$Database" = "Enabled" ]; then
   esac
 fi
 
-#Report found data #TODO: Report subtitle and season/episode numbers if we already have them.
+#Report found data
 echo "RECSTART:$ShowStartTime DATE:$MovieAirDate $OriginalAirDate"
 echo "PROGRAMID:$ProgramID ShowCategory:$ShowCategory"
+test "$InputSubtitle" != "" && echo -n "InputSubtitle:$InputSubtitle  "  || echo -n "InputSubtitle: UNKNOWN  " 
+test "$Sxx" != "" && echo -n "Sxx:$Sxx  " || echo -n "Sxx: UNKNOWN  " 
+test "$Exx" != "" && echo "Exx:$Exx" || echo "Exx: UNKNOWN"
 echo "PLOT: $Plot"
 ShowName=$InputTitle
 test "$ShowName" = "" && mythicalHelp

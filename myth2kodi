@@ -103,7 +103,7 @@
 #  agrep provides fuzzy logic. Optionally, install libnotify-bin with:
 #    "apt-get install libnotify-bin" -allows GNOME desktop notifications
 #
-#Ubuntu Notifications:
+#Gnome Notifications:
 #  In order for mythicalLibrarian to send notifications to the GNOME desktop, it
 #  must have no-password sudo access. It uses this access strictly to send 
 #  complete, moving and failure status notifications. Because this program is 
@@ -122,7 +122,7 @@
 #   that the setting in KODI under System->Network->Services->Allow control of
 #   KODI via HTTP and Allow programs on other systems to control KODI are 
 #   enabled.  
-
+#
 #Show Name Translation:
 #  The user may elect to create a file in the mythicalLibrarian/ working folder
 #  which will then translate any recorded show name into the desired show name.
@@ -2697,6 +2697,10 @@ if [ "$SeriesID" != "" ] && [ "$Sxx" = "S" -o "$Sxx" = "" -o "$Sxx" = "S00" ] &&
   ConfidenceReasoning="$ConfidenceReasoning Attempted match on OriginalAirDate:"
   #If info was pulled from database, then plug name into NewShowName 
   AbsoluteEpisodeNumber=""
+  #TODO: The OriginalAirdate stuff is US specific, should skip straight to Standard and 
+  #  Fuzzy logic for SydFTA or simply if not SchedulesDirect... close off the first part 
+  #  of the outer if and put inside check for SchedulesDirect, then replace else with a
+  #  check of GotEpisodeNumber.
   getAbsoluteEpisodeNumberWithOriginalAirdate
   AirdateExitStatus=$?
   test "$AirdateExitStatus" = "1" && test "$EpisodeSubtitle" != "" && ResolveMultipleAirdateMatches

@@ -159,7 +159,8 @@ TargetPathIsInputPath=Disabled
 Timeout=50
 #Update database time in secconds, Longer duration means faster processing time and less strain on TheTvDb. Default='84000' (1 day)
 UpdateDatabase=74200
-#mythicalLibrarian working file dir: Default=~/mythicalLibrarian (home/username/mythicalLibraian)
+#TODO: Consider adding variable binpath=/usr/local/bin/ as a step toward non-root install.
+#mythicalLibrarian working file dir: Default=~/.mythicalLibrarian (home/username/.mythicalLibraian)
 mythicalLibrarian=~/.mythicalLibrarian
 #FailSafe mode will enable symlinks to be formed in FailSafeDir if the move or symlink operation fails. Enabled|Disabled
 FailSafeMode=Enabled
@@ -1953,20 +1954,31 @@ mythicalDiagnostics(){
     read -n1 -p "Press any key to perform MythTV Database test..."
     echo ""
     echo "Performing MythTV Python Bindings database test"
-    if which python2.6; then
-      echo "Python2.6 installed"
+    # if which python2.6; then
+    #   echo "Python2.6 installed"
+    # else
+    #   echo "MISSING packange python2.6"
+    # fi
+    #Assuming Python of 2.6+ is fine just not Python 3.*
+    if which python ; then
+      echo "Python: `which python`"
+      python_version=$(python --version 2>&1)  #Python returns version info to stderr
+      echo "Version: $python_version"
+      pyver=`echo $python_version | sed s/"python\s*"//I | cut -f1-2 -d"." | tr -d '.'`
+      if [ $pyver -ge 26 -a $pyver -lt 30 ] ; then
+        echo "WARNING: Python older than 2.6 and Python 3 aren't supported."
+      fi
     else
-      echo "MISSING packange python2.6"
+      echo "MISSING package python, or path incorrectly set."
     fi
+
     /usr/local/bin/MythDataGrabber --Diagnostic=True
     test $? = "0" && PythonBindingsCheck="OK"
     if [ "$PythonBindingsCheck" = "OK" ]; then
       echo "MythTV Python Bindings are installed properly" 
     else
-      python -c 'from MythTV import MythDB'; 
-      #TODO: The test below seems like it must be a bug...
-      test $? != "0" "MythTV PythonBindings are not installed properly 
-   Debian Users:  apt-get install libmyth-python python-lxml " && Python1=1
+      python -c 'from MythTV import MythDB';
+      test $? != "0" && echo -e "MythTV PythonBindings are not installed properly\n    Debian Users:  apt-get install libmyth-python python-lxml " && Python1=1
       if [ Python1 != 1 ]; then
         /usr/local/bin/MythDataGrabber --Diagnostic=True; 
         test $? != 0 && echo "there was a problem connecting to the database, check MythDatabase package" && Python2=1

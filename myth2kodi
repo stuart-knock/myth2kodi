@@ -1125,7 +1125,7 @@ downloadInfoAboutMatchedTitleAndCreateTxtFileTables(){
   #TODO: Change this so that Overview isn't excluded
   curl -L -s -m"$Timeout" "http://www.thetvdb.com/api/$APIkey/series/$SeriesID/all/$Language.xml"| grep -vE "(</id>|</Combined_episodenumber>|</Combined_season>|</DVD_chapter>|</DVD_discid>|</DVD_episodenumber>|</DVD_season>|</Director>|</EpImgFlag>|</GuestStars>|</IMDB_ID>|</Language>|</Overview>|</ProductionCode>|</RatingCount>|</filename>|</seasonid>|</Writer>|</Rating>|</lastupdated>|</seriesid>|</absolute_number>)">"$mythicalLibrarian/$NewShowName/$NewShowName.xmlTest" && echo "$CurrentTime" > "$mythicalLibrarian/$NewShowName/lastupdated.time"
 
-  #Validate that the show has a EpisodeName tag and is a valid download before clobering our old download.
+  #Validate that the show has a EpisodeName tag and is a valid download before clobbering our old download.
   grepTest=""
   grepTest=`grep "EpisodeName" "$mythicalLibrarian/$NewShowName/$NewShowName.xmlTest"`
   test "$grepTest" != "" && mv "$mythicalLibrarian/$NewShowName/$NewShowName.xmlTest" "$mythicalLibrarian/$NewShowName/$NewShowName.xml"
@@ -2420,7 +2420,8 @@ test "$InputPath" = "" && mythicalHelp
 MythTVUserJobString="%DIR%/%FILE%"
 
 #####COMMAND LINE SWITCHES#####
-#TODO: Add a --commskip option that just re/generates to commskip file for a given show, assuming/checking that show ahs already been myth2kodi'd
+#TODO: Add a --commskip option that just re/generates to commskip file for a given show, assuming/checking that show has already been myth2kodi'd
+#TODOl Add a --getSeriesInfo option that validates then downloads info from ttvdb, writing to files. See, downloadInfoAboutMatchedTitleAndCreateTxtFileTables. 
 #check for command line switches
 case "$InputPath" in 
 

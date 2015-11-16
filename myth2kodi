@@ -946,8 +946,6 @@ ProcessSydFTA(){
   ###The ProgramID field from FTA EPG data in Sydney?Australia? doesn't specify MV/EP/SH,
   ###the Movie specification is "almost-always" found in the Category field of
   ###the MythTV database. So, we'll use that.
-  ####Create MV/EP/SH Identification Type from ProgramID
-  ###mythicalLibrarianProgramIDCheck=${ProgramID:0:2}
   if [ "$ShowCategory" = "Movie" ]; then
     mythicalLibrarianProgramIDCheck="MV"
   else #For now assume that if it's not a Movie it's an episode of a series
@@ -978,10 +976,13 @@ ProcessSydFTA(){
   test "$mythicalLibrarianProgramIDCheck" = "EP" && ProgramIDType="Series With Episode Data"
   test "$mythicalLibrarianProgramIDCheck" = "SP" && ProgramIDType="Sports Programming" && mythicalLibrarianProgramIDCheck=SH
   
-  #TODO: The ProgramID field has something that looks like a web address for 
-  #  most stations, look into this and see if there is extra data we can get.
-  #account for .0123's in EITonly data type 
-  ProgramID=`echo $ProgramID|cut -f1 -d"."`
+  #FTA stations providing a ProgramID use CRID: https://en.wikipedia.org/wiki/Crid
+  #Extract the Authority, ie the station broadcasting the show
+  ProgramAuthority=`echo $ProgramID | sed s/"crid:\/\/"//I | cut -f1 -d"/"`
+  #Extract the show specific information, removing the leading /
+  ProgramData=`echo $ProgramID | sed s/"crid:\/\/"//I | sed s/$ProgramAuthority"\/"//`
+  #Populate the ProgramID variable with the ProgramData field of CRID
+  ProgramID=$ProgramData
   
   #strip needless chars from date
   datehour=`echo "$ShowStartTime"|tr ":" "."|tr " " "@"`

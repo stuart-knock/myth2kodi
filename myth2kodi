@@ -168,7 +168,9 @@ FailSafeDir="/home/librarian/FailSafe"  #<------THIS VALUE MUST BE SET-------
 #DirTracking will check for and remove the folders created by mythicalLibrarian
 DirTracking=Enabled
 #the following line contains the API key from www.TheTvDb.Com. Default project code: 6DF511BB2A64E0E9
-APIkey=0F3A338F0FCB29A2
+APIkey=6DF511BB2A64E0E9
+#TODO: If I ever put this on GitHub I should register a fresh APIkey - http://thetvdb.com/?tab=apiregister
+#SAK: This one was set at some point for some reason: APIkey=0F3A338F0FCB29A2
 #Language setting
 Language=en
 

@@ -4,7 +4,7 @@
 # ***** WELCOME! Scroll further down to set the user settings. *****
 
 #mythicalLibrarian by Adam Outler
-
+#TODO: Contact original author before moving to a public GitHub repo...
 #email: adamoutler gmail.com
 #Software the way it should be: Free and Open Source
 #Please contact me with any bug reports 
@@ -399,7 +399,7 @@ TraditionalNamingConventions(){
   elif [ "$mythicalLibrarianProgramIDCheck" = "MV" ]; then
     Exx="Movie"
     MoveDir="$PrimaryMovieDir"
-    #TODO: If adding a year then we really want original release date so the kodi metadata lookup works reliably.
+    #TODO: If adding a year then we really want original release date so the Kodi metadata lookup works reliably.
     if [ "$MovieAirDate" != "" ]; then
       ShowFileName="$NewShowName ($MovieAirDate)"
     else
@@ -1953,6 +1953,7 @@ mythicalDiagnostics(){
       echo "MythTV Python Bindings are installed properly" 
     else
       python -c 'from MythTV import MythDB'; 
+      #TODO: The test below seems like it must be a bug...
       test $? != "0" "MythTV PythonBindings are not installed properly 
    Debian Users:  apt-get install libmyth-python python-lxml " && Python1=1
       if [ Python1 != 1 ]; then

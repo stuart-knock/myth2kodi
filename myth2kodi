@@ -727,10 +727,12 @@ GetMythTVDatabase(){
     test "$InputTitle" = "" && InputTitle=`mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select title from recorded where basename like '$InputFileBasename'; "|sed s/"title"/""/g|sed -n "2p"`
     #get Subtitle
     test "$InputSubtitle" = "" && InputSubtitle=`mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select subtitle from recorded where basename like '$InputFileBasename' ; "|sed s/"subtitle"/""/g|sed -n "2p"`
+    #TODO: It's possible the following two lines require the '| sed -n "2p"' for filtering what is returned by the mysql SELECT -- So far I think I've only used the PythonBindings. 
     #get Season Number, SydFTA sometimes has a season field #TODO: change call to enable Season Number as an input
     test "$InputSeasonNum" = "" && InputSeasonNum=`mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select season from recorded where basename like '$InputFileBasename' ;"|sed s/"season"/""/g`
     #get Episode Number, SydFTA sometimes has an episode field  #TODO: change call to enable Episode Number as an input
     test "$InputEpisodeNum" = "" && InputEpisodeNum=`mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select episode from recorded where basename like '$InputFileBasename' ; "|sed s/"episode"/""/g`
+    #TODO: Determine if substitution of "/" with "" below is SchedulesDirect specific, if so move it to ProcessSchedulesDirect... 
     #get chanid for recordings to identify program table
     ChanID=`mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select chanid from recorded where basename like '$InputFileBasename';"|sed s/"\/"/""/g|sed -n 2p|sed s/"chanid"/""/g|sed s/" "/""/g`
     #get ProgramID from recorded to identify program
@@ -854,6 +856,12 @@ ProcessSchedulesDirect(){
   test "${x:0:2}" = "EP" && echo woot
   test "$EpisodeSubtitle" != "" && GoForDoover=1 
   
+  #TODO:This overwrites the SeriesID extracted from MythTV DB, which, for some 
+  #  reason, is written to the Zap2itSeriesID variable -- which appears to be 
+  #  specific to SchedulesDirect. The SeriesID variable is used for series-id of
+  #  TheTVDB, set in setSeriesIDandNewShowNameBasedOnSeriesLineNumber(). Check 
+  #  the SeriesID field in MythTV DB & see if we can make more sensible use of
+  #  whatever it contains... If not, at least cleanup the usage 
   #Get barebones zap2it series id.  
   Zap2itSeriesID=`echo $ProgramID| tr -d MVSHEP | sed 's/0*//' | sed 's/.\{4\}$//' `
   
@@ -1371,7 +1379,7 @@ searchTheTvDbAndReturnTxtFileTables(){
   #Search TheTvDb and return an XML file with results
   curl -L -s -m"$Timeout" www.thetvdb.com/api/GetSeries.php?seriesname=$tvdbshowname>"$mythicalLibrarian/working.xml"
  
-  #Separate the XML into textual DBs conatining SeriesID, ShowName and Zap2it IDs
+  #Separate the XML into textual DBs containing SeriesID, ShowName and Zap2it IDs
   cat "$mythicalLibrarian/working.xml" | grep "<seriesid>"|sed -e s/"<seriesid>"/""/ -e s/"<\/seriesid>"/""/ -e s/'&quot;'/'"'/ -e s/"&amp;"/"\&"/ -e s/'&ndash;'/'-'/ -e s/"&lt;"/"<"/ -e s/"&gt;"/">"/ >"$mythicalLibrarian/sid.txt"
   cat "$mythicalLibrarian/working.xml" | grep "<SeriesName>"| sed -e s/"<SeriesName>"// -e s/"<\/SeriesName>"// -e s/'&quot;'/'"'/ -e s/"&amp;"/"\&"/ -e s/'&ndash;'/'-'/ -e s/"&lt;"/"<"/ -e s/"&gt;"/">"/ >"$mythicalLibrarian/shn.txt"
    
@@ -2531,8 +2539,8 @@ if [ "$Database" = "Enabled" ]; then
 fi
 
 #Report found data
-echo "RECSTART:$ShowStartTime DATE:$MovieAirDate $OriginalAirDate"
-echo "PROGRAMID:$ProgramID ShowCategory:$ShowCategory"
+echo "RECSTART:$ShowStartTime  DATE:$MovieAirDate $OriginalAirDate"
+echo "PROGRAMID:$ProgramID  ShowCategory:$ShowCategory"
 test "$InputSubtitle" != "" && echo -n "InputSubtitle:$InputSubtitle  "  || echo -n "InputSubtitle: UNKNOWN  " 
 test "$Sxx" != "" && echo -n "Sxx:$Sxx  " || echo -n "Sxx: UNKNOWN  " 
 test "$Exx" != "" && echo "Exx:$Exx" || echo "Exx: UNKNOWN"
@@ -2572,9 +2580,9 @@ if [ "$mythicalLibrarianProgramIDCheck" != "SH" ] && [ "$mythicalLibrarianProgra
   echo "DATE:$MovieAirDate $OriginalAirDate FILE NAME: $InputPath">>"$mythicalLibrarian"/output.log
   
   #Query thetvdb on show title, then return a list of Zap2itID, ShowName and seriesid.
-  searchTheTvDbAndReturnTxtFileTables  
-  ConfidenceReasoning="$ConfidenceReasoning Attempted Match On Zap2itID:"
+  searchTheTvDbAndReturnTxtFileTables
   #TODO: This function assumes a SchedulesDirect format for the data in $ProgramID,so will never work for SydFTA
+  ConfidenceReasoning="$ConfidenceReasoning Attempted Match On Zap2itID:"
   GetSeriesLineNumberFromTableWithZap2itID
   if [ $? = 0 ]; then 
     ((++SeriesConfidenceRating))

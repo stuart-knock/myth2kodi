@@ -1738,6 +1738,7 @@ ignoreList(){
 }
 
 #####SHOW TRANSLATIONS HANDLING#####
+#TODO: Make showTranslations file name consistently cased in code and doc and log...
 #Get show translations if the /mythicalLibrarian/showtranslation file exists.  the show title will be replaced by the one in the user created showtranslations file
 ShowTranslations(){
   if [ -f "$mythicalLibrarian"/showtranslations ] && [ "$ShowName" != "" ]; then 

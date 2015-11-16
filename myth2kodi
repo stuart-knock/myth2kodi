@@ -977,10 +977,12 @@ ProcessSydFTA(){
   test "$mythicalLibrarianProgramIDCheck" = "SP" && ProgramIDType="Sports Programming" && mythicalLibrarianProgramIDCheck=SH
   
   #FTA stations providing a ProgramID use CRID: https://en.wikipedia.org/wiki/Crid
+  #Remove the leading CRID://
+  ProgramID=`echo $ProgramID | sed s/"crid:\/\/"//I`
   #Extract the Authority, ie the station broadcasting the show
-  ProgramAuthority=`echo $ProgramID | sed s/"crid:\/\/"//I | cut -f1 -d"/"`
+  ProgramAuthority=`echo $ProgramID | cut -f1 -d"/"`
   #Extract the show specific information, removing the leading /
-  ProgramData=`echo $ProgramID | sed s/"crid:\/\/"//I | sed s/$ProgramAuthority"\/"//`
+  ProgramData=`echo $ProgramID | sed s/$ProgramAuthority"\/"//`
   #Populate the ProgramID variable with the ProgramData field of CRID
   ProgramID=$ProgramData
   

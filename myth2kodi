@@ -1433,6 +1433,10 @@ DoMythTVPermissionsCheck(){
   # if no bypass, and file is owned by mythtv, and username is not mythtv
   # and system is set to use mythtv database, and symlink is move 
   #TODO: This might not work
+  #TODO: Probably should change explicit "mythtv" here to a variable designating
+  #  a single authorised librarian, eg Librarian="mythtv", then adding a simple 
+  #  check of $MyUserName and bailing with an ERROR message if != $Librarian,
+  #  this should avoid most/all permission issues.
   if [ "$InputOption" != "--BypassPermissionsCheck" ] || [ "$InputOption" = "" ] && [ "$InputSubtitle" = "" ] && [ "$InputTitle" != "--BypassPermissionsCheck" ]; then
     if  [ "`ls -l \"$InputPath\"| awk '{ print $3 }'`" = "mythtv" ] && [ "$MyUserName" != "mythtv" ] && [ "$SYMLINK" = "MOVE" ]; then
       UserName=$USER
@@ -1883,7 +1887,7 @@ mythicalScan(){
   echo " $scanpath"
   echo " searching for file types:$checkext. Each file will be"
   echo " processed through mythicalLibrarian. This mode will" 
-  echo " only work when database access functional."
+  echo " only work when database access is functional."
   echo " please scan a single file to test capabilities before"
   echo " running the scan mode of operation using the following"
   echo " eg. mythicalLibrarian /path/to/file.ext"
@@ -2151,6 +2155,9 @@ mythicalDiagnostics(){
 #This function provides an easy way to redo failed jobs.
 executeDoOver(){
   if [ "$(id -u)" = "0" ]; then
+    #TODO: So, if id of user is 0, and thus root, test $SUDO_USER is set as
+    #  "root" and if it is assign whoami (which for uid=0 will return root) to
+    #  the variable  SUDO_USER... Something is wrong here.
     test "$SUDO_USER" = "root" && SUDO_USER=`whoami`
     RunSudo=1
   fi
@@ -2164,9 +2171,11 @@ executeDoOver(){
   test "$DoOverBypass" = "1" && yesorno=y
   
   if [ "$yesorno" = "y" ] && [ -f "$mythicalLibrarian/doover.sh" ]; then
+    #TODO: Maybe doover.sh.run_YYYY-MM-DD would be better, see $Today
     #preserve permissions
     chmod +x "$mythicalLibrarian/doover.sh"
     test "$RunSudo" = "1" &&sudo -u $SUDO_USER cat "$mythicalLibrarian/doover.sh" >> "$mythicalLibrarian/doover.sh.old" || cat "$mythicalLibrarian/doover.sh" >> "$mythicalLibrarian/doover.sh.old"
+    #NOTE: The first command in doover.sh is to delete the file doover.sh.
     test "$RunSudo" = "1" &&sudo -u $SUDO_USER "$mythicalLibrarian/doover.sh" || "$mythicalLibrarian/doover.sh"
     echo "done."
     exit 0
@@ -2201,6 +2210,7 @@ executeUndo(){
     test -f "$mythicalLibrarian/undo.sh" && chmod +x "$mythicalLibrarian/undo.sh"
     test -f "$mythicalLibrarian/undo.sh" && sudo -u $SUDO_USER cat "$mythicalLibrarian/undo.sh" >> "$mythicalLibrarian/undo.sh.old"
     test -f "$mythicalLibrarian/undo.sh" && sudo -u $SUDO_USER "$mythicalLibrarian/undo.sh"
+    #TODO: Change doover.sh.old to doover.sh.old_YYYY-MM-DD would be better, see $Today
     test -f "$mythicalLibrarian/doover.sh" && cat "$mythicalLibrarian/doover.sh" >> "$mythicalLibrarian/doover.sh.old"
     test -f "$mythicalLibrarian/doover.sh" && rm -f "$mythicalLibrarian/doover.sh"
     removedead=1
@@ -2409,9 +2419,23 @@ improveConfidence(){
   
 
 ######################### BEGIN MAIN PROGRAM ################################### 
- 
+
+#TODO: The permission handling stuff seems a bit convoluted, I also think I've 
+#  found at least a few bugs. It would seem far simpler to enforce a dedicated
+#  user to function as the "Librarian". That is add a Librarian= to the user
+#  settings at the start of this file. Probably with the default of 
+#  Librarian="mythtv" for maximum compatibility with existing expectations of 
+#  the code... Then simply refuse to run with a helpful error message if the 
+#  variable $MyUserName doesn't equal $Librarain. The requirement would just be
+#  that the user $Librarian be the one running MythTV and that they have write
+#  privileges to the MoveDirs that Kodi can see. Then most/all of the need for
+#  running commands with sudo and the need for undo to be run as root can be 
+#  removed... Need to check expectations of MythDataGrabber and other auxiliary 
+#  functions before making this change.
+
 #####DEFINE ENVIRONMENT AND VARIABLES#####
 MyUserName=`whoami`
+Today=`date +%F`
 # Set global values
 test -f "/etc/mythicalLibrarian/globalSettings" && source /etc/mythicalLibrarian/globalSettings
 #make our working dir if it does not exist

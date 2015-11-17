@@ -598,9 +598,7 @@ generaterss() {
   if [ "$mythicalLibrarianProgramIDCheck" = "EP" ]; then
     echo -e "\t\t\t<link>http://www.thetvdb.com/?tab=series&amp;id=$SeriesID</link>">>$rssDir/$TEMPrssFile 
   elif [ "$mythicalLibrarianProgramIDCheck" = "MV" ]; then
-    #TODO: Don't think this will work for movies, should switch to imdb... try
-    #  http://www.imdb.com/search/title?release_date=,$MovieAirDate&title=$tvdbshowname&title_type=feature
-    echo -e "\t\t\t<link>http://www.thetvdb.com/?tab=series&amp;id=$ShowName</link>">>$rssDir/$TEMPrssFile 
+    echo -e "\t\t\t<link>http://www.imdb.com/search/title?release_date=,$MovieAirDate&title=$ShowName&title_type=feature</link>">>$rssDir/$TEMPrssFile 
   else
     tvdotcomshowname=`echo $ShowName|sed s/" "/"%20"/g`
     echo -e "\t\t\t<link>http://www.tv.com/search.php?type=11&amp;stype=all&amp;tag=search%3Bfrontdoor&amp;qs=$tvdotcomshowname </link>">>$rssDir/$TEMPrssFile 

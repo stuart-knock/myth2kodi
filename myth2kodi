@@ -1313,7 +1313,7 @@ ResolveMultipleAirdateMatches(){
     #get instance line number
     IntermediateEpisodeNumber=`agrep -Byn "${EpisodeSubtitle:0:29}" "$mythicalLibrarian/$NewShowName/$NewShowName.InstanceEnames.txt"|grep -m1 ^|sed 's/:.*//'`
     #translate instance line number to actual line number  #TODO: Pretty sure the = = below is a typo, check there isn't an obscure Bash meaning them remove...
-    test "$IntermediateEpisodeNumber" != "" && AbsoluteEpisodeNumber= AbsoluteEpisodeNumber=`sed -n $IntermediateEpisodeNumber'p' "$mythicalLibrarian/$NewShowName/$NewShowName.InstanceLineNumbers.txt"`
+    test "$IntermediateEpisodeNumber" != "" && AbsoluteEpisodeNumber=`sed -n $IntermediateEpisodeNumber'p' "$mythicalLibrarian/$NewShowName/$NewShowName.InstanceLineNumbers.txt"`
     if [ "$AbsoluteEpisodeNumber" != "" ]; then
       ConfidenceReasoning="$ConfidenceReasoning Successful;"
       return 0
@@ -2461,6 +2461,7 @@ SeriesConfidenceRating=0
 #setup defaults for searching Episode information
 Exx=""
 Sxx=""
+GotEpisodeNumber=0
 EpisodeConfidenceRating=0
 MythicalEpiShow=0
 
@@ -2629,7 +2630,7 @@ if [ "$mythicalLibrarianProgramIDCheck" != "SH" ] && [ "$mythicalLibrarianProgra
   #Query thetvdb on show title, then return a list of Zap2itID, ShowName and seriesid.
   searchTheTvDbAndReturnTxtFileTables
 
-  #TODO: This would be better if it could be [ "$GuideDataType"  = "SchedulesDirect" ]
+  #TODO: This would be better if it could be [ "$GuideDataType" = "SchedulesDirect" ]
   #  Figure out if that's ok with respect to NoLookUp...
   if [ "$GuideDataType" != "SydFTA" ] ; then
     ConfidenceReasoning="$ConfidenceReasoning Attempted Match On Zap2itID:"
@@ -2693,7 +2694,7 @@ if [ "$SeriesID" != "" ] ; then
   fi
 #if series id is not obtained send failure message
 elif [ -z "$SeriesID" ] && [ "$mythicalLibrarianProgramIDCheck" != "SH" ] && [ "$mythicalLibrarianProgramIDCheck" != "MV" ]; then
-  ConfidenceReasoning=$ConfidenceReasoning+"Failed; "
+  ConfidenceReasoning="$ConfidenceReasoning Failed; "
   echo "SERIES ID WAS NOT FOUND. THETVDB MAY BE DOWN. TRY USING A showTranslations">>"$mythicalLibrarian"/output.log
   if [ "$Database" = "Enabled" ]; then
     echo "DB ENTIRES- RECSTART:$ShowStartTime- MOVIE:$MovieAirDate- ORIGAIRDATE:$OriginalAirDate- CHID:$ChanID- CAT:$ShowCategory-">>"$mythicalLibrarian"/output.log
@@ -2713,27 +2714,31 @@ if [ "$SeriesID" != "" ] && [ "$Sxx" = "S" -o "$Sxx" = "" -o "$Sxx" = "S00" ] &&
   ConfidenceReasoning="$ConfidenceReasoning Attempted match on OriginalAirDate:"
   #If info was pulled from database, then plug name into NewShowName 
   AbsoluteEpisodeNumber=""
-  #TODO: The OriginalAirdate stuff is US specific, should skip straight to Standard and 
-  #  Fuzzy logic for SydFTA or simply if not SchedulesDirect... close off the first part 
-  #  of the outer if and put inside check for SchedulesDirect, then replace else with a
-  #  check of GotEpisodeNumber.
-  getAbsoluteEpisodeNumberWithOriginalAirdate
-  AirdateExitStatus=$?
-  test "$AirdateExitStatus" = "1" && test "$EpisodeSubtitle" != "" && ResolveMultipleAirdateMatches
-  test "$?" = "0" && AirdateExitStatus=0
-  if [ "$AirdateExitStatus" = "0" ]; then
-    ((++EpisodeConfidenceRating))
-    ConfidenceReasoning="$ConfidenceReasoning Successful; "
-    GotEpisodeNumber=1
-  else 
-    echo "AIRDATE FAILED. TITLE MATCH ON ABSOLUTE EPISODE NUMBER: $AbsoluteEpisodeNumber" | tee -a "$mythicalLibrarian"/output.log
-    ((--EpisodeConfidenceRating))
-    ConfidenceReasoning="$ConfidenceReasoning Failed; Attempted SubTitle match on Standard logic:"       
+  #TODO: This would be better if it could be [ "$GuideDataType" = "SchedulesDirect" ]
+  #  Figure out if that's ok with respect to NoLookUp...
+  if [ "$GuideDataType" != "SydFTA" ] ; then
+    getAbsoluteEpisodeNumberWithOriginalAirdate
+    AirdateExitStatus=$?
+    test "$AirdateExitStatus" = "1" && test "$EpisodeSubtitle" != "" && ResolveMultipleAirdateMatches
+    test "$?" = "0" && AirdateExitStatus=0
+    if [ "$AirdateExitStatus" = "0" ]; then
+      ((++EpisodeConfidenceRating))
+      ConfidenceReasoning="$ConfidenceReasoning Successful; "
+      GotEpisodeNumber=1
+    else 
+      echo "AIRDATE FAILED. TITLE MATCH ON ABSOLUTE EPISODE NUMBER: $AbsoluteEpisodeNumber" | tee -a "$mythicalLibrarian"/output.log
+      ((--EpisodeConfidenceRating))
+      ConfidenceReasoning="$ConfidenceReasoning Failed;"
+    fi
+  fi
+
+  if [ $GotEpisodeNumber != 1 ]
+    ConfidenceReasoning="$ConfidenceReasoning  Attempted SubTitle match on Standard logic:"
     getAbsoluteEpisodeNumberWithStandardLogic
     if [ "$?" = "0" ]; then
       ConfidenceReasoning="$ConfidenceReasoning Successful; "
     else
-      echo "AIRDATE/SANDARD LOGIC FAILED. FUZZY LOGIC ABSOLUTE: $AbsoluteEpisodeNumber" | tee -a "$mythicalLibrarian"/output.log
+      echo "AIRDATE/STANDARD LOGIC FAILED. FUZZY LOGIC ABSOLUTE: $AbsoluteEpisodeNumber" | tee -a "$mythicalLibrarian"/output.log
       RequiresDoover=1
       ((--EpisodeConfidenceRating))
       ConfidenceReasoning="$ConfidenceReasoning Failed; Attempted SubTitle match on Fuzzy logic:" 

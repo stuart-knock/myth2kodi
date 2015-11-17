@@ -357,7 +357,7 @@ RunJob(){
 #$OriginalExt = original file extension  eg "mpg"
 #$NewShowName = Successfully resolved show name
 #$ChanID = ChannelID
-#$ProgramID= Zap2it listing
+#$ProgramID= The Program IDentification information found in the MythTV DB
 #$ShowStartTime = begin recording time
 #$ShowCategory = category like children or sports also specifies Movie in SydFTA data
 #$mythicalLibrarianProgramIDCheck = "SH" for SHow or sports - "MV" for MoVie - "EP" for EPisode
@@ -744,8 +744,8 @@ GetMythTVDatabase(){
     ChanID=`mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select chanid from recorded where basename like '$InputFileBasename';"|sed s/"\/"/""/g|sed -n 2p|sed s/"chanid"/""/g|sed s/" "/""/g`
     #get ProgramID from recorded to identify program
     ProgramID=`mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select programid from recorded where basename like '$InputFileBasename' ; " |sed s/"\/"/""/g|sed -n "2p"|sed s/"programid"/""/g`
-    #Get zap2it series id from basename to identify program
-    Zap2itSeriesID=`mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select seriesid from recorded where basename like '$InputFileBasename' ; " |sed s/"\/"/""/g|sed -n "2p"|sed s/"seriesid"/""/g`
+    #Get series id from basename to identify program
+    LocalSeriesID=`mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select seriesid from recorded where basename like '$InputFileBasename' ; " |sed s/"\/"/""/g|sed -n "2p"|sed s/"seriesid"/""/g`
     #Get Plot from basename to identify program
     Plot=`mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select description from recorded where basename like '$InputFileBasename' ; " |sed s/"\/"/""/g|sed -n "2p"|sed s/"description"/""/g`
     #Get rating from basename to identify program
@@ -821,7 +821,7 @@ GetMythTvPythonBindings(){
   ShowCategory=$category
   Stars=$stars
   Plot=$description
-  Zap2itSeriesID=$seriesid
+  LocalSeriesID=$seriesid
   ProgramID=$programid
   ChanID=$chanid
   ShowStartTime=$starttime
@@ -856,22 +856,16 @@ ProcessSchedulesDirect(){
   test "$mythicalLibrarianProgramIDCheck" = "SP" && ProgramIDType="Sports Programming" && mythicalLibrarianProgramIDCheck=SH
   
   #account for .0123's in EITonly data type 
-  ProgramID=`echo $ProgramID|cut -f1 -d"."`
+  ProgramID=`echo $ProgramID | cut -f1 -d"."`
   
   #Check if database contains enough information to put into doover que
   GoForDoover=0
   test "${x:0:2}" = "EP" && echo woot
   test "$EpisodeSubtitle" != "" && GoForDoover=1 
   
-  #TODO:This overwrites the SeriesID extracted from MythTV DB, which, for some 
-  #  reason, is written to the Zap2itSeriesID variable -- which appears to be 
-  #  specific to SchedulesDirect. The SeriesID variable is used for series-id of
-  #  TheTVDB, set in setSeriesIDandNewShowNameBasedOnSeriesLineNumber(). Check 
-  #  the SeriesID field in MythTV DB & see if we can make more sensible use of
-  #  whatever it contains... If not, at least cleanup the usage 
   #Get barebones zap2it series id.  
-  Zap2itSeriesID=`echo $ProgramID| tr -d MVSHEP | sed 's/0*//' | sed 's/.\{4\}$//' `
-  
+  Zap2itSeriesID=`echo $ProgramID | tr -d MVSHEP | sed 's/0*//' | sed 's/.\{4\}$//'`
+
   #strip needless chars from date
   datehour=`echo "$ShowStartTime"|tr ":" "."|tr " " "@"`
   #get 4 digit year
@@ -971,6 +965,9 @@ ProcessSydFTA(){
     mythicalLibrarianProgramIDCheck="EP"
   fi
 
+  #TODO: Check the SeriesID field in MythTV DB & see if we can make more
+  #  sensible use of whatever it contains...
+
   #If the information is already available, set the Sxx & Exx variables
   if [ "$mythicalLibrarianProgramIDCheck" = "EP" ]; then
     ExtractSxxExx
@@ -1045,7 +1042,10 @@ ProcessNoLookup(){
   test "$mythicalLibrarianProgramIDCheck" = "SP" && ProgramIDType="Sports Programming" && mythicalLibrarianProgramIDCheck=SH
  
   #account for .0123's in EITonly data type 
-  ProgramID=`echo $ProgramID|cut -f1 -d"."`
+  ProgramID=`echo $ProgramID | cut -f1 -d"."`
+
+  #This probably isn't necessary, but adding it for the time-being match previous state
+  Zap2itSeriesID="$LocalSeriesID"
   
   #strip needless chars from date
   datehour=`echo "$ShowStartTime"|tr ":" "."|tr " " "@"`
@@ -1238,19 +1238,23 @@ downloadInfoAboutMatchedTitleAndCreateTxtFileTables(){
 
 #####MATCH ZAP2ITID TO TVDB#####
 GetSeriesLineNumberFromTableWithZap2itID(){
-  Zap2ItCheck=`echo $ProgramID | tr -d MVSHEP| sed 's/0*//'|sed 's/.\{4\}$//'`
-  serieslinenumber=0
-  #loop through all show names received by TheTvDb and match Zap2it ID.
-  while read line ; do
-    (( ++ serieslinenumber ))
-    echo "TESTING FOR ZAP2ITID MATCH:$line `sed -n $serieslinenumber"p" $mythicalLibrarian/shn.txt`"
-    Zap2ItTest=`echo $line | tr -d MVSHEP| sed 's/0*//'` 
-    if [ "$Zap2ItTest" = "$Zap2ItCheck" ] && [ "$Zap2ItCheck" != "" ]; then
-      return 0         
-      break
-    fi
-  done < "$mythicalLibrarian"/zap2it.txt
-  return 1
+  if [ -n $Zap2itSeriesID ] ; then
+    serieslinenumber=0
+    #loop through all show names received by TheTvDb and match Zap2it ID.
+    while read line ; do
+      (( ++ serieslinenumber ))
+      echo "TESTING FOR ZAP2ITID MATCH:$line `sed -n $serieslinenumber"p" $mythicalLibrarian/shn.txt`"
+      Zap2ItTest=`echo $line | tr -d MVSHEP | sed 's/0*//'`
+      if [ "$Zap2ItTest" = "$Zap2itSeriesID" ] && [ "$Zap2itSeriesID" != "" ]; then
+        return 0
+        break
+      fi
+    done < "$mythicalLibrarian"/zap2it.txt
+    return 1
+  else
+    echo "WARNING:GetSeriesLineNumberFromTableWithZap2itID() called, with no Zap2itSeriesID"
+    return 1
+  fi
 }
 
 #####FUZZY LOGIC RECOGNITION OF SERIES#####

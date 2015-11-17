@@ -2628,16 +2628,25 @@ if [ "$mythicalLibrarianProgramIDCheck" != "SH" ] && [ "$mythicalLibrarianProgra
   
   #Query thetvdb on show title, then return a list of Zap2itID, ShowName and seriesid.
   searchTheTvDbAndReturnTxtFileTables
-  #TODO: This function assumes a SchedulesDirect format for the data in $ProgramID,so will never work for SydFTA
-  ConfidenceReasoning="$ConfidenceReasoning Attempted Match On Zap2itID:"
-  GetSeriesLineNumberFromTableWithZap2itID
-  if [ $? = 0 ]; then 
-    ((++SeriesConfidenceRating))
-    ConfidenceReasoning="$ConfidenceReasoning Successful;"
-    echo "MATCH FOUND BASED ON Zap2itID:$NewShowName" | tee -a "$mythicalLibrarian"/output.log
-  else
-    ((--SeriesConfidenceRating))
-    ConfidenceReasoning="$ConfidenceReasoning Failed; Attempted match on Standard Logic:"
+
+  #TODO: This would be better if it could be [ "$GuideDataType"  = "SchedulesDirect" ]
+  #  Figure out if that's ok with respect to NoLookUp...
+  if [ "$GuideDataType" != "SydFTA" ] ; then
+    ConfidenceReasoning="$ConfidenceReasoning Attempted Match On Zap2itID:"
+    GetSeriesLineNumberFromTableWithZap2itID
+    if [ $? = 0 ]; then
+      ((++SeriesConfidenceRating))
+      ConfidenceReasoning="$ConfidenceReasoning Successful;"
+      echo "MATCH FOUND BASED ON Zap2itID:$NewShowName" | tee -a "$mythicalLibrarian"/output.log
+    else
+      ((--SeriesConfidenceRating))
+      ConfidenceReasoning="$ConfidenceReasoning Failed;"
+    fi
+  fi
+
+  #If the previous if block was skipped or failed to find the SeriesLineNumber
+  if [ $SeriesConfidenceRating -le 0 ] ; then
+    ConfidenceReasoning="$ConfidenceReasoning Attempted match on Standard Logic:"
     GetSeriesLineNumberFromTableWithStandardLogic
     if [ $? = 0 ]; then
       ConfidenceReasoning="$ConfidenceReasoning Successful;"

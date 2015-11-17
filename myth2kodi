@@ -891,7 +891,7 @@ ExtractSxxExx(){
     #Check the Plot field for the SeasonEpisode info, SBS is big on 
     #including it in the plot/description field instead of where it belongs
     #The below should work for any of the following forms:
-    #S01E42 | (01x42) | s01e42 | 1X2 | S1E4 | (S01Ep42) | (S1Ep42) | 42x1 | (S.01Ep.42) 
+    #S01E42 | (01x42) | s01e42 | 1X2 | S1E4 | (S01Ep42) | (S1Ep42) | 42x1 | (S.01Ep.42) | (S.01,Ep.42)
     SeasonEpisode=`echo $Plot | grep -i --only-matching '\(s\.*[0-9]*[0-9]\,*\(e\|ep\)\.*[0-9][0-9]*\)\|\([0-9]*[0-9]x[0-9][0-9]*\)'`
   fi
   if [ "$InputSeasonNum" != "" ] && [ "$InputEpisodeNum" != "" ]; then
@@ -933,7 +933,7 @@ ProcessSydFTA(){
   #disqualify invalid movie airdates
   test ! -z "$MovieAirDate" && test $MovieAirDate -lt 1900 && MovieAirDate=$null 
   
-  #TODO:#NOTE:The OriginalAirDate in TVdb is US specific, so not very useful for us, probably want to bypass it.
+  #We don't use these, but if they're "none" we still want them changed to ""
   test "$OriginalAirDate" = "None" && OriginalAirDate=""
   test "$OriginalAirDate" = "none" && OriginalAirDate=""
   
@@ -998,12 +998,6 @@ ProcessSydFTA(){
   
   #strip needless chars from date
   datehour=`echo "$ShowStartTime"|tr ":" "."|tr " " "@"`
-  
-  #TODO:#NOTE: seasonyear is set but doesn't seem to be used anywhere, also not
-  #  going to be relevant unless you've recorded original showing rather than a
-  #  repeat.
-  #get 4 digit year
-  seasonyear=`echo "${ShowStartTime:0:4}"`
   
   #predefined naming conventions
   if [ "$ShowCategory" = "Sports event" -o "$ShowCategory" = "News" -o "$ShowCategory" = "Newsmagazine" ]; then
@@ -1209,6 +1203,11 @@ downloadInfoAboutMatchedTitleAndCreateTxtFileTables(){
         line=${line/<EpisodeNumber>/}
         EpisodeNr=$line
       #TODO: Add a block to extract the episode Overview
+      # #Get Episode Overview
+      # elif [[ $line == \<Overview\>* ]]; then
+      #   line=${line/<\/Overview>/}
+      #   line=${line/<Overview>/}
+      #   EpisodeOverview=$line
       fi
     done < "$mythicalLibrarian/$NewShowName/$NewShowName.xml"
       

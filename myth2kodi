@@ -1361,6 +1361,20 @@ getAbsoluteEpisodeNumberWithOriginalAirdate(){
   return 2
 }
 
+#Get the AbsoluteEpisodeNumber corresponding to Sxx and Exx
+getAbsoluteEpisodeNumberWithSxxExx(){
+  AbsoluteEpisodeNumber=""
+  Snum=`echo ${Sxx#S}` ; Snum=`echo ${Snum#0}`
+  Enum=`echo ${Exx#S}` ; Enum=`echo ${Enum#0}`
+  SxxAENs=`grep -nix "$Snum" "$mythicalLibrarian/$NewShowName/$NewShowName.S.txt" | sed s/:.*//`
+  ExxAENs=`grep -nix "$Enum" "$mythicalLibrarian/$NewShowName/$NewShowName.E.txt" | sed s/:.*//`
+  AbsoluteEpisodeNumber=`comm -12 <(echo $SxxAENs | sed s/" "/"\n"/g | sort) <(echo $ExxAENs | sed s/" "/"\n"/g | sort)`
+  if [ "$AbsoluteEpisodeNumber" != "" ] && [ $AbsoluteEpisodeNumber -gt 0 ]; then
+    return 0
+  fi
+  return 1
+}
+
 ######STANDARD LOGIC EPISODE MATCH#####
 ##TODO we need some sort of regex to account for matche like
 ##'The Office' 'The Delivery, Part 1'   -guide data
@@ -2634,7 +2648,7 @@ ShowTranslations
 ignoreList
 SafeShowName=`echo "$ShowName"|sed 's/;.*//'|tr -d '|\?*<":>+[]/'`
 #Format Show name for Sending to www.TheTvDb.com and KODI
-tvdbshowname=`echo $ShowName | sed s/" "/"%20"/g|sed s/"&"/"%26"/g`
+tvdbshowname=`echo $ShowName | sed s/" "/"%20"/g | sed s/"&"/"%26"/g`
 #Setup paths if TargetPathIsInputPath is active.
 test "$TargetPathIsInputPath" = "Enabled" && setTargetFolderAsInputPathFolder
 

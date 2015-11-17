@@ -2800,8 +2800,6 @@ if [ "$SeriesID" != "" ] ; then
         (( ++ConfidenceRating ))
       fi
       
-      #Reset for fuzzy test #TODO: THis seems redundant as getAbsoluteEpisodeNumberWithFuzzyLogic() starts by setting AbsoluteEpisodeNumber=""
-      AbsoluteEpisodeNumber=$AbsoluteEpisodeNumberBackup
       #Verify with Fuzzy
       getAbsoluteEpisodeNumberWithFuzzyLogic
       if [ "$AbsoluteEpisodeNumber" != "$AbsoluteEpisodeNumberBackup" ]; then

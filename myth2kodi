@@ -128,15 +128,15 @@
 #  which will then translate any recorded show name into the desired show name.
 #  This is useful for adding a year to distinguish between a new series and an
 #  older series and/or typos in your guide data. By default it should be called
-#  "showtranslations" and it will be in your home/username/mythicalLibrarian 
-#  folder. showtranslations is not needed by most users and the file should only
+#  "showTranslations" and it will be in your $mythicalLibrarian folder.
+#  showTranslations is not needed by most users and the file should only
 #  be created if it is needed. Under most circumstances, the integrated fuzzy 
 #  logic will be sufficient to translate the guide name to the TvDb name, 
-#  however, showtranslations is available to improve accuracy to 100%. The 
-#  format of showtranslations is as follows (NB: no "#" or space at the start of
+#  however, showTranslations is available to improve accuracy to 100%. The 
+#  format of showTranslations is as follows (NB: no "#" or space at the start of
 #  a line, only one space either side of "=", and no trailing space or any other
 #  characters):
-#    Filename: /home/mythtv/.mythicalLibrarian/showtranslations
+#    Filename: $mythicalLibrarian/showTranslations
 #      My Guide Show Title = www.TheTvDb.com Show Title
 #      Battlestar Gallactica = Battlestar Gallactica (2003)
 #      The Office = The Office (US)
@@ -368,7 +368,7 @@ RunJob(){
 #$ProgramIDType= Generic episode with no data, Movie, or Series With Episode Data
 #$Zap2itSeriesID= Zap2it ID with SH, MV or EP stripped
 #$MyUserName = name of user running mythicalLibrarian
-#$SafeShowName = title of show after showtranslations formatted for filesystem use
+#$SafeShowName = title of show after showTranslations formatted for filesystem use
 
 ####EPISODES AND GENERIC SHOWS####
 #$OriginalAirDate = original air date  Generic programming will be the first episode ever, for episodes it will be the first aired date
@@ -1309,7 +1309,7 @@ ResolveMultipleAirdateMatches(){
     ConfidenceReasoning="$ConfidenceReasoning Failed; Attempted to resolve conflict with Fuzzy Logic:"
     #get instance line number
     IntermediateEpisodeNumber=`agrep -Byn "${EpisodeSubtitle:0:29}" "$mythicalLibrarian/$NewShowName/$NewShowName.InstanceEnames.txt"|grep -m1 ^|sed 's/:.*//'`
-    #translate instance line number to actual line number  #TODO: Pretty sure the = = below is a typo, check there isn't an obscure Bash meaning them remove...
+    #translate instance line number to actual line number
     test "$IntermediateEpisodeNumber" != "" && AbsoluteEpisodeNumber=`sed -n $IntermediateEpisodeNumber'p' "$mythicalLibrarian/$NewShowName/$NewShowName.InstanceLineNumbers.txt"`
     if [ "$AbsoluteEpisodeNumber" != "" ]; then
       ConfidenceReasoning="$ConfidenceReasoning Successful;"
@@ -1755,11 +1755,11 @@ ignoreList(){
 }
 
 #####SHOW TRANSLATIONS HANDLING#####
-#TODO: Make showTranslations file name consistently cased in code and doc and log...
-#Get show translations if the /mythicalLibrarian/showtranslation file exists.  the show title will be replaced by the one in the user created showtranslations file
+#Get show translations if the $mythicalLibrarian/showTranslations file exists.  
+#The show title will be replaced by the one in the user created showTranslations file
 ShowTranslations(){
-  if [ -f "$mythicalLibrarian"/showtranslations ] && [ "$ShowName" != "" ]; then 
-    showtranslation=`grep "$ShowName = " "$mythicalLibrarian/showtranslations"| sed s/"$ShowName = "/""/g `    
+  if [ -f "$mythicalLibrarian"/showTranslations ] && [ "$ShowName" != "" ]; then 
+    showtranslation=`grep "$ShowName = " "$mythicalLibrarian/showTranslations"| sed s/"$ShowName = "/""/g `    
     if [ "$showtranslation" != "" ]; then 
       ShowName=$showtranslation
       echo "USER TRANSLATION: $InputTitle = $ShowName">>"$mythicalLibrarian"/output.log
@@ -1778,10 +1778,9 @@ DoMaintenance() {
   #check for interrupted undo jobs
   test -f "$mythicalLibrarian/undo.lock" && test ! -f "$mythicalLibrarian/undo.sh" && mv "$mythicalLibrarian/undo.lock" "$mythicalLibrarian/undo.sh"
   
-  #TODO: The chmod on the 2nd test line below probably should be for undo.sh
   #Check and make doover.sh and undo.sh if it does not exist
   test ! -f "$mythicalLibrarian/doover.sh" && echo 'rm -f "'$mythicalLibrarian'"/doover.sh'>"$mythicalLibrarian/doover.sh" && chmod 666 "$mythicalLibrarian/doover.sh"
-  test ! -f "$mythicalLibrarian/undo.sh" && echo 'rm -f "'$mythicalLibrarian'"/undo.sh'>"$mythicalLibrarian/undo.sh" && chmod 666 "$mythicalLibrarian/doover.sh"
+  test ! -f "$mythicalLibrarian/undo.sh" && echo 'rm -f "'$mythicalLibrarian'"/undo.sh'>"$mythicalLibrarian/undo.sh" && chmod 666 "$mythicalLibrarian/undo.sh"
   
   if [ "$CommercialMarkupCleanup" = "Enabled" ] && [ -f "$mythicalLibrarian/created.tracking" ]; then
     mythicalLibrarianCounter=0
@@ -2317,7 +2316,7 @@ special (){
   echo " If you are having problems with incorrect guide data such"
   echo " as improper titling, use showTranslations."
   echo " ShowTranslations can be applied by creating a file called:"
-  echo " ~/.mythicalLibrarian/showTranslations"
+  echo " $mythicalLibrarian/showTranslations"
   echo " ##############################################################"
   echo " #My Guide Show Title = www.TheTvDb.com Show Title      #"
   echo " #Battlestar Gallactica = Battlestar Gallactica (2003)  #"
@@ -2381,7 +2380,7 @@ improveConfidence(){
   echo -e "How can I improve my Confidence Rating?"
   echo -e " 1. mythicalLibrarian --special provides information on how"
   echo -e "    to improve Episode matching confidence by using a "
-  echo -e "    ShowTranslations file to compensate for bad guide data."
+  echo -e "    showTranslations file to compensate for bad guide data."
   echo -e " 2. Add your favorite show's Zap2it ID to TheTvDb.com."
   echo -e " 3. Add your favorite show's OriginalAirdate to TheTvDb.com."
   echo -e " 4. Add your favorite show's proper Title to TheTvDb.com"
@@ -2718,7 +2717,8 @@ if [ "$SeriesID" != "" ] ; then
   #TODO: Without internet connection, this fails to run properly even when local 
   #  information should be sufficient to properly name episode. Add a flag for 
   #  Series that have finished, so we don't keep updating for TV Series that
-  #  that finished years ago. Also enable using existing data if update fails.
+  #  that finished years ago -- see the Status field for the series in the 
+  #  ShowName.xml in the $mythicalLibrarian dir. Also enable using existing data if update fails.
   determineIfDatabaseIsUpToDate
   if [ "$?" != "0" ]; then
     downloadInfoAboutMatchedTitleAndCreateTxtFileTables

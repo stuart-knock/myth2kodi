@@ -2725,7 +2725,7 @@ if [ "$SeriesID" != "" ] ; then
     fi
   fi
 
-  if [ $GotEpisodeNumber != 1 ] ; then
+  if [ $GotEpisodeNumber != 1 ] && [ "$EpisodeSubtitle" != "" ]; then
     ConfidenceReasoning="$ConfidenceReasoning  Attempted SubTitle match on Standard logic:"
     getAbsoluteEpisodeNumberWithStandardLogic
     if [ "$?" = "0" ]; then
@@ -2749,7 +2749,9 @@ if [ "$SeriesID" != "" ] ; then
   #update confidence total
   let ConfidenceRating=EpisodeConfidenceRating+SeriesConfidenceRating
 
-  if [ "$AbsoluteEpisodeNumber" != "" ]; then
+  #Verification only makes sense if we got AbsoluteEpisodeNumber from a method
+  # other than Standard or Fuzzy logic above.
+  if [ $GotEpisodeNumber = 1 ] && [ "$AbsoluteEpisodeNumber" != "" ]; then
     #####VERIFICATION OF CONFIDENCE RATING#####
     #backup AbsoluteEpisodeNumber for tests
     AbsoluteEpisodeNumberBackup=$AbsoluteEpisodeNumber
@@ -2795,13 +2797,16 @@ if [ "$SeriesID" != "" ] ; then
 
 fi
 
-#If we don't already have EXX and SXX, set them by matching Absolute Episode Number across mythicalLibrarian's database
+#If we already have Sxx and Exx from MythTV DB, use them. If we also had a Subtitle, then do some verification.
 if [ "$Sxx" != "S" ] && [ "$Sxx" != "" ] && [ "$Sxx" != "S00" ]  && [ "$Exx" != "E" ] && [ "$Exx" != "" ] && [ "$Exx" != "E00" ] ; then
   #TODO: If the confidence rating from the above is good, then, Protect $Sxx and $Exx, run setSxxAndExxFromAbsoluteEpisodeNumber(),
-  #  and use it as a validation of the SxxExx & Subtitle from the MythTV DB. If we have Sxx & Exx but no Subtitle,
+  #  and use it as a validation of the SxxExx & Subtitle from the MythTV DB. 
+  #TODO: If we have Sxx & Exx but no Subtitle, then if the confidence rating for the series is good get the subtitle from there.
   SeasonNumber=`echo $Sxx | sed s/"S"/""/I`
   SeasonNumber=${SeasonNumber#0}
   echo "Already extracted episode number: $Sxx$Exx, for EPISODE:$EpisodeSubtitle, from MythTV database, so didn't bother with TvDb information."
+
+#If we don't already have EXX and SXX, set them by matching Absolute Episode Number across mythicalLibrarian's database
 elif [ "$AbsoluteEpisodeNumber" != "" ]; then
   setSxxAndExxFromAbsoluteEpisodeNumber
 else

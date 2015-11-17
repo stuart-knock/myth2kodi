@@ -1364,8 +1364,8 @@ getAbsoluteEpisodeNumberWithOriginalAirdate(){
 #Get the AbsoluteEpisodeNumber corresponding to Sxx and Exx
 getAbsoluteEpisodeNumberWithSxxExx(){
   AbsoluteEpisodeNumber=""
-  Snum=`echo ${Sxx#S}` ; Snum=`echo ${Snum#0}`
-  Enum=`echo ${Exx#S}` ; Enum=`echo ${Enum#0}`
+  Snum=${Sxx#S} ; Snum=${Snum#0}
+  Enum=${Exx#S} ; Enum=${Enum#0}
   SxxAENs=`grep -nix "$Snum" "$mythicalLibrarian/$NewShowName/$NewShowName.S.txt" | sed s/:.*//`
   ExxAENs=`grep -nix "$Enum" "$mythicalLibrarian/$NewShowName/$NewShowName.E.txt" | sed s/:.*//`
   AbsoluteEpisodeNumber=`comm -12 <(echo $SxxAENs | sed s/" "/"\n"/g | sort) <(echo $ExxAENs | sed s/" "/"\n"/g | sort)`
@@ -2841,6 +2841,7 @@ if [ "$Sxx" != "S" ] && [ "$Sxx" != "" ] && [ "$Sxx" != "S00" ]  && [ "$Exx" != 
   #TODO: If the confidence rating from the above is good, and we have an 
   #  AbsoluteEpisodeNumber then use it to validate the Sxx, Exx & Subtitle from
   #  the MythTV DB.
+  echo "Using episode number: $Sxx$Exx, extracted from the MythTV DB."
   #TODO: Probably should only do the following if the Series confidence rating
   #  is ok.
   #If we don't have a Subtitle, then use Sxx & Exx to get it from the TVDb info.
@@ -2848,10 +2849,10 @@ if [ "$Sxx" != "S" ] && [ "$Sxx" != "" ] && [ "$Sxx" != "S00" ]  && [ "$Exx" != 
     AbsoluteEpisodeNumberBackup=$AbsoluteEpisodeNumber
     getAbsoluteEpisodeNumberWithSxxExx
     EpisodeSubtitle=`sed -n $AbsoluteEpisodeNumber'p' "$mythicalLibrarian"/"$NewShowName"/"$NewShowName".actualEname.txt
+    echo "MythTV DB didn't have an EpisodeSubtitle, using '$EpisodeSubtitle' from TheTVDB."
   fi
-  SeasonNumber=`echo $Sxx | sed s/"S"/""/I`
+  SeasonNumber=${Sxx#S}
   SeasonNumber=${SeasonNumber#0}
-  echo "Already extracted episode number: $Sxx$Exx, for EPISODE:$EpisodeSubtitle, from MythTV database, so didn't bother with TvDb information."
 
 #If we don't already have EXX and SXX, set them by matching Absolute Episode Number across mythicalLibrarian's database
 elif [ "$AbsoluteEpisodeNumber" != "" ]; then

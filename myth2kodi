@@ -2377,7 +2377,25 @@ improveConfidence(){
   echo -e "done."
   exit 0
 }
- 
+
+getSeriesInfo(){
+  #Usage example: myth2kodi --getSeriesInfo "Black Books"
+  echo "Getting series information for $InputTitle"
+  ShowName="$InputTitle"
+  tvdbshowname=`echo $ShowName | sed s/" "/"%20"/g | sed s/"&"/"%26"/g`
+  searchTheTvDbAndReturnTxtFileTables
+  GetSeriesLineNumberFromTableWithFuzzyLogic
+  #if we have a series line number then translate that into a series id
+  if [ "$serieslinenumber" != "" ] && [ $serieslinenumber -gt 0 ]; then
+    setSeriesIDandNewShowNameBasedOnSeriesLineNumber
+    echo "FOUND:$NewShowName ID#:$SeriesID"
+  else
+    echo "WARNING: SeriesID COULD NOT BE DETERMINED"
+    exit 1
+  fi
+  downloadInfoAboutMatchedTitleAndCreateTxtFileTables
+}
+
 # #mythicalUpdater will download the Stable or SVN version of mythicalSetup
 # mythicalUpdater(){
 #   test ! -d "$mythicalLibrarian" && mkdir "$mythicalLibrarian"
@@ -2482,8 +2500,10 @@ test "$InputPath" = "" && mythicalHelp
 MythTVUserJobString="%DIR%/%FILE%"
 
 #####COMMAND LINE SWITCHES#####
-#TODO: Add a --commskip option that just re/generates to commskip file for a given show, assuming/checking that show has already been myth2kodi'd. Useful if file was moved before commercial flagging or if commercial flagging needed to be redone
-#TODO: Add a --getSeriesInfo option that validates then downloads info from ttvdb, writing to files. See, downloadInfoAboutMatchedTitleAndCreateTxtFileTables. 
+#TODO: Add a --commskip option that just re/generates to commskip file for a
+#  given show, assuming/checking that show has already been myth2kodi'd. Useful
+#  if file was moved before commercial flagging or if commercial flagging needed
+#  to be redone
 #check for command line switches
 case "$InputPath" in 
 
@@ -2509,6 +2529,10 @@ case "$InputPath" in
   --undo)
     executeUndo
     exit 0
+  ;;
+  --getSeriesInfo)
+    #Example usage: myth2kodi --getSeriesInfo "Black Books"
+    getSeriesInfo
   ;;
   --help|-?|-h)
     switchhelp=1
@@ -2650,7 +2674,7 @@ if [ "$mythicalLibrarianProgramIDCheck" != "SH" ] && [ "$mythicalLibrarianProgra
       ConfidenceReasoning="$ConfidenceReasoning Successful;"
     else
       RequiresDoover=1
-        ((--SeriesConfidenceRating))
+      ((--SeriesConfidenceRating))
       ConfidenceReasoning="$ConfidenceReasoning Failed; Attempted Title match on Fuzzy Logic:"
       GetSeriesLineNumberFromTableWithFuzzyLogic
       if [ $? = 0 ]; then
@@ -2680,7 +2704,10 @@ if [ "$SeriesID" != "" ] ; then
   makeShowDirIfNeeded
   
   #If database is out of date, download new database
-  #TODO: Without internet connection, this fails to run properly even when local information should be sufficient to properly name episode.
+  #TODO: Without internet connection, this fails to run properly even when local 
+  #  information should be sufficient to properly name episode. Add a flag for 
+  #  Series that have finished, so we don't keep updating for TV Series that
+  #  that finished years ago. Also enable using existing data if update fails.
   determineIfDatabaseIsUpToDate
   if [ "$?" != "0" ]; then
     downloadInfoAboutMatchedTitleAndCreateTxtFileTables

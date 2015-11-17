@@ -2838,9 +2838,17 @@ fi
 
 #If we already have Sxx and Exx from MythTV DB, use them. If we also had a Subtitle, then do some verification.
 if [ "$Sxx" != "S" ] && [ "$Sxx" != "" ] && [ "$Sxx" != "S00" ]  && [ "$Exx" != "E" ] && [ "$Exx" != "" ] && [ "$Exx" != "E00" ] ; then
-  #TODO: If the confidence rating from the above is good, then, Protect $Sxx and $Exx, run setSxxAndExxFromAbsoluteEpisodeNumber(),
-  #  and use it as a validation of the SxxExx & Subtitle from the MythTV DB. 
-  #TODO: If we have Sxx & Exx but no Subtitle, then if the confidence rating for the series is good get the subtitle from there.
+  #TODO: If the confidence rating from the above is good, and we have an 
+  #  AbsoluteEpisodeNumber then use it to validate the Sxx, Exx & Subtitle from
+  #  the MythTV DB.
+  #TODO: Probably should only do the following if the Series confidence rating
+  #  is ok.
+  #If we don't have a Subtitle, then use Sxx & Exx to get it from the TVDb info.
+  if [ "$EpisodeSubtitle" = "" ] ; then
+    AbsoluteEpisodeNumberBackup=$AbsoluteEpisodeNumber
+    getAbsoluteEpisodeNumberWithSxxExx
+    EpisodeSubtitle=`sed -n $AbsoluteEpisodeNumber'p' "$mythicalLibrarian"/"$NewShowName"/"$NewShowName".actualEname.txt
+  fi
   SeasonNumber=`echo $Sxx | sed s/"S"/""/I`
   SeasonNumber=${SeasonNumber#0}
   echo "Already extracted episode number: $Sxx$Exx, for EPISODE:$EpisodeSubtitle, from MythTV database, so didn't bother with TvDb information."

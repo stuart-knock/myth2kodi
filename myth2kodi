@@ -781,7 +781,7 @@ GetMythTVDatabase(){
 }
 
 #####UTILIZE PYTHON BINDINGS TO GET MYTHTV DB##### Requires dependency
-#TODO: Check whether MythDataGrabber actually requires python version 2.6... see mythicalDiagnostics
+#TODO: Check functionality of and if necessary clean-up MythDataGrabber
 GetMythTvPythonBindings(){
   echo "Attempting to pull database information on $InputPath"
   #make a named pipe for database output
@@ -962,7 +962,7 @@ ProcessSydFTA(){
   if [ "$ShowCategory" = "Movie" ]; then
     mythicalLibrarianProgramIDCheck="MV"
   else #For now assume that if it's not a Movie it's an episode of a series
-    #TODO: For now we're mainly/only record Movies and Episodes of TV series, 
+    #TODO: For now we mainly/only record Movies and Episodes of TV series, 
     #  so, this is an ok approximation, but should look through more EPG data
     #  and determine whether the Category field reliably distinguishes things
     #  like news, sport, etc
@@ -2475,8 +2475,8 @@ test "$InputPath" = "" && mythicalHelp
 MythTVUserJobString="%DIR%/%FILE%"
 
 #####COMMAND LINE SWITCHES#####
-#TODO: Add a --commskip option that just re/generates to commskip file for a given show, assuming/checking that show has already been myth2kodi'd
-#TODOl Add a --getSeriesInfo option that validates then downloads info from ttvdb, writing to files. See, downloadInfoAboutMatchedTitleAndCreateTxtFileTables. 
+#TODO: Add a --commskip option that just re/generates to commskip file for a given show, assuming/checking that show has already been myth2kodi'd. Useful if file was moved before commercial flagging or if commercial flagging needed to be redone
+#TODO: Add a --getSeriesInfo option that validates then downloads info from ttvdb, writing to files. See, downloadInfoAboutMatchedTitleAndCreateTxtFileTables. 
 #check for command line switches
 case "$InputPath" in 
 
@@ -2803,7 +2803,6 @@ if [ "$mythicalLibrarianProgramIDCheck" = "EP" ] && [ "$Exx" = "E" -o "$Exx" = "
 #If it's a movie, give it a name.
 #TODO: If it's a movie, try using imdb or similar with available $Plot to determine if the Title is correct...
 elif [ "$mythicalLibrarianProgramIDCheck" = "MV" ]; then
-  #TODO: Need to strip the "Movie: " that some stations prepend to their FTA EPG data... I'm looking at you 7
   NewShowName="$InputTitle"
   ConfidenceReasoning="$ConfidenceReasoning Guide Data reported this is a movie;"
 #If it's a showing, give it a name.

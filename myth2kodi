@@ -2618,9 +2618,6 @@ test "$TargetPathIsInputPath" = "Enabled" && setTargetFolderAsInputPathFolder
 #Loop through the list of created comskip files from dir.tracking, created.tracking and remove orphans.
 DoMaintenance
 
-
-##TODO CHECK TO MAKE SURE WE CANT GET THIS FAR WITHOUT DATABASE INFORMATION OR A SUBTITLE
-
 #####SEARCH FOR SHOW AND BUILD INFORMATION#####
  
 if [ "$mythicalLibrarianProgramIDCheck" != "SH" ] && [ "$mythicalLibrarianProgramIDCheck" != "MV" ]; then
@@ -2702,21 +2699,17 @@ elif [ -z "$SeriesID" ] && [ "$mythicalLibrarianProgramIDCheck" != "SH" ] && [ "
   fi
 fi
 
-#TODO: If we have Sxx & Exx but no Subtitle, use Title plus Sxx and Exx to get it.
-#TODO: Assuming we have identified the Series, but have no Sxx, Exx, or Subtitle, try NLP match $Plot against possible plots
+#TODO: Assuming we have identified the Series, but have no Subtitle, try NLP match $Plot against possible plots to guess a subtitle
 
 #####PROCESS EPISODE INFORMATION#####
-#TODO: Probably would be good to run this even when we have SxxExx already as a validation of those numbers.
 #If we have a SeriesID but don't already have Season and Episode information
-if [ "$SeriesID" != "" ] && [ "$Sxx" = "S" -o "$Sxx" = "" -o "$Sxx" = "S00" ] && [ "$Exx" = "E" -o "$Exx" = "" -o "$Exx" = "E00" ] ; then
+if [ "$SeriesID" != "" ] ; then
   echo "SEARCHING: www.TheTvDb.com information for EPISODE: $EpisodeSubtitle" | tee -a "$mythicalLibrarian"/output.log
   #####GET ABSOLUTE EPISODE NUMBER#####
-  ConfidenceReasoning="$ConfidenceReasoning Attempted match on OriginalAirDate:"
-  #If info was pulled from database, then plug name into NewShowName 
-  AbsoluteEpisodeNumber=""
   #TODO: This would be better if it could be [ "$GuideDataType" = "SchedulesDirect" ]
   #  Figure out if that's ok with respect to NoLookUp...
   if [ "$GuideDataType" != "SydFTA" ] ; then
+    ConfidenceReasoning="$ConfidenceReasoning Attempted match on OriginalAirDate:"
     getAbsoluteEpisodeNumberWithOriginalAirdate
     AirdateExitStatus=$?
     test "$AirdateExitStatus" = "1" && test "$EpisodeSubtitle" != "" && ResolveMultipleAirdateMatches
@@ -2732,7 +2725,7 @@ if [ "$SeriesID" != "" ] && [ "$Sxx" = "S" -o "$Sxx" = "" -o "$Sxx" = "S00" ] &&
     fi
   fi
 
-  if [ $GotEpisodeNumber != 1 ]
+  if [ $GotEpisodeNumber != 1 ] ; then
     ConfidenceReasoning="$ConfidenceReasoning  Attempted SubTitle match on Standard logic:"
     getAbsoluteEpisodeNumberWithStandardLogic
     if [ "$?" = "0" ]; then
@@ -2778,7 +2771,7 @@ if [ "$SeriesID" != "" ] && [ "$Sxx" = "S" -o "$Sxx" = "" -o "$Sxx" = "S00" ] &&
         (( ++ConfidenceRating ))
       fi
       
-      #Reset for fuzzy test
+      #Reset for fuzzy test #TODO: THis seems redundant as getAbsoluteEpisodeNumberWithFuzzyLogic() starts by setting AbsoluteEpisodeNumber=""
       AbsoluteEpisodeNumber=$AbsoluteEpisodeNumberBackup
       #Verify with Fuzzy
       getAbsoluteEpisodeNumberWithFuzzyLogic
@@ -2802,8 +2795,12 @@ if [ "$SeriesID" != "" ] && [ "$Sxx" = "S" -o "$Sxx" = "" -o "$Sxx" = "S00" ] &&
 
 fi
 
-#If we don't already have EXX and SXX set them by matching Absolute Episode Number across mythicalLibrarian's database
-if [ "$Sxx" != "S" ] && [ "$Sxx" != "" ] && [ "$Exx" != "E" ] && [ "$Exx" != "" ] ; then
+#If we don't already have EXX and SXX, set them by matching Absolute Episode Number across mythicalLibrarian's database
+if [ "$Sxx" != "S" ] && [ "$Sxx" != "" ] && [ "$Sxx" != "S00" ]  && [ "$Exx" != "E" ] && [ "$Exx" != "" ] && [ "$Exx" != "E00" ] ; then
+  #TODO: If the confidence rating from the above is good, then, Protect $Sxx and $Exx, run setSxxAndExxFromAbsoluteEpisodeNumber(),
+  #  and use it as a validation of the SxxExx & Subtitle from the MythTV DB. If we have Sxx & Exx but no Subtitle,
+  SeasonNumber=`echo $Sxx | sed s/"S"/""/I`
+  SeasonNumber=${SeasonNumber#0}
   echo "Already extracted episode number: $Sxx$Exx, for EPISODE:$EpisodeSubtitle, from MythTV database, so didn't bother with TvDb information."
 elif [ "$AbsoluteEpisodeNumber" != "" ]; then
   setSxxAndExxFromAbsoluteEpisodeNumber

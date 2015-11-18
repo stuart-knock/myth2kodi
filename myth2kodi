@@ -406,7 +406,8 @@ TraditionalNamingConventions(){
     MoveDir="$PrimaryMovieDir"
     #TODO: If adding a year then we really want original release date so the Kodi metadata lookup works reliably.
     if [ "$MovieAirDate" != "" ]; then
-      ShowFileName="$NewShowName ($MovieAirDate)"
+      echo "WARNING: currently forcing bypass adding MovieAirDate to Movie file names." | tee -a  "$mythicalLibrarian"/output.log
+      ShowFileName="$NewShowName" # ShowFileName="$NewShowName ($MovieAirDate)"
     else
       ShowFileName="$NewShowName"
     fi
@@ -542,11 +543,8 @@ KODIAutomate(){
     for KODIIP in ${KODIIPs[@]} ; do
       echo "SENDING REQUESTED COMMANDS TO:$KODIIP"
       #SAK: REPLACED BELOW, SEE http://forum.kodi.tv/showthread.php?tid=65644&page=65&highlight=json
-      #test "$XBMCNotify" = "Enabled" && curl -L -s -m3 --connect-timeout 5 "http://"$XBMCIP"/xbmcCmds/xbmcHttp?command=ExecBuiltIn(Notification(mythical%20Librarian%2Cadding%20show%20$tvdbshowname%20to%20library))" > /dev/null 2>&1
       test "$KODINotify" = "Enabled" && curl -L -s -m3 --connect-timeout 5 -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","method":"GUI.ShowNotification","params":{"title":"mythical Librarian adding","message":"'$tvdbshowname'"},"id":1}' http://$KODIIP/jsonrpc > /dev/null 2>&1
-      #test "$XBMCUpdate" = "Enabled" && curl -L -s -m3 --connect-timeout 5 "http://"$XBMCIP"/xbmcCmds/xbmcHttp?command=ExecBuiltIn(UpdateLibrary(video))" > /dev/null 2>&1
       test "$KODINotify" = "Enabled" && curl -L -s -m3 --connect-timeout 5 -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","method":"VideoLibrary.Scan","id":1}' http://$KODIIP/jsonrpc > /dev/null 2>&1
-      #test "$XBMCClean" = "Enabled" && curl -L  -s -m3 --connect-timeout 5 "http://"$XBMCIP"/xbmcCmds/xbmcHttp?command=ExecBuiltIn(CleanLibrary(video))" > /dev/null 2>&1
       test "$KODINotify" = "Enabled" && curl -L -s -m3 --connect-timeout 5 -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","method":"VideoLibrary.Clean","id":1}' http://$KODIIP/jsonrpc > /dev/null 2>&1
     done
   fi
@@ -1851,7 +1849,7 @@ DoMaintenance() {
     test -f "$mythicalLibrarian/dir.tracking2" && mv "$mythicalLibrarian/dir.tracking2" "$mythicalLibrarian/dir.tracking"
   fi   
 
-  #clense mythicalLibrarian database folders if in --doMaintenance mode
+  #cleanse mythicalLibrarian database folders if in --doMaintenance mode
   if [ "$removedead" = "1" ]; then
     test -f "$mythicalLibrarian/cleanup" && rm -f "$mythicalLibrarian/cleanup"
     ls -A -1 "$mythicalLibrarian" > "$mythicalLibrarian/cleanup"

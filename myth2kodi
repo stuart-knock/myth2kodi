@@ -164,7 +164,7 @@ Timeout=50
 UpdateDatabase=74200
 #TODO: Consider adding variable binpath=/usr/local/bin/ as a step toward non-root install.
 #mythicalLibrarian working file dir: Default=~/.mythicalLibrarian (home/username/.mythicalLibraian)
-mythicalLibrarian=/data/sknock/TEMP/.mythicalLibrarian
+mythicalLibrarian=~/.mythicalLibrarian #/data/sknock/TEMP/.mythicalLibrarian
 #FailSafe mode will enable symlinks to be formed in FailSafeDir if the move or symlink operation fails. Enabled|Disabled
 FailSafeMode=Enabled
 #FailSafeDir is used when the file cannot be moved to the MoveDir. FailSafe will not create folders. eg. /home/username
@@ -1136,7 +1136,7 @@ determineIfDatabaseIsUpToDate(){
 downloadInfoAboutMatchedTitleAndCreateTxtFileTables(){
   #Download information from server
   echo -ne "Downloading Series: $SeriesID \r" 1>&2
-  curl -L -s -m"$Timeout" "http://www.thetvdb.com/api/$APIkey/series/$SeriesID/all/$Language.xml"| grep -E "(</?Series>|</?Status>|</?Episode>|</?EpisodeName>|</?FirstAired>|</?SeasonNumber>|</?EpisodeNumber>|</?Overview>)">"$mythicalLibrarian/$NewShowName/$NewShowName.xmlTest" && echo "$CurrentTime" > "$mythicalLibrarian/$NewShowName/lastupdated.time"
+  curl -L -s -m"$Timeout" "http://www.thetvdb.com/api/$APIkey/series/$SeriesID/all/$Language.xml"| grep -E "(</?Series>|</?Status>|</?lastupdated>|</?Episode>|</?EpisodeName>|</?FirstAired>|</?SeasonNumber>|</?EpisodeNumber>|</?Overview>)">"$mythicalLibrarian/$NewShowName/$NewShowName.xmlTest" && echo "$CurrentTime" > "$mythicalLibrarian/$NewShowName/lastupdated.time"
   
   #Validate that the show has a EpisodeName tag and is a valid download before clobbering our old download.
   grepTest=""
@@ -1159,7 +1159,10 @@ downloadInfoAboutMatchedTitleAndCreateTxtFileTables(){
     echo "Parsing Downloaded information: $NewShowName.xml "
     while read line ; do
       if [[ $recordNumber < 0 ]]; then
-        #TODO:Check for a Status line and if it exists and says Ended the touch Status.Ended in the $mythicalLibrarian/$NewShowName/ directory, then add a check for this before we bother trying to download information again.
+        #TODO:Check for a Status line and if it exists and says Ended then touch 
+        #  a file called Status.Ended in the $mythicalLibrarian/$NewShowName/ 
+        #  directory, then add a check for this before we bother trying to 
+        #  download information again. Also, use the lastupdated field if present.
         #Skip lines until the end series block tag is found
         if [[ $line == \<\/Series\> ]]; then
           #Start processing the episode info

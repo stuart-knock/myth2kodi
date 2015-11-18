@@ -719,7 +719,6 @@ doFailSafeMode(){
 }
 
 #####MYTHTV DATABASE#####
-#TODO: Also grab storagegroup from database, in both GetMythTVDatabase() & GetMythTvPythonBindings(), as a possible fallback for Movie identification
 #This function gathers information from the MythTV database for use in the program
 GetMythTVDatabase(){
   #TODO: This conditional seems weird as PythonBindings isn't set anywhere and
@@ -734,9 +733,9 @@ GetMythTVDatabase(){
     test "$InputSubtitle" = "" && InputSubtitle=`mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select subtitle from recorded where basename like '$InputFileBasename' ; "|sed s/"subtitle"/""/g|sed -n "2p"`
     #TODO: It's possible the following two lines require the '| sed -n "2p"' for filtering what is returned by the mysql SELECT -- So far I think I've only used the PythonBindings. 
     #get Season Number, SydFTA sometimes has a season field #TODO: change call to enable Season Number as an input
-    test "$InputSeasonNum" = "" && InputSeasonNum=`mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select season from recorded where basename like '$InputFileBasename' ;"|sed s/"season"/""/g`
+    test "$InputSeasonNum" = "" && InputSeasonNum=`mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select season from recorded where basename like '$InputFileBasename' ;"|sed s/"season"/""/g|sed -n "2p"`
     #get Episode Number, SydFTA sometimes has an episode field  #TODO: change call to enable Episode Number as an input
-    test "$InputEpisodeNum" = "" && InputEpisodeNum=`mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select episode from recorded where basename like '$InputFileBasename' ; "|sed s/"episode"/""/g`
+    test "$InputEpisodeNum" = "" && InputEpisodeNum=`mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select episode from recorded where basename like '$InputFileBasename' ; "|sed s/"episode"/""/g|sed -n "2p"`
     #TODO: Determine if substitution of "/" with "" below is SchedulesDirect specific, if so move it to ProcessSchedulesDirect... 
     #get chanid for recordings to identify program table
     ChanID=`mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select chanid from recorded where basename like '$InputFileBasename';"|sed s/"\/"/""/g|sed -n 2p|sed s/"chanid"/""/g|sed s/" "/""/g`
@@ -752,6 +751,8 @@ GetMythTVDatabase(){
     ShowStartTime=`mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select starttime from recorded where basename like '$InputFileBasename' ; " |sed s/"\/"/""/g|sed -n "2p"|sed s/"starttime"/""/g`
     #get category from recorded to identify program table -----future development
     ShowCategory=`mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select category from recorded where basename like '$InputFileBasename' ; " |sed s/"\/"/""/g|sed -n "2p"|sed s/"category"/""/g`
+    #get storagegroup from recorded as a possible fallback to identify movies #TODO: Once accessing this works, make use of it...
+    StorageGroup=`mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select storagegroup from recorded where basename like '$InputFileBasename' ; " |sed s/"\/"/""/g|sed -n "2p"|sed s/"storagegroup"/""/g`
     #get original air date for tv shows
     OriginalAirDate=`mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select originalairdate from recorded where basename like '$InputFileBasename' ; "|sed s/"\/"/""/g|sed -n "2p"|sed s/"originalairdate"/""/g`
     test "$OriginalAirDate" = "0000-00-00" && OriginalAirDate="$null"
@@ -817,6 +818,7 @@ GetMythTvPythonBindings(){
   MovieAirDate=$airdate
   OriginalAirDate=$originalairdate
   ShowCategory=$category
+  StorageGroup=$storeagegroup
   Stars=$stars
   Plot=$description
   LocalSeriesID=$seriesid

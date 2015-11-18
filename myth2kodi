@@ -164,7 +164,7 @@ Timeout=50
 UpdateDatabase=74200
 #TODO: Consider adding variable binpath=/usr/local/bin/ as a step toward non-root install.
 #mythicalLibrarian working file dir: Default=~/.mythicalLibrarian (home/username/.mythicalLibraian)
-mythicalLibrarian=~/.mythicalLibrarian
+mythicalLibrarian=/data/sknock/TEMP/.mythicalLibrarian
 #FailSafe mode will enable symlinks to be formed in FailSafeDir if the move or symlink operation fails. Enabled|Disabled
 FailSafeMode=Enabled
 #FailSafeDir is used when the file cannot be moved to the MoveDir. FailSafe will not create folders. eg. /home/username
@@ -1135,10 +1135,9 @@ determineIfDatabaseIsUpToDate(){
 #####GET EPISODE INFORMATION#####
 downloadInfoAboutMatchedTitleAndCreateTxtFileTables(){
   #Download information from server
-  echo -ne "Downloading Series: $SeriesID \r" 1>&2 
-  #TODO: Change this so that Overview isn't excluded
-  curl -L -s -m"$Timeout" "http://www.thetvdb.com/api/$APIkey/series/$SeriesID/all/$Language.xml"| grep -vE "(</id>|</Combined_episodenumber>|</Combined_season>|</DVD_chapter>|</DVD_discid>|</DVD_episodenumber>|</DVD_season>|</Director>|</EpImgFlag>|</GuestStars>|</IMDB_ID>|</Language>|</Overview>|</ProductionCode>|</RatingCount>|</filename>|</seasonid>|</Writer>|</Rating>|</lastupdated>|</seriesid>|</absolute_number>)">"$mythicalLibrarian/$NewShowName/$NewShowName.xmlTest" && echo "$CurrentTime" > "$mythicalLibrarian/$NewShowName/lastupdated.time"
-
+  echo -ne "Downloading Series: $SeriesID \r" 1>&2
+  curl -L -s -m"$Timeout" "http://www.thetvdb.com/api/$APIkey/series/$SeriesID/all/$Language.xml"| grep -E "(</?Series>|</?Status>|</?Episode>|</?EpisodeName>|</?FirstAired>|</?SeasonNumber>|</?EpisodeNumber>|</?Overview>)">"$mythicalLibrarian/$NewShowName/$NewShowName.xmlTest" && echo "$CurrentTime" > "$mythicalLibrarian/$NewShowName/lastupdated.time"
+  
   #Validate that the show has a EpisodeName tag and is a valid download before clobbering our old download.
   grepTest=""
   grepTest=`grep "EpisodeName" "$mythicalLibrarian/$NewShowName/$NewShowName.xmlTest"`
@@ -1151,11 +1150,22 @@ downloadInfoAboutMatchedTitleAndCreateTxtFileTables(){
     FAired=""
     SeasonNr=""
     EpisodeNr=""
-    recordNumber=0
-    
+    EpisodeOverview=""
+    recordNumber=-1
+    #TODO: Unless there is some reason to keep repeated info in the same file, 
+    #  it seems like it'd be better to mv existing file to .old or .$Today.old,
+    #  the problem with the latter being it'd require manual cleanup, but it has
+    #  the benefit of maintaining more past data to revert to...
     echo "Parsing Downloaded information: $NewShowName.xml "
     while read line ; do
-      if [[ $line == \<\/Episode\> ]]; then
+      if [[ $recordNumber < 0 ]]; then
+        #TODO:Check for a Status line and if it exists and says Ended the touch Status.Ended in the $mythicalLibrarian/$NewShowName/ directory, then add a check for this before we bother trying to download information again.
+        #Skip lines until the end series block tag is found
+        if [[ $line == \<\/Series\> ]]; then
+          #Start processing the episode info
+          recordNumber=0
+        fi
+      elif [[ $line == \<\/Episode\> ]]; then
         (( ++recordNumber ))
         echo -ne "Building Record:$recordNumber ${actualEname:0:20}           \r" 1>&2 
         echo "$actualEname" >> "$mythicalLibrarian/$NewShowName/$NewShowName.actualEname.txt"
@@ -1163,11 +1173,13 @@ downloadInfoAboutMatchedTitleAndCreateTxtFileTables(){
         echo "$FAired" >> "$mythicalLibrarian/$NewShowName/$NewShowName.FAired.txt"
         echo "$SeasonNr" >> "$mythicalLibrarian/$NewShowName/$NewShowName.S.txt"
         echo "$EpisodeNr" >> "$mythicalLibrarian/$NewShowName/$NewShowName.E.txt"
+        echo "$EpisodeOverview" >> "$mythicalLibrarian/$NewShowName/$NewShowName.Plot.txt"
         Ename=""
         actualEname=""
         FAired=""
         SeasonNr=""
         EpisodeNr=""
+        EpisodeOverview=""
       #Get actual show name 
       elif [[ $line == \<EpisodeName\>* ]]; then
         line=${line/<\/EpisodeName>/}
@@ -1204,12 +1216,11 @@ downloadInfoAboutMatchedTitleAndCreateTxtFileTables(){
         line=${line/<\/EpisodeNumber>/}
         line=${line/<EpisodeNumber>/}
         EpisodeNr=$line
-      #TODO: Add a block to extract the episode Overview
-      # #Get Episode Overview
-      # elif [[ $line == \<Overview\>* ]]; then
-      #   line=${line/<\/Overview>/}
-      #   line=${line/<Overview>/}
-      #   EpisodeOverview=$line
+      #Get Episode Overview
+      elif [[ $line == \<Overview\>* ]]; then
+        line=${line/<\/Overview>/}
+        line=${line/<Overview>/}
+        EpisodeOverview=$line
       fi
     done < "$mythicalLibrarian/$NewShowName/$NewShowName.xml"
       
@@ -1218,6 +1229,7 @@ downloadInfoAboutMatchedTitleAndCreateTxtFileTables(){
     chmod 666 "$mythicalLibrarian/$NewShowName/$NewShowName".FAired.txt
     chmod 666 "$mythicalLibrarian"/"$NewShowName"/"$NewShowName".S.txt
     chmod 666 "$mythicalLibrarian/$NewShowName/$NewShowName".E.txt
+    chmod 666 "$mythicalLibrarian/$NewShowName/$NewShowName".Plot.txt
     GotNewInformation=1
       
   elif [ ! -f "$mythicalLibrarian/$NewShowName/$NewShowName.xml" ]; then
@@ -1328,7 +1340,7 @@ ResolveMultipleAirdateMatches(){
 makeShowDirIfNeeded(){
   if [ ! -d "$mythicalLibrarian/$NewShowName" ]; then
     mkdir "$mythicalLibrarian"/"$NewShowName"
-    chmod 777 "$mythicalLibrarian"/"$NewShowName"
+    chmod 777 "$mythicalLibrarian"/"$NewShowName" #TODO: consider chmod 755
     echo "Creating MythicalLibrarian Database Folder">>"$mythicalLibrarian"/output.log
   fi
 }
@@ -2392,7 +2404,7 @@ improveConfidence(){
 
 getSeriesInfo(){
   #Usage example: myth2kodi --getSeriesInfo "Black Books"
-  echo "Getting series information for $InputTitle"
+  echo "RUNNING getSeriesInfo() for $InputTitle" | tee -a "$mythicalLibrarian"/output.log
   ShowName="$InputTitle"
   tvdbshowname=`echo $ShowName | sed s/" "/"%20"/g | sed s/"&"/"%26"/g`
   searchTheTvDbAndReturnTxtFileTables
@@ -2400,12 +2412,14 @@ getSeriesInfo(){
   #if we have a series line number then translate that into a series id
   if [ "$serieslinenumber" != "" ] && [ $serieslinenumber -gt 0 ]; then
     setSeriesIDandNewShowNameBasedOnSeriesLineNumber
-    echo "FOUND:$NewShowName ID#:$SeriesID"
+    echo "FOUND:$NewShowName ID#:$SeriesID" | tee -a "$mythicalLibrarian"/output.log
+    makeShowDirIfNeeded
   else
-    echo "WARNING: SeriesID COULD NOT BE DETERMINED"
+    echo "WARNING: SeriesID COULD NOT BE DETERMINED" | tee -a "$mythicalLibrarian"/output.log
     exit 1
   fi
   downloadInfoAboutMatchedTitleAndCreateTxtFileTables
+  echo "TheTVDB information written to: $mythicalLibrarian/$NewShowName" | tee -a "$mythicalLibrarian"/output.log
 }
 
 # #mythicalUpdater will download the Stable or SVN version of mythicalSetup
@@ -2545,6 +2559,7 @@ case "$InputPath" in
   --getSeriesInfo)
     #Example usage: myth2kodi --getSeriesInfo "Black Books"
     getSeriesInfo
+    exit 0
   ;;
   --help|-?|-h)
     switchhelp=1

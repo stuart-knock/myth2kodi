@@ -164,7 +164,8 @@ Timeout=50
 UpdateDatabase=74200
 #TODO: Consider adding variable binpath=/usr/local/bin/ as a step toward non-root install.
 #mythicalLibrarian working file dir: Default=~/.mythicalLibrarian (home/username/.mythicalLibraian)
-mythicalLibrarian=~/.mythicalLibrarian #/data/sknock/TEMP/.mythicalLibrarian
+mythicalLibrarian=~/.mythicalLibrarian
+#For testing /data/sknock/TEMP/.mythicalLibrarian
 #FailSafe mode will enable symlinks to be formed in FailSafeDir if the move or symlink operation fails. Enabled|Disabled
 FailSafeMode=Enabled
 #FailSafeDir is used when the file cannot be moved to the MoveDir. FailSafe will not create folders. eg. /home/username
@@ -543,9 +544,11 @@ KODIAutomate(){
     for KODIIP in ${KODIIPs[@]} ; do
       echo "SENDING REQUESTED COMMANDS TO:$KODIIP"
       #SAK: REPLACED BELOW, SEE http://forum.kodi.tv/showthread.php?tid=65644&page=65&highlight=json
-      test "$KODINotify" = "Enabled" && curl -L -s -m3 --connect-timeout 5 -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","method":"GUI.ShowNotification","params":{"title":"mythical Librarian adding","message":"'$tvdbshowname'"},"id":1}' http://$KODIIP/jsonrpc > /dev/null 2>&1
+      #TODO: Removed '' from around the variable passed as message, but not sure this is correct, check.
+      test "$KODINotify" = "Enabled" && curl -L -s -m3 --connect-timeout 5 -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","method":"GUI.ShowNotification","params":{"title":"mythical Librarian adding","message":"$tvdbshowname"},"id":1}' http://$KODIIP/jsonrpc > /dev/null 2>&1
       test "$KODINotify" = "Enabled" && curl -L -s -m3 --connect-timeout 5 -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","method":"VideoLibrary.Scan","id":1}' http://$KODIIP/jsonrpc > /dev/null 2>&1
       test "$KODINotify" = "Enabled" && curl -L -s -m3 --connect-timeout 5 -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","method":"VideoLibrary.Clean","id":1}' http://$KODIIP/jsonrpc > /dev/null 2>&1
+      echo "COMMANDS SENT"
     done
   fi
   return 0
@@ -602,7 +605,8 @@ generaterss() {
     echo -e "\t\t\t<link>http://www.tv.com/search.php?type=11&amp;stype=all&amp;tag=search%3Bfrontdoor&amp;qs=$tvdotcomshowname </link>">>$rssDir/$TEMPrssFile 
   fi
 
-  which ifconfig >/dev/null && myip=`ifconfig  | grep 'inet addr' -m1 | cut -d: -f2 | awk '{ print $1}'`
+  #TODO: Need to make the call to ifconfig more portable, maybe just revert to straight call and add /sbin to librarians path.
+  which /sbin/ifconfig >/dev/null && myip=`/sbin/ifconfig  | grep 'inet addr' -m1 | cut -d: -f2 | awk '{ print $1}'`
   rssEpisodeSubtitle=`echo $EpisodeSubtitle| sed s/"&"/"&amp;"/g`
   rssNewShowName=`echo $NewShowName| sed s/"&"/"&amp;"/g`
   rssPlot=`echo $Plot| sed s/"&"/"&amp;"/g` 
@@ -610,7 +614,7 @@ generaterss() {
   echo -e "\t\t\t<guid>sftp://$mythicalGUID</guid>">>$rssDir/$TEMPrssFile
   echo -e "\t\t\t<pubDate>"$(date -R -d "$ShowStartTime")"</pubDate>">>$rssDir/$TEMPrssFile
   echo -e "\t\t\t<description>">>$rssDir/$TEMPrssFile
-  echo -e "\t\t\t\tEpisode Title: $rssepn$lineBreak">>$rssDir/$TEMPrssFile
+  echo -e "\t\t\t\tEpisode Title: $rssEpisodeSubtitle$lineBreak">>$rssDir/$TEMPrssFile
   echo -e "\t\t\t\tProgram: $rssNewShowName$lineBreak">>$rssDir/$TEMPrssFile
   echo -e "\t\t\t\tSeason: $Sxx$lineBreak">>$rssDir/$TEMPrssFile
   echo -e "\t\t\t\tEpisode #: $Exx$lineBreak$lineBreak">>$rssDir/$TEMPrssFile
@@ -639,9 +643,10 @@ generaterss() {
     #set IFS to use line break as a delineator
     OLDIFS=$IFS
     #SAK: Surely the following can be IFS="\n"
-    #    IFS='
-    #'
-    IFS="\n"
+    #TODO: It can't, but there must be a better solution than below...
+    IFS='
+'
+    #IFS="\n"
     #Read in the old RSS file
     declare -a old_rss_data=( $(cat "$rssDir/$OLDrssFile") )
     arrayLen=${#old_rss_data[@]}
@@ -698,7 +703,7 @@ performLoggingForLinkMode(){
 }
 
 writeJobToDooverQue(){
-  test "$InputPath" != "" && echo "mythicalLibrarian '$1' '$2' '$3'">>$mythicalLibrarian/doover.sh
+  test "$InputPath" != "" && echo "mythicalLibrarian '$1' '$2' '$3'">>"$mythicalLibrarian"/doover.sh
 }
 
 doFailSafeMode(){
@@ -915,6 +920,7 @@ ExtractSxxExx(){
 }
 
 GuessSubtitle(){
+  #TODO:Overmatching subtitle with a : neear end of plot, perhaps limit length possible for plot
   #NOTE: 
   #Try to extract a subtitle from the plot field (Luv Ya SBS)
   InputSubtitle=`echo $Plot | grep --only-matching '\(\(\(\w\+\)\(.*\s*\)\)\|\(\&\s*\)\)\{1,7\}\( -\|\:\)'`
@@ -1133,7 +1139,7 @@ determineIfDatabaseIsUpToDate(){
 #####GET EPISODE INFORMATION#####
 downloadInfoAboutMatchedTitleAndCreateTxtFileTables(){
   #Download information from server
-  echo -ne "Downloading Series: $SeriesID \r" 1>&2
+  echo -ne "Downloading Series: $SeriesID \n" 1>&2
   curl -L -s -m"$Timeout" "http://www.thetvdb.com/api/$APIkey/series/$SeriesID/all/$Language.xml"| grep -E "(</?Series>|</?Status>|</?lastupdated>|</?Episode>|</?EpisodeName>|</?FirstAired>|</?SeasonNumber>|</?EpisodeNumber>|</?Overview>)">"$mythicalLibrarian/$NewShowName/$NewShowName.xmlTest" && echo "$CurrentTime" > "$mythicalLibrarian/$NewShowName/lastupdated.time"
   
   #Validate that the show has a EpisodeName tag and is a valid download before clobbering our old download.
@@ -1168,7 +1174,7 @@ downloadInfoAboutMatchedTitleAndCreateTxtFileTables(){
         fi
       elif [[ $line == \<\/Episode\> ]]; then
         (( ++recordNumber ))
-        echo -ne "Building Record:$recordNumber ${actualEname:0:20}           \r" 1>&2 
+        echo -ne "Building Record:$recordNumber ${actualEname:0:20}           \n" 1>&2
         echo "$actualEname" >> "$mythicalLibrarian/$NewShowName/$NewShowName.actualEname.txt"
         echo "$Ename" >> "$mythicalLibrarian/$NewShowName/$NewShowName.Ename.txt"
         echo "$FAired" >> "$mythicalLibrarian/$NewShowName/$NewShowName.FAired.txt"
@@ -1377,13 +1383,15 @@ getAbsoluteEpisodeNumberWithOriginalAirdate(){
 getAbsoluteEpisodeNumberWithSxxExx(){
   AbsoluteEpisodeNumber=""
   Snum=${Sxx#S} ; Snum=${Snum#0}
-  Enum=${Exx#S} ; Enum=${Enum#0}
+  Enum=${Exx#E} ; Enum=${Enum#0}
   SxxAENs=`grep -nix "$Snum" "$mythicalLibrarian/$NewShowName/$NewShowName.S.txt" | sed s/:.*//`
   ExxAENs=`grep -nix "$Enum" "$mythicalLibrarian/$NewShowName/$NewShowName.E.txt" | sed s/:.*//`
   AbsoluteEpisodeNumber=`comm -12 <(echo $SxxAENs | sed s/" "/"\n"/g | sort) <(echo $ExxAENs | sed s/" "/"\n"/g | sort)`
   if [ "$AbsoluteEpisodeNumber" != "" ] && [ $AbsoluteEpisodeNumber -gt 0 ]; then
+    echo "Using SxxExx, determined AbsoluteEpisodeNumber: $AbsoluteEpisodeNumber"
     return 0
   fi
+  echo "WARNING: Failed to determine AbsoluteEpisodeNumber"
   return 1
 }
 
@@ -1802,7 +1810,7 @@ DoMaintenance() {
     echo "PERFORMING MAINTENANCE ROUTINE">>"$mythicalLibrarian"/output.log
     while read line ; do
       (( ++mythicalLibrarianCounter ))
-      echo -ne "File record $mythicalLibrarianCounter: ${SupportFile:0:20}     \r" 1>&2 
+      echo -ne "File record $mythicalLibrarianCounter: ${SupportFile:0:20}     \n" 1>&2
       SupportFile=`echo $line|cut -d"'" -f2`
       MainFile=`echo $line|cut -d"'" -f4`
       ls "$MainFile" > /dev/null 2>&1
@@ -1828,7 +1836,7 @@ DoMaintenance() {
   if [ "$DirTracking" = "Enabled" ] && [ -f "$mythicalLibrarian/dir.tracking" ]; then
     while read line ; do
       (( ++mythicalLibrarianCounter ))
-      echo -ne "Folder record $mythicalLibrarianCounter: ${DirToCheckCheck:0:20}    \r" 1>&2 
+      echo -ne "Folder record $mythicalLibrarianCounter: ${DirToCheckCheck:0:20}    \n" 1>&2
       DirToCheck=$line
       if [ -d "$DirToCheck" ]; then
         DirToCheckCheck=`ls "$line"|  sed s/"tvshow.nfo"/""/g |grep -m1 ^`
@@ -1856,7 +1864,7 @@ DoMaintenance() {
     
     while read line ; do
       (( ++mythicalLibrarianCounter ))
-      echo -ne "Clensing Database:$mythicalLibrarianCounter ${folderToCheck:0:20}    \r" 1>&2 
+      echo -ne "Clensing Database:$mythicalLibrarianCounter ${folderToCheck:0:20}    \n" 1>&2
       folderToCheck="$mythicalLibrarian/$line"
       if [ -d "$folderToCheck" ]; then
         if [ "$folderToCheck" != "$mythicalLibrarian/Daily Report" ]; then
@@ -2036,7 +2044,7 @@ mythicalDiagnostics(){
     echo "SENDING REQUESTED COMMANDS TO:$KODIIP"
     #SAK: REPLACED BELOW, SEE http://forum.kodi.tv/showthread.php?tid=65644&page=65&highlight=json
     #XBMCcomm=`curl -L -s --connect-timeout 3 "http://"$XBMCIP"/xbmcCmds/xbmcHttp?command=ExecBuiltIn(Notification(mythical%20Librarian%20Test%2CTesting%20Communication%20with%20mythicallibrarian))"|tr -d "</html>i^" `
-    KODIcomm=`curl -L -s -m3 --connect-timeout 5 -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","method":"GUI.ShowNotification","params":{"title":"mythical Librarian Test","message":"'$PythonBindingsCheck'"},"id":1}' http://$KODIIP/jsonrpc|tr -d "\"</html>i^" `
+    KODIcomm=`curl -L -s -m3 --connect-timeout 5 -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","method":"GUI.ShowNotification","params":{"title":"mythical Librarian Test","message":"$PythonBindingsCheck"},"id":1}' http://$KODIIP/jsonrpc|tr -d "</html>i^" `
     test "$KODIcomm" != "" && echo "TESTING:$KODIcomm" || echo "COMMUNICATIONS NOT ESTABLISHED: $KODIIP"
   done
   #SAK: REPLACED BELOW, SEE http://forum.kodi.tv/showthread.php?tid=65644&page=65&highlight=json
@@ -2487,7 +2495,7 @@ getSeriesInfo(){
 
 #####DEFINE ENVIRONMENT AND VARIABLES#####
 MyUserName=`whoami`
-Today=`date +%F`
+#Today=`date +%F`
 # Set global values
 test -f "/etc/mythicalLibrarian/globalSettings" && source /etc/mythicalLibrarian/globalSettings
 #make our working dir if it does not exist
@@ -2848,11 +2856,10 @@ if [ "$SeriesID" != "" ] ; then
   #Statistical Fuzzy Logic monitoring
   updateRunningTotalMatchesCount
   echo "TOTAL MATCHES:$FuzzyLogicMatches TOTAL VERIFIED FUZZY ERRORS:`test -f "$mythicalLibrarian"/FuzzyLogicError.log && cat "$mythicalLibrarian"/FuzzyLogicError.log || echo "0"`"
-
 fi
 
 #If we already have Sxx and Exx from MythTV DB, use them. If we also had a Subtitle, then do some verification.
-if [ "$Sxx" != "S" ] && [ "$Sxx" != "" ] && [ "$Sxx" != "S00" ]  && [ "$Exx" != "E" ] && [ "$Exx" != "" ] && [ "$Exx" != "E00" ] ; then
+if [ "$Sxx" != "S" ] && [ "$Sxx" != "" ] && [ "$Sxx" != "S00" ] && [ "$Exx" != "E" ] && [ "$Exx" != "" ] && [ "$Exx" != "E00" ] ; then
   #TODO: If the confidence rating from the above is good, and we have an 
   #  AbsoluteEpisodeNumber then use it to validate the Sxx, Exx & Subtitle from
   #  the MythTV DB.
@@ -2863,8 +2870,12 @@ if [ "$Sxx" != "S" ] && [ "$Sxx" != "" ] && [ "$Sxx" != "S00" ]  && [ "$Exx" != 
   if [ "$EpisodeSubtitle" = "" ] ; then
     AbsoluteEpisodeNumberBackup=$AbsoluteEpisodeNumber
     getAbsoluteEpisodeNumberWithSxxExx
-    EpisodeSubtitle=`sed -n $AbsoluteEpisodeNumber'p' "$mythicalLibrarian"/"$NewShowName"/"$NewShowName".actualEname.txt
-    echo "MythTV DB didn't have an EpisodeSubtitle, using '$EpisodeSubtitle' from TheTVDB."
+    if [ "$?" = "0" ]; then
+      EpisodeSubtitle=`sed -n $AbsoluteEpisodeNumber'p' "$mythicalLibrarian"/"$NewShowName"/"$NewShowName".actualEname.txt`
+      echo "MythTV DB didn't have an EpisodeSubtitle, using '$EpisodeSubtitle' from TheTVDB."
+    else
+      AbsoluteEpisodeNumber=$AbsoluteEpisodeNumberBackup
+    fi
   fi
   SeasonNumber=${Sxx#S}
   SeasonNumber=${SeasonNumber#0}
@@ -2873,6 +2884,7 @@ if [ "$Sxx" != "S" ] && [ "$Sxx" != "" ] && [ "$Sxx" != "S00" ]  && [ "$Exx" != 
 elif [ "$AbsoluteEpisodeNumber" != "" ]; then
   setSxxAndExxFromAbsoluteEpisodeNumber
 else
+  echo "WARNING: Couldn't set Sxx and Exx."
   ConfidenceReasoning="$ConfidenceReasoning Could not set Sxx and Exx, Failed; "
 fi
 

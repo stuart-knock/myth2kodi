@@ -570,27 +570,27 @@ generaterss() {
   TEMPrssFile="rss.temp"
  
   #HTML line break code for nice formatting
-  lineBreak="&lt;br /&gt;"  
+  lineBreak="&lt;br /&gt;"
 
   #test if rssFile directory is writeable
   if [ ! -w "$rssDir" ]; then
     echo -e "RSS generation failed:\nDirectory not writeable ($rssDir)"
     return 5
   fi
- 
+
   #test if rssFile is writeable
   if [ -e "$rssDir/$OLDrssFile" ] && [ ! -w "$rssDir/$OLDrssFile" ]; then
     echo -e "RSS generation failed:\nFile exists but is not writeable: $rssDir/$OLDrssFile"
     return 6
   fi
- 
+
   #Setup the rss file
   echo -e '<?xml version="1.0" encoding="ISO-8859-1" ?>' > $rssDir/$TEMPrssFile
   echo -e '<rss version="2.0">' >> $rssDir/$TEMPrssFile
   echo -e '<channel>' >> $rssDir/$TEMPrssFile
-  echo -e '\t<title>mythicalLibrarian</title>' >> $rssDir/$TEMPrssFile
+  echo -e '\t<title>myth2kodi</title>' >> $rssDir/$TEMPrssFile
   echo -e '\t<link>http://kodi.tv</link>' >> $rssDir/$TEMPrssFile
-  echo -e '\t<description>mythicalLibrary Daily Report Information</description>' >> $rssDir/$TEMPrssFile
+  echo -e '\t<description>myth2kodi Daily Report Information</description>' >> $rssDir/$TEMPrssFile
  
   #write current recording information to first item.
   echo -e "\t\t<item>">>$rssDir/$TEMPrssFile
@@ -599,29 +599,31 @@ generaterss() {
   if [ "$mythicalLibrarianProgramIDCheck" = "EP" ]; then
     echo -e "\t\t\t<link>http://www.thetvdb.com/?tab=series&amp;id=$SeriesID</link>">>$rssDir/$TEMPrssFile 
   elif [ "$mythicalLibrarianProgramIDCheck" = "MV" ]; then
-    echo -e "\t\t\t<link>http://www.imdb.com/search/title?release_date=,$MovieAirDate&title=$ShowName&title_type=feature</link>">>$rssDir/$TEMPrssFile 
+    echo -e "\t\t\t<link>http://www.imdb.com/search/title?release_date=,$MovieAirDate&title=$ShowName&title_type=feature</link>">>$rssDir/$TEMPrssFile
   else
     tvdotcomshowname=`echo $ShowName|sed s/" "/"%20"/g`
-    echo -e "\t\t\t<link>http://www.tv.com/search.php?type=11&amp;stype=all&amp;tag=search%3Bfrontdoor&amp;qs=$tvdotcomshowname </link>">>$rssDir/$TEMPrssFile 
+    echo -e "\t\t\t<link>http://www.tv.com/search.php?type=11&amp;stype=all&amp;tag=search%3Bfrontdoor&amp;qs=$tvdotcomshowname </link>">>$rssDir/$TEMPrssFile
   fi
 
   #TODO: Need to make the call to ifconfig more portable, maybe just revert to straight call and add /sbin to librarians path.
-  which /sbin/ifconfig >/dev/null && myip=`/sbin/ifconfig  | grep 'inet addr' -m1 | cut -d: -f2 | awk '{ print $1}'`
-  rssEpisodeSubtitle=`echo $EpisodeSubtitle| sed s/"&"/"&amp;"/g`
-  rssNewShowName=`echo $NewShowName| sed s/"&"/"&amp;"/g`
-  rssPlot=`echo $Plot| sed s/"&"/"&amp;"/g` 
-  mythicalGUID=`echo "$MyUserName@$myip""$MoveDir/$ShowFileName.$OriginalExt"| sed s/"("/"%28"/g| sed s/")"/"%29"/g|sed s/"\ "/"%20"/g`
+  #  The below assumed the first inet addr was the correct one, but that can lead to the loopback, using m2 and removing 127.0.0.1 avoids this problem,
+  #  though it's probably better to just set myip in the configuration at top of file
+  which /sbin/ifconfig >/dev/null && myip=`/sbin/ifconfig | grep 'inet addr' -m2 | cut -d: -f2 | awk '{ print $1}' | grep -v "127.0.0.1"`
+  rssEpisodeSubtitle=`echo $EpisodeSubtitle | sed s/"&"/"&amp;"/g`
+  rssNewShowName=`echo $NewShowName | sed s/"&"/"&amp;"/g`
+  rssPlot=`echo $Plot | sed s/"&"/"&amp;"/g`
+  mythicalGUID=`echo "$MyUserName@$myip""$MoveDir/$ShowFileName.$OriginalExt" | sed s/"("/"%28"/g | sed s/")"/"%29"/g | sed s/"\ "/"%20"/g`
   echo -e "\t\t\t<guid>sftp://$mythicalGUID</guid>">>$rssDir/$TEMPrssFile
   echo -e "\t\t\t<pubDate>"$(date -R -d "$ShowStartTime")"</pubDate>">>$rssDir/$TEMPrssFile
   echo -e "\t\t\t<description>">>$rssDir/$TEMPrssFile
   echo -e "\t\t\t\tEpisode Title: $rssEpisodeSubtitle$lineBreak">>$rssDir/$TEMPrssFile
   echo -e "\t\t\t\tProgram: $rssNewShowName$lineBreak">>$rssDir/$TEMPrssFile
   echo -e "\t\t\t\tSeason: $Sxx$lineBreak">>$rssDir/$TEMPrssFile
-  echo -e "\t\t\t\tEpisode #: $Exx$lineBreak$lineBreak">>$rssDir/$TEMPrssFile
-  echo -e "\t\t\t\t$Plot">>$rssDir/$TEMPrssFile
+  echo -e "\t\t\t\tEpisode: $Exx$lineBreak$lineBreak">>$rssDir/$TEMPrssFile
+  echo -e "\t\t\t\tPlot: $rssPlot">>$rssDir/$TEMPrssFile
   echo -e "\t\t\t</description>">>$rssDir/$TEMPrssFile
   echo -e "\t\t</item>">>$rssDir/$TEMPrssFile
- 
+
   #If there is an old RSS file
   if [ -e "$rssDir/$OLDrssFile" ]; then
     #test for number of </item> tags using grep

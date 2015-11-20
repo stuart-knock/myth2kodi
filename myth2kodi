@@ -14,6 +14,16 @@
 
 #TODO: A number of the long "test" lines would be much easier to read/debug
 #  if they were rewritten as "if ; then else" blocks.
+
+#TODO: Clean up the name space by using "local" for variable declerations
+#  within functions.
+
+#TODO: Go through and check for variables that aren't initialised before 
+#  first use -- prefer initialising everything as it avoids cruft from
+#  the environment, though should check interaction with global settings.
+
+#TODO: Consider changing backticks `` used for command substitution to 
+#  this form $() -- see, http://wiki.bash-hackers.org/syntax/expansion/cmdsubst
  
 #Intention:
 #  This program is designed to be a user job in MythTV. It can be called by 
@@ -427,7 +437,7 @@ CategoricNamingConventions(){
   if [ "${OriginalAirDate:0:4}" != "0000" ] && [ "${OriginalAirDate:0:4}" != "" ] && [ "$UseMethod2" != "1" ] ; then
     EventYear="${OriginalAirDate:0:4}"
     Sxx=$EventYear
-    EventMonthDay=`echo "${OriginalAirDate:5:5}"|tr -d "-"|sed 's/0*//'`
+    EventMonthDay=`echo "${OriginalAirDate:5:5}" | tr -d "-" | sed 's/0*//'`
     Exx=$EventMonthDay
     test "$NewShowName" = "" && NewShowName=$ShowName
   else #Flag failure of Method1
@@ -442,7 +452,7 @@ CategoricNamingConventions(){
  
   #Method2 - 
   if [ "$testedmethod1" != "1" ]; then
-    test "${ShowStartTime:0:4}" != 0000 && test "${ShowStartTime:0:4}" != "" && EventYear="${ShowStartTime:0:4}" && EventMonthDay=`echo "${ShowStartTime:5:5}"|tr -d "-"|sed 's/0*//'`
+    test "${ShowStartTime:0:4}" != 0000 && test "${ShowStartTime:0:4}" != "" && EventYear="${ShowStartTime:0:4}" && EventMonthDay=`echo "${ShowStartTime:5:5}" | tr -d "-" | sed 's/0*//'`
     Exx=$EventMonthDay
     Sxx=$EventYear
     #Check validity of Method2
@@ -486,30 +496,30 @@ checkPermissions(){
               test ! -f "$3/arbitraryfile.ext" && TMoveDirWritable=1 || TMoveDirWritable=0
             else
               TMoveDirWritable=0
-              echo "CREATED $3/arbitraryfile.ext BUT COULD NOT WRITE DATA INTO THE FILE" |tee -a "$mythicalLibrarian/output.log"
+              echo "CREATED $3/arbitraryfile.ext BUT COULD NOT WRITE DATA INTO THE FILE" | tee -a "$mythicalLibrarian"/output.log
             fi
           else
-            echo "$MyUserName TRIED TO WRITE TO $3 --FAILED" |tee -a "$mythicalLibrarian/output.log"
-            test ! -r "$3" && echo "QUICK FIX: sudo chmod a+r \"$3\"" |tee -a "$mythicalLibrarian/output.log"
-            test ! -w "$3" && echo "QUICK FIX: sudo chmod a+w \"$3\"" |tee -a "$mythicalLibrarian/output.log"
-            echo "QUICK FIX: sudo chown $MyUserName \"$3\"" |tee -a "$mythicalLibrarian/output.log"
+            echo "$MyUserName TRIED TO WRITE TO $3 --FAILED" | tee -a "$mythicalLibrarian"/output.log
+            test ! -r "$3" && echo "QUICK FIX: sudo chmod a+r \"$3\"" | tee -a "$mythicalLibrarian"/output.log
+            test ! -w "$3" && echo "QUICK FIX: sudo chmod a+w \"$3\"" | tee -a "$mythicalLibrarian"/output.log
+            echo "QUICK FIX: sudo chown $MyUserName \"$3\"" | tee -a "$mythicalLibrarian"/output.log
           fi
         elif [ -z "$2" -o $1 -ge $2 ]; then
           TMoveDirWritable=0
-          echo "INSUFFICIENT FREE SPACE ON $3" |tee -a "$mythicalLibrarian/output.log"
-          echo "QUICK FIX: Remove unnecessary files" |tee -a "$mythicalLibrarian/output.log"
+          echo "INSUFFICIENT FREE SPACE ON $3" | tee -a "$mythicalLibrarian"/output.log
+          echo "QUICK FIX: Remove unnecessary files" | tee -a "$mythicalLibrarian"/output.log
         fi
       else
-        echo "FOLDER DOES NOT EXIST: $3" |tee -a "$mythicalLibrarian/output.log"
-        echo "QUICK FIX: mkdir \"$3\"" |tee -a "$mythicalLibrarian/output.log"
+        echo "FOLDER DOES NOT EXIST: $3" | tee -a "$mythicalLibrarian"/output.log
+        echo "QUICK FIX: mkdir \"$3\"" | tee -a "$mythicalLibrarian"/output.log
       fi
     else 
-      echo "COULD NOT READ FILESIZE ON $InputPath" |tee -a "$mythicalLibrarian/output.log"
-      echo "QUICK FIX: chmod -R 775 \"$InputPath\"" |tee -a "$mythicalLibrarian/output.log"
+      echo "COULD NOT READ FILESIZE ON $InputPath" | tee -a "$mythicalLibrarian"/output.log
+      echo "QUICK FIX: chmod -R 775 \"$InputPath\"" | tee -a "$mythicalLibrarian"/output.log
     fi
   else
-    echo "COULD NOT READ FREE SPACE on \"$3\"" |tee -a "$mythicalLibrarian/output.log"
-    echo "QUICK FIX: mkdir \"$3\" ; chmod -R 775 \"$3\"" |tee -a "$mythicalLibrarian/output.log"
+    echo "COULD NOT READ FREE SPACE on \"$3\"" | tee -a "$mythicalLibrarian"/output.log
+    echo "QUICK FIX: mkdir \"$3\" ; chmod -R 775 \"$3\"" | tee -a "$mythicalLibrarian"/output.log
   fi
   
   return 0
@@ -601,7 +611,7 @@ generaterss() {
   elif [ "$mythicalLibrarianProgramIDCheck" = "MV" ]; then
     echo -e "\t\t\t<link>http://www.imdb.com/search/title?release_date=,$MovieAirDate&amp;title=$ShowName&amp;title_type=feature</link>">>$rssDir/$TEMPrssFile
   else
-    tvdotcomshowname=`echo $ShowName|sed s/" "/"%20"/g`
+    tvdotcomshowname=`echo $ShowName | sed s/" "/"%20"/g`
     echo -e "\t\t\t<link>http://www.tv.com/search.php?type=11&amp;stype=all&amp;tag=search%3Bfrontdoor&amp;qs=$tvdotcomshowname </link>">>$rssDir/$TEMPrssFile
   fi
 
@@ -645,7 +655,7 @@ generaterss() {
     #set IFS to use line break as a delineator
     OLDIFS=$IFS
     #SAK: Surely the following can be IFS="\n"
-    #TODO: It can't, but there must be a better solution than below...
+    #TODO: It can't, but there must be a better solution than below... THis should do it: IFS=$'\n'
     IFS='
 '
     #IFS="\n"
@@ -729,42 +739,48 @@ GetMythTVDatabase(){
   #TODO: This conditional seems weird as PythonBindings isn't set anywhere and
   #  even if it were set to True then this function would do nothing rather 
   #  than accessing the database via the Python bindings...
+  #TODO: try compressing the below with something like:
+  #dbselect="mysql -u$MySQLuser -p$MySQLpass -e \"use '$MySQLMythDb' ; printf \"select %s from recorded where basename like '$InputFileBasename';\""
+  #then we'd have:
+  #test "$InputTitle" = "" && InputTitle=`$dbselect  \"title\" | sed s/"title"/""/g | sed -n "2p"`
+  #ChanID=`$dbselect  \"chanid\" | sed s/"\/"/""/g | sed -n 2p | sed s/"chanid"/""/g | sed s/" "/""/g`
+  #etc
   if [ "$PythonBindings" != "True" ]; then
     #Obtain MythTV Database Information
     echo "Accessing MythTV DataBase:"
     #get Title 
-    test "$InputTitle" = "" && InputTitle=`mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select title from recorded where basename like '$InputFileBasename'; "|sed s/"title"/""/g|sed -n "2p"`
+    test "$InputTitle" = "" && InputTitle=`mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select title from recorded where basename like '$InputFileBasename'; " | sed s/"title"/""/g | sed -n "2p"`
     #get Subtitle
-    test "$InputSubtitle" = "" && InputSubtitle=`mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select subtitle from recorded where basename like '$InputFileBasename' ; "|sed s/"subtitle"/""/g|sed -n "2p"`
+    test "$InputSubtitle" = "" && InputSubtitle=`mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select subtitle from recorded where basename like '$InputFileBasename' ; " | sed s/"subtitle"/""/g | sed -n "2p"`
     #TODO: It's possible the following two lines require the '| sed -n "2p"' for filtering what is returned by the mysql SELECT -- So far I think I've only used the PythonBindings. 
     #get Season Number, SydFTA sometimes has a season field #TODO: change call to enable Season Number as an input
-    test "$InputSeasonNum" = "" && InputSeasonNum=`mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select season from recorded where basename like '$InputFileBasename' ;"|sed s/"season"/""/g|sed -n "2p"`
+    test "$InputSeasonNum" = "" && InputSeasonNum=`mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select season from recorded where basename like '$InputFileBasename' ;" | sed s/"season"/""/g | sed -n "2p"`
     #get Episode Number, SydFTA sometimes has an episode field  #TODO: change call to enable Episode Number as an input
-    test "$InputEpisodeNum" = "" && InputEpisodeNum=`mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select episode from recorded where basename like '$InputFileBasename' ; "|sed s/"episode"/""/g|sed -n "2p"`
+    test "$InputEpisodeNum" = "" && InputEpisodeNum=`mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select episode from recorded where basename like '$InputFileBasename' ; " | sed s/"episode"/""/g | sed -n "2p"`
     #TODO: Determine if substitution of "/" with "" below is SchedulesDirect specific, if so move it to ProcessSchedulesDirect... 
     #get chanid for recordings to identify program table
-    ChanID=`mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select chanid from recorded where basename like '$InputFileBasename';"|sed s/"\/"/""/g|sed -n 2p|sed s/"chanid"/""/g|sed s/" "/""/g`
+    ChanID=`mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select chanid from recorded where basename like '$InputFileBasename';" | sed s/"\/"/""/g | sed -n 2p | sed s/"chanid"/""/g | sed s/" "/""/g`
     #get ProgramID from recorded to identify program
-    ProgramID=`mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select programid from recorded where basename like '$InputFileBasename' ; " |sed s/"\/"/""/g|sed -n "2p"|sed s/"programid"/""/g`
+    ProgramID=`mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select programid from recorded where basename like '$InputFileBasename' ; " | sed s/"\/"/""/g | sed -n "2p" | sed s/"programid"/""/g`
     #Get series id from basename to identify program
-    LocalSeriesID=`mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select seriesid from recorded where basename like '$InputFileBasename' ; " |sed s/"\/"/""/g|sed -n "2p"|sed s/"seriesid"/""/g`
+    LocalSeriesID=`mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select seriesid from recorded where basename like '$InputFileBasename' ; " | sed s/"\/"/""/g | sed -n "2p" | sed s/"seriesid"/""/g`
     #Get Plot from basename to identify program
-    Plot=`mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select description from recorded where basename like '$InputFileBasename' ; " |sed s/"\/"/""/g|sed -n "2p"|sed s/"description"/""/g`
+    Plot=`mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select description from recorded where basename like '$InputFileBasename' ; " | sed s/"\/"/""/g | sed -n "2p" | sed s/"description"/""/g`
     #Get rating from basename to identify program
-    Stars=`mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select stars from recorded where basename like '$InputFileBasename' ; " |sed s/"\/"/""/g|sed -n "2p"|sed s/"Stars"/""/g`
+    Stars=`mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select stars from recorded where basename like '$InputFileBasename' ; " | sed s/"\/"/""/g | sed -n "2p" | sed s/"Stars"/""/g`
     #get show start time to identify program ----future development
-    ShowStartTime=`mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select starttime from recorded where basename like '$InputFileBasename' ; " |sed s/"\/"/""/g|sed -n "2p"|sed s/"starttime"/""/g`
+    ShowStartTime=`mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select starttime from recorded where basename like '$InputFileBasename' ; " | sed s/"\/"/""/g | sed -n "2p" | sed s/"starttime"/""/g`
     #get category from recorded to identify program table -----future development
-    ShowCategory=`mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select category from recorded where basename like '$InputFileBasename' ; " |sed s/"\/"/""/g|sed -n "2p"|sed s/"category"/""/g`
+    ShowCategory=`mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select category from recorded where basename like '$InputFileBasename' ; " | sed s/"\/"/""/g | sed -n "2p" | sed s/"category"/""/g`
     #get storagegroup from recorded as a possible fallback to identify movies #TODO: Once accessing this works, make use of it...
-    StorageGroup=`mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select storagegroup from recorded where basename like '$InputFileBasename' ; " |sed s/"\/"/""/g|sed -n "2p"|sed s/"storagegroup"/""/g`
+    StorageGroup=`mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select storagegroup from recorded where basename like '$InputFileBasename' ; " | sed s/"\/"/""/g | sed -n "2p" | sed s/"storagegroup"/""/g`
     #get original air date for tv shows
-    OriginalAirDate=`mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select originalairdate from recorded where basename like '$InputFileBasename' ; "|sed s/"\/"/""/g|sed -n "2p"|sed s/"originalairdate"/""/g`
+    OriginalAirDate=`mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select originalairdate from recorded where basename like '$InputFileBasename' ; " | sed s/"\/"/""/g | sed -n "2p" | sed s/"originalairdate"/""/g`
     test "$OriginalAirDate" = "0000-00-00" && OriginalAirDate="$null"
     #get DataType
-    XMLTVGrabber=`mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select xmltvgrabber from videosource ; "|sed s/"xmltvgrabber"/""/g|sed s/"\/"/""/g|sed -n "2p"|sed s/" "/""/g`
+    XMLTVGrabber=`mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select xmltvgrabber from videosource ; " | sed s/"xmltvgrabber"/""/g | sed s/"\/"/""/g | sed -n "2p" | sed s/" "/""/g`
     #get year for movies 
-    MovieAirDate=`mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select airdate from recordedprogram where programid like '$ProgramID' and chanid like '$ChanID' ; "|sed s/"\/"/""/g|sed s/"airdate"/""/g|sed -n "2p"|sed s/" "/""/g`
+    MovieAirDate=`mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select airdate from recordedprogram where programid like '$ProgramID' and chanid like '$ChanID' ; " | sed s/"\/"/""/g | sed s/"airdate"/""/g | sed -n "2p" | sed s/" "/""/g`
     #Blank year if it is invalid
     if [ ! -z "$MovieAirDate" ] && [ $MovieAirDate -lt 1900 ]; then
       MovieAirDate=$null
@@ -775,10 +791,10 @@ GetMythTVDatabase(){
     if [ "$CommercialMarkup" = "Enabled" ]; then  
       #Remove old and generate a comskip Start list
       echo "">$mythicalLibrarian/markupstart.txt
-      mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select mark from recordedmarkup where starttime like '$ShowStartTime' and chanid like '$ChanID' and type like "4" ; " |sed s/"mark"/""/g|sed s/" "/""/g>>$mythicalLibrarian/markupstart.txt
+      mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select mark from recordedmarkup where starttime like '$ShowStartTime' and chanid like '$ChanID' and type like "4" ; " | sed s/"mark"/""/g | sed s/" "/""/g>>$mythicalLibrarian/markupstart.txt
       #Remove old and generate comskip Stop list
       echo "">$mythicalLibrarian/markupstop.txt
-      mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select mark from recordedmarkup where starttime like '$ShowStartTime' and chanid like '$ChanID' and type like "5" ; " |sed s/"mark"/""/g|sed s/" "/""/g>>$mythicalLibrarian/markupstop.txt
+      mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select mark from recordedmarkup where starttime like '$ShowStartTime' and chanid like '$ChanID' and type like "5" ; " | sed s/"mark"/""/g | sed s/" "/""/g>>$mythicalLibrarian/markupstop.txt
       #Combine commercial data into a single comskip file and remove the initial files
       GenComSkip
     fi
@@ -800,7 +816,7 @@ GetMythTvPythonBindings(){
 
   #read values from named pipe, remove quotes and declare $Variable=$Value
   while read var equals value ; do 
-    value=`echo $value|tr -d \"`
+    value=`echo $value | tr -d \"`
     test "$equals" = "=" && declare $var="$value"
     echo $var$equals$value
   done < "$mythicalLibrarian/mythicalDbOut" > /dev/null 2>&1
@@ -872,7 +888,7 @@ ProcessSchedulesDirect(){
   Zap2itSeriesID=`echo $ProgramID | tr -d MVSHEP | sed 's/0*//' | sed 's/.\{4\}$//'`
 
   #strip needless chars from date
-  datehour=`echo "$ShowStartTime"|tr ":" "."|tr " " "@"`
+  datehour=`echo "$ShowStartTime" | tr ":" "." | tr " " "@"`
   #get 4 digit year
   seasonyear=`echo "${ShowStartTime:0:4}"`
   
@@ -887,6 +903,7 @@ ProcessSchedulesDirect(){
   return 0 
 }
 
+#TODO: Rename as ExtractSxxExxFromPlot for consistency...
 ExtractSxxExx(){
   #TODO: Maybe change the * to \? in most cases below so the matching is less inclusive
   #TODO: Maybe add warning in the case of 4x4 in case it's not actually an SxxExx 
@@ -921,17 +938,34 @@ ExtractSxxExx(){
   return 0
 }
 
+RemoveSeasonEpisodeFromPlot(){
+  if [ "$SeasonEpisode" != "" ] ; then
+    #Check if it's in the leading position and if so, remove it
+    SEstring=`echo $Plot | grep -i --only-matching '(\?\(s\.*[0-9]*[0-9]\,*\(e\|ep\)\.*[0-9][0-9]*\))\?\s*\|(\?\([0-9]*[0-9]x[0-9][0-9]*\))\?\s*'`
+    if [ "$SEstring" != "" ] ; then
+      echo "WARNING: SeasonEpisode was in the leading position of the Plot field, removing it to simplify subsequent processing."
+      Plot=`echo $Plot | sed s/"$SEstring"/""/`
+      #TODO: Still need to strip any trailing space or leading "- " from the Plot
+    fi
+  else
+    echo "WARNING: SeasonEpisode isn't currently set, so not going to discard it from Plot field."
+  fi
+}
+
+#TODO: Rename as ExtractSubtitleFromPlot for consistency -- guessing will now be done elsewhere 
 GuessSubtitle(){
-  #TODO:Overmatching subtitle with a : neear end of plot, perhaps limit length possible for plot
   #NOTE: 
   #Try to extract a subtitle from the plot field (Luv Ya SBS)
-  InputSubtitle=`echo $Plot | grep --only-matching '\(\(\(\w\+\)\(.*\s*\)\)\|\(\&\s*\)\)\{1,7\}\( -\|\:\)'`
-  #Clean off the trailing " -" that we're using to identify it
+  InputSubtitle=`echo $Plot | grep --only-matching '^\(\(\(\(\w\+\)\(.\?\s*\)\)\|\(\&\s*\)\)\{1,7\}\)\( -\|\:\)'`
+  #Clean off the trailing " -" or ":" that we're using to identify it
   InputSubtitle=`echo $InputSubtitle | grep --only-matching '\(\(\(\w\+\)\(.*\s*\)\)\|\(\&\s*\)\)\{,7\}\(\w\+\)'`
-  #Strip SeasonEpisode part when it's bundled with the Subtitle before the hyphen (SBS data entry plebs, one day I'll find out where you live...)
-  InputSubtitle=`echo $InputSubtitle | sed 's/(*\(s\.*[0-9]*[0-9]\,*\(e\|ep\)\.*[0-9][0-9]*\))*\s*\|(*\([0-9]*[0-9]x[0-9][0-9]*\))*\s*//I'`
   echo "Guessed Subtitle from Plot field as '$InputSubtitle'"
   return 0
+}
+
+RemoveSubtitleFromPlot(){
+  #TODO: If we extracted a subtitle from Plot variable then remove that text from Plot.
+  echo "RemoveSubtitleFromPlot(): Not Implemented"
 }
 
 #A Process function compatible with Sydney over the air data...
@@ -977,9 +1011,11 @@ ProcessSydFTA(){
   #If the information is already available, set the Sxx & Exx variables
   if [ "$mythicalLibrarianProgramIDCheck" = "EP" ]; then
     ExtractSxxExx
+    RemoveSeasonEpisodeFromPlot
     #If we haven't set a Subtitle yet, try and get one from $Plot
     if [ "$InputSubtitle" = "" ]; then
       GuessSubtitle
+      RemoveSubtitleFromPlot
     fi
   fi
 
@@ -1005,7 +1041,7 @@ ProcessSydFTA(){
   ProgramID=$ProgramData
   
   #strip needless chars from date
-  datehour=`echo "$ShowStartTime"|tr ":" "."|tr " " "@"`
+  datehour=`echo "$ShowStartTime" | tr ":" "." | tr " " "@"`
   
   #predefined naming conventions
   if [ "$ShowCategory" = "Sports event" -o "$ShowCategory" = "News" -o "$ShowCategory" = "Newsmagazine" ]; then
@@ -1048,7 +1084,7 @@ ProcessNoLookup(){
   Zap2itSeriesID="$LocalSeriesID"
   
   #strip needless chars from date
-  datehour=`echo "$ShowStartTime"|tr ":" "."|tr " " "@"`
+  datehour=`echo "$ShowStartTime" | tr ":" "." | tr " " "@"`
   #get 4 digit year
   seasonyear=`echo "${ShowStartTime:0:4}"`
 
@@ -1066,7 +1102,7 @@ DeleteRelevantDatabaseFilesAndPictures(){
   #Make sure we got input arguments and file is valid
   if [ ! -e "$InputPath" ]; then
     #Remove recording entry from mysql database
-    echo "REMOVING - $FileBaseName - THUMBNAILS - DATABASE ENTRIES"|tee -a "$mythicalLibrarian"/output.log
+    echo "REMOVING - $FileBaseName - THUMBNAILS - DATABASE ENTRIES" | tee -a "$mythicalLibrarian"/output.log
     mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; delete from recorded where basename like '$FileBaseName'; "
     #Remove thumbnails
     rm -f "$originaldirname/$FileBaseName".*  
@@ -1096,7 +1132,7 @@ determineIfDatabaseIsUpToDate(){
   curl -L -s -m"$Timeout" "http://www.thetvdb.com/api/Updates.php?type=none">"$mythicalLibrarian/$NewShowName/current.time"
 
   #Get the time from the file
-  test -f "$mythicalLibrarian/$NewShowName/current.time" && CurrentTime=`cat "$mythicalLibrarian/$NewShowName/current.time"|grep '<Time>'|sed s/"<Time>"/""/g|sed s/"<\/Time>"//g`
+  test -f "$mythicalLibrarian/$NewShowName/current.time" && CurrentTime=`cat "$mythicalLibrarian/$NewShowName/current.time" | grep '<Time>' | sed s/"<\/\?Time>"/""/g`
   test "$CurrentTime" = "" && CurrentTime=99999999
   rm -f "$mythicalLibrarian/$NewShowName/current.time"
   
@@ -1137,12 +1173,14 @@ determineIfDatabaseIsUpToDate(){
   #some other condition was present. update anyways.
   return 1
 }
- 
+
 #####GET EPISODE INFORMATION#####
 downloadInfoAboutMatchedTitleAndCreateTxtFileTables(){
   #Download information from server
   echo -ne "Downloading Series: $SeriesID \n" 1>&2
-  curl -L -s -m"$Timeout" "http://www.thetvdb.com/api/$APIkey/series/$SeriesID/all/$Language.xml"| grep -E "(</?Series>|</?Status>|</?lastupdated>|</?Episode>|</?EpisodeName>|</?FirstAired>|</?SeasonNumber>|</?EpisodeNumber>|</?Overview>)">"$mythicalLibrarian/$NewShowName/$NewShowName.xmlTest" && echo "$CurrentTime" > "$mythicalLibrarian/$NewShowName/lastupdated.time"
+  local TheTVDBShowXML="http://www.thetvdb.com/api/$APIkey/series/$SeriesID/all/$Language.xml"
+  local FieldsWeWant="(</?Series>|</?seriesid>|</?Status>|</?lastupdated>|</?Episode>|</?EpisodeName>|</?FirstAired>|</?SeasonNumber>|</?EpisodeNumber>|</?Overview>)"
+  curl -L -s -m"$Timeout" $TheTVDBShowXML | grep -E $FieldsWeWant > "$mythicalLibrarian/$NewShowName/$NewShowName.xmlTest" && echo "$CurrentTime" > "$mythicalLibrarian/$NewShowName/lastupdated.time"
   
   #Validate that the show has a EpisodeName tag and is a valid download before clobbering our old download.
   grepTest=""
@@ -1242,7 +1280,7 @@ downloadInfoAboutMatchedTitleAndCreateTxtFileTables(){
     GotNewInformation=1
       
   elif [ ! -f "$mythicalLibrarian/$NewShowName/$NewShowName.xml" ]; then
-    echo "COULD NOT DOWNLOAD:www.thetvdb.com/api/$APIkey/series/$SeriesID/all/$Language.xml">>"$mythicalLibrarian"/output.log
+    echo "COULD NOT DOWNLOAD:$TheTVDBShowXML">>"$mythicalLibrarian"/output.log
   fi
   #check if files were created and generate message
   if [ "$GotNewInformation" = "1" ]; then
@@ -1280,7 +1318,7 @@ GetSeriesLineNumberFromTableWithZap2itID(){
 #####FUZZY LOGIC RECOGNITION OF SERIES#####
 #This function provides fuzzy logic matching of a show name and returns a seriesid
 GetSeriesLineNumberFromTableWithFuzzyLogic(){
-  serieslinenumber=`agrep -Byn "${ShowName:0:27}" "$mythicalLibrarian/shn.txt"|sed 's/:.*//'|grep -m1 ^`
+  serieslinenumber=`agrep -Byn "${ShowName:0:27}" "$mythicalLibrarian/shn.txt" | sed 's/:.*//' | grep -m1 ^`
   #Correct for serieslinenumber = ""
   test "$serieslinenumber" = "" && serieslinenumber="0" 
   
@@ -1293,7 +1331,7 @@ GetSeriesLineNumberFromTableWithFuzzyLogic(){
 
 #####STANDARD TITLE RECOGNITION OF SERIES#####
 GetSeriesLineNumberFromTableWithStandardLogic(){
-  serieslinenumber=`grep -nix "$ShowName" "$mythicalLibrarian/shn.txt"|sed 's/:.*//'|grep -m1 ^`
+  serieslinenumber=`grep -nix "$ShowName" "$mythicalLibrarian/shn.txt" | sed 's/:.*//' | grep -m1 ^`
 
   #Correct for serieslinenumber = ""
   test "$serieslinenumber" = "" && serieslinenumber="0" 
@@ -1314,7 +1352,7 @@ ResolveMultipleAirdateMatches(){
   test -f "$mythicalLibrarian/$NewShowName/$NewShowName.InstanceFAiredLineNumbers.txt"  && rm "$mythicalLibrarian/$NewShowName/$NewShowName.InstanceFAiredLineNumbers.txt" 
   test -f "$mythicalLibrarian/$NewShowName/$NewShowName.InstanceLineNumbers.txt" && rm "$mythicalLibrarian/$NewShowName/$NewShowName.InstanceLineNumbers.txt"
   #Create a list of line numbers which match original airdate
-  grep -n "$OriginalAirDate" "$mythicalLibrarian/$NewShowName/$NewShowName.FAired.txt"|sed 's/:.*//'>>"$mythicalLibrarian/$NewShowName/$NewShowName.InstanceFAiredLineNumbers.txt"
+  grep -n "$OriginalAirDate" "$mythicalLibrarian/$NewShowName/$NewShowName.FAired.txt" | sed 's/:.*//'>>"$mythicalLibrarian/$NewShowName/$NewShowName.InstanceFAiredLineNumbers.txt"
   #Loop through list and create instance matching files
   while read line ; do
     echo "$line" >>"$mythicalLibrarian/$NewShowName/$NewShowName.InstanceLineNumbers.txt"
@@ -1322,7 +1360,7 @@ ResolveMultipleAirdateMatches(){
   done < "$mythicalLibrarian/$NewShowName/$NewShowName.InstanceFAiredLineNumbers.txt"
   
   #get instance line number
-  IntermediateEpisodeNumber=`grep -ni "$EpisodeSubtitle" "$mythicalLibrarian/$NewShowName/$NewShowName.InstanceEnames.txt"|grep -m1 ^|sed 's/:.*//'`
+  IntermediateEpisodeNumber=`grep -ni "$EpisodeSubtitle" "$mythicalLibrarian/$NewShowName/$NewShowName.InstanceEnames.txt" | grep -m1 ^ | sed 's/:.*//'`
   #translate instance line number to actual line number
   test "$IntermediateEpisodeNumber" != "" && AbsoluteEpisodeNumber=`sed -n $IntermediateEpisodeNumber'p' "$mythicalLibrarian/$NewShowName/$NewShowName.InstanceLineNumbers.txt"`
   if [ "$AbsoluteEpisodeNumber" != "" ]; then
@@ -1331,7 +1369,7 @@ ResolveMultipleAirdateMatches(){
   else
     ConfidenceReasoning="$ConfidenceReasoning Failed; Attempted to resolve conflict with Fuzzy Logic:"
     #get instance line number
-    IntermediateEpisodeNumber=`agrep -Byn "${EpisodeSubtitle:0:29}" "$mythicalLibrarian/$NewShowName/$NewShowName.InstanceEnames.txt"|grep -m1 ^|sed 's/:.*//'`
+    IntermediateEpisodeNumber=`agrep -Byn "${EpisodeSubtitle:0:29}" "$mythicalLibrarian/$NewShowName/$NewShowName.InstanceEnames.txt" | grep -m1 ^ | sed 's/:.*//'`
     #translate instance line number to actual line number
     test "$IntermediateEpisodeNumber" != "" && AbsoluteEpisodeNumber=`sed -n $IntermediateEpisodeNumber'p' "$mythicalLibrarian/$NewShowName/$NewShowName.InstanceLineNumbers.txt"`
     if [ "$AbsoluteEpisodeNumber" != "" ]; then
@@ -1357,8 +1395,8 @@ makeShowDirIfNeeded(){
 #####SET THE SERIESID AND SHOW NAME#####
 setSeriesIDandNewShowNameBasedOnSeriesLineNumber(){
   #Get the seriesid based on the showname
-  SeriesID=`sed -n $serieslinenumber'p' "$mythicalLibrarian"/sid.txt|grep -m1 ^`
-  NewShowName=`sed -n $serieslinenumber'p' "$mythicalLibrarian"/shn.txt|grep -m1 ^|sed s/"&amp;"/"\&"/g`
+  SeriesID=`sed -n $serieslinenumber'p' "$mythicalLibrarian"/sid.txt | grep -m1 ^`
+  NewShowName=`sed -n $serieslinenumber'p' "$mythicalLibrarian"/shn.txt | grep -m1 ^ | sed s/"&amp;"/"\&"/g`
    
   #Cleanup files to prevent mismatch next time
   test -f "$mythicalLibrarian"/sid.txt && rm -f "$mythicalLibrarian"/sid.txt
@@ -1369,13 +1407,13 @@ setSeriesIDandNewShowNameBasedOnSeriesLineNumber(){
 #####AIRDATE MATCH#####
 getAbsoluteEpisodeNumberWithOriginalAirdate(){
   AbsoluteEpisodeNumber=""
-  test "$OriginalAirDate" != "" && AbsoluteEpisodeNumber=`grep -n "$OriginalAirDate" "$mythicalLibrarian/$NewShowName/$NewShowName.FAired.txt"|grep -m1 ^|sed 's/:.*//'`
+  test "$OriginalAirDate" != "" && AbsoluteEpisodeNumber=`grep -n "$OriginalAirDate" "$mythicalLibrarian/$NewShowName/$NewShowName.FAired.txt" | grep -m1 ^ | sed 's/:.*//'`
   #Account for original series airdate
   if [ "$AbsoluteEpisodeNumber" != "" ] && [ $AbsoluteEpisodeNumber -gt 0 ]; then
     #Account for original show airdate = first air date
-    NumberOriginalAirdates=`grep "$OriginalAirDate" "$mythicalLibrarian/$NewShowName/$NewShowName.FAired.txt"|wc -l`
+    NumberOriginalAirdates=`grep "$OriginalAirDate" "$mythicalLibrarian/$NewShowName/$NewShowName.FAired.txt" | wc -l`
     test $NumberOriginalAirdates -gt 1 && return 1
-    echo "Absolute Exx NR:$AbsoluteEpisodeNumber BASED ON AIRDATE:$OriginalAirDate"| tee -a "$mythicalLibrarian"/output.log
+    echo "Absolute Exx NR:$AbsoluteEpisodeNumber BASED ON AIRDATE:$OriginalAirDate" | tee -a "$mythicalLibrarian"/output.log
     return 0
   fi
   return 2
@@ -1403,7 +1441,7 @@ getAbsoluteEpisodeNumberWithSxxExx(){
 ##'The Office' 'The Delivery (1)'       -TvDb data
 getAbsoluteEpisodeNumberWithStandardLogic(){
   AbsoluteEpisodeNumber=""
-  AbsoluteEpisodeNumber=`grep -nix "$EpisodeSubtitle" "$mythicalLibrarian/$NewShowName/$NewShowName.Ename.txt"|grep -m1 ^|sed 's/:.*//'`
+  AbsoluteEpisodeNumber=`grep -nix "$EpisodeSubtitle" "$mythicalLibrarian/$NewShowName/$NewShowName.Ename.txt" | grep -m1 ^ | sed 's/:.*//'`
   if [ "$AbsoluteEpisodeNumber" != "" ] && [ $AbsoluteEpisodeNumber -gt 0 ]; then
     return 0
   fi
@@ -1413,7 +1451,7 @@ getAbsoluteEpisodeNumberWithStandardLogic(){
 ######FUZZY LOGIC EPISODE MATCH#####
 getAbsoluteEpisodeNumberWithFuzzyLogic(){
   AbsoluteEpisodeNumber=""
-  AbsoluteEpisodeNumber=`agrep -Byn "${EpisodeSubtitle:0:29}" "$mythicalLibrarian/$NewShowName/$NewShowName.Ename.txt"|grep -m1 ^|sed 's/:.*//'`
+  AbsoluteEpisodeNumber=`agrep -Byn "${EpisodeSubtitle:0:29}" "$mythicalLibrarian/$NewShowName/$NewShowName.Ename.txt" | grep -m1 ^ | sed 's/:.*//'`
   if [ "$AbsoluteEpisodeNumber" != "" ] && [ $AbsoluteEpisodeNumber -gt 0 ]; then
     return 0
   fi
@@ -1427,8 +1465,8 @@ searchTheTvDbAndReturnTxtFileTables(){
   curl -L -s -m"$Timeout" www.thetvdb.com/api/GetSeries.php?seriesname=$tvdbshowname>"$mythicalLibrarian/working.xml"
  
   #Separate the XML into textual DBs containing SeriesID, ShowName and Zap2it IDs
-  cat "$mythicalLibrarian/working.xml" | grep "<seriesid>"|sed -e s/"<seriesid>"/""/ -e s/"<\/seriesid>"/""/ -e s/'&quot;'/'"'/ -e s/"&amp;"/"\&"/ -e s/'&ndash;'/'-'/ -e s/"&lt;"/"<"/ -e s/"&gt;"/">"/ >"$mythicalLibrarian/sid.txt"
-  cat "$mythicalLibrarian/working.xml" | grep "<SeriesName>"| sed -e s/"<SeriesName>"// -e s/"<\/SeriesName>"// -e s/'&quot;'/'"'/ -e s/"&amp;"/"\&"/ -e s/'&ndash;'/'-'/ -e s/"&lt;"/"<"/ -e s/"&gt;"/">"/ >"$mythicalLibrarian/shn.txt"
+  cat "$mythicalLibrarian/working.xml" | grep "<seriesid>" | sed -e s/"<seriesid>"/""/ -e s/"<\/seriesid>"/""/ -e s/'&quot;'/'"'/ -e s/"&amp;"/"\&"/ -e s/'&ndash;'/'-'/ -e s/"&lt;"/"<"/ -e s/"&gt;"/">"/ >"$mythicalLibrarian/sid.txt"
+  cat "$mythicalLibrarian/working.xml" | grep "<SeriesName>" | sed -e s/"<SeriesName>"// -e s/"<\/SeriesName>"// -e s/'&quot;'/'"'/ -e s/"&amp;"/"\&"/ -e s/'&ndash;'/'-'/ -e s/"&lt;"/"<"/ -e s/"&gt;"/">"/ >"$mythicalLibrarian/shn.txt"
    
   #parse the XML for shows with Zap2ItIDs
   test -f "$mythicalLibrarian/zap2it.txt" && rm -f "$mythicalLibrarian/zap2it.txt"
@@ -1437,7 +1475,7 @@ searchTheTvDbAndReturnTxtFileTables(){
     test "$line" = "</Series>" && test "$NextShow" = "1" && echo "" >>"$mythicalLibrarian/zap2it.txt" && NextShow=0
 
     if [[ $line =~ '<zap2it_id>'* ]] ; then
-      echo $line| sed -e s/"<zap2it_id>"/""/ -e s/"<\/zap2it_id>"/""/ -e s/'&quot;'/'"'/ -e s/"&amp;"/"\&"/ -e s/'&ndash;'/'-'/ -e s/"&lt;"/"<"/ -e s/"&gt;"/">"/ >>"$mythicalLibrarian/zap2it.txt"
+      echo $line | sed -e s/"<zap2it_id>"/""/ -e s/"<\/zap2it_id>"/""/ -e s/'&quot;'/'"'/ -e s/"&amp;"/"\&"/ -e s/'&ndash;'/'-'/ -e s/"&lt;"/"<"/ -e s/"&gt;"/">"/ >>"$mythicalLibrarian/zap2it.txt"
       NextShow=0
     fi
   done < "$mythicalLibrarian/working.xml"
@@ -1482,19 +1520,19 @@ DoMythTVPermissionsCheck(){
   if [ "$InputOption" != "--BypassPermissionsCheck" ] || [ "$InputOption" = "" ] && [ "$InputSubtitle" = "" ] && [ "$InputTitle" != "--BypassPermissionsCheck" ]; then
     if  [ "`ls -l \"$InputPath\"| awk '{ print $3 }'`" = "mythtv" ] && [ "$MyUserName" != "mythtv" ] && [ "$SYMLINK" = "MOVE" ]; then
       UserName=$USER
-      echo -e " ########################################################################"|tee -a "$mythicalLibrarian"/output.log
-      echo -e " ##############################  ERROR  #################################"|tee -a "$mythicalLibrarian"/output.log
-      echo -e " ########################################################################"|tee -a "$mythicalLibrarian"/output.log
-      echo -e " USER NAME:$UserName ATTEMPTED TO RENAME A MYTHTV OWNED FILE"|tee -a "$mythicalLibrarian"/output.log
-      echo -e " mythicalLibrarian HAS PREVENTED THIS UNAUTHORIZED FILE ACTION"|tee -a "$mythicalLibrarian"/output.log
-      echo -e " THIS IS A SAFETY FEATURE TO PRESERVE FILE PERMISSIONS."|tee -a "$mythicalLibrarian"/output.log
-      echo -e " PLEASE RUN THE FOLLOWING TO SET PROPER PERMISSIONS WHEN RENAMING FILES:"|tee -a "$mythicalLibrarian"/output.log
-      echo -e " sudo su mythtv"|tee -a "$mythicalLibrarian"/output.log
-      echo -e " mythicalLibrarian \"$InputPath\" \"$InputTitle\" \"$InputSubtitle\""|tee -a "$mythicalLibrarian"/output.log
-      echo -e " OR AT YOUR OWN RISK BYPASS THIS CHECK BY ADDING --BypassPermissionsCheck"|tee -a "$mythicalLibrarian"/output.log
-      echo -e " AT THE END OF THE LINE YOU JUST RAN."|tee -a "$mythicalLibrarian"/output.log
-      echo -e " "|tee -a "$mythicalLibrarian"/output.log
-      echo -e " Done."|tee -a "$mythicalLibrarian"/output.log
+      echo -e " ########################################################################" | tee -a "$mythicalLibrarian"/output.log
+      echo -e " ##############################  ERROR  #################################" | tee -a "$mythicalLibrarian"/output.log
+      echo -e " ########################################################################" | tee -a "$mythicalLibrarian"/output.log
+      echo -e " USER NAME:$UserName ATTEMPTED TO RENAME A MYTHTV OWNED FILE" | tee -a "$mythicalLibrarian"/output.log
+      echo -e " mythicalLibrarian HAS PREVENTED THIS UNAUTHORIZED FILE ACTION" | tee -a "$mythicalLibrarian"/output.log
+      echo -e " THIS IS A SAFETY FEATURE TO PRESERVE FILE PERMISSIONS." | tee -a "$mythicalLibrarian"/output.log
+      echo -e " PLEASE RUN THE FOLLOWING TO SET PROPER PERMISSIONS WHEN RENAMING FILES:" | tee -a "$mythicalLibrarian"/output.log
+      echo -e " sudo su mythtv" | tee -a "$mythicalLibrarian"/output.log
+      echo -e " mythicalLibrarian \"$InputPath\" \"$InputTitle\" \"$InputSubtitle\"" | tee -a "$mythicalLibrarian"/output.log
+      echo -e " OR AT YOUR OWN RISK BYPASS THIS CHECK BY ADDING --BypassPermissionsCheck" | tee -a "$mythicalLibrarian"/output.log
+      echo -e " AT THE END OF THE LINE YOU JUST RAN." | tee -a "$mythicalLibrarian"/output.log
+      echo -e " " | tee -a "$mythicalLibrarian"/output.log
+      echo -e " Done." | tee -a "$mythicalLibrarian"/output.log
       jobtype="PermissionErrorWhileMoving"
       RunJob
     fi
@@ -1616,7 +1654,7 @@ genericUnspecifiedError(){
   echo "CHECK www.TheTvDb.com  RUN mythicalLibrarian LINK COMMAND PROMPT.">>"$mythicalLibrarian"/output.log
   echo "FOR MORE INFORMATION SEE http://kodi.wiki/index.php?title=mythicalLibrarian">>"$mythicalLibrarian"/output.log
   echo "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%">>"$mythicalLibrarian"/output.log
-  echo "%%%%%%%%%%%%%%OPERATION FAILED" `date` "%%%%%%%%%%%%%%%%%">>"$mythicalLibrarian/output.log">>"$mythicalLibrarian"/output.log
+  echo "%%%%%%%%%%%%%%OPERATION FAILED" `date` "%%%%%%%%%%%%%%%%%">>"$mythicalLibrarian"/output.log
 }
 
 MaintenanceWarning(){
@@ -1694,9 +1732,9 @@ MakeFolder() {
 #If TargetPathIsInputPath is set, then this changes movedir to original dir.
 setTargetFolderAsInputPathFolder(){
   #Set originaldir name if none was supplied
-  test "$originaldirname" = "./" && originaldirname=$(pwd)
-  test "$originaldirname" = "." && originaldirname=$(pwd)  
-  test "$originaldirname" = "" && originaldirname=$(pwd)
+  test "$originaldirname" = "./" && originaldirname="$(pwd)"
+  test "$originaldirname" = "." && originaldirname="$(pwd)"
+  test "$originaldirname" = "" && originaldirname="$(pwd)"
   #MoveDir is the folder which mythicalLibrarian will move the file.  No trailing / is accepted eg. "~/videos"
   MoveDir="$originaldirname/Episodes"
   test ! -d "$MoveDir" && mkdir "$MoveDir" 
@@ -1725,7 +1763,7 @@ GenerateTVShowNFO(){
   echo -e "\t<title>$NewShowName</title>">>"$MoveDir/tvshow.nfo"
   test "$SeriesID" != "" && echo -e "\t<episodeguide>http://www.thetvdb.com/api/$APIkey/series/$SeriesID/all/$Language.xml</episodeguide>">>"$MoveDir/tvshow.nfo" ||  echo -e "\t<episodeguide></episodeguide>">>"$MoveDir/$ShowFileName.nfo"
   echo -e "</tvshow>">>"$MoveDir/tvshow.nfo"
-  return 0 
+  return 0
 } 
 
 #####GENERATE NFO FILE#####
@@ -1947,7 +1985,7 @@ mythicalScan(){
     echo $scanpath $checkext
     while read line ; do
       if [ "$InputOption" = "--BypassPermissionsCheck" ]; then
-        test ! -L "$line" && test ! -S "$line" && test ! -d "$line" && mythicalLibrarian "$line" "--BypassPermissionsCheck"     
+        test ! -L "$line" && test ! -S "$line" && test ! -d "$line" && mythicalLibrarian "$line" "--BypassPermissionsCheck"
       else
         test ! -L "$line" && test ! -S "$line" && test ! -d "$line" && mythicalLibrarian "$line" 
       fi
@@ -1977,7 +2015,7 @@ mythicalDiagnostics(){
   echo ""
   test `which curl`>/dev/null && echo "package 'curl' is installed" || checkc="curl "
   test `which agrep`>/dev/null && echo "package 'agrep' or 'tre-agrep' is installed" || checkd="agrep "
-  test `which notify-send`>/dev/null && echo "package 'libnotify-bin' is installed"  || checke="libnotify-bin " 
+  test `which notify-send`>/dev/null && echo "package 'libnotify-bin' is installed"  || checke="libnotify-bin "
        
   if [ `which agrep`>/dev/null ] && [ `which curl`>/dev/null ]  ; then
     packagecheck="***PASSED***"
@@ -2433,50 +2471,6 @@ getSeriesInfo(){
   echo "TheTVDB information written to: $mythicalLibrarian/$NewShowName" | tee -a "$mythicalLibrarian"/output.log
 }
 
-# #mythicalUpdater will download the Stable or SVN version of mythicalSetup
-# mythicalUpdater(){
-#   test ! -d "$mythicalLibrarian" && mkdir "$mythicalLibrarian"
-#   test ! -d "$mythicalLibrarian/mythicalSetup" && mkdir "$mythicalLibrarian/mythicalSetup"
-#   test -f "$mythicalLibrarian/output.log" && cat "$mythicalLibrarian/output.log" >> "$mythicalLibrarian/output.log.old"
-  
-#   if [ ! -f "../output.log" ]; then 
-#     echo "Please type 'cd $mythicalLibrarian/mythicalSetup' before running this command"
-#     SetExitBit=1
-#   fi
-  
-#   if [ "$(id -u)" != "0" ]; then
-#     echo "You do not have sufficient privileges to run this script."
-#     echo "Try again with sudo mythicalLibrarian --update"
-#     SetExitBit=1
-#   fi  
-#   test "$SetExitBit" = "1" && exit 1
-#   sudo -u $SUDO_USER echo "<<<UPDATER ACTIVATED>>>">"$mythicalLibrarian/output.log"
-#   test "$SUDO_USER" = "" && SUDO_USER=`whoami`
-  
-#   echo "--You have entered Update mode."
-#   echo " mythicalSetup will now update your system to the latest revision."
-#   echo " You will be asked a series of questions and the updater will make"
-#   echo " decisions based upon your selections and your system. mythicalSetup "
-#   echo " is designed to make updating easy and will set up the following:"
-#   echo " Episode naming, Movie naming, local RSS feeds, Daily Report,"
-#   echo " Desktop Notifications, KODI notifications, KODI library updates"
-#   echo " MythTV Database settings, and various operational modes. Upon"
-#   echo " completion, a diagnostic will be run.  This is designed to be" 
-#   echo " a fully automated process.  Please pay attention and report any"
-#   echo " errors which may occur during this process. If this update fails"
-#   echo " The first time, please try again.  mythicalLibrarian will make"
-#   echo " configuration changes."
-#   read -n1 -p " Do you wish to continue? y/(n) >" yesorno
-#   echo ""
-#   test "$yesorno" != "y" && exit 0
-  
-#   test -f ./mythicalSetup.sh && rm -f ./mythicalSetup.sh
-#   curl -L "http://mythicallibrarian.googlecode.com/svn/trunk/mythicalSetup.sh">"./mythicalSetup.sh"
-#   sudo chmod +x ./mythicalSetup.sh
-#   ./mythicalSetup.sh
-#   exit $?
-# }
-
 ########################### END FUNCTION DEFINITIONS ###########################  
   
 
@@ -2579,7 +2573,8 @@ case "$InputPath" in
   ;;
   --update|--upgrade|--build|-u)
     #mythicalUpdater
-    echo "ERROR: NOT MAINTAINING THE UPDATER, SO DON'T TRY AND UPDATE..."
+    echo "ERROR: NOT MAINTAINING THE UPDATER, SO DON'T BOTHER TRYING TO UPDATE..."
+    exit 1
   ;;
   --doMaintenance)
     MaintenanceWarning
@@ -2670,7 +2665,7 @@ FileName="$InputPath"
 ShowTranslations
 #Do not process files in files categoricIgnore or titleIgnore, just exit
 ignoreList
-SafeShowName=`echo "$ShowName"|sed 's/;.*//'|tr -d '|\?*<":>+[]/'`
+SafeShowName=`echo "$ShowName" | sed 's/;.*//' | tr -d '|\?*<":>+[]/'`
 #Format Show name for Sending to www.TheTvDb.com and KODI
 tvdbshowname=`echo $ShowName | sed s/" "/"%20"/g | sed s/"&"/"%26"/g`
 #Setup paths if TargetPathIsInputPath is active.
@@ -2917,7 +2912,7 @@ fi
 
 #If file is a link then activate link mode so the original link is not screwed up.
 if [ -L "$InputPath" ]; then
-  echo "WARNING: FILE IS A LINK FORCING SYMLINK LINK MODE"|tee -a "$mythicalLibrarian"/output.log 
+  echo "WARNING: FILE IS A LINK FORCING SYMLINK LINK MODE" | tee -a "$mythicalLibrarian"/output.log 
   SYMLINK=LINK
 fi
  
@@ -2941,15 +2936,15 @@ fi
 
 ##TEST FILESYSTEM##
 #Get file size and free space
-test -f "./$InputPath" && MoveFileSize=`stat "$InputPath" --format=%s` |awk '{print $1}' || MoveFileSize=0
+test -f "./$InputPath" && MoveFileSize=`stat "$InputPath" --format=%s` | awk '{print $1}' || MoveFileSize=0
 MoveFileSize=$((MoveFileSize/1024))
-MoveDirFreeSpace=`df -P "$MoveDir"|sed -n 2p|awk '{print $4}'` || MoveDirFreeSpace=0
-AlternateMoveDirFreeSpace=`df -P "$AlternateMoveDir"|sed -n 2p|awk '{print $4}'`|| AlternateMoveDirFreeSpace=0
+MoveDirFreeSpace=`df -P "$MoveDir" | sed -n 2p | awk '{print $4}'` || MoveDirFreeSpace=0
+AlternateMoveDirFreeSpace=`df -P "$AlternateMoveDir" | sed -n 2p | awk '{print $4}'`|| AlternateMoveDirFreeSpace=0
 if [ "$Database" = "Enabled" ]; then
-  PrimaryMovieDirFreeSpace=`df -P "$PrimaryMovieDir"|sed -n 2p|awk '{print $4}'` || PrimaryMovieDirFreeSpace=0
-  AlternateMovieDirFreeSpace=`df -P "$AlternateMovieDir"|sed -n 2p|awk '{print $4}'`|| AlternateMovieDirFreeSpace=0
-  PrimaryShowDirFreeSpace=`df -P "$PrimaryShowDir"|sed -n 2p|awk '{print $4}'`|| PrimaryShowDirFreeSpace=0
-  AlternateShowDirFreeSpace=`df -P "$AlternateShowDir"|sed -n 2p|awk '{print $4}'`|| AlternateShowDirFreeSpace=0
+  PrimaryMovieDirFreeSpace=`df -P "$PrimaryMovieDir" | sed -n 2p | awk '{print $4}'` || PrimaryMovieDirFreeSpace=0
+  AlternateMovieDirFreeSpace=`df -P "$AlternateMovieDir" | sed -n 2p | awk '{print $4}'`|| AlternateMovieDirFreeSpace=0
+  PrimaryShowDirFreeSpace=`df -P "$PrimaryShowDir" | sed -n 2p | awk '{print $4}'`|| PrimaryShowDirFreeSpace=0
+  AlternateShowDirFreeSpace=`df -P "$AlternateShowDir" | sed -n 2p | awk '{print $4}'`|| AlternateShowDirFreeSpace=0
 fi
 #Call permissions check from function.  Write small file, delete, get results
 checkPermissions "$MoveFileSize" "$MoveDirFreeSpace" "$MoveDir"
@@ -2966,8 +2961,8 @@ if [ "$Database" = "Enabled" ]; then
   checkPermissions "$MoveFileSize" "$AlternateShowDirFreeSpace" "$AlternateShowDir"
   AlternateShowDirWritable=$TMoveDirWritable
 fi
-OriginaldirFreeSpace=`df -P "$originaldirname"|sed -n 2p|awk '{print $4}'`
-WorkingDirFreeSpace=`df -P "$mythicalLibrarian"|sed -n 2p|awk '{print $4}'`
+OriginaldirFreeSpace=`df -P "$originaldirname" | sed -n 2p | awk '{print $4}'`
+WorkingDirFreeSpace=`df -P "$mythicalLibrarian" | sed -n 2p | awk '{print $4}'`
 checkPermissions "1" "$OriginaldirFreeSpace" "$originaldirname"
 OriginalDirWritable=$TMoveDirWritable
 checkPermissions "5000" "$WorkingDirFreeSpace" "$mythicalLibrarian"
@@ -3043,9 +3038,9 @@ determinePrimaryOrAlternateFolderUsage
 #####OUTPUT FILE NAME FORMATTING#####
 #universally not accepted file system characters:  |\?*<":>+[]/ 
 #Format Shows
-EpisodeSubtitle=`echo $EpisodeSubtitle| tr -d '!|\?*<":>+[]/'"'"`
-NewShowName=`echo $NewShowName|tr -d '!|\?*<":>+[]/'"'"`
-ShowName=`echo $ShowName|tr -d '!|\?*<":>+[]/'"'"`
+EpisodeSubtitle=`echo $EpisodeSubtitle | tr -d '!|\?*<":>+[]/'"'"`
+NewShowName=`echo $NewShowName | tr -d '!|\?*<":>+[]/'"'"`
+ShowName=`echo $ShowName | tr -d '!|\?*<":>+[]/'"'"`
  
 #Format Episodes showname=show name Sxx=season number Exx=episode number EpisodeSubtitle=episode name
 if [ "$NamingConvention" = "" ]; then
@@ -3060,7 +3055,7 @@ fi
 MakeFolder
 
 #check to see if output folder exists
-test -d "$MoveDir" && echo "TARGET SET:$MoveDir/$ShowFileName.$OriginalExt"||echo "ERROR: COULD NOT CREATE FOLDER:$MoveDir/$ShowFileName" 
+test -d "$MoveDir" && echo "TARGET SET:$MoveDir/$ShowFileName.$OriginalExt" || echo "ERROR: COULD NOT CREATE FOLDER:$MoveDir/$ShowFileName" 
 
 #####FAILSAFE HANDLING#####
 #If failsafe state is set then create link in FailSafeMode
@@ -3120,7 +3115,7 @@ if [ "$SYMLINK" != "LINK" ]; then
       if [ "$SYMLINK" = "MOVE" ]; then
         echo CREATING SYMLINK IN MOVE MODE
         ln -s  "$MoveDir/$ShowFileName.$OriginalExt" "$InputPath"
-        test ! -L "$InputPath" && echo "ERROR CREATING SYMLINK: FILESYSTEM MAY NOT SUPPORT SYMLINKS"|tee -a "$mythicalLibrarian"/output.log
+        test ! -L "$InputPath" && echo "ERROR CREATING SYMLINK: FILESYSTEM MAY NOT SUPPORT SYMLINKS" | tee -a "$mythicalLibrarian"/output.log
       fi
       DisplayCompletedMoveMessage
  
@@ -3132,7 +3127,7 @@ if [ "$SYMLINK" != "LINK" ]; then
         else
           echo CREATING SYMLINK IN SYMLINK=DISABLED MODE
           ln -s  "$MoveDir/$ShowFileName.$OriginalExt" "$InputPath"
-          test ! -L "$InputPath" && echo "ERROR CREATING SYMLINK: FILESYSTEM MAY NOT SUPPORT SYMLINKS"|tee -a "$mythicalLibrarian"/output.log 
+          test ! -L "$InputPath" && echo "ERROR CREATING SYMLINK: FILESYSTEM MAY NOT SUPPORT SYMLINKS" | tee -a "$mythicalLibrarian"/output.log 
         fi
       fi 
  

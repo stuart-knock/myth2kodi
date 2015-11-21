@@ -658,11 +658,12 @@ generaterss() {
     #get the line number for our last </item> tag
     lastLine=$(grep -n -m $(($itemLimit-1)) "</item>" "$rssDir/$OLDrssFile" | tail -n1 | cut -d ":" -f 1)
     #set IFS to use line break as a delineator
-    OLDIFS=$IFS
+    # OLDIFS=$IFS
     #SAK: Surely the following can be IFS="\n"
     #TODO: It can't, but there must be a better solution than below... THis should do it: IFS=$'\n'
-    IFS='
-'
+    local IFS=$'\n'
+#     IFS='
+# '
     #IFS="\n"
     #Read in the old RSS file
     declare -a old_rss_data=( $(cat "$rssDir/$OLDrssFile") )
@@ -685,7 +686,7 @@ generaterss() {
   #move fully formed temp file on top of the old file
   mv "$rssDir/$TEMPrssFile" "$rssDir/$OLDrssFile"
   echo "RSS ENTRY SUCCESSFULLY CREATED: $rssDir/$OLDrssFile"
-  IFS=$OLDIFS
+  # IFS=$OLDIFS
   return 0
 }
 

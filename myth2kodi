@@ -12,6 +12,11 @@
 
 #SAK: Modified for me...
 
+#TODO: Make use of TMDb (https://www.themoviedb.org/) when the recorded
+#  program is identified as being a Movie... Or http://omdbapi.com/, eg
+#  http://www.omdbapi.com/?t=Casino&y=&plot=short&r=xml
+
+
 #TODO: A number of the long "test" lines would be much easier to read/debug
 #  if they were rewritten as "if ; then else" blocks.
 
@@ -159,7 +164,7 @@
 ###Stand-alone mode values###
 #SYMLINK has 3 modes.  MOVE|LINK|Disabled: Default=MOVE
 #Create symlink at InputPath after 'MOVE' | Do not move, just create a sym'LINK' | move the file, symlinking is 'Disabled'
-SYMLINK=MOVE
+SYMLINK="MOVE"
 #MoveDir is the folder which mythicalLibrarian will move the file. No trailing / is accepted eg. "~/videos"
 MoveDir="/media/video/tv"  #<------THIS VALUE MUST BE SET-------
 #AlternateMoveDir will act as a secondary MoveDir if the primary MoveDir fails.  No trailing / is accepted eg. "~/videos"
@@ -167,7 +172,7 @@ AlternateMoveDir="/home/librarian/recordedTV"
 #If TargetPathIsInputPath is Enabled, original dir will override MoveDir. Useful
 #for multiple recording dirs. TargetPathIsInputPath will separate generic shows 
 #from episodes and movies. Enabled|Disabled
-TargetPathIsInputPath=Disabled
+TargetPathIsInputPath="Disabled"
 #Internet access Timeout in seconds: Default Timeout=50 (seconds)
 Timeout=50
 #Update database time in secconds, Longer duration means faster processing time and less strain on TheTvDb. Default='84000' (1 day)
@@ -177,75 +182,75 @@ UpdateDatabase=74200
 mythicalLibrarian=~/.mythicalLibrarian
 #For testing /data/sknock/TEMP/.mythicalLibrarian
 #FailSafe mode will enable symlinks to be formed in FailSafeDir if the move or symlink operation fails. Enabled|Disabled
-FailSafeMode=Enabled
+FailSafeMode="Enabled"
 #FailSafeDir is used when the file cannot be moved to the MoveDir. FailSafe will not create folders. eg. /home/username
 FailSafeDir="/home/librarian/FailSafe"  #<------THIS VALUE MUST BE SET-------
 #DirTracking will check for and remove the folders created by mythicalLibrarian
-DirTracking=Enabled
+DirTracking="Enabled"
 #the following line contains the API key from www.TheTvDb.Com. Default project code: 6DF511BB2A64E0E9
-APIkey=6DF511BB2A64E0E9
+APIkey="6DF511BB2A64E0E9"
 #TODO: If I ever put this on GitHub I should register a fresh APIkey - http://thetvdb.com/?tab=apiregister
 #SAK: This one was set at some point for some reason: APIkey=0F3A338F0FCB29A2
 #  but it seems to be rejected for certain uses...
 #Language setting
-Language=en
+Language="en"
 
 ###Database settings### 
 #MythTV MYSQL access allows addition of movies, comskip data, and improves accuracy of episode recognition.
 #Database access Enabled|Disabled
-Database=Enabled
+Database="Enabled"
 #Database Type MythTV|MythTVPythonBindings  Default=MythTVPythonBinding
-DatabaseType=MythTVPythonBindings
+DatabaseType="MythTVPythonBindings"
 #Guide data type: SchedulesDirect currently covers DataDirect, MC2XML and others.  NoLookup will bypass tvdb scanning
 #Options: SchedulesDirect|NoLookup
-GuideDataType=SydFTA
+GuideDataType="SydFTA"
 #The IP address or name of the server for MythTV Database (used in python bindings only)
-DBHostName=192.168.1.42
+DBHostName="192.168.1.42"
 #MySQL User name: Default="mythtv"
-MySQLuser=mythtv
+MySQLuser="mythtv"
 #MySQL Password: Default="mythtv"
-MySQLpass=mythtv #<------THIS VALUE MUST BE SET-------
+MySQLpass="mythtv" #<------THIS VALUE MUST BE SET-------
 #MythTV Backend server: Default=localhost
 #SAK: NOT USED ###MythTVBackendServer=localhost
 #The Database Pin for the MythTV Database (used in python bindings only)
 DBPin=8446
 #MySQL Myth Database: Default="mythconverg"  
 #If utilizing mythconverg with Python Bindings, then it would be MySQLMythDb=PythonBindingsmythconverg
-MySQLMythDb=mythconverg
+MySQLMythDb="mythconverg"
 #Primary Movie Dir. mythicalLibrarian will attempt to move to this dir first. No trailing / is accepted eg. "~/videos"
 PrimaryMovieDir="/media/video/movies" #<------THIS VALUE MUST BE SET-------
 #AlternateMovieDir will act as a Secondary move dir if the primary movie dir fails
 AlternateMovieDir="/home/librarian/recordedMovies"
 #ShowStopper = Enabled prevents generic shows and unrecognized episodes from being processed
-ShowStopper=Enabled
+ShowStopper="Enabled"
 #Primary Show Dir. mythicalLibrarian will attempt to move to this dir first. No trailing / is accepted eg. "~/videos"
 PrimaryShowDir="/media/video/recordedShows" #<------THIS VALUE MUST BE SET-------
 #AlternateMoveDir will act as a Seccondary move dir if the primary move dir fails
 AlternateShowDir="/home/librarian/recordedShows" 
 #CommercialMarkup will generate comskip files for recordings when they are moved. Enabled|Disabled
-CommercialMarkup=Enabled
+CommercialMarkup="Enabled"
 #CommercialMarkupCleanup will execute a maintenance routine which will remove comskip files if they are not needed
-CommercialMarkupCleanup=Enabled
+CommercialMarkupCleanup="Enabled"
 
 ###Reporting/Communications###
 #Enables debug mode. This is a verbose mode of logging which should be used for troubleshooting.  Enabled|Disabled
-DEBUGMODE=Enabled
+DEBUGMODE="Enabled"
 #DailyReport provides a local log of shows added to your library per day. Enabled|Disabled
-DailyReport=Enabled
+DailyReport="Enabled"
 #Notify tells mythicalLibrarian to send a notification to GNOME Desktop upon completion. Enabled|Disabled
-Notify=Enabled
+Notify="Enabled"
 #If notifications are enabled, NotifyUserName should be the same as the user logged into the GNOME Session. (your username)
-NotifyUserName=librarian #<------THIS VALUE MUST BE SET-------
+NotifyUserName="librarian" #<------THIS VALUE MUST BE SET-------
 #Send a notification to KODI to Update library upon Successful move job Enabled|Disabled
-KODIUpdate=Enabled
+KODIUpdate="Enabled"
 #Send a notification to KODI to cleanup the library upon Successful move job Enabled|Disabled
-KODIClean=Enabled
+KODIClean="Enabled"
 #Send Notifications to KODI UI when library is updated Enabled|Disabled
-KODINotify=Enabled
+KODINotify="Enabled"
 #Ip Address and port for KODI Notifications Eg.KODIIPs=( "192.168.1.110:8080" "192.168.1.111:8080" "XBOX:8080" )
 KODIIPs=( "192.168.1.42:8080" ) #<------THIS VALUE MUST BE SET-------
 #maxItems controls the number of items in the RSS. RSS Can be activated by creating a folder in /var/www/mythical-rss.  
-maxItems=8  
+maxItems=8
 ########################## END USER SETTINGS ###################################
 
 mythicalVersion="myth2kodi Version 0.2.0; mythicalLibrarian 953ish+"

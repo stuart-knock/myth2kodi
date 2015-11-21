@@ -179,7 +179,7 @@ Timeout=50
 UpdateDatabase=74200
 #TODO: Consider adding variable binpath=/usr/local/bin/ as a step toward non-root install.
 #mythicalLibrarian working file dir: Default=~/.mythicalLibrarian (home/username/.mythicalLibraian)
-mythicalLibrarian=~/.mythicalLibrarian
+mythicalLibrarian="$HOME/.mythicalLibrarian"
 #For testing /data/sknock/TEMP/.mythicalLibrarian
 #FailSafe mode will enable symlinks to be formed in FailSafeDir if the move or symlink operation fails. Enabled|Disabled
 FailSafeMode="Enabled"
@@ -1442,7 +1442,7 @@ getAbsoluteEpisodeNumberWithSxxExx(){
 }
 
 ######STANDARD LOGIC EPISODE MATCH#####
-##TODO we need some sort of regex to account for matche like
+##TODO we need some sort of regex to account for matches like
 ##'The Office' 'The Delivery, Part 1'   -guide data
 ##'The Office' 'The Delivery (1)'       -TvDb data
 getAbsoluteEpisodeNumberWithStandardLogic(){
@@ -1828,7 +1828,7 @@ ignoreList(){
 #The show title will be replaced by the one in the user created showTranslations file
 ShowTranslations(){
   if [ -f "$mythicalLibrarian"/showTranslations ] && [ "$ShowName" != "" ]; then 
-    showtranslation=`grep "$ShowName = " "$mythicalLibrarian/showTranslations"| sed s/"$ShowName = "/""/g `    
+    showtranslation=`grep "$ShowName = " "$mythicalLibrarian/showTranslations" | sed s/"$ShowName = "/""/g `
     if [ "$showtranslation" != "" ]; then 
       ShowName=$showtranslation
       echo "USER TRANSLATION: $InputTitle = $ShowName">>"$mythicalLibrarian"/output.log
@@ -2008,6 +2008,7 @@ mythicalScan(){
 setGroupPermissions (){
   #Add read and write permissions for the group to the moved recording.
   chmod g=rw "$MoveDir/$ShowFileName.$OriginalExt"
+  #TODO:#NOTE: the above command is slightly inconsistent with the comment as = also implies removal of any unmentioned attributes.
 }
 
 #####MYTHICAL DIAGNOSTICS#####
@@ -2397,7 +2398,7 @@ special (){
   echo "======titleIgnore======"
   echo " If wish to ignore all shows with a specific title, use titleIgnore"
   echo " titleIgnore can be applied by creating a file called:"
-  echo " ~.mythicalLibrarian/titleIgnore"
+  echo " $mythicalLibrarian/titleIgnore"
   echo " ##############################################################"
   echo " #Show to ignore                #"
   echo " #Battlestar Gallactica              #"
@@ -2410,7 +2411,7 @@ special (){
   echo " If you wish to ignore all shows with a specific category, use"
   echo " categoricIgnore"
   echo " categoricIgnore can be applied by creating a file called:"
-  echo " ~.mythicalLibrarian/categoricIgnore"
+  echo " $mythicalLibrarian/categoricIgnore"
   echo " ##############################################################"
   echo " #Category to ignore            #"
   echo " #Sports                  #"
@@ -2537,7 +2538,7 @@ test "$InputPath" = "" && mythicalHelp
 MythTVUserJobString="%DIR%/%FILE%"
 
 #####COMMAND LINE SWITCHES#####
-#TODO: Add a --commskip option that just re/generates to commskip file for a
+#TODO: Add a --commskip option that just re/generates the commskip file for a
 #  given show, assuming/checking that show has already been myth2kodi'd. Useful
 #  if file was moved before commercial flagging or if commercial flagging needed
 #  to be redone
@@ -2660,7 +2661,7 @@ ShowName=$InputTitle
 test "$ShowName" = "" && mythicalHelp
 
 #split on semicolon, there will only be one episode looked up.  Remove non-filesystem-compliant chars.
-EpisodeSubtitle=`echo $InputSubtitle|sed 's/;.*//'|tr -d '!|\?*<":>+[]/'`
+EpisodeSubtitle=`echo $InputSubtitle | sed 's/;.*//' | tr -d '!|\?*<":>+[]/'`
 ExtensionPrep=`basename "$InputPath"`
 OriginalExt=`echo "${ExtensionPrep#*.}"`
 originaldirname=`dirname "$InputPath"`

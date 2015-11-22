@@ -11,6 +11,7 @@
 #Tech Support: http://forum.kodi.tv/showthread.php?pid=470402
 
 #SAK: Modified for me...
+#Good site for learning Bash: http://wiki.bash-hackers.org/
 
 #TODO: Make use of TMDb (https://www.themoviedb.org/) when the recorded
 #  program is identified as being a Movie... Or http://omdbapi.com/, eg
@@ -244,7 +245,10 @@ NotifyUserName="librarian" #<------THIS VALUE MUST BE SET-------
 #Send a notification to KODI to Update library upon Successful move job Enabled|Disabled
 KODIUpdate="Enabled"
 #Send a notification to KODI to cleanup the library upon Successful move job Enabled|Disabled
-KODIClean="Enabled"
+#TODO:#NOTE:Don't fully trust the automated call of clean, and currently it doesn't even
+#  seem to be invoked at the times that would make sense, so for now I'm disabling it. See
+#  the TODO in KODIAutomate().
+KODIClean="Disabled"
 #Send Notifications to KODI UI when library is updated Enabled|Disabled
 KODINotify="Enabled"
 #Ip Address and port for KODI Notifications Eg.KODIIPs=( "192.168.1.110:8080" "192.168.1.111:8080" "XBOX:8080" )
@@ -552,23 +556,44 @@ GenComSkip(){
 }
 
 #####KODI COMMUNICATIONS#####
-#This function Automates communication with KODI  
+#This function Automates communication with KODI
 KODIAutomate(){
   #Send notification to KODI, Update Library, Clean Library
-  if [ "$KODINotify" = "Enabled" -o "$KODIUpdate" = "Enabled" -o "$KODIClean" = "Enabled" ]; then
+  if [ "$KODINotify" = "Enabled" || "$KODIUpdate" = "Enabled" || "$KODIClean" = "Enabled" ]; then
     for KODIIP in ${KODIIPs[@]} ; do
-      echo "SENDING REQUESTED COMMANDS TO:$KODIIP"
-      #SAK: REPLACED BELOW, SEE http://forum.kodi.tv/showthread.php?tid=65644&page=65&highlight=json
-      #TODO: Removed '' from around the variable passed as message, but not sure this is correct, check.
-      test "$KODINotify" = "Enabled" && curl -L -s -m3 --connect-timeout 5 -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","method":"GUI.ShowNotification","params":{"title":"mythical Librarian adding","message":"$tvdbshowname"},"id":1}' http://$KODIIP/jsonrpc > /dev/null 2>&1
-      test "$KODINotify" = "Enabled" && curl -L -s -m3 --connect-timeout 5 -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","method":"VideoLibrary.Scan","id":1}' http://$KODIIP/jsonrpc > /dev/null 2>&1
-      test "$KODINotify" = "Enabled" && curl -L -s -m3 --connect-timeout 5 -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","method":"VideoLibrary.Clean","id":1}' http://$KODIIP/jsonrpc > /dev/null 2>&1
-      echo "COMMANDS SENT"
+      echo "SENDING REQUESTED COMMANDS TO: $KODIIP"
+      local curlPOST='curl -L -s -m3 --connect-timeout 5 -X POST -H "Content-Type: application/json" -d'
+      if [ "$KODINotify" = "Enabled" ] ; then
+        local data=\''{"jsonrpc":"2.0",
+                       "method":"GUI.ShowNotification",
+                       "params":{"title":"myth2kodi added","message":"'$tvdbshowname'"},
+                       "id":1}'\'
+        $curlPOST $data http://$KODIIP/jsonrpc > /dev/null 2>&1
+        echo "SENT: GUI.ShowNotification for $tvdbshowname"
+      fi
+      if [ "$KODIUpdate" = "Enabled" ] ; then
+        local data=\''{"jsonrpc":"2.0", "method":"VideoLibrary.Scan", "id":1}'\'
+        $curlPOST $data http://$KODIIP/jsonrpc > /dev/null 2>&1
+        echo "SENT: VideoLibrary.Scan"
+      fi
+      #TODO: Requesting Kodi to Clean its Library doesn't seem to make sense in the same 
+      #  context as Update & Notify, that is, cleaning after adding a new show makes 
+      #  little sense and has the potential danger of completely clearing out Kodi's 
+      #  Library information if for example a network drive is temporarily unavailable
+      #  due to a network problem. It does, however, seem to make sense to request 
+      #  Kodi to run Clean of its Library after myth2kodi runs undo, doover, or any
+      #  other means of removing or renaming a file of which Kodi is aware... Perhaps
+      #  split KODIAutomate() into KodiNewShow() and KodiCleanup()...
+      if [ "$KODIClean" = "Enabled" ] ; then
+        local data=\''{"jsonrpc":"2.0", "method":"VideoLibrary.Clean", "id":1}'\'
+        $curlPOST $data http://$KODIIP/jsonrpc > /dev/null 2>&1
+        echo "SENT: VideoLibrary.Clean"
+      fi
     done
   fi
   return 0
 }
- 
+
 #####GENERATE RSS ENTRY#####
 #This function generates an RSS feed for use on the web server. This can be used
 #in /home/<kodi-user>/.kodi/userdata/RssFeeds.xml replace the feeds.feedburner.com link

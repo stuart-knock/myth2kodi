@@ -263,6 +263,9 @@ maxItems=8
 
 mythicalVersion="myth2kodi Version 0.2.0; mythicalLibrarian 953ish+"
 
+#declare -r LogFile="$mythicalLibrarian/output.log"
+#declare -r DiagnosticsFile="$mythicalLibrarian/diagnostics.log"
+
 ########################### BEGIN USER JOBS ####################################
 #The RunJob function is a place where you can put your custom script to be run 
 #at the end of execution. Though it may be at the top, this is actually the end
@@ -964,7 +967,7 @@ ExtractSxxExx(){
     Sxx=${Sxx#0}
     Exx=${Exx#0}
   else
-    echo 'WARNING:ExtractSxxExx() - No Season & Episode number information is available.'
+    echo "WARNING:${FUNCNAME}() - No Season & Episode number information is available."
     return 1
   fi
   #Single digit episode and show names are not allowed Ex and Sx replaced with Sxx Exx
@@ -977,7 +980,7 @@ ExtractSxxExx(){
 RemoveSeasonEpisodeFromPlot(){
   if [ "$SeasonEpisode" != "" ] ; then
     #Check if it's in the leading position and if so, remove it
-    SEstring=`echo $Plot | grep -i --only-matching '(\?\(s\.*[0-9]*[0-9]\,*\(e\|ep\)\.*[0-9][0-9]*\))\?\s*\|(\?\([0-9]*[0-9]x[0-9][0-9]*\))\?\s*'`
+    local SEstring=`echo $Plot | grep -i --only-matching '(\?\(s\.*[0-9]*[0-9]\,*\(e\|ep\)\.*[0-9][0-9]*\))\?\s*\|(\?\([0-9]*[0-9]x[0-9][0-9]*\))\?\s*'`
     if [ "$SEstring" != "" ] ; then
       echo "WARNING: SeasonEpisode was in the leading position of the Plot field, removing it to simplify subsequent processing."
       Plot=`echo $Plot | sed s/"$SEstring"/""/`
@@ -1001,7 +1004,7 @@ GuessSubtitle(){
 
 RemoveSubtitleFromPlot(){
   #TODO: If we extracted a subtitle from Plot variable then remove that text from Plot.
-  echo "RemoveSubtitleFromPlot(): Not Implemented"
+  echo "WARNING: ${FUNCNAME}(): Not Implemented"
 }
 
 #A Process function compatible with Sydney over the air data...
@@ -2490,7 +2493,7 @@ improveConfidence(){
 
 getSeriesInfo(){
   #Usage example: myth2kodi --getSeriesInfo "Black Books"
-  echo "RUNNING getSeriesInfo() for $InputTitle" | tee -a "$mythicalLibrarian"/output.log
+  echo "RUNNING ${FUNCNAME}() for $InputTitle" | tee -a "$mythicalLibrarian"/output.log
   ShowName="$InputTitle"
   tvdbshowname=`echo $ShowName | sed s/" "/"%20"/g | sed s/"&"/"%26"/g`
   searchTheTvDbAndReturnTxtFileTables

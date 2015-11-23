@@ -30,6 +30,10 @@
 
 #TODO: Consider changing backticks `` used for command substitution to 
 #  this form $() -- see, http://wiki.bash-hackers.org/syntax/expansion/cmdsubst
+
+#TODO: Consider replacing all echo statements with corresponding printf, as 
+#  it's apparently preferred for compatibility/portability reasons. See,
+#    http://wiki.bash-hackers.org/commands/builtin/printf
  
 #Intention:
 #  This program is designed to be a user job in MythTV. It can be called by 
@@ -277,7 +281,7 @@ RunJob(){
   #Information was not obtainable
     TvDbIsIncomplete|GenericShow)
       echo "INSUFFICIENT INFORMATION WAS SUPPLIED:$jobtype"
-        #Insert Custom User Job here 
+      #Insert Custom User Job here 
       
       #
       exit 0
@@ -563,6 +567,7 @@ KODIAutomate(){
     for KODIIP in ${KODIIPs[@]} ; do
       echo "SENDING REQUESTED COMMANDS TO: $KODIIP"
       local curlPOST='curl -L -s -m3 --connect-timeout 5 -X POST -H "Content-Type: application/json" -d'
+      #TODO:Updating the Library prior to sending the Notification probably makes more sense.
       if [ "$KODINotify" = "Enabled" ] ; then
         local data=\''{"jsonrpc":"2.0",
                        "method":"GUI.ShowNotification",
@@ -771,7 +776,7 @@ GetMythTVDatabase(){
   #  even if it were set to True then this function would do nothing rather 
   #  than accessing the database via the Python bindings...
   #TODO: try compressing the below with something like:
-  #dbselect="mysql -u$MySQLuser -p$MySQLpass -e \"use '$MySQLMythDb' ; printf \"select %s from recorded where basename like '$InputFileBasename';\""
+  #local dbselect="mysql -u$MySQLuser -p$MySQLpass -e \"use '$MySQLMythDb' ; printf \"select %s from recorded where basename like '$InputFileBasename';\""
   #then we'd have:
   #test "$InputTitle" = "" && InputTitle=`$dbselect  \"title\" | sed s/"title"/""/g | sed -n "2p"`
   #ChanID=`$dbselect  \"chanid\" | sed s/"\/"/""/g | sed -n 2p | sed s/"chanid"/""/g | sed s/" "/""/g`
@@ -2497,10 +2502,11 @@ getSeriesInfo(){
     makeShowDirIfNeeded
   else
     echo "WARNING: SeriesID COULD NOT BE DETERMINED" | tee -a "$mythicalLibrarian"/output.log
-    exit 1
+    return 1
   fi
   downloadInfoAboutMatchedTitleAndCreateTxtFileTables
   echo "TheTVDB information written to: $mythicalLibrarian/$NewShowName" | tee -a "$mythicalLibrarian"/output.log
+  return 0
 }
 
 ########################### END FUNCTION DEFINITIONS ###########################  
@@ -2596,7 +2602,7 @@ case "$InputPath" in
   --getSeriesInfo)
     #Example usage: myth2kodi --getSeriesInfo "Black Books"
     getSeriesInfo
-    exit 0
+    exit $?
   ;;
   --help|-?|-h)
     switchhelp=1
@@ -2788,7 +2794,7 @@ elif [ -z "$SeriesID" ] && [ "$mythicalLibrarianProgramIDCheck" != "SH" ] && [ "
   echo "SERIES ID WAS NOT FOUND. THETVDB MAY BE DOWN. TRY USING A showTranslations">>"$mythicalLibrarian"/output.log
   if [ "$Database" = "Enabled" ]; then
     echo "DB ENTIRES- RECSTART:$ShowStartTime- MOVIE:$MovieAirDate- ORIGAIRDATE:$OriginalAirDate- CHID:$ChanID- CAT:$ShowCategory-">>"$mythicalLibrarian"/output.log
-    test  "${Exx:2:2}" = "" && Exx=$null
+    test  "${Exx:2:1}" = "" && Exx=$null
   fi
 fi
 

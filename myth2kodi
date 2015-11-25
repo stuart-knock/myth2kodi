@@ -185,7 +185,7 @@ UpdateDatabase=74200
 #TODO: Consider adding variable binpath=/usr/local/bin/ as a step toward non-root install.
 #myth2kodi working file dir: Default=$HOME/.myth2kodi (home/username/.myth2kodi)
 m2kdir="$HOME/.myth2kodi"
-#For testing /data/sknock/TEMP/.mythicalLibrarian
+###For testing###m2kdir="/data/sknock/TEMP/.mythicalLibrarian"
 #FailSafe mode will enable symlinks to be formed in FailSafeDir if the move or symlink operation fails. Enabled|Disabled
 FailSafeMode="Enabled"
 #FailSafeDir is used when the file cannot be moved to the MoveDir. FailSafe will not create folders. eg. /home/username
@@ -261,11 +261,11 @@ KODIIPs=( "192.168.1.42:8080" ) #<------THIS VALUE MUST BE SET-------
 maxItems=8
 ########################## END USER SETTINGS ###################################
 
-mythicalVersion="myth2kodi Version 0.2.0; mythicalLibrarian 953ish+"
+mythicalVersion="myth2kodi Version 0.4.0; mythicalLibrarian 953ish+"
 
 #
 declare -r LogFile="$m2kdir/output.log"
-#declare -r DiagnosticsFile="$m2kdir/diagnostics.log"
+declare -r DiagnosticsFile="$m2kdir/diagnostics.log"
 
 ########################### BEGIN USER JOBS ####################################
 #The RunJob function is a place where you can put your custom script to be run
@@ -501,6 +501,7 @@ dailyreport(){
 #tests. The result will be $TMoveDirWritable as a 1 or a 0 for writable or not.
 #$1=filesize $2=freespace $3=folder to check
 checkPermissions(){
+  printf 'Running: %s()\n' "${FUNCNAME}" | tee -a "$LogFile"
   #set Test variable to 0.  It will be a 1 if everything passes.
   TMoveDirWritable=0
   if [ "$2" != "" ]; then
@@ -865,8 +866,8 @@ GetMythTvPythonBindings(){
 
   if [ "$CommercialMarkup" = "Enabled" ]; then
     #Output commercial data to initial files
-    printf "%s\n" "${startdata[@]}" >"$m2kdir/markupstart.txt"
-    printf "%s\n" "${stopdata[@]}"  >"$m2kdir/markupstop.txt"
+    printf '%s\n' "${startdata[@]}" >"$m2kdir/markupstart.txt"
+    printf '%s\n' "${stopdata[@]}"  >"$m2kdir/markupstop.txt"
     #Combine commercial data into a single comskip file and remove the initial files
     GenComSkip
   fi
@@ -1229,7 +1230,7 @@ downloadInfoAboutMatchedTitleAndCreateTxtFileTables(){
   #Download information from server
   echo -ne "Downloading Series: $SeriesID \n" 1>&2
   local TheTVDBShowXML="http://www.thetvdb.com/api/$APIkey/series/$SeriesID/all/$Language.xml"
-  local FieldsWeWant="(</?Series>|</?seriesid>|</?Status>|</?lastupdated>|</?Episode>|</?EpisodeName>|</?FirstAired>|</?SeasonNumber>|</?EpisodeNumber>|</?Overview>)"
+  local FieldsWeWant="(</?Series>|</?seriesid>|</?Status>|</?lastupdated>|</?Episode>|</?SeasonNumber>|</?EpisodeNumber>|</?EpisodeName>|</?Overview>|</?FirstAired>)"
   curl -L -s -m"$Timeout" $TheTVDBShowXML | grep -E $FieldsWeWant > "$m2kdir/$NewShowName/$NewShowName.xmlTest"
   test $? = 0 && echo "$CurrentTime" > "$m2kdir/$NewShowName/lastupdated.time"
 
@@ -2110,133 +2111,157 @@ setGroupPermissions (){
 }
 
 #####MYTHICAL DIAGNOSTICS#####
-#TODO: Need to go through this function line-by-line and make sure it's still a sensible Diagnostics function.
-#TODO: Should use | tee -a "$m2kdir"/diagnostics.log to write diagnostics info to a file
 #This function provides a functions check on myth2kodi
 mythicalDiagnostics(){
-  local checka=""
-  local checkb=""
-  local checkc=""
-  local checkd=""
-  local checke=""
-  local checkf=""
+  #If there is already a diagnostics file, move it to diagnostics_old_<Date&Time that this script was launched>
+  test -f "$DiagnosticsFile" && mv "$DiagnosticsFile" "$m2kdir/diagnostics_old_${Now}.log"
+  #TODO: give these checka, checkb etc more meaningful names
+  local checka="" #libmyth-python
+  local checkb="" #python-lxml
+  local checkc="" #curl
+  local checkd="" #agrep
+  local checke="" #libnotify-bin
+  local checkf="" #python
+  local python_version="" #Python Version information
+  local pyver=0 #An integer representing first 2 points of python version, ie 2.6.3 => 26
   local packagecheck=""
   local DBTest=""
-  local =""
-  echo "--You have entered diagnostic mode"
-  echo "myth2kodi will now conduct a series of tests."
+  local notifytest=""
+  local PythonBindingsCheck=""
+  printf '%s\n' "--You have entered diagnostic mode" | tee -a "$DiagnosticsFile"
+  printf '%s\n' "$(date)" >> "$DiagnosticsFile"
+  printf '%s\n' "myth2kodi will now conduct a series of tests." | tee -a "$DiagnosticsFile"
   read -n1 -p "press any key to verify installed packages..."
-  echo ""
-  test `which curl`>/dev/null && echo "package 'curl' is installed" || checkc="curl "
-  test `which agrep`>/dev/null && echo "package 'agrep' or 'tre-agrep' is installed" || checkd="agrep "
-  test `which notify-send`>/dev/null && echo "package 'libnotify-bin' is installed"  || checke="libnotify-bin "
 
-  if [ `which agrep`>/dev/null ] && [ `which curl`>/dev/null ]  ; then
-    packagecheck="***PASSED***"
-    echo "Installed packages check ***PASSED***"
-  else
-    packagecheck="***FAILED***"
-    echo "Installed packages check ***FAILED***"
-    #TODO: checkf isn't set anywhere in this script... and checkb isn't set until 50-60 lines below here.
-    echo "Missing packages are $checkb$checkc$checkd$checke$checkf"
-    if [ "$mythicalPlatform" != "Darwin" ] ; then
-      echo "Please run 'apt-get install $checkb$checkc$checkd$checke$checkf' or equivalant"
-    else
-      echo "Please obtain MacPorts and install $checkb$checkc$checkd$checke"
-      test $checkf != "" && echo "Python Bindings are missing, please install Python"
+  #Test if required packages are installed and accessible to caller.
+  test `which curl`>/dev/null  || checkc="curl"
+  test `which agrep`>/dev/null || checkd="agrep or tre-agrep"
+  test `which notify-send`>/dev/null || checke="libnotify-bin"
+  if [ "$DatabaseType" = "MythTVPythonBindings" ]; then
+    which python &> /dev/null ; test "$?" = "0" || checkf="python"
+    if [ "$checkf" = "" ] ; then
+      python_version=$(python --version 2>&1)  #Python returns version info to stderr
+      pyver=`echo $python_version | sed s/"python\s*"//I | cut -f1-2 -d"." | tr -d '.'`
+      python -c "from MythTV import MythDB ; exit()" &> /dev/null
+      test "$?" != "0" && checka="libmyth-python"
+      python -c "import lxml ; exit()" &> /dev/null
+      test "$?" != "0" && checkb="python-lxml"
+    fi
   fi
+
+  #Provide feedback on package checks
+  packagecheck="$checkc$checkd$checke"
+  printf '\n' | tee -a "$DiagnosticsFile"
+  test "$checkc" = "" && printf '%s\n' "package 'curl' found." | tee -a "$DiagnosticsFile"
+  test "$checkd" = "" && printf '%s\n' "package 'agrep' or 'tre-agrep' found." | tee -a "$DiagnosticsFile"
+  test "$checke" = "" && printf '%s\n' "package 'libnotify-bin' found." | tee -a "$DiagnosticsFile"
+  if [ "$DatabaseType" = "MythTVPythonBindings" ]; then
+    packagecheck="$packagecheck$checkf$checka$checkb"
+    test "$checkf" = "" && printf '%s\n' "package 'python' found." | tee -a "$DiagnosticsFile"
+    if [ "$checkf" = "" ] && [ $pyver -lt 26 -o $pyver -ge 30 ] ; then
+      printf '%s\n' "WARNING: Python 3 and Python older than 2.6 aren't supported." | tee -a "$DiagnosticsFile"
+    fi
+    test "$checka" = "" && printf '%s\n' "package 'libmyth-python' found." | tee -a "$DiagnosticsFile"
+    test "$checkb" = "" && printf '%s\n' "package 'python-lxml' found." | tee -a "$DiagnosticsFile"
+  fi
+  if [ $packagecheck != "" ] ; then
+    packagecheck="***FAILED***"
+    printf '%s\n' "Installed packages check ***FAILED***" | tee -a "$DiagnosticsFile"
+    printf 'Missing packages are: %s\n' "$checkc $checkd $checke $checkf $checka $checkb" | tee -a "$DiagnosticsFile"
+    printf '%s\n' "If packages are already installed, check your path settings." | tee -a "$DiagnosticsFile"
+    if [ "$mythicalPlatform" != "Darwin" ] ; then
+      printf "Please run 'apt-get install %s' or equivalent.\n" "$checkc $checkd $checke $checkf $checka $checkb" | tee -a "$DiagnosticsFile"
+    else
+      echo "Please obtain MacPorts and install %s \n" "$checkb $checkc $checkd $checke"
+      test $checkf != "" && printf '%s\n' "Python is missing, please install Python, or make sure it's in your path." | tee -a "$DiagnosticsFile"
+    fi
+  else
+    packagecheck="***PASSED***"
+    printf '%s\n' "Installed packages check ***PASSED***" | tee -a "$DiagnosticsFile"
+  fi
+
+  #If we're not on Mac OS X, check that user notification is working.
   if [ "$mythicalPlatform" != "Darwin" ]; then
     read -n1 -p "Press any key to perform Desktop Message test..."
-    echo ""
-    echo "Performing librarian-notify-send test"
-    echo "This test verifies that the message was sent to the DBUS."
-    echo "This test does not verify the user has a valid desktop open."
+    printf '\n%s\n' "Performing librarian-notify-send test" | tee -a "$DiagnosticsFile"
+    printf '%s\n' "This test verifies that the message was sent to the DBUS." | tee -a "$DiagnosticsFile"
+    printf '%s\n' "This test does not verify the user has a valid desktop open." | tee -a "$DiagnosticsFile"
     sudo -u "$NotifyUserName" /usr/local/bin/librarian-notify-send "myth2kodi test" "Testing Desktop Communications" "info"
     test "$?" = "0" && notifytest="***PASSED***" || notifytest="***FAILED***"
-    echo "Desktop Notifications test $notifytest"
+    printf '%s\n' "Desktop Notifications test $notifytest" | tee -a "$DiagnosticsFile"
   else
     notifytest="   N/A"
   fi
 
+  #If we'll be using MythTV python bindings, check that they're functioning.
   if [ "$DatabaseType" = "MythTVPythonBindings" ]; then
-    read -n1 -p "Press any key to perform MythTV Database test..."
-    echo ""
-    echo "Performing MythTV Python Bindings database test"
-    #Assuming Python of 2.6+ is fine just not Python 3.*
-    if which python ; then
-      echo "Python: `which python`"
-      python_version=$(python --version 2>&1)  #Python returns version info to stderr
-      echo "Version: $python_version"
-      pyver=`echo $python_version | sed s/"python\s*"//I | cut -f1-2 -d"." | tr -d '.'`
-      if [ $pyver -ge 26 -a $pyver -lt 30 ] ; then
-        echo "WARNING: Python older than 2.6 and Python 3 aren't supported."
-      fi
-    else
-      echo "MISSING package python, or path incorrectly set."
+    read -n1 -p "Press any key to perform a test of the MythTV Database python bindings..."
+    printf '\n%s\n' "Performing MythTV Python Bindings database test." | tee -a "$DiagnosticsFile"
+    if [ "$checkf" = "" ]  ; then
+      printf 'Python: %s\n' "$(which python)" | tee -a "$DiagnosticsFile"
+      printf 'Version: %s\n' "$python_version" | tee -a "$DiagnosticsFile"
     fi
 
-    PythonBindingsCheck="FAILED"
-    /usr/local/bin/MythDataGrabber --Diagnostic=True
-    test $? = "0" && PythonBindingsCheck="OK"
-    if [ "$PythonBindingsCheck" = "OK" ]; then
-      echo "MythTV Python Bindings are installed properly"
+    #If checks above found python-lxml & libmyth-python, do a more thorough testing of MythTV python bindings
+    if [ "$checkf$checka$checkb" = "" ] ; then
+      #Use MythDataGrabber's internal diagnostics function
+      /usr/local/bin/MythDataGrabber --Diagnostic=True
+      test $? = "0" && PythonBindingsCheck="OK" || PythonBindingsCheck="FAILED"
+      if [ "$PythonBindingsCheck" = "OK" ]; then
+        printf '%s\n' "MythTV Python Bindings are installed properly." | tee -a "$DiagnosticsFile"
+        DBTest="***PASSED***"
+      else
+        printf '%s\n' "MythTV PythonBindings are not installed properly" | tee -a "$DiagnosticsFile"
+        printf '%s\n' "there was a problem connecting to the database, check MythDatabase package." | tee -a "$DiagnosticsFile"
+        DBTest="***FAILED***"
+      fi
     else
-      python -c 'from MythTV import MythDB';
-      if [ $? != "0" ] ; then
-        echo "MythTV PythonBindings are not installed properly"
-        echo "    Debian Users:  apt-get install libmyth-python python-lxml "
-        Python1=1
-      fi
-      if [ Python1 != 1 ]; then
-        /usr/local/bin/MythDataGrabber --Diagnostic=True;
-        test $? != 0 && echo "there was a problem connecting to the database, check MythDatabase package" && Python2=1
-      fi
+      DBTest="COULD NOT COMPLETE, SEE MISSING PACKAGES MENTIONED ABOVE."
     fi
-    test "$PythonBindingsCheck" = "OK" && DBTest="***PASSED***"
-    if [ "$PythonBindingsCheck" != "OK" ] ; then
-      DBTest="***FAILED***"
-      packagecheck="***FAILED***"
-      checka=" libmyth-python"
-      checkb=" python-lxml "
-    fi
-    echo "MythTV Database Test $DBTest"
+    printf '%s\n'  "MythTV Database Test $DBTest" | tee -a "$DiagnosticsFile"
   fi
-
+  
+  #TODO: This currently tests Kodi notification even if Notifications are disabled in settings, is this actually the behaviour we want?
+  #Test communication with Kodi
   read -n1 -p "Press any key to perform KODI Notification test..."
-  echo ""
-  echo "Performing KODI Notifications test"
+  printf '\n%s\n' "Performing KODI Notifications test" | tee -a "$DiagnosticsFile"
   for KODIIP in ${KODIIPs[@]} ; do
-    echo "SENDING REQUESTED COMMANDS TO:$KODIIP"
+    printf 'SENDING REQUESTED COMMANDS TO: %s\n' "$KODIIP" | tee -a "$DiagnosticsFile"
     #SAK: REPLACED BELOW, SEE http://forum.kodi.tv/showthread.php?tid=65644&page=65&highlight=json
     local curlPOST='curl -L -s -m3 --connect-timeout 5 -X POST -H "Content-Type: application/json" -d'
     local data=\''{"jsonrpc":"2.0",
                    "method":"GUI.ShowNotification",
                    "params":{"title":"mythical Librarian Test","message":"'$PythonBindingsCheck'"},
                    "id":1}'\'
-    local KODIcomm=$($curlPOST $data http://$KODIIP/jsonrpc | tr -d "</html>i^")
-    test "$KODIcomm" != "" && echo "TESTING:$KODIcomm" || echo "COMMUNICATIONS NOT ESTABLISHED: $KODIIP"
+    local KODIresp=$($curlPOST $data http://$KODIIP/jsonrpc | tr -d "</html>i^")
+    if [ "$KODIresp" != "" ] ; then
+      printf 'TESTING: %s\n' "$KODIresp" | tee -a "$DiagnosticsFile"
+    else
+      printf 'COMMUNICATIONS NOT ESTABLISHED: %s\n' "$KODIIP" | tee -a "$DiagnosticsFile"
+    fi
   done
   #SAK: REPLACED BELOW, SEE http://forum.kodi.tv/showthread.php?tid=65644&page=65&highlight=json
-  test "`echo $KODIcomm`" = "{d:1,jsonrpc:2.0,resu:OK}" && KODIcomm="***PASSED***" || KODIcomm="***FAILED***"
-  echo "KODI Communications $KODIcomm"
+  test "`echo $KODIresp`" = "{d:1,jsonrpc:2.0,resu:OK}" && KODIcomm="***PASSED***" || KODIcomm="***FAILED***"
+  printf 'KODI Communications %s\n' "$KODIcomm" | tee -a "$DiagnosticsFile"
+
+  #Check filesystem permissions
   read -n1 -p "Press any key to test file system permissions..."
-  echo ""
-  echo "Testing file system permissions"
+  printf '\n%s\n'  "Testing file system permissions" | tee -a "$DiagnosticsFile"
 
   if [ "$TargetPathIsInputPath" = "Enabled" ]; then
-    echo "TargetPathIsInputPath is selected. Testing with current folder"
+    printf '%s\n' "TargetPathIsInputPath is selected. Testing with current folder" | tee -a "$DiagnosticsFile"
     setTargetFolderAsInputPathFolder
   fi
 
   MoveFileSize="10000"
   MoveFileSize=$((MoveFileSize/1024))
-  MoveDirFreeSpace=`df -P "$MoveDir"|sed -n 2p|awk '{print $4}'` || MoveDirFreeSpace=0
-  AlternateMoveDirFreeSpace=`df -P "$AlternateMoveDir"|sed -n 2p|awk '{print $4}'`|| AlternateMoveDirFreeSpace=0
+  MoveDirFreeSpace=`df -P "$MoveDir" | sed -n 2p | awk '{print $4}'` || MoveDirFreeSpace=0
+  AlternateMoveDirFreeSpace=`df -P "$AlternateMoveDir" | sed -n 2p | awk '{print $4}'`|| AlternateMoveDirFreeSpace=0
   if [ "$Database" = "Enabled" ]; then
-    PrimaryMovieDirFreeSpace=`df -P "$PrimaryMovieDir"|sed -n 2p|awk '{print $4}'` || PrimaryMovieDirFreeSpace=0
-    AlternateMovieDirFreeSpace=`df -P "$AlternateMovieDir"|sed -n 2p|awk '{print $4}'`|| AlternateMovieDirFreeSpace=0
-    PrimaryShowDirFreeSpace=`df -P "$PrimaryShowDir"|sed -n 2p|awk '{print $4}'`|| PrimaryShowDirFreeSpace=0
-    AlternateShowDirFreeSpace=`df -P "$AlternateShowDir"|sed -n 2p|awk '{print $4}'`|| AlternateShowDirFreeSpace=0
+    PrimaryMovieDirFreeSpace=`df -P "$PrimaryMovieDir" | sed -n 2p | awk '{print $4}'` || PrimaryMovieDirFreeSpace=0
+    AlternateMovieDirFreeSpace=`df -P "$AlternateMovieDir" | sed -n 2p | awk '{print $4}'`|| AlternateMovieDirFreeSpace=0
+    PrimaryShowDirFreeSpace=`df -P "$PrimaryShowDir" | sed -n 2p | awk '{print $4}'`|| PrimaryShowDirFreeSpace=0
+    AlternateShowDirFreeSpace=`df -P "$AlternateShowDir" | sed -n 2p | awk '{print $4}'`|| AlternateShowDirFreeSpace=0
   fi
   #Call permissions check from function.  Write small file, delete, get results
   checkPermissions "$MoveFileSize" "$MoveDirFreeSpace" "$MoveDir"
@@ -2253,29 +2278,30 @@ mythicalDiagnostics(){
     checkPermissions "$MoveFileSize" "$AlternateShowDirFreeSpace" "$AlternateShowDir"
     AlternateShowDirWritable=$TMoveDirWritable
   fi
-  OriginaldirFreeSpace=`df -P "$originaldirname"|sed -n 2p|awk '{print $4}'`
-  WorkingDirFreeSpace=`df -P "$m2kdir"|sed -n 2p|awk '{print $4}'`
-  checkPermissions "1" "$OriginaldirFreeSpace" "$originaldirname"
-  OriginalDirWritable=$TMoveDirWritable
+  if [ "$TargetPathIsInputPath" = "Enabled" ]; then
+    OriginaldirFreeSpace=`df -P "$originaldirname" | sed -n 2p | awk '{print $4}'`
+    checkPermissions "1" "$OriginaldirFreeSpace" "$originaldirname"
+    OriginalDirWritable=$TMoveDirWritable
+  fi
+  WorkingDirFreeSpace=`df -P "$m2kdir" | sed -n 2p | awk '{print $4}'`
   checkPermissions "5000" "$WorkingDirFreeSpace" "$m2kdir"
   WorkingDirWritable=$TMoveDirWritable
-  checkPermissions "5000" "$WorkingDirFreeSpace" "$m2kdir"
-  WorkingDirWritable=$TMoveDirWritable
-
-  echo "USER SETTING     |FLAG                       |Folder name"
-  echo "MoveDir          |$MoveDirWritable           |$MoveDir "
-  echo "AlternateMoveDir |$AlternateMoveDirWritable  |$AlternateMoveDir"
-  echo "PrimaryMovieDir  |$PrimaryMovieDirWritable   |$PrimaryMovieDir"
-  echo "AlternateMovieDir|$AlternateMovieDirWritable |$AlternateMovieDir"
-  echo "PrimaryShowDir   |$PrimaryShowDirWritable    |$PrimaryShowDir"
-  echo "AlternateShowDir |$AlternateShowDirWritable  |$AlternateShowDir"
-  echo "m2kdir           |$WorkingDirWritable        |$m2kdir"
+  
+  #Print a summary table of writeable directories.
+  printf '%-18s|%-5s|%s\n'   "USER SETTING"      "FLAG"                       "Folder name"        | tee -a "$DiagnosticsFile"
+  printf '%-18s|  %s  |%s\n' "MoveDir"           "$MoveDirWritable"           "$MoveDir"           | tee -a "$DiagnosticsFile"
+  printf '%-18s|  %s  |%s\n' "AlternateMoveDir"  "$AlternateMoveDirWritable"  "$AlternateMoveDir"  | tee -a "$DiagnosticsFile"
+  printf '%-18s|  %s  |%s\n' "PrimaryMovieDir"   "$PrimaryMovieDirWritable"   "$PrimaryMovieDir"   | tee -a "$DiagnosticsFile"
+  printf '%-18s|  %s  |%s\n' "AlternateMovieDir" "$AlternateMovieDirWritable" "$AlternateMovieDir" | tee -a "$DiagnosticsFile"
+  printf '%-18s|  %s  |%s\n' "PrimaryShowDir"    "$PrimaryShowDirWritable"    "$PrimaryShowDir"    | tee -a "$DiagnosticsFile"
+  printf '%-18s|  %s  |%s\n' "AlternateShowDir"  "$AlternateShowDirWritable"  "$AlternateShowDir"  | tee -a "$DiagnosticsFile"
+  printf '%-18s|  %s  |%s\n' "m2kdir"            "$WorkingDirWritable"        "$m2kdir"            | tee -a "$DiagnosticsFile"
   if [ "$MoveDirWritable" = "1" ] && [ "$AlternateMoveDirWritable" = "1" ] && [ "$WorkingDirWritable" = "1" ] ; then
     folderchecks="***PASSED***"
   else
     folderchecks="***FAILED***"
   fi
-  echo "Critical Filesystem checks $folderchecks"
+  printf "Critical Filesystem checks %s\n"  "$folderchecks" | tee -a "$DiagnosticsFile"
   if [ "$packagecheck" = "***PASSED***" ] && [ "$folderchecks" = "***PASSED***" ] ; then
     overallchecks="***PASSED***"
   else
@@ -2283,83 +2309,80 @@ mythicalDiagnostics(){
   fi
   if [ "$overallchecks" = "***PASSED***" ]; then
     read -n1 -p "press any key to test myth2kodi..."
-    echo ""
-    echo " Recordings Database is not used for testing."
-    echo " Performing fuzzy logic lookup on database file.  Please wait."
-    echo " It may take a moment to build mythical librarian database files "
-    echo " executing myth2kodi testfile.ext 'mister rogers' 'show 1332'"
-    echo " testing for exit status 0"
+    printf '\n  %s\n' "Recordings Database is not used for testing." | tee -a "$DiagnosticsFile"
+    printf '  %s\n'   "Performing fuzzy logic lookup on database file.  Please wait."
+    printf '  %s\n'   "It may take a moment to build mythical librarian database files."
+    printf '  %s\n'   "Executing: myth2kodi testfile.ext 'mister rogers' 'show 1332'" | tee -a "$DiagnosticsFile"
+    printf '  %s\n'   "Testing exit status." | tee -a "$DiagnosticsFile"
 
     myth2kodi testfile.ext "mister rogers" "show 1332"
     exitstatus=$?
-    echo "exited with status $exitstatus"
+    printf "exited with status  %s\n"  "$exitstatus" | tee -a "$DiagnosticsFile"
     if [ "$exitstatus" = "0" ]; then
       mythicaltest="***PASSED***"
     else
-      echo "OVERALL FAILURE"
+      printf '%s\n' "OVERALL FAILURE" | tee -a "$DiagnosticsFile"
       mythicaltest="COULD NOT COMPLETE"
       overallchecks="***FAILURE***"
     fi
   else
-    echo "OVERALL FAILURE"
+    printf '%s\n' "OVERALL FAILURE" | tee -a "$DiagnosticsFile"
     mythicaltest="COULD NOT COMPLETE"
   fi
   read -n1 -p "press any key to continue on to the final results..."
-  echo ""
-  echo -e "  All tests complete        RESULTS"
-  test "$DatabaseType"="MythTVPythonBindings" && echo -e "  MythTV Database Test:     $DBTest"
-  echo -e "  Installed Packages:       $packagecheck $checka$checkb$checkc$checkd$checke"
-  echo -e "  Notifications Test:       $notifytest"
-  echo -e "  KODI Communications:      $KODIcomm"
-  echo -e "  File System Checks:       $folderchecks"
-  echo -e "  mythicalTesting:          $mythicaltest"
-  echo -e "  Overall mythicalReadiness:$overallchecks"
-  echo -e "-----End of diagnostics-----"
+  printf '\n  %s\n' "All tests complete           RESULTS" | tee -a "$DiagnosticsFile"
+  test "$DatabaseType"="MythTVPythonBindings" && printf "  MythTV Database Test: %s\n" "$DBTest" | tee -a "$DiagnosticsFile"
+  printf '  Installed Packages:   %s %s %s %s %s %s\n' "$packagecheck" "$checka" "$checkb" "$checkc" "$checkd" "$checke" | tee -a "$DiagnosticsFile"
+  printf '  Notifications Test:   %s\n'   "$notifytest" | tee -a "$DiagnosticsFile"
+  printf '  KODI Communications:  %s\n'   "$KODIcomm" | tee -a "$DiagnosticsFile"
+  printf '  File System Checks:   %s\n'   "$folderchecks" | tee -a "$DiagnosticsFile"
+  printf '  mythicalTesting:      %s\n\n' "$mythicaltest" | tee -a "$DiagnosticsFile"
+
+  printf "  Overall mythicalReadiness: %s\n" "$overallchecks" | tee -a "$DiagnosticsFile"
+  printf '%s\n' "-----End of diagnostics-----" | tee -a "$DiagnosticsFile"
 
   #Logging for failure messages
   if [ "$DBTest" = "***FAILED***" ]; then
-    echo -e " When interfacing MythTV/0.24, myth2kodi uses MythTV's Python"
-    echo -e " Bindings.  These must be configured and working for proper access"
-    echo -e " to data required by myth2kodi.   "
-    test "$Python1" = "1" && echo -e " Missing packages:  apt-get install libmyth-python"
-    test "$Python2" = "1" && echo -e " Could not connect to the database.  Specify a username and password"
-  #TODO add more information on how to install
+    printf '  %s\n' "When interfacing MythTV/0.24, myth2kodi uses MythTV's Python" | tee -a "$DiagnosticsFile"
+    printf '  %s\n' "Bindings.  These must be configured and working for proper access" | tee -a "$DiagnosticsFile"
+    printf '  %s\n' "to data required by myth2kodi." | tee -a "$DiagnosticsFile"
+    printf '  %s\n' "Could not connect to the database. Check username and password." | tee -a "$DiagnosticsFile"
+  #TODO: add more information on how to install
   fi
 
   if [ "$notifytest" = "***FAILED***" ]; then
-    echo -e " Notifications to the DBUS have failed. myth2kodi relies upon"
-    echo -e " librarian-notify-send and package lib-notify to display messages on"
-    echo -e " GNOME desktop interface. These messages will not be displayed. "
+    printf '\n  %s\n' "Notifications to the DBUS have failed. myth2kodi relies upon" | tee -a "$DiagnosticsFile"
+    printf '  %s\n' "librarian-notify-send and package lib-notify to display messages on" | tee -a "$DiagnosticsFile"
+    printf '  %s\n' "GNOME desktop interface. These messages will not be displayed. " | tee -a "$DiagnosticsFile"
   fi
-  if [ "$KODIcomm" != "***PASSED***" ]; then
-    echo -e " KODI Communications have failed.  Likely causes: Improper IP address,"
-    echo -e " or KODI is not equipped to handle external network commands in settings."
-    echo -e " myth2kodi will not send messages or library update requests."
+  if [ "$KODIcomm" = "***FAILED***" ]; then
+    printf '\n  %s\n' "KODI Communications have failed.  Likely causes: Improper IP address," | tee -a "$DiagnosticsFile"
+    printf '  %s\n' "or KODI is not equipped to handle external network commands in settings." | tee -a "$DiagnosticsFile"
+    printf '  %s\n' "myth2kodi can not send messages or library update requests." | tee -a "$DiagnosticsFile"
   fi
-  if [ "$folderchecks" != "***PASSED***" ]; then
-    echo -e " The filesystem checks failed.  Likely causes: "
-    echo -e " The user named $SUDO_USER does not have permission to use the folder"
-    echo -e "  corrective action: sudo chown $SUDO_USER /Name/of/My_failed_folder"
-    echo -e " The folder belongs to a different group then the user named $SUDO_USER"
+  if [ "$folderchecks" = "***FAILED***" ]; then
+    printf '  %s\n' "The filesystem checks failed. Likely causes: " | tee -a "$DiagnosticsFile"
+    printf '    %s\n' "The user named $SUDO_USER does not have permission to use the folder" | tee -a "$DiagnosticsFile"
+    printf '      %s\n\n' "CORRECTIVE ACTION: sudo chown $SUDO_USER /Name/of/My_failed_folder" | tee -a "$DiagnosticsFile"
+    printf '    %s\n' "The folder belongs to a different group then the user named $SUDO_USER" | tee -a "$DiagnosticsFile"
     if [ "$Database" = "Enabled" ] && [ "$DatabaseType" = "MythTV" ] && [ "$SUDO_USER" != "mythtv" ]; then
-      echo -e "  corrective action: sudo adduser mythtv $SUDO_USER"
-      echo -e "        sudo adduser $SUDO_USER mythtv"
+      printf '      CORRECTIVE ACTION: %s\n' "sudo adduser mythtv $SUDO_USER" | tee -a "$DiagnosticsFile"
+      printf '                         %s\n\n' "sudo adduser $SUDO_USER mythtv" | tee -a "$DiagnosticsFile"
     else
-      echo -e "  corrective action: sudo adduser RecordingManagerUser $SUDO_USER"
-      echo -e "        sudo adduser $SUDO_USER RecordingManagerUser"
+      printf '      CORRECTIVE ACTION: %s\n' "sudo adduser RecordingManagerUser $SUDO_USER" | tee -a "$DiagnosticsFile"
+      printf '                         %s\n\n' "sudo adduser $SUDO_USER RecordingManagerUser" | tee -a "$DiagnosticsFile"
     fi
-    echo -e " The folder does not exist"
-    echo -e "  corrective action: mkdir /Name/of/My_failed_folder"
+    printf '    %s\n' "The folder does not exist" | tee -a "$DiagnosticsFile"
+    printf '      CORRECTIVE ACTION: %s\n\n' "mkdir /Name/of/My_failed_folder" | tee -a "$DiagnosticsFile"
   fi
   if [ "$mythicaltest" != "***PASSED***" ]; then
-    echo -e " myth2kodi has encountered an error.  This may be due to "
-    echo -e " lack of network connection.   If the problem persists, contact"
-    echo -e " outleradam here: http://forum.kodi.tv/showthread.php?tid=65644"
+    printf '  %s\n' "myth2kodi has encountered an error. This may be due to a" | tee -a "$DiagnosticsFile"
+    printf '  %s\n' "lack of network connection. If the problem persists, try" | tee -a "$DiagnosticsFile"
+    printf '  %s\n' "reading then asking at: http://forum.kodi.tv/showthread.php?tid=65644" | tee -a "$DiagnosticsFile" #TODO: If make public, change to new thread that I should've started.
   fi
-  if [ "$overallchecks" != "***PASSED***" ]; then
-    echo -e " "
-    echo -e " These issues must be corrected in order for myth2kodi to"
-    echo -e " perform correctly"
+  if [ "$overallchecks" = "***FAILURE***" ]; then
+    printf '\n  %s\n' "These issues must be corrected in order for myth2kodi to" | tee -a "$DiagnosticsFile"
+    printf '  %s\n' "perform correctly" | tee -a "$DiagnosticsFile"
   fi
 
   test "$overallchecks" = "***FAILURE***" && exit 1
@@ -2634,8 +2657,9 @@ getSeriesInfo(){
 #  functions before making this change.
 
 #####DEFINE ENVIRONMENT AND VARIABLES#####
-MyUserName=`whoami`
-#Today=`date +%F`
+declare -r MyUserName=$(whoami)
+declare -r Today=$(date +%F) #Date in IEEE standard format, ie YYYY-mm-dd
+declare -r Now=$(date +%FT%H%M%S)   #ISO 8601: YYYY-mm-ddTHHMMSS
 # Set global values
 test -f "/etc/myth2kodi/globalSettings" && source /etc/myth2kodi/globalSettings
 #make our working dir if it does not exist

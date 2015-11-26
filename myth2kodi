@@ -200,6 +200,10 @@ APIkey="6DF511BB2A64E0E9"
 #Language setting
 Language="en"
 
+#If "Allow" and Guide Data identified this as a show or episode, but no episode or series information was found, then
+#if the MythTV DB's storagegroup is movie[s] or film[s] this is used to reset the recording type as Movie.
+StorageGroupFallback="Allow"
+
 ###Database settings###
 #MythTV MYSQL access allows addition of movies, comskip data, and improves accuracy of episode recognition.
 #Database access Enabled|Disabled
@@ -571,9 +575,10 @@ KODIAutomate(){
   local data=""
   #Send notification to KODI, Update Library, Clean Library
   if [ "$KODINotify" = "Enabled" || "$KODIUpdate" = "Enabled" || "$KODIClean" = "Enabled" ]; then
+    printf '%s\n' 'COMMUNICATING WITH KODI INSTANCES...'
     local curlPOST='curl -L -s -m3 --connect-timeout 5 -X POST -H "Content-Type: application/json" -d'
     for KODIIP in ${KODIIPs[@]} ; do
-      echo "SENDING REQUESTED COMMANDS TO: $KODIIP"
+      printf 'SENDING REQUESTED COMMANDS TO: %s\n' "$KODIIP"
       #TODO:Updating the Library prior to sending the Notification probably makes more sense.
       if [ "$KODINotify" = "Enabled" ] ; then
         data=\''{"jsonrpc":"2.0",
@@ -581,12 +586,12 @@ KODIAutomate(){
                  "params":{"title":"myth2kodi added","message":"'$tvdbshowname'"},
                  "id":1}'\'
         $curlPOST $data http://$KODIIP/jsonrpc > /dev/null 2>&1
-        echo "SENT: GUI.ShowNotification for $tvdbshowname"
+        printf 'SENT: GUI.ShowNotification for %s\n' "$tvdbshowname"
       fi
       if [ "$KODIUpdate" = "Enabled" ] ; then
         data=\''{"jsonrpc":"2.0", "method":"VideoLibrary.Scan", "id":1}'\'
         $curlPOST $data http://$KODIIP/jsonrpc > /dev/null 2>&1
-        echo "SENT: VideoLibrary.Scan"
+        printf '%s\n' 'SENT: VideoLibrary.Scan request.'
       fi
       #TODO: Requesting Kodi to Clean its Library doesn't seem to make sense in the same
       #  context as Update & Notify, that is, cleaning after adding a new show makes
@@ -599,7 +604,7 @@ KODIAutomate(){
       if [ "$KODIClean" = "Enabled" ] ; then
         data=\''{"jsonrpc":"2.0", "method":"VideoLibrary.Clean", "id":1}'\'
         $curlPOST $data http://$KODIIP/jsonrpc > /dev/null 2>&1
-        echo "SENT: VideoLibrary.Clean"
+        printf '%s\n' "SENT: VideoLibrary.Clean request."
       fi
     done
   fi
@@ -872,6 +877,9 @@ GetMythTvPythonBindings(){
     GenComSkip
   fi
 
+  #TODO: Consider making all the vars et here readonly "declare -r ", even if that means renaming
+  #  and tracking down the various inconsistent uses... NOTE: must do in non-python GetMythTv... as well.
+
   #Import mythtv values into myth2kodi values, don't clobber title, subtitle, season-number, or episode-number.
   test "$InputTitle" = "" && InputTitle=$title
   test "$InputSubtitle" = "" && InputSubtitle=$subtitle
@@ -882,7 +890,7 @@ GetMythTvPythonBindings(){
   MovieAirDate=$airdate
   OriginalAirDate=$originalairdate
   ShowCategory=$category
-  StorageGroup=$storeagegroup
+  StorageGroup=$storagegroup
   Stars=$stars
   Plot=$description
   LocalSeriesID=$seriesid
@@ -1071,7 +1079,7 @@ ProcessSydFTA(){
   fi
 
   #Strip the Movie: tag that some stations very helpfully put in the title field...
-  if  [ "$m2kProgramIDCheck" = "MV" ]; then
+  if [ "$m2kProgramIDCheck" = "MV" ]; then
     InputTitle=`echo $InputTitle | sed s/"Movie:\s*"/""/I`
   fi
 
@@ -2856,6 +2864,7 @@ DoMaintenance
 
 #####SEARCH FOR SHOW AND BUILD INFORMATION#####
 
+#Process as though it's an episode of a tv series.
 if [ "$m2kProgramIDCheck" != "SH" ] && [ "$m2kProgramIDCheck" != "MV" ]; then
   echo "SEARCHING: www.TheTvDb.com SHOW NAME: $ShowName" | tee -a "$LogFile"
   echo "DATE:$MovieAirDate $OriginalAirDate FILE NAME: $InputPath">>"$LogFile"
@@ -3037,7 +3046,7 @@ if [ "$Sxx" != "S" ] && [ "$Sxx" != "" ] && [ "$Sxx" != "S00" ] && [ "$Exx" != "
   #TODO: If the confidence rating from the above is good, and we have an
   #  AbsoluteEpisodeNumber then use it to validate the Sxx, Exx & Subtitle from
   #  the MythTV DB.
-  echo "Using episode number: $Sxx$Exx, extracted from the MythTV DB."
+  echo "Using episode number: $Sxx$Exx, extracted from the MythTV DB." | tee -a "$LogFile"
   #TODO: Probably should only do the following if the Series confidence rating
   #  is ok.
   #If we don't have a Subtitle, then use Sxx & Exx to get it from the TVDb info.
@@ -3046,22 +3055,37 @@ if [ "$Sxx" != "S" ] && [ "$Sxx" != "" ] && [ "$Sxx" != "S00" ] && [ "$Exx" != "
     getAbsoluteEpisodeNumberWithSxxExx
     if [ "$?" = "0" ]; then
       EpisodeSubtitle=`sed -n $AbsoluteEpisodeNumber'p' "$m2kdir"/"$NewShowName"/"$NewShowName".actualEname.txt`
-      echo "MythTV DB didn't have an EpisodeSubtitle, using '$EpisodeSubtitle' from TheTVDB."
+      echo "MythTV DB didn't have an EpisodeSubtitle, using '$EpisodeSubtitle' from TheTVDB." | tee -a "$LogFile"
     else
       AbsoluteEpisodeNumber=$AbsoluteEpisodeNumberBackup
     fi
   fi
+  #Strip the leading "S" from Sxx,
   SeasonNumber=${Sxx#S}
+  #and any leading "0"
   SeasonNumber=${SeasonNumber#0}
 
 #If we don't already have EXX and SXX, set them by matching Absolute Episode Number across myth2kodi's database
 elif [ "$AbsoluteEpisodeNumber" != "" ]; then
   setSxxAndExxFromAbsoluteEpisodeNumber
 else
-  echo "WARNING: Couldn't set Sxx and Exx."
+  echo "WARNING: Couldn't set Sxx and Exx." | tee -a "$LogFile"
   ConfidenceReasoning="$ConfidenceReasoning Could not set Sxx and Exx, Failed; "
 fi
 
+#If it's tagged as a SH or EP but lacking SxxExx and then as a fallback check storagegroup in case it's a Movie we missed
+if [ "$StorageGroupFallback" = "Allow"] ; then
+  #TODO: Make a HasSxxExx variable that is set and used consistently, #NOTE: there is already one but it's weirdly used
+  if [ "$m2kProgramIDCheck" = "SH" ] || [ "$m2kProgramIDCheck" = "EP" ] && [ "$Sxx" != "S" ] && [ "$Sxx" != "" ] && [ "$Sxx" != "S00" ] && [ "$Exx" != "E" ] && [ "$Exx" != "" ] && [ "$Exx" != "E00" ] ; then
+    if [ "$(echo $StorageGroup | grep -i '\(Movies*\|Films*\)')" != "" ] ; then
+      printf 'GUESSING that this is a Movie based on being in storagegroup: %s\n' "$StorageGroup" | tee -a "$LogFile"
+      m2kProgramIDCheck="MV"
+      ProgramIDType="Movie"
+      ((--ConfidenceRating)) #Decrement confidence, because this is a guess.
+      ConfidenceReasoning="$ConfidenceReasoning Possible misidentified Movie, overriding Guide Data, Guess; "
+    fi
+  fi
+fi
 
 #######SANITY CHECKS#####
 

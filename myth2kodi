@@ -234,7 +234,7 @@ PrimaryShowDir="/media/video/recordedShows" #<------THIS VALUE MUST BE SET------
 AlternateShowDir="/home/librarian/recordedShows"
 #CommercialMarkup will generate comskip files for recordings when they are moved. Enabled|Disabled
 CommercialMarkup="Enabled"
-#CommercialMarkupCleanup will execute a maintenance routine which will remove comskip files if they are not needed
+#CommercialMarkupCleanup if "Enabled", when DoMaintenance() is run, removes comskip & NFO files if the associated .mpg file can't be found.
 CommercialMarkupCleanup="Enabled"
 
 ###Reporting/Communications###
@@ -486,7 +486,7 @@ CategoricNamingConventions(){
 ######DAILY REPORT#####
 #This function reports all shows processed based on date
 dailyreport(){
-  if [ $DailyReport = Enabled ]; then
+  if [ "$DailyReport" = "Enabled" ]; then
     test ! -d "$m2kdir/DailyReport" && mkdir "$m2kdir/DailyReport"
     local reportfilename=`date +%Y-%m-%d`
     local reporttime=`date +%T`
@@ -612,7 +612,7 @@ KODIAutomate(){
 #with:
 #  <feed updateinterval="30">http://[youripaddress]/mythical-rss/rss.xml</feed>
 #Big thanks to barney_1!
-generaterss() {
+generaterss(){
   #user settings:
   rssDir="/var/www/mythical-rss"
   maxItems=8  #maximum number of items to read into the feed
@@ -1722,7 +1722,7 @@ PermissionErrorWhileMoving(){
   fi
 }
 
-SymlinkNotCreated() {
+SymlinkNotCreated(){
   echo "PERMISSION ERROR OR FILE SYSTEM DOES NOT SUPPORT SYMLINKS:$MoveDir"
   echo "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%">>"$LogFile"
   echo "%%%%%%%%%%%%%%%LINK PERMISSION ERROR: SYMLINK NOT CREATED%%%%%%%%%%%%%%%%">>"$LogFile"
@@ -1781,7 +1781,7 @@ determinePrimaryOrAlternateFolderUsage(){
 }
 
 #####MAKE FOLDER#####
-MakeFolder() {
+MakeFolder(){
   #If specified, make $movedir = $movedir/show name
   if [ "$NewShowName" != "" ]; then
     MoveDir="$MoveDir/$NewShowName"
@@ -1939,8 +1939,8 @@ ShowTranslations(){
 #####MAINTENANCE ROUTINE#####
 #TODO: Need to go through this function line-by-line and make sure it behaves as expected in a do-no-harm sort of way...
 #DoMaintenance loops through all logged files and checks if their parent is there.  If no parent, then file is deleted.
-DoMaintenance() {
-  echo "PERFORMING MAINTENANCE ROUTINE..."
+DoMaintenance(){
+  echo "PERFORMING MAINTENANCE ROUTINE..." | tee -a "$LogFile"
   #check for interrupted undo jobs
   test -f "$m2kdir/undo.lock" && test ! -f "$m2kdir/undo.sh" && mv "$m2kdir/undo.lock" "$m2kdir/undo.sh"
 
@@ -1948,11 +1948,15 @@ DoMaintenance() {
   test ! -f "$m2kdir/doover.sh" && echo 'rm -f "'$m2kdir'"/doover.sh'>"$m2kdir/doover.sh" && chmod 666 "$m2kdir/doover.sh"
   test ! -f "$m2kdir/undo.sh" && echo 'rm -f "'$m2kdir'"/undo.sh'>"$m2kdir/undo.sh" && chmod 666 "$m2kdir/undo.sh"
 
+  #Check for commskip (.txt) and .nfo files listed in created.tracking and
+  #remove them if their associated "main" file (.mpg) is missing.
   if [ "$CommercialMarkupCleanup" = "Enabled" ] && [ -f "$m2kdir/created.tracking" ]; then
     myth2kodiCounter=0
-    echo "PERFORMING MAINTENANCE ROUTINE">>"$LogFile"
+    echo "PERFORMING CLEANUP OF ORPHANED SUPPORT FILES." | tee -a "$LogFile"
     local SupportFile=""
     while read line ; do
+      #TODO: Sublime text syntax highlighting fails here, the different coloured 2 in
+      #  the variable name below isn't actually a problem, fix the syntax highlighting.
       (( ++myth2kodiCounter ))
       echo -ne "File record $myth2kodiCounter: ${SupportFile:0:20}     \n" 1>&2
       SupportFile=`echo $line|cut -d"'" -f2`
@@ -1960,13 +1964,15 @@ DoMaintenance() {
       ls "$MainFile" > /dev/null 2>&1
       if [ "$?" != "0" ]; then
         if [ -d "`dirname "$SupportFile"`" ]; then
-          echo "REMOVING ORPHAN $SupportFile"
-          echo "REMOVING ORPHAN $SupportFile">>"$LogFile"
+          echo "REMOVING ORPHAN $SupportFile" | tee -a "$LogFile"
           rm -f "$SupportFile"
         else
-          echo "FOLDER DISCONNECTED:$SupportFile"
-          echo "FOLDER DISCONNECTED:$SupportFile">>"$LogFile"
-          test "$removedead" != "1" && echo "$line" >> "$m2kdir/created.tracking2" || echo "REMOVING FROM FUTURE SEARCHES: $line "
+          echo "FOLDER DISCONNECTED:$SupportFile" | tee -a "$LogFile"
+          if [ "$removedead" != "1" ] ; then
+            echo "$line" >> "$m2kdir/created.tracking2"
+          else
+            echo "REMOVING FROM FUTURE SEARCHES: $line " | tee -a "$LogFile"
+          fi
         fi
       else
         echo "$line" >> "$m2kdir/created.tracking2"
@@ -1979,22 +1985,23 @@ DoMaintenance() {
   #Check if folders are empty and remove dir if needed and it was created by myth2kodi
   if [ "$DirTracking" = "Enabled" ] && [ -f "$m2kdir/dir.tracking" ]; then
     while read line ; do
+      #TODO: Sublime text syntax highlighting fails here, the different coloured 2 in
+      #  the variable name below isn't actually a problem, fix the syntax highlighting.
       (( ++myth2kodiCounter ))
       echo -ne "Folder record $myth2kodiCounter: ${DirToCheckCheck:0:20}    \n" 1>&2
       DirToCheck=$line
       if [ -d "$DirToCheck" ]; then
-        DirToCheckCheck=`ls "$line"|  sed s/"tvshow.nfo"/""/g |grep -m1 ^`
+        DirToCheckCheck=`ls "$line" | sed s/"tvshow.nfo"/""/g | grep -m1 ^`
         test "$DirToCheckCheck" = "" && DirToCheckCheck=`ls "$line" | sed s/"tvshow.nfo"/""/g | grep -m2 ^`
         if [ "$DirToCheckCheck" = "" ]; then
-          echo "REMOVING ORPHAN FOLDER:$line">>"$LogFile"
-          echo "REMOVING ORPHAN FOLDER:$line"
+          echo "REMOVING ORPHAN FOLDER:$line" | tee -a "$LogFile"
           test -f "$line/tvshow.nfo" && rm -f "$line/tvshow.nfo"
           rmdir "$line"
         elif [ "$DirToCheckCheck" != "" ]; then
           echo "$DirToCheck" >> "$m2kdir/dir.tracking2"
         fi
       elif [ ! -d "$DirToCheck" ]; then
-        echo $DirToCheck >> "$m2kdir/dir.tracking2"
+        echo "$DirToCheck" >> "$m2kdir/dir.tracking2"
       fi
     done < "$m2kdir"/dir.tracking
     rm -f "$m2kdir/dir.tracking"
@@ -2007,15 +2014,15 @@ DoMaintenance() {
     ls -A -1 "$m2kdir" > "$m2kdir/cleanup"
 
     while read line ; do
+      #TODO: Sublime text syntax highlighting fails here, the different coloured 2 in
+      #  the variable name below isn't actually a problem, fix the syntax highlighting.
       (( ++myth2kodiCounter ))
-      echo -ne "Clensing Database:$myth2kodiCounter ${folderToCheck:0:20}    \n" 1>&2
+      echo -ne "Cleansing myth2kodi Database:$myth2kodiCounter ${folderToCheck:0:20}    \n" 1>&2
       folderToCheck="$m2kdir/$line"
       if [ -d "$folderToCheck" ]; then
-        if [ "$folderToCheck" != "$m2kdir/Daily Report" ]; then
-          if [ "$folderToCheck" != "$m2kdir/mythicalSetup" ]; then
-            echo "Removing myth2kodi database from:$folderToCheck"
-            rm -Rf "$folderToCheck"
-          fi
+        if [ "$folderToCheck" != "$m2kdir/DailyReport" ] &&  [ "$folderToCheck" != "$m2kdir/mythicalSetup" ]; then
+          echo "Removing myth2kodi database from:$folderToCheck" | tee -a "$LogFile"
+          rm -Rf "$folderToCheck"
         fi
       fi
     done < "$m2kdir/cleanup"
@@ -2104,7 +2111,7 @@ mythicalScan(){
   exit 1
 }
 
-setGroupPermissions (){
+setGroupPermissions(){
   #Add read and write permissions for the group to the moved recording.
   chmod g=rw "$MoveDir/$ShowFileName.$OriginalExt"
   #TODO:#NOTE: the above command is slightly inconsistent with the comment as = also implies removal of any unmentioned attributes.
@@ -2540,7 +2547,7 @@ mythicalHelp(){
   exit 1
 }
 
-special (){
+special(){
   echo " ======showTranslations====="
   echo " If you are having problems with incorrect guide data such"
   echo " as improper titling, use showTranslations."
@@ -2710,7 +2717,11 @@ case "$InputPath" in
     mythicalScan
   ;;
   --mythicalDiagnostics|-m)
+    #TODO: checkPermissions() is called within mythicalDiagnostics, but its
+    #  output is dumped to LogFile not DiagnosticsFile. Consider making all
+    #  logging go to LogFile, but make where LogFile points context specific.
     mythicalDiagnostics
+    #TODO: Standardise on functions returning with actual exit done here.
   ;;
   --confidence)
     improveConfidence
@@ -3238,6 +3249,8 @@ if [ -f "$MoveDir/$ShowFileName.$OriginalExt" ]; then
   myth2kodiCounter=0
   NameCheck=0
   while [ $NameCheck = '0' ]; do
+    #TODO: Sublime text syntax highlighting fails here, the different coloured 2 in
+    #  the variable name below isn't actually a problem, fix the syntax highlighting.
     ((++myth2kodiCounter))
 
     #If file does not exist, then it is a valid target

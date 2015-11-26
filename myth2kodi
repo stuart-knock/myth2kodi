@@ -180,8 +180,8 @@ AlternateMoveDir="/home/librarian/recordedTV"
 TargetPathIsInputPath="Disabled"
 #Internet access Timeout in seconds: Default Timeout=50 (seconds)
 Timeout=50
-#Update database time in secconds, Longer duration means faster processing time and less strain on TheTvDb. Default='84000' (1 day)
-UpdateDatabase=74200
+#Update database time in seconds, Longer duration means faster processing time and less strain on TheTvDb. Default='88920' (1 day + eps)
+UpdateDatabase=88920
 #TODO: Consider adding variable binpath=/usr/local/bin/ as a step toward non-root install.
 #myth2kodi working file dir: Default=$HOME/.myth2kodi (home/username/.myth2kodi)
 m2kdir="$HOME/.myth2kodi"
@@ -1237,116 +1237,137 @@ determineIfDatabaseIsUpToDate(){
 downloadInfoAboutMatchedTitleAndCreateTxtFileTables(){
   #Download information from server
   echo -ne "Downloading Series: $SeriesID \n" 1>&2
+  local GotNewInformation=0
   local TheTVDBShowXML="http://www.thetvdb.com/api/$APIkey/series/$SeriesID/all/$Language.xml"
   local FieldsWeWant="(</?Series>|</?seriesid>|</?Status>|</?lastupdated>|</?Episode>|</?SeasonNumber>|</?EpisodeNumber>|</?EpisodeName>|</?Overview>|</?FirstAired>)"
   curl -L -s -m"$Timeout" $TheTVDBShowXML | grep -E $FieldsWeWant > "$m2kdir/$NewShowName/$NewShowName.xmlTest"
-  test $? = 0 && echo "$CurrentTime" > "$m2kdir/$NewShowName/lastupdated.time"
+  test $? = 0 && echo "$CurrentTime" > "$m2kdir/$NewShowName/lastupdated.time" && chmod 666 "$m2kdir/$NewShowName/lastupdated.time"
 
-  #Validate that the show has a EpisodeName tag and is a valid download before clobbering our old download.
-  grepTest=""
+  #Validate that the show has at least one EpisodeName tag and is a valid download before clobbering our old download.
+  local grepTest=""
   grepTest=`grep "EpisodeName" "$m2kdir/$NewShowName/$NewShowName.xmlTest"`
-  test "$grepTest" != "" && mv "$m2kdir/$NewShowName/$NewShowName.xmlTest" "$m2kdir/$NewShowName/$NewShowName.xml"
+  if [ "$grepTest" != "" ] ; then
+    #Check the new info is actually new, if there was no old info then it must be new.
+    if [ -f "$m2kdir/$NewShowName/$NewShowName.xml" ] ; then
+      diff "$m2kdir/$NewShowName/$NewShowName.xmlTest" "$m2kdir/$NewShowName/$NewShowName.xml" &> /dev/null
+      GotNewInformation=$?  #NOTE: No-diff = 0; diff = 1; error = 2
+    else
+      GotNewInformation=1
+    fi
+    if [ "$GotNewInformation" = "1" ] ; then
+      #Clear out the old
+      printf 'Downloaded new information for %s\n' "$NewShowName" | tee -a "$LogFile"
+      printf 'Cleaning up old information before processing.\n' | tee -a "$LogFile"
+      test -f "$m2kdir/$NewShowName/$NewShowName.xml" && mv "$m2kdir/$NewShowName/$NewShowName.xml" "$m2kdir/$NewShowName/${Today}_$NewShowName.xml"
+      mv "$m2kdir/$NewShowName/$NewShowName.xmlTest" "$m2kdir/$NewShowName/$NewShowName.xml"
+      test -f "$m2kdir/$NewShowName/$NewShowName.actualEname.txt" && rm -f "$m2kdir/$NewShowName/$NewShowName.actualEname.txt"
+      test -f "$m2kdir/$NewShowName/$NewShowName.Ename.txt" && rm -f "$m2kdir/$NewShowName/$NewShowName.Ename.txt"
+      test -f "$m2kdir/$NewShowName/$NewShowName.FAired.txt" && rm -f "$m2kdir/$NewShowName/$NewShowName.FAired.txt"
+      test -f "$m2kdir/$NewShowName/$NewShowName.S.txt" && rm -f "$m2kdir/$NewShowName/$NewShowName.S.txt"
+      test -f "$m2kdir/$NewShowName/$NewShowName.E.txt" && rm -f "$m2kdir/$NewShowName/$NewShowName.E.txt"
+      test -f "$m2kdir/$NewShowName/$NewShowName.Plot.txt" && rm -f "$m2kdir/$NewShowName/$NewShowName.Plot.txt"
 
-  #create a folder/file "database" Strip XML tags.  Series, Exx and Sxx are separated into different files
-  if [ -f "$m2kdir/$NewShowName/$NewShowName.xml" ]; then
-    Ename=""
-    actualEname=""
-    FAired=""
-    SeasonNr=""
-    EpisodeNr=""
-    EpisodeOverview=""
-    recordNumber=-1
-    #TODO: Unless there is some reason to keep repeated info in the same file,
-    #  it seems like it'd be better to mv existing file to .old or .$Today.old,
-    #  the problem with the latter being it'd require manual cleanup, but it has
-    #  the benefit of maintaining more past data to revert to...
-    echo "Parsing Downloaded information: $NewShowName.xml "
-    while read line ; do
-      if [[ $recordNumber < 0 ]]; then
-        #TODO:Check for a Status line and if it exists and says Ended then touch
-        #  a file called Status.Ended in the $m2kdir/$NewShowName/
-        #  directory, then add a check for this before we bother trying to
-        #  download information again. Also, use the lastupdated field if present.
-        #Skip lines until the end series block tag is found
-        if [[ $line == \<\/Series\> ]]; then
-          #Start processing the episode info
-          recordNumber=0
+      #create a folder/file "database" Strip XML tags.  Series, Exx and Sxx are separated into different files
+      local Ename=""
+      local actualEname=""
+      local FAired=""
+      local SeasonNr=""
+      local EpisodeNr=""
+      local EpisodeOverview=""
+      local recordNumber=-1
+      echo "Parsing Downloaded information: $NewShowName.xml " | tee -a "$LogFile"
+      while read line ; do
+        if [[ $recordNumber < 0 ]]; then
+          #TODO:Check for a Status line and if it exists and says Ended then touch
+          #  a file called Status.Ended in the $m2kdir/$NewShowName/
+          #  directory, then add a check for this before we bother trying to
+          #  download information again. Also, use the lastupdated field if present.
+          #Skip lines until the end series block tag is found
+          if [[ $line == \<\/Series\> ]]; then
+            #Start processing the episode info
+            recordNumber=0
+          fi
+        elif [[ $line == \<\/Episode\> ]]; then
+          (( ++recordNumber ))
+          #Write Episode info to files
+          echo -ne "Building Record:$recordNumber ${actualEname:0:20}           \n" 1>&2
+          echo "$actualEname" >> "$m2kdir/$NewShowName/$NewShowName.actualEname.txt"
+          echo "$Ename" >> "$m2kdir/$NewShowName/$NewShowName.Ename.txt"
+          echo "$FAired" >> "$m2kdir/$NewShowName/$NewShowName.FAired.txt"
+          echo "$SeasonNr" >> "$m2kdir/$NewShowName/$NewShowName.S.txt"
+          echo "$EpisodeNr" >> "$m2kdir/$NewShowName/$NewShowName.E.txt"
+          echo "$EpisodeOverview" >> "$m2kdir/$NewShowName/$NewShowName.Plot.txt"
+          #Clear Episode information variables for next pass
+          Ename=""
+          actualEname=""
+          FAired=""
+          SeasonNr=""
+          EpisodeNr=""
+          EpisodeOverview=""
+        #Get actual show name
+        elif [[ $line == \<EpisodeName\>* ]]; then
+          line=${line/<\/EpisodeName>/}
+          line=${line/<EpisodeName>/}
+          line=${line/&lt;/}
+          line=${line/&gt;/}
+          line=${line/&quot;/}
+          line=${line/&amp;/&}
+          line=${line/|/}
+          line=${line/\?/}
+          line=${line/\*/}
+          line=${line/:/}
+          line=${line/+/}
+          line=${line/\\/}
+          line=${line/\//}
+          line=${line/[/}
+          line=${line/]/}
+          line=${line/\'/}
+          line=${line/\"/}
+          actualEname=${line/&ndash;/-}
+          Ename=${actualEname/;*/}
+        #Get OriginalAirDate
+        elif [[ $line == \<FirstAired\>* ]]; then
+          line=${line/<\/FirstAired>/}
+          line=${line/<FirstAired>/}
+          FAired=$line
+        #Get Season number
+        elif [[ $line == \<SeasonNumber\>* ]]; then
+          line=${line/<\/SeasonNumber>/}
+          line=${line/<SeasonNumber>/}
+          SeasonNr=$line
+        #Get Episode number
+        elif [[ $line == \<EpisodeNumber\>* ]]; then
+          line=${line/<\/EpisodeNumber>/}
+          line=${line/<EpisodeNumber>/}
+          EpisodeNr=$line
+        #Get Episode Overview
+        elif [[ $line == \<Overview\>* ]]; then
+          line=${line/<\/Overview>/}
+          line=${line/<Overview>/}
+          EpisodeOverview=$line
         fi
-      elif [[ $line == \<\/Episode\> ]]; then
-        (( ++recordNumber ))
-        echo -ne "Building Record:$recordNumber ${actualEname:0:20}           \n" 1>&2
-        echo "$actualEname" >> "$m2kdir/$NewShowName/$NewShowName.actualEname.txt"
-        echo "$Ename" >> "$m2kdir/$NewShowName/$NewShowName.Ename.txt"
-        echo "$FAired" >> "$m2kdir/$NewShowName/$NewShowName.FAired.txt"
-        echo "$SeasonNr" >> "$m2kdir/$NewShowName/$NewShowName.S.txt"
-        echo "$EpisodeNr" >> "$m2kdir/$NewShowName/$NewShowName.E.txt"
-        echo "$EpisodeOverview" >> "$m2kdir/$NewShowName/$NewShowName.Plot.txt"
-        Ename=""
-        actualEname=""
-        FAired=""
-        SeasonNr=""
-        EpisodeNr=""
-        EpisodeOverview=""
-      #Get actual show name
-      elif [[ $line == \<EpisodeName\>* ]]; then
-        line=${line/<\/EpisodeName>/}
-        line=${line/<EpisodeName>/}
-        line=${line/&lt;/}
-        line=${line/&gt;/} 
-        line=${line/&quot;/} 
-        line=${line/&amp;/&}
-        line=${line/|/}
-        line=${line/\?/}
-        line=${line/\*/}
-        line=${line/:/}
-        line=${line/+/}
-        line=${line/\\/}
-        line=${line/\//}
-        line=${line/[/}
-        line=${line/]/}
-        line=${line/\'/}
-        line=${line/\"/}
-        actualEname=${line/&ndash;/-}
-        Ename=${actualEname/;*/}
-      #Get OriginalAirDate
-      elif [[ $line == \<FirstAired\>* ]]; then
-        line=${line/<\/FirstAired>/}
-        line=${line/<FirstAired>/}
-        FAired=$line
-      #Get Season number
-      elif [[ $line == \<SeasonNumber\>* ]]; then
-        line=${line/<\/SeasonNumber>/}
-        line=${line/<SeasonNumber>/}
-        SeasonNr=$line
-      #Get Episode number
-      elif [[ $line == \<EpisodeNumber\>* ]]; then
-        line=${line/<\/EpisodeNumber>/}
-        line=${line/<EpisodeNumber>/}
-        EpisodeNr=$line
-      #Get Episode Overview
-      elif [[ $line == \<Overview\>* ]]; then
-        line=${line/<\/Overview>/}
-        line=${line/<Overview>/}
-        EpisodeOverview=$line
-      fi
-    done < "$m2kdir/$NewShowName/$NewShowName.xml"
+      done < "$m2kdir/$NewShowName/$NewShowName.xml"
 
-    chmod 666 "$m2kdir/$NewShowName/$NewShowName".actualEname.txt
-    chmod 666 "$m2kdir/$NewShowName/$NewShowName".Ename.txt
-    chmod 666 "$m2kdir/$NewShowName/$NewShowName".FAired.txt
-    chmod 666 "$m2kdir/$NewShowName/$NewShowName".S.txt
-    chmod 666 "$m2kdir/$NewShowName/$NewShowName".E.txt
-    chmod 666 "$m2kdir/$NewShowName/$NewShowName".Plot.txt
-    GotNewInformation=1
+      chmod 666 "$m2kdir/$NewShowName/$NewShowName".actualEname.txt
+      chmod 666 "$m2kdir/$NewShowName/$NewShowName".Ename.txt
+      chmod 666 "$m2kdir/$NewShowName/$NewShowName".FAired.txt
+      chmod 666 "$m2kdir/$NewShowName/$NewShowName".S.txt
+      chmod 666 "$m2kdir/$NewShowName/$NewShowName".E.txt
+      chmod 666 "$m2kdir/$NewShowName/$NewShowName".Plot.txt
+      local ProcessingSuccesful=1
 
-  elif [ ! -f "$m2kdir/$NewShowName/$NewShowName.xml" ]; then
-    echo "COULD NOT DOWNLOAD:$TheTVDBShowXML">>"$LogFile"
+    elif [ "$GotNewInformation" = "2" ]; then
+      printf 'UNEXPECTED ERROR comparing new to old information for %s\n' "$NewShowName" | tee -a "$LogFile"
+    elif [ "$GotNewInformation" = "0" ]; then
+      printf '%s\n' "TheTVDB information for $NewShowName hasn't changed since last download." | tee -a "$LogFile"
+    fi
+  else
+    printf 'COULD NOT DOWNLOAD: %s\n' "$TheTVDBShowXML" | tee -a "$LogFile"
   fi
   #check if files were created and generate message
-  if [ "$GotNewInformation" = "1" ]; then
+  if [ "$ProcessingSuccesful" = "1" ]; then
+    echo "LOCAL DATABASE UPDATED: $m2kdir/$NewShowName" | tee -a "$LogFile"
     return 0
-    echo $CurrentTime>"$m2kdir/$NewShowName/lastupdated.time" && chmod 666 $CurrentTime>"$m2kdir/$NewShowName/lastupdated.time"
-    echo "LOCAL DATABASE UPDATED:$m2kdir/$NewShowName">>"$LogFile"
   elif [ ! -f "$m2kdir/$NewShowName/$NewShowName.Ename.txt" ]; then
     echo "*** PERMISSION ERROR $m2kdir/$NewShowName/">>"$LogFile"
     return 1
@@ -2514,7 +2535,7 @@ mythicalHelp(){
     echo "  scan: creates a library from an entire folder"
     echo "  eg. myth2kodi --scan mpg /home/mythtv/videos"
     echo ""
-    echo "-doMaintenance"
+    echo "--doMaintenance"
     echo "  doMaintenance: removes FOLDER DISCONNECTED errors from logs"
     echo "  eg. myth2kodi --doMaintenance"
     echo ""
@@ -2533,6 +2554,11 @@ mythicalHelp(){
     echo "-u|--undo"
     echo "  undo: returns all files to original states"
     echo "  eg. sudo myth2kodi --undo"
+    echo ""
+    echo "--getSeriesInfo"
+    echo "  getSeriesInfo: Update of local tables for a series from TheTVDB,"
+    echo "                 ignoring lastupdated.time."
+    echo "  eg. myth2kodi --getSeriesInfo 'Black Books'"
     echo ""
     echo "-?|-h|--help"
     echo "  Help: displays this message"
@@ -2633,6 +2659,7 @@ improveConfidence(){
 }
 
 getSeriesInfo(){
+  #Force an update of the myth2kodi tables for a specified Series
   #Usage example: myth2kodi --getSeriesInfo "Black Books"
   echo "RUNNING ${FUNCNAME}() for $InputTitle" | tee -a "$LogFile"
   ShowName="$InputTitle"
@@ -2649,8 +2676,7 @@ getSeriesInfo(){
     return 1
   fi
   downloadInfoAboutMatchedTitleAndCreateTxtFileTables
-  echo "TheTVDB information written to: $m2kdir/$NewShowName" | tee -a "$LogFile"
-  return 0
+  return $?
 }
 
 ########################### END FUNCTION DEFINITIONS ###########################

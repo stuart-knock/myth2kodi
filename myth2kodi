@@ -3068,7 +3068,7 @@ if [ "$SeriesID" != "" ] ; then
 fi
 
 #If we already have Sxx and Exx from MythTV DB, use them. If we also had a Subtitle, then do some verification.
-if [ "$Sxx" != "S" ] && [ "$Sxx" != "" ] && [ "$Sxx" != "S00" ] && [ "$Exx" != "E" ] && [ "$Exx" != "" ] && [ "$Exx" != "E00" ] ; then
+if [[ "$Sxx" != "S" && "$Sxx" != "" && "$Sxx" != "S00" && "$Exx" != "E" && "$Exx" != "" && "$Exx" != "E00" ]] ; then
   #TODO: If the confidence rating from the above is good, and we have an
   #  AbsoluteEpisodeNumber then use it to validate the Sxx, Exx & Subtitle from
   #  the MythTV DB.
@@ -3100,9 +3100,9 @@ else
 fi
 
 #If it's tagged as a SH or EP but lacking SxxExx and then as a fallback check storagegroup in case it's a Movie we missed
-if [ "$StorageGroupFallback" = "Allow"] ; then
+if [ "$StorageGroupFallback" = "Allow" ] ; then
   #TODO: Make a HasSxxExx variable that is set and used consistently, #NOTE: there is already one but it's weirdly used
-  if [ "$m2kProgramIDCheck" = "SH" ] || [ "$m2kProgramIDCheck" = "EP" ] && [ "$Sxx" != "S" ] && [ "$Sxx" != "" ] && [ "$Sxx" != "S00" ] && [ "$Exx" != "E" ] && [ "$Exx" != "" ] && [ "$Exx" != "E00" ] ; then
+  if [ "$m2kProgramIDCheck" != "MV" ] && [[ "$Sxx" = "S" || "$Sxx" = "" || "$Sxx" = "S00" || "$Exx" = "E" || "$Exx" = "" || "$Exx" = "E00" ]] ; then
     if [ "$(echo $StorageGroup | grep -i '\(Movies*\|Films*\)')" != "" ] ; then
       printf 'GUESSING that this is a Movie based on being in storagegroup: %s\n' "$StorageGroup" | tee -a "$LogFile"
       m2kProgramIDCheck="MV"

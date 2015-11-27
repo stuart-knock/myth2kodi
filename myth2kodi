@@ -267,12 +267,28 @@ maxItems=8
 
 mythicalVersion="myth2kodi Version 0.4.2; mythicalLibrarian 953ish+"
 
-#Fine grained control over information myth2kodi reports: 0=Only Errors; 1 adds warnings; 2 adds more information; 3 provides debugging output.
+#LogLevel provides control over the amount of information myth2kodi reports.
+#    0=Only Errors;
+#    1=adds warnings;
+#    2=adds more information;
+#    3=provides debugging output.
+#Recommend 1 for usual operation, when everything is working fine.
+#Recommend 2 if you want to get an understanding of what myth2kodi is doing.
+#Only use 3 if you have a particular problem your trying to track down.
 LogLevel=3
+
+#Functions defining the different logging messages
 Debug(){  [[ LogLevel -ge 3 ]] && printf 'DEBUG: %s\n' "$1"   | tee -a $LogFile; }
 Inform(){ [[ LogLevel -ge 2 ]] && printf 'INFO: %s\n' "$1"    | tee -a $LogFile; }
 Warn(){   [[ LogLevel -ge 1 ]] && printf 'WARNING: %s\n' "$1" | tee -a $LogFile; }
 Err(){    [[ LogLevel -ge 0 ]] && printf 'ERROR: %s\n' "$1"   | tee -a $LogFile; }
+
+#Use for multiple lines of a single message
+declare -r pad="          " #needs to be >= number of spaces for the largest X below in %0.Xs
+DebugCont(){  [[ LogLevel -ge 3 ]] && printf '%0.7s%s\n' "$pad" "$1" | tee -a $LogFile; }
+InformCont(){ [[ LogLevel -ge 2 ]] && printf '%0.6s%s\n' "$pad" "$1" | tee -a $LogFile; }
+WarnCont(){   [[ LogLevel -ge 1 ]] && printf '%0.9s%s\n' "$pad" "$1" | tee -a $LogFile; }
+ErrCont(){    [[ LogLevel -ge 0 ]] && printf '%0.7s%s\n' "$pad" "$1" | tee -a $LogFile; }
 
 #
 declare -r LogFile="$m2kdir/output.log"
@@ -283,10 +299,11 @@ declare -r DiagnosticsFile="$m2kdir/diagnostics.log"
 #at the end of execution. Though it may be at the top, this is actually the end
 #of the program.
 RunJob(){
+  Debug "ENTERING: ${FUNCNAME}()"
   case $jobtype in
   #Successful Completion of myth2kodi
     LinkModeSuccessful|MoveModeSuccessful)
-      echo "SUCCESSFUL COMPLETION TYPE: $jobtype"
+      Inform "SUCCESSFUL COMPLETION TYPE: $jobtype"
       #Insert Custom User Job here
 
       #
@@ -295,7 +312,7 @@ RunJob(){
 
   #Information was not obtainable
     TvDbIsIncomplete|GenericShow)
-      echo "INSUFFICIENT INFORMATION WAS SUPPLIED:$jobtype"
+      Warn "INSUFFICIENT INFORMATION WAS SUPPLIED: $jobtype"
       #Insert Custom User Job here
 
       #
@@ -304,7 +321,7 @@ RunJob(){
 
   #File system error occurred
     PermissionError0Length|InvalidFileNameSupplied|PermissionErrorWhileMoving|FailSafeModeComplete|LinkModeFailed)
-      echo "FILE SYSTEM ERROR:$jobtype"
+      Err "FILE SYSTEM ERROR: $jobtype"
       #Insert Custom User Job here
 
       #
@@ -312,7 +329,7 @@ RunJob(){
       ;;
   #Generic error occurred
     GenericUnspecifiedError)
-      echo "UNKNOWN ERROR OCCOURED:$jobtype"
+      Err "UNKNOWN ERROR OCCOURED: $jobtype"
       #Insert Custom User Job here
 
       #
@@ -320,7 +337,7 @@ RunJob(){
       ;;
   #User elected not to process jobs which can not be properly categorized
     NameCouldNotBeAssigned)
-      echo "NAME COULD NOT BE ASSIGNED BASED UPON DATA SUPPLIED"
+      Warn "NAME COULD NOT BE ASSIGNED BASED UPON DATA SUPPLIED"
       #Insert Custom User Job here
 
       #
@@ -328,7 +345,7 @@ RunJob(){
       ;;
   #User elected to use a title/category ignore file
     titleIgnore|categoricIgnore)
-      echo "Show Was ignored based on $jobtype"
+      Warn "Show Was ignored based on $jobtype"
       #Insert Custom User Job Here
 
       #
@@ -436,32 +453,37 @@ RunJob(){
 
 ######################### BEGIN FUNCTION DEFINITIONS ###########################
 TraditionalNamingConventions(){
+  Debug "ENTERING: ${FUNCNAME}()"
   #Format Episodes showname=show name Sxx=season number Exx=episode number EpisodeSubtitle=episode name
   if [[ "$Exx" != "" && "$Exx" != "E" ]]; then
+    Debug "Naming as episode"
     ShowFileName=`echo "$NewShowName $Sxx$Exx ($EpisodeSubtitle)"`
-
   #Format Movies
   elif [ "$m2kProgramIDCheck" = "MV" ]; then
+    Debug "Naming as movie"
     Exx="Movie"
     MoveDir="$PrimaryMovieDir"
     #TODO: If adding a year then we really want original release date so the Kodi metadata lookup works reliably.
     if [ "$MovieAirDate" != "" ]; then
-      echo "WARNING: currently forcing bypass adding MovieAirDate to Movie file names." | tee -a  "$LogFile"
+      Warn "currently forcing bypass adding MovieAirDate to Movie file names."
       ShowFileName="$NewShowName" # ShowFileName="$NewShowName ($MovieAirDate)"
     else
       ShowFileName="$NewShowName"
     fi
   #Format generic Shows
   else
+    Debug "Naming as generic show"
     Exx="Generic"
     MoveDir="$PrimaryShowDir"
     ShowFileName=`echo "$ShowName S0E0 ($EpisodeSubtitle Recorded $datehour on $ChanID)"`
     RequiresNFO=1
     test "$m2kProgramIDCheck" = "EP" && RequiresDoover=1
   fi
+  Inform "Set file name as: $ShowFileName"
 }
 
 CategoricNamingConventions(){
+  Debug "ENTERING: ${FUNCNAME}()"
   #Method1 - use airdate for season
   if [ "${OriginalAirDate:0:4}" != "0000" ] && [ "${OriginalAirDate:0:4}" != "" ] && [ "$UseMethod2" != "1" ] ; then
     EventYear="${OriginalAirDate:0:4}"
@@ -492,16 +514,18 @@ CategoricNamingConventions(){
 
   RequiresNFO=1
   HasSxxExx=1
+  Inform "Set file name as: $ShowFileName"
 }
 
 ######DAILY REPORT#####
 #This function reports all shows processed based on date
 dailyreport(){
+  Debug "ENTERING: ${FUNCNAME}()"
   if [ "$DailyReport" = "Enabled" ]; then
     test ! -d "$m2kdir/DailyReport" && mkdir "$m2kdir/DailyReport"
-    local reportfilename=`date +%Y-%m-%d`
     local reporttime=`date +%T`
-    echo "$reporttime - $ShowFileName">>"$m2kdir/DailyReport/$reportfilename"
+    Inform "Writing to DailyReport file: ${Today}"
+    echo "$reporttime - $ShowFileName">>"$m2kdir/DailyReport/${Today}"
   fi
   return 0
 }
@@ -512,7 +536,7 @@ dailyreport(){
 #tests. The result will be $TMoveDirWritable as a 1 or a 0 for writable or not.
 #$1=filesize $2=freespace $3=folder to check
 checkPermissions(){
-  printf 'Running: %s()\n' "${FUNCNAME}" | tee -a "$LogFile"
+  Debug "ENTERING: ${FUNCNAME}()"
   #set Test variable to 0.  It will be a 1 if everything passes.
   TMoveDirWritable=0
   if [ "$2" != "" ]; then
@@ -526,30 +550,30 @@ checkPermissions(){
               test ! -f "$3/arbitraryfile.ext" && TMoveDirWritable=1 || TMoveDirWritable=0
             else
               TMoveDirWritable=0
-              echo "CREATED $3/arbitraryfile.ext BUT COULD NOT WRITE DATA INTO THE FILE" | tee -a "$LogFile"
+              Err "CREATED $3/arbitraryfile.ext BUT COULD NOT WRITE DATA INTO THE FILE"
             fi
           else
-            echo "$MyUserName TRIED TO WRITE TO $3 --FAILED" | tee -a "$LogFile"
-            test ! -r "$3" && echo "QUICK FIX: sudo chmod a+r \"$3\"" | tee -a "$LogFile"
-            test ! -w "$3" && echo "QUICK FIX: sudo chmod a+w \"$3\"" | tee -a "$LogFile"
-            echo "QUICK FIX: sudo chown $MyUserName \"$3\"" | tee -a "$LogFile"
+            Err "$MyUserName TRIED TO WRITE TO $3 --FAILED"
+            test ! -r "$3" && Inform "QUICK FIX: sudo chmod a+r \"$3\""
+            test ! -w "$3" && Inform "QUICK FIX: sudo chmod a+w \"$3\""
+            Inform "QUICK FIX: sudo chown $MyUserName \"$3\""
           fi
         elif [ -z "$2" -o $1 -ge $2 ]; then
           TMoveDirWritable=0
-          echo "INSUFFICIENT FREE SPACE ON $3" | tee -a "$LogFile"
-          echo "QUICK FIX: Remove unnecessary files" | tee -a "$LogFile"
+          Err "INSUFFICIENT FREE SPACE ON $3"
+          Inform "QUICK FIX: Remove unnecessary files"
         fi
       else
-        echo "FOLDER DOES NOT EXIST: $3" | tee -a "$LogFile"
-        echo "QUICK FIX: mkdir \"$3\"" | tee -a "$LogFile"
+        Err "FOLDER DOES NOT EXIST: $3"
+        Inform "QUICK FIX: mkdir \"$3\""
       fi
     else
-      echo "COULD NOT READ FILESIZE ON $InputPath" | tee -a "$LogFile"
-      echo "QUICK FIX: chmod -R 775 \"$InputPath\"" | tee -a "$LogFile"
+      Warn "COULD NOT READ FILESIZE ON $InputPath"
+      Inform "QUICK FIX: chmod -R 775 \"$InputPath\""
     fi
   else
-    echo "COULD NOT READ FREE SPACE on \"$3\"" | tee -a "$LogFile"
-    echo "QUICK FIX: mkdir \"$3\" ; chmod -R 775 \"$3\"" | tee -a "$LogFile"
+    Warn "COULD NOT READ FREE SPACE on \"$3\""
+    Inform "QUICK FIX: mkdir \"$3\" ; chmod -R 775 \"$3\""
   fi
 
   return 0
@@ -558,6 +582,7 @@ checkPermissions(){
 #####COMSKIP FILES#####
 #Function GenComSkip creates a comskip.txt file for use with the show upon moving, created from data from library
 GenComSkip(){
+  Debug "ENTERING: ${FUNCNAME}()"
   myth2kodiCounter=1
   #Set up comskip file
   test -f "$m2kdir/markupframes.txt" && rm -f "$m2kdir/markupframes.txt"
@@ -570,7 +595,7 @@ GenComSkip(){
     if [ ! -z "$StopData" ]; then
       echo "$StartData $StopData">>"$m2kdir"/markupframes.txt
       CommercialMarkup="Created"
-      echo "COMMERCIAL DATA START:$StartData STOP:$StopData"
+      Debug "COMMERCIAL DATA START:$StartData STOP:$StopData"
     fi
   done <"$m2kdir/markupstop.txt"
   return 0
@@ -579,13 +604,14 @@ GenComSkip(){
 #####KODI COMMUNICATIONS#####
 #This function Automates communication with KODI
 KODIAutomate(){
+  Debug "ENTERING: ${FUNCNAME}()"
   local data=""
   #Send notification to KODI, Update Library, Clean Library
   if [[ "$KODINotify" = "Enabled" || "$KODIUpdate" = "Enabled" || "$KODIClean" = "Enabled" ]]; then
-    printf '%s\n' 'COMMUNICATING WITH KODI INSTANCES...'
+    Inform 'COMMUNICATING WITH KODI INSTANCES...'
     local curlPOST='curl -L -s -m3 --connect-timeout 5 -X POST -H "Content-Type: application/json" -d'
     for KODIIP in ${KODIIPs[@]} ; do
-      printf 'SENDING REQUESTED COMMANDS TO: %s\n' "$KODIIP"
+      Inform "SENDING REQUESTED COMMANDS TO: $KODIIP"
       #TODO:Updating the Library prior to sending the Notification probably makes more sense.
       if [ "$KODINotify" = "Enabled" ] ; then
         data=\''{"jsonrpc":"2.0",
@@ -593,12 +619,12 @@ KODIAutomate(){
                  "params":{"title":"myth2kodi added","message":"'$tvdbshowname'"},
                  "id":1}'\'
         $curlPOST $data http://$KODIIP/jsonrpc > /dev/null 2>&1
-        printf 'SENT: GUI.ShowNotification for %s\n' "$tvdbshowname"
+        Inform "SENT: GUI.ShowNotification for $tvdbshowname"
       fi
       if [ "$KODIUpdate" = "Enabled" ] ; then
         data=\''{"jsonrpc":"2.0", "method":"VideoLibrary.Scan", "id":1}'\'
         $curlPOST $data http://$KODIIP/jsonrpc > /dev/null 2>&1
-        printf '%s\n' 'SENT: VideoLibrary.Scan request.'
+        Inform 'SENT: VideoLibrary.Scan request.'
       fi
       #TODO: Requesting Kodi to Clean its Library doesn't seem to make sense in the same
       #  context as Update & Notify, that is, cleaning after adding a new show makes
@@ -611,9 +637,11 @@ KODIAutomate(){
       if [ "$KODIClean" = "Enabled" ] ; then
         data=\''{"jsonrpc":"2.0", "method":"VideoLibrary.Clean", "id":1}'\'
         $curlPOST $data http://$KODIIP/jsonrpc > /dev/null 2>&1
-        printf '%s\n' "SENT: VideoLibrary.Clean request."
+        Inform 'SENT: VideoLibrary.Clean request.'
       fi
     done
+  else
+    Debug 'No communication with Kodi requested.'
   fi
   return 0
 }
@@ -625,6 +653,7 @@ KODIAutomate(){
 #  <feed updateinterval="30">http://[youripaddress]/mythical-rss/rss.xml</feed>
 #Big thanks to barney_1!
 generaterss(){
+  Debug "ENTERING: ${FUNCNAME}()"
   #user settings:
   rssDir="/var/www/mythical-rss"
   maxItems=8  #maximum number of items to read into the feed
@@ -638,13 +667,13 @@ generaterss(){
 
   #test if rssFile directory is writeable
   if [ ! -w "$rssDir" ]; then
-    echo -e "RSS generation failed:\nDirectory not writeable ($rssDir)"
+    Err "RSS generation failed: Directory not writeable ($rssDir)"
     return 5
   fi
 
   #test if rssFile is writeable
   if [ -e "$rssDir/$OLDrssFile" ] && [ ! -w "$rssDir/$OLDrssFile" ]; then
-    echo -e "RSS generation failed:\nFile exists but is not writeable: $rssDir/$OLDrssFile"
+    Err "RSS generation failed: File exists but is not writeable: $rssDir/$OLDrssFile"
     return 6
   fi
 
@@ -707,13 +736,7 @@ generaterss(){
     #get the line number for our last </item> tag
     lastLine=$(grep -n -m $(($itemLimit-1)) "</item>" "$rssDir/$OLDrssFile" | tail -n1 | cut -d ":" -f 1)
     #set IFS to use line break as a delineator
-    # OLDIFS=$IFS
-    #SAK: Surely the following can be IFS="\n"
-    #TODO: It can't, but there must be a better solution than below... THis should do it: IFS=$'\n'
     local IFS=$'\n'
-#     IFS='
-# '
-    #IFS="\n"
     #Read in the old RSS file
     declare -a old_rss_data=( $(cat "$rssDir/$OLDrssFile") )
     arrayLen=${#old_rss_data[@]}
@@ -734,14 +757,14 @@ generaterss(){
 
   #move fully formed temp file on top of the old file
   mv "$rssDir/$TEMPrssFile" "$rssDir/$OLDrssFile"
-  echo "RSS ENTRY SUCCESSFULLY CREATED: $rssDir/$OLDrssFile"
-  # IFS=$OLDIFS
+  Inform "RSS ENTRY SUCCESSFULLY CREATED: $rssDir/$OLDrssFile"
   return 0
 }
 
 #####MOVE MODE LOGGING#####
 #This function provides logging for move mode
 performLoggingForMoveMode(){
+  Debug "ENTERING: ${FUNCNAME}()"
   #Create undo and doover file if not present
   test ! -f "$m2kdir/undo.sh"   && echo "rm -f \"$m2kdir/undo.sh\"">>"$m2kdir/undo.sh"     && chmod 666 "$m2kdir/undo.sh"
   test ! -f "$m2kdir/doover.sh" && echo "rm -f \"$m2kdir/doover.sh\"">>"$m2kdir/doover.sh" && chmod 666 "$m2kdir/doover.sh"
@@ -759,6 +782,7 @@ performLoggingForMoveMode(){
 #####LINK MODE LOGGING#####
 #This function performs logging for link mode
 performLoggingForLinkMode(){
+  Debug "ENTERING: ${FUNCNAME}()"
   #Create undo and doover file if not present
   test ! -f "$m2kdir/undo.sh" && echo "rm -f \"$m2kdir/undo.sh\"" >> "$m2kdir/undo.sh" && chmod 666 "$m2kdir/undo.sh"
   test ! -f "$m2kdir/doover.sh" && echo "rm -f \"$m2kdir/doover.sh\"">>"$m2kdir/doover.sh" && chmod 666 "$m2kdir/doover.sh"
@@ -770,10 +794,12 @@ performLoggingForLinkMode(){
 }
 
 writeJobToDooverQue(){
+  Debug "ENTERING: ${FUNCNAME}()"
   test "$InputPath" != "" && echo "myth2kodi '$1' '$2' '$3'">>"$m2kdir"/doover.sh
 }
 
 doFailSafeMode(){
+  Debug "ENTERING: ${FUNCNAME}()"
   echo "FAILSAFE FLAG WAS SET CHECK PERMISSIONS AND FOLDERS">>"$LogFile"
   echo "FAILSAFE FLAG WAS SET"
   if [ "$FailSafeMode" = "Enabled" ]; then
@@ -791,6 +817,7 @@ doFailSafeMode(){
 #####MYTHTV DATABASE#####
 #This function gathers information from the MythTV database for use in the program
 GetMythTVDatabase(){
+  Debug "ENTERING: ${FUNCNAME}()"
   #TODO: This conditional seems weird as PythonBindings isn't set anywhere and
   #  even if it were set to True then this function would do nothing rather
   #  than accessing the database via the Python bindings...
@@ -802,7 +829,7 @@ GetMythTVDatabase(){
   #etc
   if [ "$PythonBindings" != "True" ]; then
     #Obtain MythTV Database Information
-    echo "Accessing MythTV DataBase:"
+    Inform "Accessing MythTV DataBase:"
     #get Title
     test "$InputTitle" = "" && InputTitle=`mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select title from recorded where basename like '$InputFileBasename'; " | sed s/"title"/""/g | sed -n "2p"`
     #get Subtitle
@@ -860,14 +887,18 @@ GetMythTVDatabase(){
 #####UTILIZE PYTHON BINDINGS TO GET MYTHTV DB##### Requires dependency
 #TODO: Check functionality of and if necessary clean-up MythDataGrabber
 GetMythTvPythonBindings(){
-  echo "Attempting to pull database information on $InputPath"
+  Debug "ENTERING: ${FUNCNAME}()"
+  Inform "Attempting to pull database information on $InputPath"
   #make a named pipe for database output
   test ! -p "$m2kdir/mythicalDbOut" && mkfifo "$m2kdir/mythicalDbOut"
 
   #run the python bindings and output to named pipe
   /usr/local/bin/MythDataGrabber --filename="$InputFileBasename" --DBPin="$DBPin" --DBHostName="$DBHostName" --DBName="$MySQLMythDb" --DBUserName="$MySQLuser" --DBPassword="$MySQLpass"> "$m2kdir/mythicalDbOut" &
   pythonExitStatus=$?
-  test "$pythonExitStatus" != "0" && echo -e "DATABASE ACCESS ERROR: COULD NOT OBTAIN INFORMATION \n  Check DBInfo in mythicalSetup, verify file is mythtv file"
+  if [ "$pythonExitStatus" != "0" ] ; then
+    Err "DATABASE ACCESS ERROR: COULD NOT OBTAIN INFORMATION"
+    Debug "Check DBInfo in mythicalSetup, verify file is mythtv file"
+  fi
 
   #read values from named pipe, remove quotes and declare $Variable=$Value
   while read var equals value ; do
@@ -912,6 +943,7 @@ GetMythTvPythonBindings(){
 #####PROCESS DATABASE INFORMATION#####
 #Function ProcessSchedulesDirect processes Zap2it/SchedulesDirect/Tribune data for use in the program
 ProcessSchedulesDirect(){
+  Debug "ENTERING: ${FUNCNAME}()"
   #Check for database permissions
   test "$ChanID" = "" && echo "%%%NO DATABASE INFORMATION. CHECK LOGIN/PASS OR FILE %%%%%">>"$LogFile"
   #disqualify invalid movie airdates
@@ -963,6 +995,7 @@ ProcessSchedulesDirect(){
 
 #TODO: Rename as ExtractSxxExxFromPlot for consistency...
 ExtractSxxExx(){
+  Debug "ENTERING: ${FUNCNAME}()"
   #TODO: Maybe change the * to \? in most cases below so the matching is less inclusive
   #TODO: Maybe add warning in the case of 4x4 in case it's not actually an SxxExx
   #If available use the season and episode fields from MythTV database, otherwise,
@@ -970,6 +1003,7 @@ ExtractSxxExx(){
   #extract a season number Sxx and episode number Exx
   #Assumes season and episode numbers in range 1-99
   if [ "$SeasonEpisode" = "" ] && [ "$InputSeasonNum" = "" ] && [ "$InputEpisodeNum" = "" ]; then
+    Debug "Searching Plot for season & episode information."
     #Check the Plot field for the SeasonEpisode info, SBS is big on
     #including it in the plot/description field instead of where it belongs
     #The below should work for any of the following forms:
@@ -977,65 +1011,71 @@ ExtractSxxExx(){
     SeasonEpisode=`echo $Plot | grep -i --only-matching '\(s\.*[0-9]*[0-9]\,*\(e\|ep\)\.*[0-9][0-9]*\)\|\([0-9]*[0-9]x[0-9][0-9]*\)'`
   fi
   if [ "$InputSeasonNum" != "" ] && [ "$InputEpisodeNum" != "" ]; then
+    Debug "Using season & episode information from MythTV DB season & episode fields."
     Sxx="$InputSeasonNum"
     Exx="$InputEpisodeNum"
   elif [ "$SeasonEpisode" != "" ]; then
+    Debug "Extracted season & episode information from Plot."
     Sxx=`echo $SeasonEpisode | grep -i --only-matching '\(s\.*[0-9]*[0-9]\)\|\([0-9]*[0-9]x\)' | sed 's/s\.*\|x//I'`
     Exx=`echo $SeasonEpisode | grep -i --only-matching '\(\(e\|ep\)\.*[0-9][0-9]*\)\|\(x[0-9][0-9]*\)' | sed 's/\(E\.*\|Ep\.*\)\|x//I'`
     #Strip leading zero
     Sxx=${Sxx#0}
     Exx=${Exx#0}
   else
-    echo "WARNING:${FUNCNAME}() - No Season & Episode number information is available."
+    Warn "No Season & Episode number information is available."
     return 1
   fi
   #Single digit episode and show names are not allowed Ex and Sx replaced with Sxx Exx
   test $Sxx -lt 10  && Sxx="S0$Sxx" || Sxx="S$Sxx"
   test $Exx -lt 10  && Exx="E0$Exx" || Exx="E$Exx"
-
+  Inform "Found Season ($Sxx) & Episode ($Exx) information."
   return 0
 }
 
 RemoveSeasonEpisodeFromPlot(){
+  Debug "ENTERING: ${FUNCNAME}()"
   if [ "$SeasonEpisode" != "" ] ; then
     #Check if it's in the leading position and if so, remove it
     local SEstring=`echo $Plot | grep -i --only-matching '(\?\(s\.*[0-9]*[0-9]\,*\(e\|ep\)\.*[0-9][0-9]*\))\?\s*\|(\?\([0-9]*[0-9]x[0-9][0-9]*\))\?\s*'`
     if [ "$SEstring" != "" ] ; then
-      echo "WARNING: SeasonEpisode was in the leading position of the Plot field, removing it to simplify subsequent processing."
+      Warn "SeasonEpisode was in the leading position of the Plot field, removing it to simplify subsequent processing."
       Plot=`echo $Plot | sed s/"$SEstring"/""/`
       #TODO: Still need to strip any trailing space or leading "- " from the Plot
     fi
   else
-    echo "WARNING: SeasonEpisode isn't currently set, so not going to discard it from Plot field."
+    Debug "SeasonEpisode isn't currently set, so not going to discard it from Plot field."
   fi
 }
 
 #TODO: Rename as ExtractSubtitleFromPlot for consistency -- guessing will now be done elsewhere
 GuessSubtitle(){
+  Debug "ENTERING: ${FUNCNAME}()"
   #NOTE:
   #Try to extract a subtitle from the plot field (Luv Ya SBS)
   InputSubtitle=`echo $Plot | grep --only-matching '^\(\(\(\(\w\+\)\(.\?\s*\)\)\|\(\&\s*\)\)\{1,7\}\)\( -\|\:\)'`
   #Clean off the trailing " -" or ":" that we're using to identify it
   InputSubtitle=`echo $InputSubtitle | grep --only-matching '\(\(\(\w\+\)\(.*\s*\)\)\|\(\&\s*\)\)\{,7\}\(\w\+\)'`
-  echo "Guessed Subtitle from Plot field as '$InputSubtitle'"
+  Inform "Guessed Subtitle from Plot field as '$InputSubtitle'"
   return 0
 }
 
 RemoveSubtitleFromPlot(){
+  Debug "ENTERING: ${FUNCNAME}()"
   #TODO: If we extracted a subtitle from Plot variable then remove that text from Plot.
   if [ "$InputSubtitle" != "" ] ; then
     local STstring=$(echo $Plot | grep --only-matching '^\(\(\(\(\w\+\)\(.\?\s*\)\)\|\(\&\s*\)\)\{1,7\}\)\( -\|\:\)\s*')
     if [ "$STstring" != "" ] ; then
-      echo "WARNING: Episode subtitle was in the Plot field, removing it to simplify subsequent processing."
+      Warn "Episode subtitle was in the Plot field, removing it to simplify subsequent processing."
       Plot=$(echo $Plot | sed s/"$STstring"/""/)
     fi
   else
-    echo "WARNING: InputSubtitle isn't currently set, so not going to discard it from Plot field."
+    Debug "InputSubtitle isn't currently set, so not going to discard it from Plot field."
   fi
 }
 
 #A Process function compatible with Sydney over the air data...
 ProcessSydFTA(){
+  Debug "ENTERING: ${FUNCNAME}()"
   #Check for database permissions
   test "$ChanID" = "" && echo "%%%NO DATABASE INFORMATION. CHECK LOGIN/PASS OR FILE %%%%%">>"$LogFile"
   #disqualify invalid movie airdates
@@ -1123,6 +1163,7 @@ ProcessSydFTA(){
 #####PROCESS DATABASE INFORMATION#####
 ####NoLookup is an alternate mode where TheTvDb is not used for lookups
 ProcessNoLookup(){
+  Debug "ENTERING: ${FUNCNAME}()"
   #Check for database permissions
   test "$ChanID" = "" && echo "%%%NO DATABASE INFORMATION. CHECK LOGIN/PASS OR FILE %%%%%">>"$LogFile"
   #disqualify invalid movie airdates
@@ -1165,6 +1206,7 @@ ProcessNoLookup(){
 #####REMOVE ENTRIES FROM LIBRARY#####
 #remove mythtv recording's pictures and database entries.  Thanks to barney_1.
 DeleteRelevantDatabaseFilesAndPictures(){
+  Debug "ENTERING: ${FUNCNAME}()"
   #Make sure we got input arguments and file is valid
   if [ ! -e "$InputPath" ]; then
     #Remove recording entry from mysql database
@@ -1178,6 +1220,7 @@ DeleteRelevantDatabaseFilesAndPictures(){
 
 #####USE AbsoluteEpisodeNumber TO SET SXX AND EXX#####
 setSxxAndExxFromAbsoluteEpisodeNumber(){
+  Debug "ENTERING: ${FUNCNAME}()"
   #if line match is obtained, then gather new episode name, Sxx and Exx
   EpisodeSubtitle=`sed -n $AbsoluteEpisodeNumber'p' "$m2kdir"/"$NewShowName"/"$NewShowName".actualEname.txt`
 
@@ -1193,6 +1236,7 @@ setSxxAndExxFromAbsoluteEpisodeNumber(){
 }
 
 determineIfDatabaseIsUpToDate(){
+  Debug "ENTERING: ${FUNCNAME}()"
   #Get current server time
   test -f "$m2kdir/$NewShowName/current.time" && rm -f "$m2kdir/$NewShowName/current.time"
   curl -L -s -m"$Timeout" "http://www.thetvdb.com/api/Updates.php?type=none">"$m2kdir/$NewShowName/current.time"
@@ -1242,7 +1286,6 @@ determineIfDatabaseIsUpToDate(){
 
 #####GET EPISODE INFORMATION#####
 downloadInfoAboutMatchedTitleAndCreateTxtFileTables(){
-  #TODO: Add this as the first line in every function
   Debug "ENTERING: ${FUNCNAME}()"
   #Download information from server
   echo -ne "Downloading Series: $SeriesID \n" 1>&2
@@ -1386,12 +1429,13 @@ downloadInfoAboutMatchedTitleAndCreateTxtFileTables(){
 
 #####MATCH ZAP2ITID TO TVDB#####
 GetSeriesLineNumberFromTableWithZap2itID(){
+  Debug "ENTERING: ${FUNCNAME}()"
   if [ -n $Zap2itSeriesID ] ; then
     serieslinenumber=0
     #loop through all show names received by TheTvDb and match Zap2it ID.
     while read line ; do
       (( ++ serieslinenumber ))
-      echo "TESTING FOR ZAP2ITID MATCH:$line `sed -n $serieslinenumber"p" $m2kdir/shn.txt`"
+      Info "TESTING FOR ZAP2ITID MATCH:$line `sed -n $serieslinenumber"p" $m2kdir/shn.txt`"
       Zap2ItTest=`echo $line | tr -d MVSHEP | sed 's/0*//'`
       if [ "$Zap2ItTest" = "$Zap2itSeriesID" ] && [ "$Zap2itSeriesID" != "" ]; then
         return 0
@@ -1400,7 +1444,7 @@ GetSeriesLineNumberFromTableWithZap2itID(){
     done < "$m2kdir"/zap2it.txt
     return 1
   else
-    echo "WARNING:GetSeriesLineNumberFromTableWithZap2itID() called, with no Zap2itSeriesID"
+    Warn "${FUNCNAME}() called, with no Zap2itSeriesID"
     return 1
   fi
 }
@@ -1408,6 +1452,7 @@ GetSeriesLineNumberFromTableWithZap2itID(){
 #####FUZZY LOGIC RECOGNITION OF SERIES#####
 #This function provides fuzzy logic matching of a show name and returns a seriesid
 GetSeriesLineNumberFromTableWithFuzzyLogic(){
+  Debug "ENTERING: ${FUNCNAME}()"
   serieslinenumber=`agrep -Byn "${ShowName:0:27}" "$m2kdir/shn.txt" | sed 's/:.*//' | grep -m1 ^`
   #Correct for serieslinenumber = ""
   test "$serieslinenumber" = "" && serieslinenumber="0"
@@ -1421,6 +1466,7 @@ GetSeriesLineNumberFromTableWithFuzzyLogic(){
 
 #####STANDARD TITLE RECOGNITION OF SERIES#####
 GetSeriesLineNumberFromTableWithStandardLogic(){
+  Debug "ENTERING: ${FUNCNAME}()"
   serieslinenumber=`grep -nix "$ShowName" "$m2kdir/shn.txt" | sed 's/:.*//' | grep -m1 ^`
 
   #Correct for serieslinenumber = ""
@@ -1436,6 +1482,7 @@ GetSeriesLineNumberFromTableWithStandardLogic(){
 #ResolveMultipleAirdateMatches is used in the event of multiple matches on the same airdate
 #It resolves a conflict by matching the matched airdate by title.
 ResolveMultipleAirdateMatches(){
+  Debug "ENTERING: ${FUNCNAME}()"
   local NewShowBasename="$m2kdir/$NewShowName/$NewShowName"
   #Cleanup from last instance match if required
   ConfidenceReasoning="$ConfidenceReasoning Conflict; Multiple Airdates Detected- Parsed results; Attempted to resolve conflict with Standard Logic:"
@@ -1480,15 +1527,17 @@ ResolveMultipleAirdateMatches(){
 
 #####CREATE SHOW FOLDER#####
 makeShowDirIfNeeded(){
+  Debug "ENTERING: ${FUNCNAME}()"
   if [ ! -d "$m2kdir/$NewShowName" ]; then
     mkdir "$m2kdir/$NewShowName"
     chmod 777 "$m2kdir/$NewShowName" #TODO: consider chmod 755
-    echo "Creating myth2kodi Database Folder">>"$LogFile"
+    Inform "Created myth2kodi Database Folder: $m2kdir/$NewShowName"
   fi
 }
 
 #####SET THE SERIESID AND SHOW NAME#####
 setSeriesIDandNewShowNameBasedOnSeriesLineNumber(){
+  Debug "ENTERING: ${FUNCNAME}()"
   #Get the seriesid based on the showname
   SeriesID=`sed -n $serieslinenumber'p' "$m2kdir"/sid.txt | grep -m1 ^`
   NewShowName=`sed -n $serieslinenumber'p' "$m2kdir"/shn.txt | grep -m1 ^ | sed s/"&amp;"/"\&"/g`
@@ -1501,6 +1550,7 @@ setSeriesIDandNewShowNameBasedOnSeriesLineNumber(){
 
 #####AIRDATE MATCH#####
 getAbsoluteEpisodeNumberWithOriginalAirdate(){
+  Debug "ENTERING: ${FUNCNAME}()"
   AbsoluteEpisodeNumber=""
   if [ "$OriginalAirDate" != "" ] ; then
     AbsoluteEpisodeNumber=`grep -n "$OriginalAirDate" "$m2kdir/$NewShowName/$NewShowName.FAired.txt" | grep -m1 ^ | sed 's/:.*//'`
@@ -1510,7 +1560,7 @@ getAbsoluteEpisodeNumberWithOriginalAirdate(){
     #Account for original show airdate = first air date
     NumberOriginalAirdates=`grep "$OriginalAirDate" "$m2kdir/$NewShowName/$NewShowName.FAired.txt" | wc -l`
     test $NumberOriginalAirdates -gt 1 && return 1
-    echo "Absolute Exx NR:$AbsoluteEpisodeNumber BASED ON AIRDATE:$OriginalAirDate" | tee -a "$LogFile"
+    Inform "Absolute Exx NR:$AbsoluteEpisodeNumber BASED ON AIRDATE:$OriginalAirDate"
     return 0
   fi
   return 2
@@ -1518,6 +1568,7 @@ getAbsoluteEpisodeNumberWithOriginalAirdate(){
 
 #Get the AbsoluteEpisodeNumber corresponding to Sxx and Exx
 getAbsoluteEpisodeNumberWithSxxExx(){
+  Debug "ENTERING: ${FUNCNAME}()"
   AbsoluteEpisodeNumber=""
   Snum=${Sxx#S} ; Snum=${Snum#0}
   Enum=${Exx#E} ; Enum=${Enum#0}
@@ -1525,10 +1576,10 @@ getAbsoluteEpisodeNumberWithSxxExx(){
   ExxAENs=`grep -nix "$Enum" "$m2kdir/$NewShowName/$NewShowName.E.txt" | sed s/:.*//`
   AbsoluteEpisodeNumber=`comm -12 <(echo $SxxAENs | sed s/" "/"\n"/g | sort) <(echo $ExxAENs | sed s/" "/"\n"/g | sort)`
   if [ "$AbsoluteEpisodeNumber" != "" ] && [ $AbsoluteEpisodeNumber -gt 0 ]; then
-    echo "Using SxxExx, determined AbsoluteEpisodeNumber: $AbsoluteEpisodeNumber"
+    Inform "Using SxxExx, determined AbsoluteEpisodeNumber: $AbsoluteEpisodeNumber"
     return 0
   fi
-  echo "WARNING: Failed to determine AbsoluteEpisodeNumber"
+  Warn "Failed to determine AbsoluteEpisodeNumber"
   return 1
 }
 
@@ -1537,6 +1588,7 @@ getAbsoluteEpisodeNumberWithSxxExx(){
 ##'The Office' 'The Delivery, Part 1'   -guide data
 ##'The Office' 'The Delivery (1)'       -TvDb data
 getAbsoluteEpisodeNumberWithStandardLogic(){
+  Debug "ENTERING: ${FUNCNAME}()"
   AbsoluteEpisodeNumber=""
   AbsoluteEpisodeNumber=`grep -nix "$EpisodeSubtitle" "$m2kdir/$NewShowName/$NewShowName.Ename.txt" | grep -m1 ^ | sed 's/:.*//'`
   if [ "$AbsoluteEpisodeNumber" != "" ] && [ $AbsoluteEpisodeNumber -gt 0 ]; then
@@ -1547,6 +1599,7 @@ getAbsoluteEpisodeNumberWithStandardLogic(){
 
 ######FUZZY LOGIC EPISODE MATCH#####
 getAbsoluteEpisodeNumberWithFuzzyLogic(){
+  Debug "ENTERING: ${FUNCNAME}()"
   AbsoluteEpisodeNumber=""
   AbsoluteEpisodeNumber=`agrep -Byn "${EpisodeSubtitle:0:29}" "$m2kdir/$NewShowName/$NewShowName.Ename.txt" | grep -m1 ^ | sed 's/:.*//'`
   if [ "$AbsoluteEpisodeNumber" != "" ] && [ $AbsoluteEpisodeNumber -gt 0 ]; then
@@ -1557,6 +1610,7 @@ getAbsoluteEpisodeNumberWithFuzzyLogic(){
 
 #####SEARCH THETVDB AND CREATE DATA FILES#####
 searchTheTvDbAndReturnTxtFileTables(){
+  Debug "ENTERING: ${FUNCNAME}()"
   #TODO: Instance searching rather then global.  Need to create an instance variable based on time and chanid.
   #Search TheTvDb and return an XML file with results
   curl -L -s -m"$Timeout" www.thetvdb.com/api/GetSeries.php?seriesname=$tvdbshowname>"$m2kdir/working.xml"
@@ -1594,6 +1648,7 @@ searchTheTvDbAndReturnTxtFileTables(){
 }
 
 DoTestFileExit(){
+  Debug "ENTERING: ${FUNCNAME}()"
   [[ -d ./Episodes ]] && [[ ! "$(ls -A ./Episodes)" ]] && rmdir ./Episodes
   [[ -d ./Movies ]]   && [[ ! "$(ls -A ./Movies)" ]]   && rmdir ./Movies
   [[ -d ./Showings ]] && [[ ! "$(ls -A ./Showings)" ]] && rmdir ./Showings
@@ -1601,6 +1656,7 @@ DoTestFileExit(){
 }
 
 updateRunningFuzzyLogicErrorCount(){
+  Debug "ENTERING: ${FUNCNAME}()"
   #additional logging for statistical purposes
   test ! -f "$m2kdir"/FuzzyLogicError.log && echo "0">"$m2kdir"/FuzzyLogicError.log
   FuzzyLogicError="`cat "$m2kdir"/FuzzyLogicError.log`"
@@ -1610,6 +1666,7 @@ updateRunningFuzzyLogicErrorCount(){
 }
 
 updateRunningTotalMatchesCount(){
+  Debug "ENTERING: ${FUNCNAME}()"
   #additional logging for statistical purposes
   test ! -f "$m2kdir"/TotalEpisodeMatches.log && echo "0">"$m2kdir"/TotalEpisodeMatches.log
   FuzzyLogicMatches="`cat "$m2kdir"/TotalEpisodeMatches.log`"
@@ -1622,6 +1679,7 @@ updateRunningTotalMatchesCount(){
 #owned by mythtv and cause myth2kodi to exit with a descriptive
 #message if certain criteria are met.
 DoMythTVPermissionsCheck(){
+  Debug "ENTERING: ${FUNCNAME}()"
   # if no bypass, and file is owned by mythtv, and username is not mythtv
   # and system is set to use mythtv database, and symlink is move
   #TODO: This might not work
@@ -1632,19 +1690,20 @@ DoMythTVPermissionsCheck(){
   if [ "$InputOption" != "--BypassPermissionsCheck" ] || [ "$InputOption" = "" ] && [ "$InputSubtitle" = "" ] && [ "$InputTitle" != "--BypassPermissionsCheck" ]; then
     if  [ "`ls -l \"$InputPath\"| awk '{ print $3 }'`" = "mythtv" ] && [ "$MyUserName" != "mythtv" ] && [ "$SYMLINK" = "MOVE" ]; then
       UserName=$USER
-      echo -e " ########################################################################" | tee -a "$LogFile"
-      echo -e " ##############################  ERROR  #################################" | tee -a "$LogFile"
-      echo -e " ########################################################################" | tee -a "$LogFile"
-      echo -e " USER NAME:$UserName ATTEMPTED TO RENAME A MYTHTV OWNED FILE" | tee -a "$LogFile"
-      echo -e " myth2kodi HAS PREVENTED THIS UNAUTHORIZED FILE ACTION" | tee -a "$LogFile"
-      echo -e " THIS IS A SAFETY FEATURE TO PRESERVE FILE PERMISSIONS." | tee -a "$LogFile"
-      echo -e " PLEASE RUN THE FOLLOWING TO SET PROPER PERMISSIONS WHEN RENAMING FILES:" | tee -a "$LogFile"
-      echo -e " sudo su mythtv" | tee -a "$LogFile"
-      echo -e " myth2kodi \"$InputPath\" \"$InputTitle\" \"$InputSubtitle\"" | tee -a "$LogFile"
-      echo -e " OR AT YOUR OWN RISK BYPASS THIS CHECK BY ADDING --BypassPermissionsCheck" | tee -a "$LogFile"
-      echo -e " AT THE END OF THE LINE YOU JUST RAN." | tee -a "$LogFile"
-      echo -e " " | tee -a "$LogFile"
-      echo -e " Done." | tee -a "$LogFile"
+      Err ""
+      ErrCont "########################################################################"
+      ErrCont "##############################  ERROR  #################################"
+      ErrCont "########################################################################"
+      ErrCont "USER NAME:$UserName ATTEMPTED TO RENAME A MYTHTV OWNED FILE"
+      ErrCont "myth2kodi HAS PREVENTED THIS UNAUTHORIZED FILE ACTION"
+      ErrCont "THIS IS A SAFETY FEATURE TO PRESERVE FILE PERMISSIONS."
+      ErrCont "PLEASE RUN THE FOLLOWING TO SET PROPER PERMISSIONS WHEN RENAMING FILES:"
+      ErrCont "    sudo su mythtv"
+      ErrCont "    myth2kodi \"$InputPath\" \"$InputTitle\" \"$InputSubtitle\""
+      ErrCont "OR AT YOUR OWN RISK BYPASS THIS CHECK BY ADDING --BypassPermissionsCheck"
+      ErrCont "AT THE END OF THE LINE YOU JUST RAN."
+      ErrCont ""
+      ErrCont "Done."
       jobtype="PermissionErrorWhileMoving"
       RunJob
     fi
@@ -1652,28 +1711,33 @@ DoMythTVPermissionsCheck(){
 }
 
 UserJobOutsideMythTV(){
-  echo -e " ERROR: MythTV User Job is only valid when run as a user job by MythTV."
-  echo -e " When outside MythTV call the file directly, EG."
-  echo -e " myth2kodi /path_to/file.ext"
-  echo -e "   --OR when looking up a non database Episode--"
-  echo -e " myth2kodi /path_to/file.ext \"Title of Show\" \"Subtitle of show\""
-  echo -e "done."
+  Debug "ENTERING: ${FUNCNAME}()"
+  Err ""
+  ErrCont "MythTV User Job is only valid when run as a user job by MythTV."
+  ErrCont "When outside MythTV call the file directly, EG."
+  ErrCont "  myth2kodi /path_to/file.ext"
+  ErrCont "--OR when looking up a non database Episode--"
+  ErrCont "  myth2kodi /path_to/file.ext \"Title of Show\" \"Subtitle of show\""
+  ErrCont "done."
   jobtype="GenericUnspecifiedError"
   RunJob
 }
 
 DisplayShowWarning(){
-  echo "GENERIC GUIDE DATA WAS SUPPLIED TYPE: $ProgramIDType- $InputTitle, $InputSubtitle">>"$LogFile"
-  echo "WARNING:%%%%%%%%%%PROGRAM GUIDE DATA IS NOT COMPLETE%%%%%%%%%%%%%%%%%%%%">>"$LogFile"
+  Debug "ENTERING: ${FUNCNAME}()"
+  Warn "GENERIC GUIDE DATA WAS SUPPLIED TYPE: $ProgramIDType- $InputTitle, $InputSubtitle"
+  Warn "%%%%%%%%%%PROGRAM GUIDE DATA IS NOT COMPLETE%%%%%%%%%%%%%%%%%%%%"
 }
 
 DisplayCompletedMoveMessage(){
-  echo "@@@@@@@@@@@@@OPERATION COMPLETE" `date` "@@@@@@@@@@@@@@@@">>"$LogFile"
-  echo "MOVED: $InputPath"
-  echo "TO: $MoveDir/$ShowFileName.$OriginalExt "
+  Debug "ENTERING: ${FUNCNAME}()"
+  Inform "@@@@@@@@@@@@@ OPERATION COMPLETE "`date`" @@@@@@@@@@@@@@@@"
+  Inform "MOVED: $InputPath"
+  Inform "TO: $MoveDir/$ShowFileName.$OriginalExt"
 }
 
 DisplayEpiShowMessage(){
+  Debug "ENTERING: ${FUNCNAME}()"
   echo "WARNING: EPISODE INFORMATION COULD NOT BE OBTAINED"
   echo "HANDLING AS A GENERAL SHOWING"
   echo "Please consider helping out and adding to thetvdb."
@@ -1683,6 +1747,7 @@ DisplayEpiShowMessage(){
 }
 
 FuzzyLogicDoesNotJiveMessage(){
+  Debug "ENTERING: ${FUNCNAME}()"
   echo "%%%%%%%%%%%%%%%%%%%%%%Testing Fuzzy Logic results%%%%%%%%%%%%%%%%%%%%%%%%">>"$LogFile"
   echo "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%">>"$LogFile"
   echo "%%%%%%%%%%%%%%%%% GUIDE DATA AND TVDB DATA DO NOT MATCH %%%%%%%%%%%%%%%%%">>"$LogFile"
@@ -1698,6 +1763,7 @@ FuzzyLogicDoesNotJiveMessage(){
 }
 
 StandardLogicDoesNotJiveMessage(){
+  Debug "ENTERING: ${FUNCNAME}()"
   echo "%%%%%%%%%%%%%%%%%%%%Testing Standard Logic results%%%%%%%%%%%%%%%%%%%%%%%">>"$LogFile"
   echo "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%">>"$LogFile"
   echo "%%%%%%%%%%%%%%%%% GUIDE DATA AND TVDB DATA DO NOT MATCH %%%%%%%%%%%%%%%%%">>"$LogFile"
@@ -1713,6 +1779,7 @@ StandardLogicDoesNotJiveMessage(){
 }
 
 InvalidFileErrorMessage(){
+  Debug "ENTERING: ${FUNCNAME}()"
   echo "INPUT FILE NAME NON EXISTANT -CHECK FILE NAME AND READ PERMISSIONS"
   echo "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%">>"$LogFile"
   echo "%%%%%INPUT FILE NAME NON EXISTANT CHECK FILE NAME AND PERMISSIONS%%%%%%%%">>"$LogFile"
@@ -1721,6 +1788,7 @@ InvalidFileErrorMessage(){
 }
 
 tvDbIsIncomplete(){
+  Debug "ENTERING: ${FUNCNAME}()"
   echo "%%%%%%%%%%www.TheTvDB.com information is incomplete $InputTitle, $InputSubtitle">>"$LogFile"
   echo "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%">>"$LogFile"
   echo "%%%%%%%%%%%%Please consider helping out and adding to thetvdb%%%%%%%%%%%%">>"$LogFile"
@@ -1737,6 +1805,7 @@ tvDbIsIncomplete(){
 }
 
 Wrote0LengthFile(){
+  Debug "ENTERING: ${FUNCNAME}()"
   local errtype="myth2kodi Failure"
   local errmsg="$ShowFileName could not be moved to $MoveDir"
   if [ "$Notify" = "Enabled" ] ; then
@@ -1749,6 +1818,7 @@ Wrote0LengthFile(){
 }
 
 PermissionErrorWhileMoving(){
+  Debug "ENTERING: ${FUNCNAME}()"
   echo "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%">>"$LogFile"
   echo "%%%%%%%%%%%%%%%%%%%%PERMISSION ERROR WHILE MOVING%%%%%%%%%%%%%%%%%%%%%%%%">>"$LogFile"
   echo "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%">>"$LogFile"
@@ -1761,6 +1831,7 @@ PermissionErrorWhileMoving(){
 }
 
 SymlinkNotCreated(){
+  Debug "ENTERING: ${FUNCNAME}()"
   echo "PERMISSION ERROR OR FILE SYSTEM DOES NOT SUPPORT SYMLINKS:$MoveDir"
   echo "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%">>"$LogFile"
   echo "%%%%%%%%%%%%%%%LINK PERMISSION ERROR: SYMLINK NOT CREATED%%%%%%%%%%%%%%%%">>"$LogFile"
@@ -1776,6 +1847,7 @@ SymlinkNotCreated(){
 #####GENERIC UNSPECIFIED ERROR#####
 #This function provides an error message on generic errors
 genericUnspecifiedError(){
+  Debug "ENTERING: ${FUNCNAME}()"
   echo "NO MATCH FOUND.  TROUBLESHOOTING: Check www.TheTvDb TO SEE IF $InputTitle EXISTS. ">>"$LogFile"
   echo "CHECK EPISODE NAME $InputSubtitle. CHECK INTERNET CONNECTION. CHECK API KEY.">>"$LogFile"
   echo "NOT ENOUGH INFORMATION PULLED FROM DATABASE TO IDENTIFY FILE AS MOVIE OR EPISODE">>"$LogFile"
@@ -1786,6 +1858,7 @@ genericUnspecifiedError(){
 }
 
 MaintenanceWarning(){
+  Debug "ENTERING: ${FUNCNAME}()"
   local yesorno=""
   echo " --You have entered Maintenance mode."
   echo " myth2kodi will perform maintenance on it's records."
@@ -1800,6 +1873,7 @@ MaintenanceWarning(){
 }
 
 determinePrimaryOrAlternateFolderUsage(){
+  Debug "ENTERING: ${FUNCNAME}()"
   #Command line, no database Episodes: Determine where File will fit
   FailSafeState=0
   test "$MoveDirWritable" != "1" -a "$m2kProgramIDCheck" = "" && MoveDir="$AlternateMoveDir"
@@ -1820,6 +1894,7 @@ determinePrimaryOrAlternateFolderUsage(){
 
 #####MAKE FOLDER#####
 MakeFolder(){
+  Debug "ENTERING: ${FUNCNAME}()"
   #If specified, make $movedir = $movedir/show name
   if [ "$NewShowName" != "" ]; then
     MoveDir="$MoveDir/$NewShowName"
@@ -1860,6 +1935,7 @@ MakeFolder(){
 #####USE ORIGINAL DIR#####
 #If TargetPathIsInputPath is set, then this changes movedir to original dir.
 setTargetFolderAsInputPathFolder(){
+  Debug "ENTERING: ${FUNCNAME}()"
   #Set originaldir name if none was supplied
   test "$originaldirname" = "./" && originaldirname="$(pwd)"
   test "$originaldirname" = "." && originaldirname="$(pwd)"
@@ -1888,6 +1964,7 @@ setTargetFolderAsInputPathFolder(){
 #####GENERATE tvshow.nfo#####
 #Generates folder tvshow.nfo file
 GenerateTVShowNFO(){
+  Debug "ENTERING: ${FUNCNAME}()"
   test -f "$MoveDir/tvshow.nfo" && rm -f "$MoveDir/tvshow.nfo"
   echo -e "<tvshow>">>"$MoveDir"/tvshow.nfo
   echo -e "\t<title>$NewShowName</title>">>"$MoveDir/tvshow.nfo"
@@ -1903,6 +1980,7 @@ GenerateTVShowNFO(){
 #####GENERATE NFO FILE#####
 #Create an NFO file based upon extracted information
 GenerateEpisodeNFO(){
+  Debug "ENTERING: ${FUNCNAME}()"
   test -f "$MoveDir/$ShowFileName.nfo" && rm -f "$MoveDir/$ShowFileName.nfo"
   echo -e "<episodedetails>">>"$MoveDir/$ShowFileName.nfo"
   #SAK-REPLACED BELOW, SEE http://forum.kodi.tv/showthread.php?tid=65644&page=65&highlight=json
@@ -1938,6 +2016,7 @@ GenerateEpisodeNFO(){
 
 ##### IGNORE LIST #####
 ignoreList(){
+  Debug "ENTERING: ${FUNCNAME}()"
   local ignoreTest=""
   #Test if the title is in the titleIgnore file
   if [ -f "$m2kdir/titleIgnore" ]; then
@@ -1962,6 +2041,7 @@ ignoreList(){
 #Get show translations if the $m2kdir/showTranslations file exists.
 #The show title will be replaced by the one in the user created showTranslations file
 ShowTranslations(){
+  Debug "ENTERING: ${FUNCNAME}()"
   if [ -f "$m2kdir"/showTranslations ] && [ "$ShowName" != "" ]; then
     showtranslation=`grep "$ShowName = " "$m2kdir/showTranslations" | sed s/"$ShowName = "/""/g `
     if [ "$showtranslation" != "" ]; then
@@ -1978,6 +2058,7 @@ ShowTranslations(){
 #TODO: Need to go through this function line-by-line and make sure it behaves as expected in a do-no-harm sort of way...
 #DoMaintenance loops through all logged files and checks if their parent is there.  If no parent, then file is deleted.
 DoMaintenance(){
+  Debug "ENTERING: ${FUNCNAME}()"
   echo "PERFORMING MAINTENANCE ROUTINE..." | tee -a "$LogFile"
   #check for interrupted undo jobs
   test -f "$m2kdir/undo.lock" && test ! -f "$m2kdir/undo.sh" && mv "$m2kdir/undo.lock" "$m2kdir/undo.sh"
@@ -2073,6 +2154,7 @@ DoMaintenance(){
 #TODO: Need to go through this function line-by-line and make sure it can be run without causing damage.
 #This function will scan a folder and process the entire library
 mythicalScan(){
+  Debug "ENTERING: ${FUNCNAME}()"
   local yesorno=""
   DoMythTVPermissionsCheck
   checkext=$InputTitle
@@ -2150,6 +2232,7 @@ mythicalScan(){
 }
 
 setGroupPermissions(){
+  Debug "ENTERING: ${FUNCNAME}()"
   #Add read and write permissions for the group to the moved recording.
   chmod g=rw "$MoveDir/$ShowFileName.$OriginalExt"
   #TODO:#NOTE: the above command is slightly inconsistent with the comment as = also implies removal of any unmentioned attributes.
@@ -2158,6 +2241,7 @@ setGroupPermissions(){
 #####MYTHICAL DIAGNOSTICS#####
 #This function provides a functions check on myth2kodi
 mythicalDiagnostics(){
+  Debug "ENTERING: ${FUNCNAME}()"
   #If there is already a diagnostics file, move it to diagnostics_old_<Date&Time that this script was launched>
   test -f "$DiagnosticsFile" && mv "$DiagnosticsFile" "$m2kdir/diagnostics_old_${Now}.log"
   #TODO: give these checka, checkb etc more meaningful names
@@ -2438,6 +2522,7 @@ mythicalDiagnostics(){
 #####DOOVER PROCESSING#####
 #This function provides an easy way to redo failed jobs.
 executeDoOver(){
+  Debug "ENTERING: ${FUNCNAME}()"
   local yesorno=""
   local RunSudo=0
   if [ "$(id -u)" = "0" ]; then
@@ -2480,6 +2565,7 @@ executeDoOver(){
 #####UNDO JOBS#####
 #This function provides an easy way to undo all myth2kodi jobs
 executeUndo(){
+  Debug "ENTERING: ${FUNCNAME}()"
   if [ "$(id -u)" != "0" ]; then
     echo "You do not have sufficient privileges to run this script."
     echo "--undo must be executed with the sudo command"
@@ -2521,6 +2607,7 @@ executeUndo(){
 #####HELP#####
 #This function provides a helpful message.
 mythicalHelp(){
+  Debug "ENTERING: ${FUNCNAME}()"
   if [ "$InputPath" = "%DIR%/%FILE%" ]; then
     UserJobOutsideMythTV
     jobType="GenericUnspecifiedError"
@@ -2591,6 +2678,7 @@ mythicalHelp(){
 }
 
 special(){
+  Debug "ENTERING: ${FUNCNAME}()"
   echo " ======showTranslations====="
   echo " If you are having problems with incorrect guide data such"
   echo " as improper titling, use showTranslations."
@@ -2649,6 +2737,7 @@ special(){
 }
 
 improveConfidence(){
+  Debug "ENTERING: ${FUNCNAME}()"
   echo -e "About Confidence ratings:"
   echo -e ""
   echo -e " Confidence Ratings are used by myth2kodi."
@@ -2668,9 +2757,10 @@ improveConfidence(){
 }
 
 getSeriesInfo(){
+  Debug "ENTERING: ${FUNCNAME}()"
   #Force an update of the myth2kodi tables for a specified Series
   #Usage example: myth2kodi --getSeriesInfo "Black Books"
-  echo "RUNNING ${FUNCNAME}() for $InputTitle" | tee -a "$LogFile"
+  Inform "Searching for series: $InputTitle"
   ShowName="$InputTitle"
   local tvdbshowname=`echo $ShowName | sed s/" "/"%20"/g | sed s/"&"/"%26"/g`
   searchTheTvDbAndReturnTxtFileTables
@@ -2678,14 +2768,19 @@ getSeriesInfo(){
   #if we have a series line number then translate that into a series id
   if [ "$serieslinenumber" != "" ] && [ $serieslinenumber -gt 0 ]; then
     setSeriesIDandNewShowNameBasedOnSeriesLineNumber
-    echo "FOUND:$NewShowName ID#:$SeriesID" | tee -a "$LogFile"
+    Inform "FOUND: $NewShowName ID#:$SeriesID"
     makeShowDirIfNeeded
   else
-    echo "WARNING: SeriesID COULD NOT BE DETERMINED" | tee -a "$LogFile"
+    Warn "SeriesID COULD NOT BE DETERMINED"
     return 1
   fi
-  downloadInfoAboutMatchedTitleAndCreateTxtFileTables
-  return $?
+  if [ "$SeriesID" != "" ] ; then
+    downloadInfoAboutMatchedTitleAndCreateTxtFileTables
+    return $?
+  else
+    Err "We had serieslinenumber: $serieslinenumber but couldn't get a SeriesID."
+    return 1
+  fi
 }
 
 ########################### END FUNCTION DEFINITIONS ###########################

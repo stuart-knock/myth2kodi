@@ -265,7 +265,14 @@ KODIIPs=( "192.168.1.42:8080" ) #<------THIS VALUE MUST BE SET-------
 maxItems=8
 ########################## END USER SETTINGS ###################################
 
-mythicalVersion="myth2kodi Version 0.4.0; mythicalLibrarian 953ish+"
+mythicalVersion="myth2kodi Version 0.4.2; mythicalLibrarian 953ish+"
+
+#Fine grained control over information myth2kodi reports: 0=Only Errors; 1 adds warnings; 2 adds more information; 3 provides debugging output.
+LogLevel=3
+Debug(){  [[ LogLevel -ge 3 ]] && printf 'DEBUG: %s\n' "$1"   | tee -a $LogFile; }
+Inform(){ [[ LogLevel -ge 2 ]] && printf 'INFO: %s\n' "$1"    | tee -a $LogFile; }
+Warn(){   [[ LogLevel -ge 1 ]] && printf 'WARNING: %s\n' "$1" | tee -a $LogFile; }
+Err(){    [[ LogLevel -ge 0 ]] && printf 'ERROR: %s\n' "$1"   | tee -a $LogFile; }
 
 #
 declare -r LogFile="$m2kdir/output.log"
@@ -1236,7 +1243,7 @@ determineIfDatabaseIsUpToDate(){
 #####GET EPISODE INFORMATION#####
 downloadInfoAboutMatchedTitleAndCreateTxtFileTables(){
   #TODO: Add this as the first line in every function
-  test "$DEBUGMODE" = "Enabled" && printf '%s\n' "ENTERING: ${FUNCNAME}()" | tee -a "$LogFile"
+  Debug "ENTERING: ${FUNCNAME}()"
   #Download information from server
   echo -ne "Downloading Series: $SeriesID \n" 1>&2
   local GotNewInformation=0

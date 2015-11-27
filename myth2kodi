@@ -430,7 +430,7 @@ RunJob(){
 ######################### BEGIN FUNCTION DEFINITIONS ###########################
 TraditionalNamingConventions(){
   #Format Episodes showname=show name Sxx=season number Exx=episode number EpisodeSubtitle=episode name
-  if [ "$Exx" != "" ] && [ "$Exx" != "E" ]; then
+  if [[ "$Exx" != "" && "$Exx" != "E" ]]; then
     ShowFileName=`echo "$NewShowName $Sxx$Exx ($EpisodeSubtitle)"`
 
   #Format Movies
@@ -574,7 +574,7 @@ GenComSkip(){
 KODIAutomate(){
   local data=""
   #Send notification to KODI, Update Library, Clean Library
-  if [ "$KODINotify" = "Enabled" || "$KODIUpdate" = "Enabled" || "$KODIClean" = "Enabled" ]; then
+  if [[ "$KODINotify" = "Enabled" || "$KODIUpdate" = "Enabled" || "$KODIClean" = "Enabled" ]]; then
     printf '%s\n' 'COMMUNICATING WITH KODI INSTANCES...'
     local curlPOST='curl -L -s -m3 --connect-timeout 5 -X POST -H "Content-Type: application/json" -d'
     for KODIIP in ${KODIIPs[@]} ; do
@@ -769,7 +769,7 @@ writeJobToDooverQue(){
 doFailSafeMode(){
   echo "FAILSAFE FLAG WAS SET CHECK PERMISSIONS AND FOLDERS">>"$LogFile"
   echo "FAILSAFE FLAG WAS SET"
-  if [ $FailSafeMode = "Enabled" ]; then
+  if [ "$FailSafeMode" = "Enabled" ]; then
     echo "PERMISSION ERROR OR DRIVE FULL">>"$LogFile"
     echo "ATTEMPTING SYMLINK TO FAILSAFE DIR: $FailSafeDir">>"$LogFile"
     echo "ATTEPMTING SYMLINK TO FAILSAFE DIR"
@@ -3349,7 +3349,7 @@ if [ "$SYMLINK" != "LINK" ]; then
       DisplayCompletedMoveMessage
 
       #If symlink=disabled, remove database entries
-      if [  "$SYMLINK" = "Disabled" ]; then
+      if [ "$SYMLINK" = "Disabled" ]; then
         chmod 775 "$MoveDir/$ShowFileName.$OriginalExt"
         if [ "$RequiresDoover" != "1" ]; then
           DeleteRelevantDatabaseFilesAndPictures

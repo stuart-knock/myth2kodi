@@ -1235,6 +1235,8 @@ determineIfDatabaseIsUpToDate(){
 
 #####GET EPISODE INFORMATION#####
 downloadInfoAboutMatchedTitleAndCreateTxtFileTables(){
+  #TODO: Add this as the first line in every function
+  test "$DEBUGMODE" = "Enabled" && printf '%s\n' "ENTERING: ${FUNCNAME}()" | tee -a "$LogFile"
   #Download information from server
   echo -ne "Downloading Series: $SeriesID \n" 1>&2
   local GotNewInformation=0

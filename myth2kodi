@@ -43,7 +43,7 @@
 #    /usr/local/bin/myth2kodi "%DIR%/%FILE%"
 #
 #Usage:
-#  myth2kodi "Target File" "show name" "episode name"
+#  myth2kodi "Input File" "show name" "episode name"
 #  eg. myth2kodi "/home/myth/recordings/2308320472023429837.mpg" "South Park" "Here Comes the Neighborhood"
 #
 #Output-target:
@@ -89,6 +89,7 @@
 #  Log file will show information for troubleshooting. You can find the log file
 #  in the working folder. Log file default location:
 #    /home/<user>/.myth2kodi/output.log
+#  See 'bashlogging' under dependencies and associated script for more information.
 #
 #Database-external:
 #  This program will make 3 calls to TheTvDb for every episode. The first one is
@@ -115,13 +116,26 @@
 #  it is best to delete all database folders to ensure proper data formatting.
 #
 #Dependencies:
-#  depends on "curl", "agrep", "libnotify-bin" and Mythtv Backend for database
-#  access. install curl with:
+#  "curl" -- downloads webpages and sends commands to Kodi;
+#  "agrep" -- provides fuzzy logic;
+#  "libnotify-bin" -- allows GNOME desktop notifications;
+#  "mythbackend" -- Access the MythTV database.
+#
+#  Install curl with:
 #    "apt-get install curl"
-#  curl downloads webpages and sends commands to KODI. Install agrep with:
+#  Install agrep with:
 #    "apt-get install agrep"
-#  agrep provides fuzzy logic. Optionally, install libnotify-bin with:
-#    "apt-get install libnotify-bin" -allows GNOME desktop notifications
+#  Optionally, install libnotify-bin with:
+#    "apt-get install libnotify-bin"
+#
+#  Some of the functionality of this script is provided in other files, these
+#  will need to be placed in /usr/local/bin/ along with this script. They are:
+#  MythDataGrabber -- Uses MythTV python bindings to access database information.
+#  librarian-notify-send -- A script for sending notifications to Gnome Desktop.
+#  bashlogging -- A set of bash functions that provide a simple way to produce 
+#                 log messages, with control over the type of messages returned
+#                 and where they are directed, ie stdout, a log file, both. See,
+#                 the ###Logging settings### section of USER SETTINGS below.
 #
 #Gnome Notifications:
 #  In order for myth2kodi to send notifications to the GNOME desktop, it
@@ -263,10 +277,8 @@ KODINotify="Enabled"
 KODIIPs=( "192.168.1.42:8080" ) #<------THIS VALUE MUST BE SET-------
 #maxItems controls the number of items in the RSS. RSS Can be activated by creating a folder in /var/www/mythical-rss.
 maxItems=8
-########################## END USER SETTINGS ###################################
 
-mythicalVersion="myth2kodi Version 0.4.2; mythicalLibrarian 953ish+"
-
+###Logging settings###
 #LogLevel provides control over the amount of information myth2kodi reports.
 #    0=Only Errors;
 #    1=adds warnings;
@@ -276,6 +288,16 @@ mythicalVersion="myth2kodi Version 0.4.2; mythicalLibrarian 953ish+"
 #Recommend 2 if you want to get an understanding of what myth2kodi is doing.
 #Only use 3 if you have a particular problem your trying to track down.
 LogLevel=2
+##Where to direct logging messages ['stdout|'logfile'|'both'(DEFAULT)]:
+#LogType='both'
+#A name for the log file, this will be placed in myth2kodi's working directory, $m2kdir set above.
+#DEFAULT: 'output.log' #NOTE: LogFile is overridden in special contexts, such as running Diagnostics.
+#LogFile='output.log'
+########################## END USER SETTINGS ###################################
+
+mythicalVersion="myth2kodi Version 0.4.2; mythicalLibrarian 953ish+"
+#TODO: replace these definitions with:
+#  test -f /usr/local/bin/bashlogging && source /usr/local/bin/bashlogging "$LogType" || printf 'ERROR: %s\n' "/usr/local/bin/bashlogging doesn't exist." | tee -a $LogFile; exit 1
 
 #Functions defining the different logging messages
 Debug(){  [[ LogLevel -ge 3 ]] && printf 'DEBUG: %s\n'   "$1" | tee -a $LogFile; }
@@ -290,7 +312,8 @@ InformCont(){ [[ LogLevel -ge 2 ]] && printf '%0.6s%s\n' "$pad" "$1" | tee -a $L
 WarnCont(){   [[ LogLevel -ge 1 ]] && printf '%0.9s%s\n' "$pad" "$1" | tee -a $LogFile; }
 ErrCont(){    [[ LogLevel -ge 0 ]] && printf '%0.7s%s\n' "$pad" "$1" | tee -a $LogFile; }
 
-#
+#The full path version of the file to which logging output will be sent:
+#declare LogFile="$m2kdir/$LogFile"
 declare -r LogFile="$m2kdir/output.log"
 declare -r DiagnosticsFile="$m2kdir/diagnostics.log"
 
@@ -800,15 +823,13 @@ writeJobToDooverQue(){
 
 doFailSafeMode(){
   Debug "ENTERING: ${FUNCNAME}()"
-  echo "FAILSAFE FLAG WAS SET CHECK PERMISSIONS AND FOLDERS">>"$LogFile"
-  echo "FAILSAFE FLAG WAS SET"
+  Warn "FAILSAFE FLAG WAS SET CHECK PERMISSIONS AND FOLDERS"
   if [ "$FailSafeMode" = "Enabled" ]; then
-    echo "PERMISSION ERROR OR DRIVE FULL">>"$LogFile"
-    echo "ATTEMPTING SYMLINK TO FAILSAFE DIR: $FailSafeDir">>"$LogFile"
-    echo "ATTEPMTING SYMLINK TO FAILSAFE DIR"
+    Warn "PERMISSION ERROR OR DRIVE FULL"
+    Warn "ATTEMPTING SYMLINK TO FAILSAFE DIR: $FailSafeDir"
     ln -s "$InputPath" "$FailSafeDir/$ShowFileName.$OriginalExt"
-    test -f "$FailSafeDir/$ShowFileName.$OriginalExt";echo "FAILSAFE MODE COMPLETE: SYMLINK CREATED">>"$LogFile"
-    test ! -f "$FailSafeDir/$ShowFileName.$OriginalExt"; echo "FAILSAFE MODE FAILURE CHECK PERMISSIONS AND FREE SPACE IN $FailSafeDir">>"$LogFile"
+    test -f "$FailSafeDir/$ShowFileName.$OriginalExt" ; Inform "FAILSAFE MODE COMPLETE: SYMLINK CREATED"
+    test ! -f "$FailSafeDir/$ShowFileName.$OriginalExt"; Err "FAILSAFE MODE FAILURE CHECK PERMISSIONS AND FREE SPACE IN $FailSafeDir"
   fi
 
   test $Notify = Enabled && sudo -u "$NotifyUserName" /usr/local/bin/librarian-notify-send "myth2kodi FAILSAFE" "FAILSAFE mode active See $LogFile for more information" error
@@ -2857,6 +2878,8 @@ case "$InputPath" in
     #TODO: checkPermissions() is called within mythicalDiagnostics, but its
     #  output is dumped to LogFile not DiagnosticsFile. Consider making all
     #  logging go to LogFile, but make where LogFile points context specific.
+    #LogFile="$m2kdir/diagnostics.log"
+    #test "$LogType" != "stdout" && Warn "Redirecting logging messages to $LogFile" || Warn "Running diagnostics without any logging to file, consider changing LogType to 'logfile' or 'both'"
     mythicalDiagnostics
     #TODO: Standardise on functions returning with actual exit done here.
   ;;

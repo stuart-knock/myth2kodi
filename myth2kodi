@@ -3,25 +3,37 @@
 
 # ***** WELCOME! Scroll further down to set the user settings. *****
 
-#mythicalLibrarian by Adam Outler
-#TODO: Contact original author before moving to a public GitHub repo...
-#email: adamoutler gmail.com
+#myth2kodi is a modified version of mythicalLibrarian by Adam Outler
+#
+# mythicalLibrarian Author: Adam Outler
+# email: adamoutler gmail.com
+# mythicalLibrarian Originally Written: 2009ish
+#
+# myth2kodi Author: Stuart A. Knock
+# myth2kodi Originally Written: 2015-11
+#
 #Software the way it should be: Free and Open Source
-#Please contact me with any bug reports
-#Tech Support: http://forum.kodi.tv/showthread.php?pid=470402
+#
+#mythicalLibrarian Tech Support: http://forum.kodi.tv/showthread.php?pid=470402
+#
 
-#SAK: Modified for me...
-#Good site for learning Bash: http://wiki.bash-hackers.org/
+#TODO: Contact original author before moving to a public GitHub repo...
+
+#TODO: If making a tar ball as a "Release", include the following:
+#    myth2kodi
+#    bashlogging
+#    MythDataGrabber
+#    librarian-notify-send
+#    showTranslations.SydFTA
 
 #TODO: Make use of TMDb (https://www.themoviedb.org/) when the recorded
 #  program is identified as being a Movie... Or http://omdbapi.com/, eg
 #  http://www.omdbapi.com/?t=Casino&y=&plot=short&r=xml
 
-
 #TODO: A number of the long "test" lines would be much easier to read/debug
 #  if they were rewritten as "if ; then else" blocks.
 
-#TODO: Clean up the name space by using "local" for variable declerations
+#TODO: Clean up the name space by using "local" for variable declarations
 #  within functions.
 
 #TODO: Go through and check for variables that aren't initialised before
@@ -157,7 +169,7 @@
 #   KODI via HTTP and Allow programs on other systems to control KODI are
 #   enabled.
 #
-#Show Name Translation:
+#Show Name Translation: #TODO: include my 'showTranslations' file as 'showTranslations.SydFTA', to function as a show translations template, when I bundle a "Release".
 #  The user may elect to create a file in the myth2kodi working folder
 #  which will then translate any recorded show name into the desired show name.
 #  This is useful for adding a year to distinguish between a new series and an
@@ -210,13 +222,17 @@ DirTracking="Enabled"
 APIkey="6DF511BB2A64E0E9"
 #TODO: If I ever put this on GitHub I should register a fresh APIkey - http://thetvdb.com/?tab=apiregister
 #SAK: This one was set at some point for some reason: APIkey=0F3A338F0FCB29A2
-#  but it seems to be rejected for certain uses...
+#  but it seems to be rejected for certain uses... Maybe the key used during configuration.
 #Language setting
 Language="en"
 
-#If "Allow" and Guide Data identified this as a show or episode, but no episode or series information was found, then
-#if the MythTV DB's storagegroup is movie[s] or film[s] this is used to reset the recording type as Movie.
-StorageGroupFallback="Allow"
+#StorageGroupFallback can be used to enable/disable a bit of code that, if Guide Data identified the
+#input file as a show or episode, but no episode or series information was found, then it checks if
+#the MythTV DB's storagegroup is movie[s] or film[s] and uses this to reset the recording type as Movie.
+#To function it requires that you have created a MythTV storagegroup called something like 'Movies'
+#and selected that storagegroup when making the rule for the recording. This works for my setup SAK.
+#Options: ['Enabled'|'Disabled']
+StorageGroupFallback="Enabled"
 
 ###Database settings###
 #MythTV MYSQL access allows addition of movies, comskip data, and improves accuracy of episode recognition.
@@ -279,20 +295,22 @@ KODIIPs=( "192.168.1.42:8080" ) #<------THIS VALUE MUST BE SET-------
 maxItems=8
 
 ###Logging settings###
+#These settings are for the bashlogging script which provides the configurable
+#logging functionality used in myth2kodi.
 #LogLevel provides control over the amount of information myth2kodi reports.
 #    0=Only Errors;
 #    1=adds warnings;
 #    2=adds more information;  --> DEFAULT
 #    3=provides debugging output.
-#Recommend 1 for usual operation, when everything is working fine.
-#Recommend 2 if you want to get an understanding of what myth2kodi is doing.
-#Only use 3 if you have a particular problem your trying to track down.
+#Recommend 2 to start with or if you want to keep track of what myth2kodi is doing.
+#Recommend 1 for usual operation, once you're confident that everything is working fine.
+#Only use 3 if you have a particular problem that you're trying to track down.
 LogLevel=2
-##Where to direct logging messages ['stdout|'logfile'|'both'(DEFAULT)]:
-#LogType='both'
-#A name for the log file, this will be placed in myth2kodi's working directory, $m2kdir set above.
-#DEFAULT: 'output.log' #NOTE: LogFile is overridden in special contexts, such as running Diagnostics.
+##LogFile is the name of the log file, this will be placed in myth2kodi's working directory, $m2kdir set above.
+##DEFAULT: 'output.log' #NOTE: LogFile is overridden in special contexts, such as running Diagnostics.
 #LogFile='output.log'
+##LogType defines where to direct logging messages ['stdout|'logfile'|'both'(DEFAULT)]:
+#declare -r LogType='both'
 ########################## END USER SETTINGS ###################################
 
 mythicalVersion="myth2kodi Version 0.4.2; mythicalLibrarian 953ish+"
@@ -2259,7 +2277,7 @@ setGroupPermissions(){
 mythicalDiagnostics(){
   Debug "ENTERING: ${FUNCNAME}()"
   #If there is already a diagnostics file, move it to diagnostics_old_<Date&Time that this script was launched>
-  test -f "$DiagnosticsFile" && mv "$DiagnosticsFile" "$m2kdir/diagnostics_old_${Now}.log"
+  test -f "$DiagnosticsFile" && mv "$DiagnosticsFile" "$m2kdir/diagnostics_old_${FileNameNow}.log"
   #TODO: give these checka, checkb etc more meaningful names
   local checka="" #libmyth-python
   local checkb="" #python-lxml
@@ -2822,43 +2840,51 @@ getSeriesInfo(){
 #  functions before making this change.
 
 #####DEFINE ENVIRONMENT AND VARIABLES#####
+#Who called the script:
 declare -r MyUserName=$(whoami)
-declare -r Today=$(date +%F) #Date in IEEE standard format, ie YYYY-mm-dd
-declare -r Now=$(date +%FT%H%M%S)   #ISO 8601: YYYY-mm-ddTHHMMSS
-# Set global values
+#And when, 
+declare -r Today=$(date +%F)  #Date in IEEE standard format, ie YYYY-mm-dd
+declare -r Time="$(date +%H:%M:%S)" #Time in a readable IEEE standard format, ie HH:MM:SS
+declare -r FileNameNow=$(date +%FT%H%M%S)  #ISO 8601: YYYY-mm-ddThhMMSS
+
+#Set global values for settings, this overrides those set at the top of this file
 test -f "/etc/myth2kodi/globalSettings" && source /etc/myth2kodi/globalSettings
-#make our working dir if it does not exist
+
+#Make our working directory if it doesn't already exist
 if [ ! -d "$m2kdir" ]; then
   mkdir "$m2kdir"
-  echo "creating $m2kdir and log file: $LogFile">>"$LogFile"
+  #Keep this as a printf so it's created here regardless of LogType & LogLevel. Or maybe convert to a touch
+  printf 'Creating %s and log file: %s' "$m2kdir" "$LogFile" >> "$LogFile"
+  printf 'Created on %s at %s' "$Today" "$Time" >> "$LogFile"
 fi
 
-#setup defaults for searching Series information
+#Setup defaults for searching Series information
 SeriesID=""
 NewShowName=""
 RequiresDoover=0
 ConfidenceRating=0
 SeriesConfidenceRating=0
 
-#setup defaults for searching Episode information
+#Setup defaults for searching Episode information
 Exx=""
 Sxx=""
 GotEpisodeNumber=0
 EpisodeConfidenceRating=0
 MythicalEpiShow=0
 
-#load variables from a file if required
+#Load variables from a file if required
 test -f "$m2kdir"/myth2kodi.conf && source "$m2kdir"/myth2kodi.conf
 
 #TODO: Should allow manual input of season and episode numbers in addition to
 #  Title & Subtitle, with full information all searching should be overridden/bypassed...
 
-#TODO: Why the non-sequential order here? does it matter?
+#Capture args the script was called with
+InputPath="$1"
 InputTitle="$2"
 InputSubtitle="$3"
-InputPath="$1"
 InputOption="$4"
-#
+
+#Some basic tests to make sure we were called correctly
 test "$InputPath" != "testfile.ext" && test ! -f "$InputPath" && test "$InputTitle" = "" && test "${InputPath:0:1}" != "-" && mythicalHelp
 test "$InputPath" = "" && mythicalHelp
 MythTVUserJobString="%DIR%/%FILE%"
@@ -3226,7 +3252,7 @@ else
 fi
 
 #If it's tagged as a SH or EP but lacking SxxExx and then as a fallback check storagegroup in case it's a Movie we missed
-if [ "$StorageGroupFallback" = "Allow" ] ; then
+if [ "$StorageGroupFallback" = "Enabled" ] ; then
   #TODO: Make a HasSxxExx variable that is set and used consistently, #NOTE: there is already one but it's weirdly used
   if [ "$m2kProgramIDCheck" != "MV" ] && [[ "$Sxx" = "S" || "$Sxx" = "" || "$Sxx" = "S00" || "$Exx" = "E" || "$Exx" = "" || "$Exx" = "E00" ]] ; then
     if [ "$(echo $StorageGroup | grep -i '\(Movies*\|Films*\)')" != "" ] ; then

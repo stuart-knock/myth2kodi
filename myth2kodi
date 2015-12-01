@@ -291,8 +291,9 @@ KODIClean="Disabled"
 KODINotify="Enabled"
 #Ip Address and port for KODI Notifications Eg.KODIIPs=( "192.168.1.110:8080" "192.168.1.111:8080" "XBOX:8080" )
 KODIIPs=( "192.168.1.42:8080" ) #<------THIS VALUE MUST BE SET-------
-#maxItems controls the number of items in the RSS. RSS Can be activated by creating a folder in /var/www/mythical-rss.
-maxItems=8
+#RSSmaxItems controls the number of items in the RSS. RSS Can be activated by creating a folder in /var/www/mythical-rss.
+#NOTE: setting this to 0 will essentially be ignored as generateRSS() considers it unset and uses the default of 8
+declare -i RSSmaxItems=8
 
 ###Logging settings###
 #These settings are for the bashlogging script which provides the configurable
@@ -305,35 +306,34 @@ maxItems=8
 #Recommend 2 to start with or if you want to keep track of what myth2kodi is doing.
 #Recommend 1 for usual operation, once you're confident that everything is working fine.
 #Only use 3 if you have a particular problem that you're trying to track down.
-LogLevel=2
-##LogFile is the name of the log file, this will be placed in myth2kodi's working directory, $m2kdir set above.
-##DEFAULT: 'output.log' #NOTE: LogFile is overridden in special contexts, such as running Diagnostics.
-#LogFile='output.log'
-##LogType defines where to direct logging messages ['stdout|'logfile'|'both'(DEFAULT)]:
-#declare -r LogType='both'
+declare -i LogLevel=2
+#LogFile is the name of the log file, this will be placed in myth2kodi's working directory, $m2kdir set above.
+#DEFAULT: 'output.log' #NOTE: LogFile is overridden in special contexts, such as running Diagnostics.
+LogFile='output.log'
+#LogType defines where to direct logging messages ['stdout|'logfile'|'both'(DEFAULT)]:
+#NOTE: This is made read only within the bashlogging script.
+LogType='both'
 ########################## END USER SETTINGS ###################################
 
 mythicalVersion="myth2kodi Version 0.4.2; mythicalLibrarian 953ish+"
-#TODO: replace these definitions with:
-#  test -f /usr/local/bin/bashlogging && source /usr/local/bin/bashlogging "$LogType" || printf 'ERROR: %s\n' "/usr/local/bin/bashlogging doesn't exist." | tee -a $LogFile; exit 1
-
-#Functions defining the different logging messages
-Debug(){  [[ LogLevel -ge 3 ]] && printf 'DEBUG: %s\n'   "$1" | tee -a $LogFile; }
-Inform(){ [[ LogLevel -ge 2 ]] && printf 'INFO: %s\n'    "$1" | tee -a $LogFile; }
-Warn(){   [[ LogLevel -ge 1 ]] && printf 'WARNING: %s\n' "$1" | tee -a $LogFile; }
-Err(){    [[ LogLevel -ge 0 ]] && printf 'ERROR: %s\n'   "$1" | tee -a $LogFile; }
-
-#Use for multiple lines of a single message
-declare -r pad="          " #needs to be >= number of spaces for the largest X below in %0.Xs
-DebugCont(){  [[ LogLevel -ge 3 ]] && printf '%0.7s%s\n' "$pad" "$1" | tee -a $LogFile; }
-InformCont(){ [[ LogLevel -ge 2 ]] && printf '%0.6s%s\n' "$pad" "$1" | tee -a $LogFile; }
-WarnCont(){   [[ LogLevel -ge 1 ]] && printf '%0.9s%s\n' "$pad" "$1" | tee -a $LogFile; }
-ErrCont(){    [[ LogLevel -ge 0 ]] && printf '%0.7s%s\n' "$pad" "$1" | tee -a $LogFile; }
 
 #The full path version of the file to which logging output will be sent:
-#declare LogFile="$m2kdir/$LogFile"
-declare -r LogFile="$m2kdir/output.log"
+LogFile="$m2kdir/output.log"
 declare -r DiagnosticsFile="$m2kdir/diagnostics.log"
+
+if [ -f /usr/local/bin/bashlogging ] ; then
+  source /usr/local/bin/bashlogging "$LogType"
+else
+  printf 'ERROR: %s\n' "/usr/local/bin/bashlogging doesn't exist." | tee -a $LogFile
+  exit 1
+fi
+
+###For testing###if [ -f /home/sknock/GitHub/bash-tools/bashlogging ] ; then
+###For testing###  source /home/sknock/GitHub/bash-tools/bashlogging "$LogType"
+###For testing###else
+###For testing###  printf 'ERROR: %s\n' "/home/sknock/GitHub/bash-tools/bashlogging doesn't exist." | tee -a $LogFile
+###For testing###  exit 1
+###For testing###fi
 
 ########################### BEGIN USER JOBS ####################################
 #The RunJob function is a place where you can put your custom script to be run
@@ -578,6 +578,8 @@ dailyreport(){
 #$1=filesize $2=freespace $3=folder to check
 checkPermissions(){
   Debug "ENTERING: ${FUNCNAME}()"
+  DebugCont "Called with $# arguments"
+  local -i i=0 ; local var ; for var in "$@"; do ((++i)) ; DebugCont "arg $i = ${var}" ; done
   #set Test variable to 0.  It will be a 1 if everything passes.
   TMoveDirWritable=0
   if [ "$2" != "" ]; then
@@ -697,7 +699,7 @@ generaterss(){
   Debug "ENTERING: ${FUNCNAME}()"
   #user settings:
   rssDir="/var/www/mythical-rss"
-  maxItems=8  #maximum number of items to read into the feed
+  ((RSSmaxItems == 0)) && RSSmaxItems=8  #maximum number of items to read into the feed
 
   #script settings
   OLDrssFile="rss.xml"
@@ -763,13 +765,13 @@ generaterss(){
     #test for number of </item> tags using grep
     RssItemCount=$(grep -c "</item>" "$rssDir/$OLDrssFile")
 
-    #if $maxItems is greater than this number
-    if [ $maxItems -gt $RssItemCount ]; then
+    #if $RSSmaxItems is greater than this number
+    if (($RSSmaxItems > $RssItemCount)); then
       #set a variable to track this number + 1 for the new entry
       itemLimit=$(($RssItemCount+1))
     else
-      #set tracking variable to $maxItems
-      itemLimit=$maxItems
+      #set tracking variable to $RSSmaxItems
+      itemLimit=$RSSmaxItems
     fi
 
     #get the line number for the first <item> tag
@@ -983,6 +985,7 @@ GetMythTvPythonBindings(){
 #Function ProcessSchedulesDirect processes Zap2it/SchedulesDirect/Tribune data for use in the program
 ProcessSchedulesDirect(){
   Debug "ENTERING: ${FUNCNAME}()"
+  Inform "Processing MythTV database info as SchedulesDirect."
   #Check for database permissions
   test "$ChanID" = "" && echo "%%%NO DATABASE INFORMATION. CHECK LOGIN/PASS OR FILE %%%%%">>"$LogFile"
   #disqualify invalid movie airdates
@@ -1115,6 +1118,7 @@ RemoveSubtitleFromPlot(){
 #A Process function compatible with Sydney over the air data...
 ProcessSydFTA(){
   Debug "ENTERING: ${FUNCNAME}()"
+  Inform "Processing MythTV database info as SydFTA."
   #Check for database permissions
   test "$ChanID" = "" && Err "%%%NO DATABASE INFORMATION. CHECK LOGIN/PASS OR FILE %%%%%"
   #disqualify invalid movie airdates
@@ -1141,7 +1145,13 @@ ProcessSydFTA(){
   ###the Movie specification is "almost-always" found in the Category field of
   ###the MythTV database. So, we'll use that.
   if [ "$ShowCategory" = "Movie" ]; then
+    Inform "Guide data for $InputTitle indicates a Movie."
     m2kProgramIDCheck="MV"
+    if [ "$InputSubtitle" != "" ] ; then
+      Warn "${FUNCNAME}() Guide data indicates that $InputTitle is a Movie, but has an InputSubtitle: $InputSubtitle"
+      Warn "Resetting  InputSubtitle to ''"
+      InputSubtitle=''
+    fi
   else #For now assume that if it's not a Movie it's an episode of a series
     #TODO: For now we mainly/only record Movies and Episodes of TV series,
     #  so, this is an ok approximation, but should look through more EPG data
@@ -1203,6 +1213,7 @@ ProcessSydFTA(){
 ####NoLookup is an alternate mode where TheTvDb is not used for lookups
 ProcessNoLookup(){
   Debug "ENTERING: ${FUNCNAME}()"
+  Inform "Processing MythTV database info as NoLookup."
   #Check for database permissions
   test "$ChanID" = "" && Err "%%%NO DATABASE INFORMATION. CHECK LOGIN/PASS OR FILE %%%%%"
   #disqualify invalid movie airdates
@@ -1365,10 +1376,10 @@ downloadInfoAboutMatchedTitleAndCreateTxtFileTables(){
       local SeasonNr=""
       local EpisodeNr=""
       local EpisodeOverview=""
-      local recordNumber=-1
+      local -i recordNumber=-1
       Inform "Parsing Downloaded information: $NewShowName.xml"
       while read line ; do
-        if [[ $recordNumber < 0 ]]; then
+        if (($recordNumber < 0)); then
           #TODO:Check for a Status line and if it exists and says Ended then touch
           #  a file called Status.Ended in the $m2kdir/$NewShowName/
           #  directory, then add a check for this before we bother trying to
@@ -1652,6 +1663,7 @@ getAbsoluteEpisodeNumberWithFuzzyLogic(){
 #####SEARCH THETVDB AND CREATE DATA FILES#####
 searchTheTvDbAndReturnTxtFileTables(){
   Debug "ENTERING: ${FUNCNAME}()"
+  Inform "SEARCHING www.TheTVDB.com FOR $tvdbshowname"
   #TODO: Instance searching rather then global.  Need to create an instance variable based on time and chanid.
   #Search TheTvDb and return an XML file with results
   curl -L -s -m"$Timeout" www.thetvdb.com/api/GetSeries.php?seriesname=$tvdbshowname>"$m2kdir/working.xml"
@@ -2291,9 +2303,8 @@ mythicalDiagnostics(){
   local DBTest=""
   local notifytest=""
   local PythonBindingsCheck=""
-  printf '%s\n' "--You have entered diagnostic mode" | tee -a "$DiagnosticsFile"
-  printf '%s\n' "$(date)" >> "$DiagnosticsFile"
-  printf '%s\n' "myth2kodi will now conduct a series of tests." | tee -a "$DiagnosticsFile"
+  Inform "Diagnostic mode entered: $(date)"
+  Inform "myth2kodi will now conduct a series of tests."
   read -n1 -p "press any key to verify installed packages..."
 
   #Test if required packages are installed and accessible to caller.
@@ -2315,43 +2326,49 @@ mythicalDiagnostics(){
   #Provide feedback on package checks
   packagecheck="$checkc$checkd$checke"
   printf '\n' | tee -a "$DiagnosticsFile"
-  test "$checkc" = "" && printf '%s\n' "package 'curl' found." | tee -a "$DiagnosticsFile"
-  test "$checkd" = "" && printf '%s\n' "package 'agrep' or 'tre-agrep' found." | tee -a "$DiagnosticsFile"
-  test "$checke" = "" && printf '%s\n' "package 'libnotify-bin' found." | tee -a "$DiagnosticsFile"
+  test "$checkc" = "" && Inform "package 'curl' found."
+  test "$checkd" = "" && Inform "package 'agrep' or 'tre-agrep' found."
+  test "$checke" = "" && Inform "package 'libnotify-bin' found."
   if [ "$DatabaseType" = "MythTVPythonBindings" ]; then
     packagecheck="$packagecheck$checkf$checka$checkb"
-    test "$checkf" = "" && printf '%s\n' "package 'python' found." | tee -a "$DiagnosticsFile"
+    test "$checkf" = "" && Inform "package 'python' found."
     if [ "$checkf" = "" ] && [ $pyver -lt 26 -o $pyver -ge 30 ] ; then
-      printf '%s\n' "WARNING: Python 3 and Python older than 2.6 aren't supported." | tee -a "$DiagnosticsFile"
+      Warn "Python 3 and Python older than 2.6 aren't supported."
     fi
-    test "$checka" = "" && printf '%s\n' "package 'libmyth-python' found." | tee -a "$DiagnosticsFile"
-    test "$checkb" = "" && printf '%s\n' "package 'python-lxml' found." | tee -a "$DiagnosticsFile"
+    test "$checka" = "" && Inform "package 'libmyth-python' found."
+    test "$checkb" = "" && Inform "package 'python-lxml' found."
   fi
   if [ $packagecheck != "" ] ; then
     packagecheck="***FAILED***"
-    printf '%s\n' "Installed packages check ***FAILED***" | tee -a "$DiagnosticsFile"
-    printf 'Missing packages are: %s\n' "$checkc $checkd $checke $checkf $checka $checkb" | tee -a "$DiagnosticsFile"
-    printf '%s\n' "If packages are already installed, check your path settings." | tee -a "$DiagnosticsFile"
+    Err "Installed packages check ***FAILED***"
+    ErrCont "Missing packages are: $checkc $checkd $checke $checkf $checka $checkb"
+    ErrCont "If packages are already installed, check your path settings."
     if [ "$mythicalPlatform" != "Darwin" ] ; then
-      printf "Please run 'apt-get install %s' or equivalent.\n" "$checkc $checkd $checke $checkf $checka $checkb" | tee -a "$DiagnosticsFile"
+      ErrCont "Please run 'apt-get install $checkc $checkd $checke $checkf $checka $checkb' or equivalent."
     else
-      echo "Please obtain MacPorts and install %s \n" "$checkb $checkc $checkd $checke"
-      test $checkf != "" && printf '%s\n' "Python is missing, please install Python, or make sure it's in your path." | tee -a "$DiagnosticsFile"
+      ErrCont "Please obtain MacPorts and install $checkb $checkc $checkd $checke"
+      test $checkf != "" && ErrCont "Python is missing, please install Python, or make sure it's in your path."
     fi
   else
     packagecheck="***PASSED***"
-    printf '%s\n' "Installed packages check ***PASSED***" | tee -a "$DiagnosticsFile"
+    Inform "Installed packages check ***PASSED***"
   fi
 
   #If we're not on Mac OS X, check that user notification is working.
   if [ "$mythicalPlatform" != "Darwin" ]; then
     read -n1 -p "Press any key to perform Desktop Message test..."
-    printf '\n%s\n' "Performing librarian-notify-send test" | tee -a "$DiagnosticsFile"
-    printf '%s\n' "This test verifies that the message was sent to the DBUS." | tee -a "$DiagnosticsFile"
-    printf '%s\n' "This test does not verify the user has a valid desktop open." | tee -a "$DiagnosticsFile"
+    printf '\n'
+    Inform "Performing librarian-notify-send test"
+    InformCont "This test verifies that the message was sent to the DBUS."
+    InformCont "This test does not verify the user has a valid desktop open."
     sudo -u "$NotifyUserName" /usr/local/bin/librarian-notify-send "myth2kodi test" "Testing Desktop Communications" "info"
-    test "$?" = "0" && notifytest="***PASSED***" || notifytest="***FAILED***"
-    printf '%s\n' "Desktop Notifications test $notifytest" | tee -a "$DiagnosticsFile"
+    if [ "$?" = "0" ] ; then
+      notifytest="***PASSED***"
+      Inform "Desktop Notifications test $notifytest"
+    else
+      notifytest="***FAILED***"
+      Warn "Desktop Notifications test $notifytest"
+    fi
   else
     notifytest="   N/A"
   fi
@@ -2359,10 +2376,11 @@ mythicalDiagnostics(){
   #If we'll be using MythTV python bindings, check that they're functioning.
   if [ "$DatabaseType" = "MythTVPythonBindings" ]; then
     read -n1 -p "Press any key to perform a test of the MythTV Database python bindings..."
-    printf '\n%s\n' "Performing MythTV Python Bindings database test." | tee -a "$DiagnosticsFile"
+    printf '\n'
+    Inform "Performing MythTV Python Bindings database test."
     if [ "$checkf" = "" ]  ; then
-      printf 'Python: %s\n' "$(which python)" | tee -a "$DiagnosticsFile"
-      printf 'Version: %s\n' "$python_version" | tee -a "$DiagnosticsFile"
+      Inform "Python: $(which python)"
+      Inform "Version: $python_version"
     fi
 
     #If checks above found python-lxml & libmyth-python, do a more thorough testing of MythTV python bindings
@@ -2371,25 +2389,28 @@ mythicalDiagnostics(){
       /usr/local/bin/MythDataGrabber --Diagnostic=True
       test $? = "0" && PythonBindingsCheck="OK" || PythonBindingsCheck="FAILED"
       if [ "$PythonBindingsCheck" = "OK" ]; then
-        printf '%s\n' "MythTV Python Bindings are installed properly." | tee -a "$DiagnosticsFile"
+        Inform "MythTV Python Bindings are installed properly."
         DBTest="***PASSED***"
+        Inform "MythTV Database Test $DBTest"
       else
-        printf '%s\n' "MythTV PythonBindings are not installed properly" | tee -a "$DiagnosticsFile"
-        printf '%s\n' "there was a problem connecting to the database, check MythDatabase package." | tee -a "$DiagnosticsFile"
+        Err "MythTV PythonBindings are not installed properly"
+        ErrCont "there was a problem connecting to the database, check MythDatabase package."
         DBTest="***FAILED***"
+        Err "MythTV Database Test $DBTest"
       fi
     else
       DBTest="COULD NOT COMPLETE, SEE MISSING PACKAGES MENTIONED ABOVE."
+      Err "MythTV Database Test $DBTest"
     fi
-    printf '%s\n'  "MythTV Database Test $DBTest" | tee -a "$DiagnosticsFile"
   fi
   
   #TODO: This currently tests Kodi notification even if Notifications are disabled in settings, is this actually the behaviour we want?
   #Test communication with Kodi
   read -n1 -p "Press any key to perform KODI Notification test..."
-  printf '\n%s\n' "Performing KODI Notifications test" | tee -a "$DiagnosticsFile"
+  printf '\n'
+  Inform "Performing KODI Notifications test"
   for KODIIP in ${KODIIPs[@]} ; do
-    printf 'SENDING REQUESTED COMMANDS TO: %s\n' "$KODIIP" | tee -a "$DiagnosticsFile"
+    Inform "SENDING REQUESTED COMMANDS TO: $KODIIP"
     #SAK: REPLACED BELOW, SEE http://forum.kodi.tv/showthread.php?tid=65644&page=65&highlight=json
     local curlPOST='curl -L -s -m3 --connect-timeout 5 -X POST -H "Content-Type: application/json" -d'
     local data=\''{"jsonrpc":"2.0",
@@ -2398,21 +2419,27 @@ mythicalDiagnostics(){
                    "id":1}'\'
     local KODIresp=$($curlPOST $data http://$KODIIP/jsonrpc | tr -d "</html>i^")
     if [ "$KODIresp" != "" ] ; then
-      printf 'TESTING: %s\n' "$KODIresp" | tee -a "$DiagnosticsFile"
+      InformCont "TESTING: $KODIresp"
     else
-      printf 'COMMUNICATIONS NOT ESTABLISHED: %s\n' "$KODIIP" | tee -a "$DiagnosticsFile"
+      Err "COMMUNICATIONS NOT ESTABLISHED: $KODIIP"
     fi
   done
   #SAK: REPLACED BELOW, SEE http://forum.kodi.tv/showthread.php?tid=65644&page=65&highlight=json
-  test "`echo $KODIresp`" = "{d:1,jsonrpc:2.0,resu:OK}" && KODIcomm="***PASSED***" || KODIcomm="***FAILED***"
-  printf 'KODI Communications %s\n' "$KODIcomm" | tee -a "$DiagnosticsFile"
+  if [ "`echo $KODIresp`" = "{d:1,jsonrpc:2.0,resu:OK}" ] ; then
+    KODIcomm="***PASSED***"
+    Inform "KODI Communications $KODIcomm"
+  else
+    KODIcomm="***FAILED***"
+    Err "KODI Communications $KODIcomm"
+  fi
 
   #Check filesystem permissions
   read -n1 -p "Press any key to test file system permissions..."
-  printf '\n%s\n'  "Testing file system permissions" | tee -a "$DiagnosticsFile"
+  printf '\n'
+  Inform "Testing file system permissions"
 
   if [ "$TargetPathIsInputPath" = "Enabled" ]; then
-    printf '%s\n' "TargetPathIsInputPath is selected. Testing with current folder" | tee -a "$DiagnosticsFile"
+    Inform "TargetPathIsInputPath is selected. Testing with current folder"
     setTargetFolderAsInputPathFolder
   fi
 
@@ -2451,20 +2478,22 @@ mythicalDiagnostics(){
   WorkingDirWritable=$TMoveDirWritable
   
   #Print a summary table of writeable directories.
-  printf '%-18s|%-5s|%s\n'   "USER SETTING"      "FLAG"                       "Folder name"        | tee -a "$DiagnosticsFile"
-  printf '%-18s|  %s  |%s\n' "MoveDir"           "$MoveDirWritable"           "$MoveDir"           | tee -a "$DiagnosticsFile"
-  printf '%-18s|  %s  |%s\n' "AlternateMoveDir"  "$AlternateMoveDirWritable"  "$AlternateMoveDir"  | tee -a "$DiagnosticsFile"
-  printf '%-18s|  %s  |%s\n' "PrimaryMovieDir"   "$PrimaryMovieDirWritable"   "$PrimaryMovieDir"   | tee -a "$DiagnosticsFile"
-  printf '%-18s|  %s  |%s\n' "AlternateMovieDir" "$AlternateMovieDirWritable" "$AlternateMovieDir" | tee -a "$DiagnosticsFile"
-  printf '%-18s|  %s  |%s\n' "PrimaryShowDir"    "$PrimaryShowDirWritable"    "$PrimaryShowDir"    | tee -a "$DiagnosticsFile"
-  printf '%-18s|  %s  |%s\n' "AlternateShowDir"  "$AlternateShowDirWritable"  "$AlternateShowDir"  | tee -a "$DiagnosticsFile"
-  printf '%-18s|  %s  |%s\n' "m2kdir"            "$WorkingDirWritable"        "$m2kdir"            | tee -a "$DiagnosticsFile"
+  Inform "A summary table of writeable directories: 0='NOT WRITEABLE' ; 1='WRITEABLE'"
+  printf '    %-18s|%-5s|%s\n'   "USER SETTING"      "FLAG"                       "Folder name"        | tee -a "$DiagnosticsFile"
+  printf '    %-18s|  %s  |%s\n' "MoveDir"           "$MoveDirWritable"           "$MoveDir"           | tee -a "$DiagnosticsFile"
+  printf '    %-18s|  %s  |%s\n' "AlternateMoveDir"  "$AlternateMoveDirWritable"  "$AlternateMoveDir"  | tee -a "$DiagnosticsFile"
+  printf '    %-18s|  %s  |%s\n' "PrimaryMovieDir"   "$PrimaryMovieDirWritable"   "$PrimaryMovieDir"   | tee -a "$DiagnosticsFile"
+  printf '    %-18s|  %s  |%s\n' "AlternateMovieDir" "$AlternateMovieDirWritable" "$AlternateMovieDir" | tee -a "$DiagnosticsFile"
+  printf '    %-18s|  %s  |%s\n' "PrimaryShowDir"    "$PrimaryShowDirWritable"    "$PrimaryShowDir"    | tee -a "$DiagnosticsFile"
+  printf '    %-18s|  %s  |%s\n' "AlternateShowDir"  "$AlternateShowDirWritable"  "$AlternateShowDir"  | tee -a "$DiagnosticsFile"
+  printf '    %-18s|  %s  |%s\n' "m2kdir"            "$WorkingDirWritable"        "$m2kdir"            | tee -a "$DiagnosticsFile"
   if [ "$MoveDirWritable" = "1" ] && [ "$AlternateMoveDirWritable" = "1" ] && [ "$WorkingDirWritable" = "1" ] ; then
     folderchecks="***PASSED***"
+    Inform "Critical Filesystem checks $folderchecks"
   else
     folderchecks="***FAILED***"
+    Err "Critical Filesystem checks $folderchecks"
   fi
-  printf "Critical Filesystem checks %s\n"  "$folderchecks" | tee -a "$DiagnosticsFile"
   if [ "$packagecheck" = "***PASSED***" ] && [ "$folderchecks" = "***PASSED***" ] ; then
     overallchecks="***PASSED***"
   else
@@ -2472,85 +2501,105 @@ mythicalDiagnostics(){
   fi
   if [ "$overallchecks" = "***PASSED***" ]; then
     read -n1 -p "press any key to test myth2kodi..."
-    printf '\n  %s\n' "Recordings Database is not used for testing." | tee -a "$DiagnosticsFile"
-    printf '  %s\n'   "Performing fuzzy logic lookup on database file.  Please wait."
-    printf '  %s\n'   "It may take a moment to build mythical librarian database files."
-    printf '  %s\n'   "Executing: myth2kodi testfile.ext 'mister rogers' 'show 1332'" | tee -a "$DiagnosticsFile"
-    printf '  %s\n'   "Testing exit status." | tee -a "$DiagnosticsFile"
+    printf '\n'
+    Inform "Recordings Database is not used for testing."
+    InformCont "Performing fuzzy logic lookup on database file.  Please wait."
+    InformCont "It may take a moment to build mythical librarian database files."
+    InformCont "Executing: myth2kodi testfile.ext 'mister rogers' 'show 1332'"
+    InformCont "Testing exit status."
 
     myth2kodi testfile.ext "mister rogers" "show 1332"
     exitstatus=$?
-    printf "exited with status  %s\n"  "$exitstatus" | tee -a "$DiagnosticsFile"
+    InformCont  "exited with status $exitstatus"
     if [ "$exitstatus" = "0" ]; then
       mythicaltest="***PASSED***"
     else
-      printf '%s\n' "OVERALL FAILURE" | tee -a "$DiagnosticsFile"
+      Err "OVERALL FAILURE -- checks passed, but test run failed."
       mythicaltest="COULD NOT COMPLETE"
       overallchecks="***FAILURE***"
     fi
   else
-    printf '%s\n' "OVERALL FAILURE" | tee -a "$DiagnosticsFile"
+    Err "OVERALL FAILURE"
     mythicaltest="COULD NOT COMPLETE"
   fi
   read -n1 -p "press any key to continue on to the final results..."
-  printf '\n  %s\n' "All tests complete           RESULTS" | tee -a "$DiagnosticsFile"
-  test "$DatabaseType"="MythTVPythonBindings" && printf "  MythTV Database Test: %s\n" "$DBTest" | tee -a "$DiagnosticsFile"
-  printf '  Installed Packages:   %s %s %s %s %s %s\n' "$packagecheck" "$checka" "$checkb" "$checkc" "$checkd" "$checke" | tee -a "$DiagnosticsFile"
-  printf '  Notifications Test:   %s\n'   "$notifytest" | tee -a "$DiagnosticsFile"
-  printf '  KODI Communications:  %s\n'   "$KODIcomm" | tee -a "$DiagnosticsFile"
-  printf '  File System Checks:   %s\n'   "$folderchecks" | tee -a "$DiagnosticsFile"
-  printf '  mythicalTesting:      %s\n\n' "$mythicaltest" | tee -a "$DiagnosticsFile"
+  printf '\n'
+  Inform "RESULTS SUMMARY:"
+  test "$DatabaseType"="MythTVPythonBindings" && InformCont "MythTV Database Test: $DBTest"
+  InformCont "Installed Packages:  $packagecheck $checka $checkb $checkc $checkd $checke"
+  InformCont "Notifications Test:  $notifytest"
+  InformCont "KODI Communications: $KODIcomm"
+  InformCont "File System Checks:  $folderchecks"
+  InformCont "mythicalTesting:     $mythicaltest"
 
-  printf "  Overall mythicalReadiness: %s\n" "$overallchecks" | tee -a "$DiagnosticsFile"
-  printf '%s\n' "-----End of diagnostics-----" | tee -a "$DiagnosticsFile"
+  InformCont "Overall mythicalReadiness: $overallchecks"
+  InformCont "-----End of diagnostics-----"
+  printf '\n' | tee -a "$DiagnosticsFile"
 
   #Logging for failure messages
   if [ "$DBTest" = "***FAILED***" ]; then
-    printf '  %s\n' "When interfacing MythTV/0.24, myth2kodi uses MythTV's Python" | tee -a "$DiagnosticsFile"
-    printf '  %s\n' "Bindings.  These must be configured and working for proper access" | tee -a "$DiagnosticsFile"
-    printf '  %s\n' "to data required by myth2kodi." | tee -a "$DiagnosticsFile"
-    printf '  %s\n' "Could not connect to the database. Check username and password." | tee -a "$DiagnosticsFile"
+    Err "Database tests failed"
+    ErrCont "When interfacing MythTV/0.24, myth2kodi uses MythTV's Python"
+    ErrCont "Bindings.  These must be configured and working for proper access"
+    ErrCont "to data required by myth2kodi."
+    ErrCont "Could not connect to the database. Check username and password."
+    printf '\n' | tee -a "$DiagnosticsFile"
   #TODO: add more information on how to install
   fi
 
   if [ "$notifytest" = "***FAILED***" ]; then
-    printf '\n  %s\n' "Notifications to the DBUS have failed. myth2kodi relies upon" | tee -a "$DiagnosticsFile"
-    printf '  %s\n' "librarian-notify-send and package lib-notify to display messages on" | tee -a "$DiagnosticsFile"
-    printf '  %s\n' "GNOME desktop interface. These messages will not be displayed. " | tee -a "$DiagnosticsFile"
+    Err "Notify tests failed"
+    ErrCont "Notifications to the DBUS have failed. myth2kodi relies upon"
+    ErrCont "librarian-notify-send and package lib-notify to display messages on"
+    ErrCont "GNOME desktop interface. These messages will not be displayed. "
+    printf '\n' | tee -a "$DiagnosticsFile"
   fi
   if [ "$KODIcomm" = "***FAILED***" ]; then
-    printf '\n  %s\n' "KODI Communications have failed.  Likely causes: Improper IP address," | tee -a "$DiagnosticsFile"
-    printf '  %s\n' "or KODI is not equipped to handle external network commands in settings." | tee -a "$DiagnosticsFile"
-    printf '  %s\n' "myth2kodi can not send messages or library update requests." | tee -a "$DiagnosticsFile"
+    Err "Kodi communication tests failed"
+    ErrCont "KODI Communications have failed.  Likely causes: Improper IP address,"
+    ErrCont "or KODI is not equipped to handle external network commands in settings."
+    ErrCont "myth2kodi can not send messages or library update requests."
+    printf '\n' | tee -a "$DiagnosticsFile"
   fi
+  #TODO: SUDO_USER is only set in executeDoOver() and executeUndo(), in the original mythicalLibrarian it was also set in the updater.
+  #  So, the $SUDO_USER statements here won't evaluate to anything, and would never have worked outside of the context of the updater.
+  #  REALLY NEED TO REVIEW sudo USE AND PERMISSIONS EXPECTATIONS WITHIN THE SCRIPT...
   if [ "$folderchecks" = "***FAILED***" ]; then
-    printf '  %s\n' "The filesystem checks failed. Likely causes: " | tee -a "$DiagnosticsFile"
-    printf '    %s\n' "The user named $SUDO_USER does not have permission to use the folder" | tee -a "$DiagnosticsFile"
-    printf '      %s\n\n' "CORRECTIVE ACTION: sudo chown $SUDO_USER /Name/of/My_failed_folder" | tee -a "$DiagnosticsFile"
-    printf '    %s\n' "The folder belongs to a different group then the user named $SUDO_USER" | tee -a "$DiagnosticsFile"
+    Err "Folder checks failed"
+    ErrCont "The filesystem checks failed. Likely causes: "
+    ErrCont "The user named $SUDO_USER does not have permission to use the folder"
+    ErrCont "CORRECTIVE ACTION: sudo chown $SUDO_USER /Name/of/My_failed_folder"
+    ErrCont "The folder belongs to a different group then the user named $SUDO_USER"
     if [ "$Database" = "Enabled" ] && [ "$DatabaseType" = "MythTV" ] && [ "$SUDO_USER" != "mythtv" ]; then
-      printf '      CORRECTIVE ACTION: %s\n' "sudo adduser mythtv $SUDO_USER" | tee -a "$DiagnosticsFile"
-      printf '                         %s\n\n' "sudo adduser $SUDO_USER mythtv" | tee -a "$DiagnosticsFile"
+      ErrCont "    CORRECTIVE ACTION: sudo adduser mythtv $SUDO_USER"
+      ErrCont "                       sudo adduser $SUDO_USER mythtv"
+      printf '\n' | tee -a "$DiagnosticsFile"
     else
-      printf '      CORRECTIVE ACTION: %s\n' "sudo adduser RecordingManagerUser $SUDO_USER" | tee -a "$DiagnosticsFile"
-      printf '                         %s\n\n' "sudo adduser $SUDO_USER RecordingManagerUser" | tee -a "$DiagnosticsFile"
+      ErrCont "    CORRECTIVE ACTION: sudo adduser RecordingManagerUser $SUDO_USER"
+      ErrCont "                       sudo adduser $SUDO_USER RecordingManagerUser"
+      printf '\n' | tee -a "$DiagnosticsFile"
     fi
-    printf '    %s\n' "The folder does not exist" | tee -a "$DiagnosticsFile"
-    printf '      CORRECTIVE ACTION: %s\n\n' "mkdir /Name/of/My_failed_folder" | tee -a "$DiagnosticsFile"
+    ErrCont "The folder does not exist"
+    ErrCont "    CORRECTIVE ACTION: mkdir /Name/of/My_failed_folder"
+    printf '\n' | tee -a "$DiagnosticsFile"
   fi
   if [ "$mythicaltest" != "***PASSED***" ]; then
-    printf '  %s\n' "myth2kodi has encountered an error. This may be due to a" | tee -a "$DiagnosticsFile"
-    printf '  %s\n' "lack of network connection. If the problem persists, try" | tee -a "$DiagnosticsFile"
-    printf '  %s\n' "reading then asking at: http://forum.kodi.tv/showthread.php?tid=65644" | tee -a "$DiagnosticsFile" #TODO: If make public, change to new thread that I should've started.
+    Err "Test run of myth2kodi failed."
+    ErrCont "myth2kodi has encountered an error. This may be due to a"
+    ErrCont "lack of network connection. If the problem persists, try"
+    ErrCont "reading then asking at: http://forum.kodi.tv/showthread.php?tid=65644" #TODO: If make public, change to new thread that I should've started.
+    printf '\n' | tee -a "$DiagnosticsFile"
   fi
   if [ "$overallchecks" = "***FAILURE***" ]; then
-    printf '\n  %s\n' "These issues must be corrected in order for myth2kodi to" | tee -a "$DiagnosticsFile"
-    printf '  %s\n' "perform correctly" | tee -a "$DiagnosticsFile"
+    Inform "The issues mentioned above must be corrected for myth2kodi to perform correctly."
   fi
 
-  test "$overallchecks" = "***FAILURE***" && exit 1
+  Inform "Diagnostic mode completed: $(date)"
+  Inform "A diagnostics log file was written to: $LogFile"
 
-  exit 0
+  test "$overallchecks" = "***FAILURE***" && return 1
+
+  return 0
 }
 
 #####DOOVER PROCESSING#####
@@ -2800,7 +2849,7 @@ getSeriesInfo(){
   #Usage example: myth2kodi --getSeriesInfo "Black Books"
   Inform "Searching for series: $InputTitle"
   ShowName="$InputTitle"
-  local tvdbshowname=`echo $ShowName | sed s/" "/"%20"/g | sed s/"&"/"%26"/g`
+  local tvdbshowname=$(echo $ShowName | sed s/" "/"%20"/g | sed s/"&"/"%26"/g)
   searchTheTvDbAndReturnTxtFileTables
   GetSeriesLineNumberFromTableWithFuzzyLogic
   #if we have a series line number then translate that into a series id
@@ -2901,13 +2950,22 @@ case "$InputPath" in
     mythicalScan
   ;;
   --mythicalDiagnostics|-m)
-    #TODO: checkPermissions() is called within mythicalDiagnostics, but its
-    #  output is dumped to LogFile not DiagnosticsFile. Consider making all
-    #  logging go to LogFile, but make where LogFile points context specific.
-    #LogFile="$m2kdir/diagnostics.log"
-    #test "$LogType" != "stdout" && Warn "Redirecting logging messages to $LogFile" || Warn "Running diagnostics without any logging to file, consider changing LogType to 'logfile' or 'both'"
+    PreCallLogFile="$LogFile"
+    PreCallLogLevel="$LogLevel"
+    if [[ "$LogType" != "stdout" ]] ; then
+     Warn "Running diagnostics, so setting LogLevel=3 and redirecting subsequent messages to $DiagnosticsFile"
+    else
+     Warn "Running diagnostics without any logging to file, consider using LogType 'logfile' or 'both'"
+     Warn "Setting LogLevel=3"
+    fi
+    LogFile="$DiagnosticsFile"
+    LogLogLevel=3
     mythicalDiagnostics
-    #TODO: Standardise on functions returning with actual exit done here.
+    declare -i diagnosticsreturnstatus="$?"
+    #Reset the LogFile & LogLevel to previous state, in case we ever call myth2kodi --mythicalDiagnostics from within myth2kodi
+    LogFile="$PreCallLogFile"
+    LogLevel="$PreCallLogLevel"
+    exit $diagnosticsreturnstatus
   ;;
   --confidence)
     improveConfidence
@@ -2938,7 +2996,7 @@ case "$InputPath" in
   ;;
   --update|--upgrade|--build|-u)
     #mythicalUpdater
-    echo "ERROR: NOT MAINTAINING THE UPDATER, SO DON'T BOTHER TRYING TO UPDATE..."
+    Err "NOT MAINTAINING THE UPDATER, SO DON'T BOTHER TRYING TO UPDATE..."
     exit 1
   ;;
   --doMaintenance)
@@ -2963,7 +3021,7 @@ test "${InputTitle:0:1}" = "-" && mythicalHelp
 
 #Initial log entry
 mythicalPlatform="`uname`"
-echo "@@@@@@@@@@@NEW SEARCH INITIATED AT `date`@@@@@@@@@@@@@@">>"$LogFile"
+echo "@@@@@@@@@@@@@@@@ NEW SEARCH INITIATED $Today AT $Time @@@@@@@@@@@@@@@@">>"$LogFile"
 echo "$mythicalVersion on $mythicalPlatform">>"$LogFile"
 echo "$mythicalVersion"
 
@@ -2990,31 +3048,30 @@ if [ "$Database" = "Enabled" ]; then
   #determine appropriate processing for guide data
   case "$GuideDataType" in
     SchedulesDirect)
-      echo "Processing MythTV database info as SchedulesDirect."
       ProcessSchedulesDirect
     ;;
     NoLookup)
-      echo "Processing MythTV database info as NoLookup."
       ProcessNoLookup
     ;;
     SydFTA)
-      echo "Processing MythTV database info as SydFTA."
       ProcessSydFTA
     ;;
     *)
-      echo "GuideDataType incorrectly specified, processing MythTV database info assuming SchedulesDirect."
+      Warn "GuideDataType incorrectly specified, processing MythTV database info assuming SchedulesDirect."
       ProcessSchedulesDirect
     ;;
   esac
+#TODO: Should bail with an error here if Database isn't Enabled and InputTitle is empty...
 fi
 
 #Report found data
-echo "RECSTART:$ShowStartTime  DATE:$MovieAirDate $OriginalAirDate"
-echo "PROGRAMID:$ProgramID  ShowCategory:$ShowCategory"
-test "$InputSubtitle" != "" && echo -n "InputSubtitle:$InputSubtitle  "  || echo -n "InputSubtitle: UNKNOWN  "
-test "$Sxx" != "" && echo -n "Sxx:$Sxx  " || echo -n "Sxx: UNKNOWN  "
-test "$Exx" != "" && echo "Exx:$Exx" || echo "Exx: UNKNOWN"
-echo "PLOT: $Plot"
+Inform "Input and MythTV-DB Guide Data for $InputFileBasename"
+InformCont "RECSTART:$ShowStartTime  DATE:$MovieAirDate $OriginalAirDate"
+InformCont "PROGRAMID:$ProgramID  ShowCategory:$ShowCategory"
+test "$InputSubtitle" != "" && InformCont "InputSubtitle:$InputSubtitle  "  || InformCont "InputSubtitle: UNKNOWN  "
+test "$Sxx" != "" && InformCont "Sxx:$Sxx  " || InformCont "Sxx: UNKNOWN  "
+test "$Exx" != "" && InformCont "Exx:$Exx" || InformCont "Exx: UNKNOWN"
+InformCont "PLOT: $Plot"
 ShowName=$InputTitle
 test "$ShowName" = "" && mythicalHelp
 
@@ -3044,9 +3101,6 @@ DoMaintenance
 
 #Process as though it's an episode of a tv series.
 if [ "$m2kProgramIDCheck" != "SH" ] && [ "$m2kProgramIDCheck" != "MV" ]; then
-  echo "SEARCHING: www.TheTvDb.com SHOW NAME: $ShowName" | tee -a "$LogFile"
-  echo "DATE:$MovieAirDate $OriginalAirDate FILE NAME: $InputPath">>"$LogFile"
-
   #Query thetvdb on show title, then return a list of Zap2itID, ShowName and seriesid.
   searchTheTvDbAndReturnTxtFileTables
 
@@ -3251,11 +3305,11 @@ else
   ConfidenceReasoning="$ConfidenceReasoning Could not set Sxx and Exx, Failed; "
 fi
 
-#If it's tagged as a SH or EP but lacking SxxExx and then as a fallback check storagegroup in case it's a Movie we missed
+#If it's not tagged as a Movie but lacking SxxExx and then as a fallback check storagegroup in case it's a Movie we missed
 if [ "$StorageGroupFallback" = "Enabled" ] ; then
   #TODO: Make a HasSxxExx variable that is set and used consistently, #NOTE: there is already one but it's weirdly used
   if [ "$m2kProgramIDCheck" != "MV" ] && [[ "$Sxx" = "S" || "$Sxx" = "" || "$Sxx" = "S00" || "$Exx" = "E" || "$Exx" = "" || "$Exx" = "E00" ]] ; then
-    if [ "$(echo $StorageGroup | grep -i '\(Movies*\|Films*\)')" != "" ] ; then
+    if [ "$(grep -i '\(Movies*\|Films*\)' <<< "$StorageGroup")" != "" ] ; then
       printf 'GUESSING that this is a Movie based on being in storagegroup: %s\n' "$StorageGroup" | tee -a "$LogFile"
       m2kProgramIDCheck="MV"
       ProgramIDType="Movie"
@@ -3281,7 +3335,7 @@ elif [ "$m2kProgramIDCheck" = "MV" ] || [ "$m2kProgramIDCheck" = "SH" ] ; then
 fi
 
 #if the confidence was low, then show requires a doover
-#TODO: Use test for short, if for long, ie: [[ ConfidenceRating <= -4 ]] && RequiresDoover=1
+#TODO: Use test for short, if for long, ie: ((ConfidenceRating <= -4)) && RequiresDoover=1
 if [ $ConfidenceRating -le -4 ]; then
   RequiresDoover=1
 fi
@@ -3293,7 +3347,7 @@ if [ -L "$InputPath" ]; then
 fi
 
 #If user wants database data deleted, then we will do that if the match was a good confidence level
-#TODO: Use test for short, if for long, ie: [[ "$SYMLINK" = "Disabled" ]] && [[ ConfidenceRating > -4 ]] && RequiresDoover=0
+#TODO: Use test for short, if for long, ie: [[ "$SYMLINK" = "Disabled" ]] && ((ConfidenceRating > -4)) && RequiresDoover=0
 if [ "$SYMLINK" = "Disabled" ]; then
   if [ $ConfidenceRating -gt -4 ]; then
     RequiresDoover=0
@@ -3558,7 +3612,7 @@ elif [ "$SYMLINK" = "LINK" ]; then
     #Move comskip data to proper folder
     if [ "$CommercialMarkup" = "Created" ]; then
       mv "$m2kdir"/markupframes.txt "$MoveDir/$ShowFileName.txt"
-      echo "$MoveDir/$ShowFileName.txt">>"$m2kdir"/created.tracking
+      echo "$MoveDir/$ShowFileName.txt" >> "$m2kdir"/created.tracking
     fi
 
     #Additional features, notifications, rss, daily report.
@@ -3574,7 +3628,7 @@ elif [ "$SYMLINK" = "LINK" ]; then
 
     #If link failure, send notification and fail
   elif [ ! -L "$MoveDir/$ShowFileName.$OriginalExt" ]; then
-    echo "myth2kodi '$1' '$2' '$3'">>$m2kdir/doover.sh
+    echo "myth2kodi '$1' '$2' '$3'" >> "$m2kdir"/doover.sh
     SymlinkNotCreated
     writeJobToDooverQue
 

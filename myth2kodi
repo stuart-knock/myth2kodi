@@ -234,6 +234,13 @@ Language="en"
 #Options: ['Enabled'|'Disabled']
 StorageGroupFallback="Enabled"
 
+#PlotMatchFallback can be used to enable/disable a bit of code that, if a SeriesID has been determined,
+#but no subtitle, nor Season & Episode numbers have been identified, falls back to fuzzy matching the
+#Plot field from the Guide data in MythTV DB against the Plot data for the series, which we retrieved from
+#TheTVDB.
+#Options: ['Enabled'|'Disabled']
+PlotMatchFallback="Enabled"
+
 ###Database settings###
 #MythTV MYSQL access allows addition of movies, comskip data, and improves accuracy of episode recognition.
 #Database access Enabled|Disabled
@@ -1621,11 +1628,18 @@ getAbsoluteEpisodeNumberWithOriginalAirdate(){
 #Get the AbsoluteEpisodeNumber corresponding to Sxx and Exx
 getAbsoluteEpisodeNumberWithSxxExx(){
   Debug "ENTERING: ${FUNCNAME}()"
+  DebugCont "AbsoluteEpisodeNumber: $AbsoluteEpisodeNumber"
+  DebugCont "NewShowName: $NewShowName"
+  DebugCont "Sxx: $Sxx"
+  DebugCont "Exx: $Exx"
+
   AbsoluteEpisodeNumber=""
-  Snum=${Sxx#S} ; Snum=${Snum#0}
-  Enum=${Exx#E} ; Enum=${Enum#0}
-  SxxAENs=`grep -nix "$Snum" "$m2kdir/$NewShowName/$NewShowName.S.txt" | sed s/:.*//`
-  ExxAENs=`grep -nix "$Enum" "$m2kdir/$NewShowName/$NewShowName.E.txt" | sed s/:.*//`
+  #Strip the leading "S" and any leading "0" from Sxx
+  local Snum=${Sxx#S} ; Snum=${Snum#0}
+  #Strip the leading "E" and any leading "0" from Exx
+  local Enum=${Exx#E} ; Enum=${Enum#0}
+  local SxxAENs=`grep -nix "$Snum" "$m2kdir/$NewShowName/$NewShowName.S.txt" | sed s/:.*//`
+  local ExxAENs=`grep -nix "$Enum" "$m2kdir/$NewShowName/$NewShowName.E.txt" | sed s/:.*//`
   AbsoluteEpisodeNumber=`comm -12 <(echo $SxxAENs | sed s/" "/"\n"/g | sort) <(echo $ExxAENs | sed s/" "/"\n"/g | sort)`
   if [ "$AbsoluteEpisodeNumber" != "" ] && [ $AbsoluteEpisodeNumber -gt 0 ]; then
     Inform "Using SxxExx, determined AbsoluteEpisodeNumber: $AbsoluteEpisodeNumber"
@@ -1633,6 +1647,44 @@ getAbsoluteEpisodeNumberWithSxxExx(){
   fi
   Warn "${FUNCNAME}() Failed to determine AbsoluteEpisodeNumber"
   return 1
+}
+
+getAbsoluteEpisodeNumberWithFuzzyPlotMatch(){
+  Debug "ENTERING: ${FUNCNAME}()"
+  DebugCont "AbsoluteEpisodeNumber: $AbsoluteEpisodeNumber"
+  DebugCont "NewShowName: $NewShowName"
+  DebugCont "Plot: $Plot"
+  #Length of the plot we're trying to match
+  local -i PlotLength=$(wc --chars <<< "$Plot")
+  DebugCont "PlotLength: $PlotLength"
+  #If Plot length is short this really won't work well, so give up
+  ((PlotLength<42)) && Warn "${FUNCNAME}() - Plot is too short to attempt fuzzy guess." && return 1
+  #Fuzzy guess at plot, prepended with: "AbsoluteEpisodeNumber:cost:"
+  local FuzzyPlot=$(agrep -ikByns "$Plot" "$m2kdir/$NewShowName/$NewShowName.Plot.txt")
+  [[ "$FuzzyPlot" = "" ]] && Warn "${FUNCNAME}() - No fuzzy match on Plot" && return 1
+  #Extract our guessed AbsoluteEpisodeNumber
+  local -i AENguess=$(cut -f1 -d":" <<< "$FuzzyPlot")
+  DebugCont "AbsoluteEpisodeNumber guess: $AENguess"
+  local -i cost=$(cut -f2 -d":" <<< "$FuzzyPlot")
+  DebugCont "Cost: $cost"
+  local MatchedPlot=$(sed -n $AENguess'p' "$m2kdir"/"$NewShowName"/"$NewShowName".Plot.txt)
+  DebugCont "MatchedPlot: $MatchedPlot"
+  local -i MatchedPlotLength=$(wc --chars <<< "$MatchedPlot")
+  DebugCont "MatchedPlotLength: $MatchedPlotLength"
+  #Get (unsigned) difference in number of characters between $Plot & fuzzy guessed plot.
+  local -i lendif=PlotLength-MatchedPlotLength ; lendif=${lendif/#-/}
+  #Normalise the cost, allowing for truncated plots.
+  local -i normcost=cost-lendif ; normcost=${normcost/#-/}
+  DebugCont "Normalised Cost: $normcost"
+  #If the normalised cost is greater than a 1/4 of characters in the plot we're trying to match
+  if (( normcost > (PlotLength / 4) )) ; then
+    Warn "${FUNCNAME}() - Guess of AbsoluteEpisodeNumber from Plot is too fuzzy."
+    return 1
+  fi
+  #Guess is probably ok, we'll use it
+  AbsoluteEpisodeNumber="$AENguess"
+  Inform "${FUNCNAME}() - Identified AbsoluteEpisodeNumber: $AbsoluteEpisodeNumber"
+  return 0
 }
 
 ######STANDARD LOGIC EPISODE MATCH#####

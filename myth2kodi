@@ -47,6 +47,8 @@
 #  it's apparently preferred for compatibility/portability reasons. See,
 #    http://wiki.bash-hackers.org/commands/builtin/printf
 
+#TODO: Add more Debug statements throughout...
+
 #Intention:
 #  This program is designed to be a user job in MythTV. It can be called by
 #  creating a user job. It must have access to your MythTV recordings
@@ -1654,6 +1656,7 @@ getAbsoluteEpisodeNumberWithFuzzyPlotMatch(){
   DebugCont "AbsoluteEpisodeNumber: $AbsoluteEpisodeNumber"
   DebugCont "NewShowName: $NewShowName"
   DebugCont "Plot: $Plot"
+  AbsoluteEpisodeNumber=""
   #Length of the plot we're trying to match
   local -i PlotLength=$(wc --chars <<< "$Plot")
   DebugCont "PlotLength: $PlotLength"
@@ -3237,7 +3240,7 @@ fi
 #####PROCESS EPISODE INFORMATION#####
 #If we have a SeriesID but don't already have Season and Episode information
 if [ "$SeriesID" != "" ] ; then
-  echo "SEARCHING: www.TheTvDb.com information for EPISODE: $EpisodeSubtitle" | tee -a "$LogFile"
+  Inform "SEARCHING: www.TheTvDb.com information for EPISODE: $EpisodeSubtitle"
   #####GET ABSOLUTE EPISODE NUMBER#####
   if [ "$GuideDataType" = "SchedulesDirect" ] ; then
     ConfidenceReasoning="$ConfidenceReasoning Attempted match on OriginalAirDate:"
@@ -3330,7 +3333,7 @@ if [[ "$Sxx" != "S" && "$Sxx" != "" && "$Sxx" != "S00" && "$Exx" != "E" && "$Exx
   #TODO: If the confidence rating from the above is good, and we have an
   #  AbsoluteEpisodeNumber then use it to validate the Sxx, Exx & Subtitle from
   #  the MythTV DB.
-  echo "Using episode number: $Sxx$Exx, extracted from the MythTV DB." | tee -a "$LogFile"
+  Inform "Using episode number: $Sxx$Exx, extracted from the MythTV DB."
   #TODO: Probably should only do the following if the Series confidence rating
   #  is ok.
   #If we don't have a Subtitle, then use Sxx & Exx to get it from the TVDb info.
@@ -3339,7 +3342,7 @@ if [[ "$Sxx" != "S" && "$Sxx" != "" && "$Sxx" != "S00" && "$Exx" != "E" && "$Exx
     getAbsoluteEpisodeNumberWithSxxExx
     if [ "$?" = "0" ]; then
       EpisodeSubtitle=`sed -n $AbsoluteEpisodeNumber'p' "$m2kdir"/"$NewShowName"/"$NewShowName".actualEname.txt`
-      echo "MythTV DB didn't have an EpisodeSubtitle, using '$EpisodeSubtitle' from TheTVDB." | tee -a "$LogFile"
+      Inform "MythTV DB didn't have an EpisodeSubtitle, using '$EpisodeSubtitle' from TheTVDB."
     else
       AbsoluteEpisodeNumber=$AbsoluteEpisodeNumberBackup
     fi
@@ -3351,18 +3354,20 @@ if [[ "$Sxx" != "S" && "$Sxx" != "" && "$Sxx" != "S00" && "$Exx" != "E" && "$Exx
 
 #If we don't already have EXX and SXX, set them by matching Absolute Episode Number across myth2kodi's database
 elif [ "$AbsoluteEpisodeNumber" != "" ]; then
+  #NOTE: this function also sets EpisodeSubtitle and SeasonNumber
   setSxxAndExxFromAbsoluteEpisodeNumber
 else
-  echo "WARNING: Couldn't set Sxx and Exx." | tee -a "$LogFile"
-  ConfidenceReasoning="$ConfidenceReasoning Could not set Sxx and Exx, Failed; "
+  Warn "Couldn't set Sxx and Exx from MythTV-DB or set them based on InputSubtitle."
+  ConfidenceReasoning="$ConfidenceReasoning Could not get Sxx and Exx from MythTV-DB or set them based on InputSubtitle; "
 fi
 
 #If it's not tagged as a Movie but lacking SxxExx and then as a fallback check storagegroup in case it's a Movie we missed
 if [ "$StorageGroupFallback" = "Enabled" ] ; then
+  Debug "StorageGroupFallback is Enabled"
   #TODO: Make a HasSxxExx variable that is set and used consistently, #NOTE: there is already one but it's weirdly used
   if [ "$m2kProgramIDCheck" != "MV" ] && [[ "$Sxx" = "S" || "$Sxx" = "" || "$Sxx" = "S00" || "$Exx" = "E" || "$Exx" = "" || "$Exx" = "E00" ]] ; then
     if [ "$(grep -i '\(Movies*\|Films*\)' <<< "$StorageGroup")" != "" ] ; then
-      printf 'GUESSING that this is a Movie based on being in storagegroup: %s\n' "$StorageGroup" | tee -a "$LogFile"
+      Inform "GUESSING that this is a Movie based on being in storagegroup: $StorageGroup"
       m2kProgramIDCheck="MV"
       ProgramIDType="Movie"
       ((--ConfidenceRating)) #Decrement confidence, because this is a guess.
@@ -3370,6 +3375,25 @@ if [ "$StorageGroupFallback" = "Enabled" ] ; then
     fi
   fi
 fi
+
+#TODO: If this works reliably, then consider moving it up to directly below fuzzy match on subtitle
+#As a last resort, if we still think it's an episode but have no episode info, try fuzzy match on plot
+if [ "$PlotMatchFallback" = "Enabled" ] ; then
+  Debug "PlotMatchFallback is Enabled"
+  if [ "$m2kProgramIDCheck" = "EP" ] && [[ "$Sxx" = "S" || "$Sxx" = "" || "$Sxx" = "S00" || "$Exx" = "E" || "$Exx" = "" || "$Exx" = "E00" ]] ; then
+    getAbsoluteEpisodeNumberWithFuzzyPlotMatch
+    if [[ "$?" = "0" && "$AbsoluteEpisodeNumber" != "" ]]; then
+      Inform "Setting Sxx, Exx, and EpisodeSubtitle based on FuzzyPlotMatch:"
+      #NOTE: this function also sets EpisodeSubtitle and SeasonNumber
+      setSxxAndExxFromAbsoluteEpisodeNumber
+      ((--ConfidenceRating)) #Decrement confidence, because this is a guess.
+      ConfidenceReasoning="$ConfidenceReasoning Found AbsoluteEpisodeNumber with fuzzy plot match, Guess; "
+    else
+      Err "Failed in last ditch attempt to identify episode with fuzzy plot match, we have no SxxExx."
+    fi
+  fi
+fi
+
 
 #######SANITY CHECKS#####
 

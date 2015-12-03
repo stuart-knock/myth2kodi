@@ -1660,7 +1660,7 @@ getAbsoluteEpisodeNumberWithFuzzyPlotMatch(){
   #Length of the plot we're trying to match
   local -i PlotLength=$(wc --chars <<< "$Plot")
   DebugCont "PlotLength: $PlotLength"
-  #If Plot length is short this really won't work well, so give up
+  #If Plot length is short this really won't work well, so give up #TODO: figure out what length is genuinely too short...
   ((PlotLength<42)) && Warn "${FUNCNAME}() - Plot is too short to attempt fuzzy guess." && return 1
   #Fuzzy guess at plot, prepended with: "AbsoluteEpisodeNumber:cost:"
   local FuzzyPlot=$(agrep -ikByns "$Plot" "$m2kdir/$NewShowName/$NewShowName.Plot.txt")
@@ -1672,15 +1672,15 @@ getAbsoluteEpisodeNumberWithFuzzyPlotMatch(){
   DebugCont "Cost: $cost"
   local MatchedPlot=$(sed -n $AENguess'p' "$m2kdir"/"$NewShowName"/"$NewShowName".Plot.txt)
   DebugCont "MatchedPlot: $MatchedPlot"
-  local -i MatchedPlotLength=$(wc --chars <<< "$MatchedPlot")
-  DebugCont "MatchedPlotLength: $MatchedPlotLength"
-  #Get (unsigned) difference in number of characters between $Plot & fuzzy guessed plot.
-  local -i lendif=PlotLength-MatchedPlotLength ; lendif=${lendif/#-/}
-  #Normalise the cost, allowing for truncated plots.
-  local -i normcost=cost-lendif ; normcost=${normcost/#-/}
-  DebugCont "Normalised Cost: $normcost"
-  #If the normalised cost is greater than a 1/4 of characters in the plot we're trying to match
-  if (( normcost > (PlotLength / 4) )) ; then
+  # local -i MatchedPlotLength=$(wc --chars <<< "$MatchedPlot")
+  # DebugCont "MatchedPlotLength: $MatchedPlotLength"
+  # #Get (unsigned) difference in number of characters between $Plot & fuzzy guessed plot.
+  # local -i lendif=PlotLength-MatchedPlotLength ; lendif=${lendif/#-/}
+  # #Normalise the cost, allowing for truncated plots.
+  # local -i normcost=cost-lendif ; normcost=${normcost/#-/}
+  # DebugCont "Normalised Cost: $normcost"
+  #If the cost is greater than a 1/3 of characters in the plot we're trying to match #TODO: figure out the critical ratio here.
+  if (( cost > (PlotLength / 3) )) ; then
     Warn "${FUNCNAME}() - Guess of AbsoluteEpisodeNumber from Plot is too fuzzy."
     return 1
   fi

@@ -106,12 +106,12 @@
 #  See 'bashlogging' under dependencies and associated script for more information.
 #
 #Database-external:
-#  This program will make 3 calls to TheTvDb for every episode. The first one is
+#  This program will make 3 calls to TheTVDB for every episode. The first one is
 #  to obtain the series ID and verify the show name is correct. The second is to
 #  check if the internally managed database is up-to-date. The third call will
 #  only be made if the internal database is not up-to-date. The third call will
 #  download a larger file which contains all information about the show which is
-#  known on TheTvDb.
+#  known on TheTVDB.
 #
 #Database-internal:
 #  While myth2kodi maintains and requires it's own external file/folder
@@ -120,7 +120,7 @@
 #  recognized and handled by myth2kodi. Also, in the event that the
 #  integrated fuzzy logic cannot make a determination of the correct show name,
 #  myth2kodi will pull the original air date from the MythTV database
-#  and attempt to make an exact match to theTvDb.com supplied data. In addition,
+#  and attempt to make an exact match to TheTVDB.com supplied data. In addition,
 #  the type of program is extracted from the mythtv database and a determination
 #  is made weather or not there is sufficient information available to identify
 #  the show based upon guide data. In order to make myth2kodi work to
@@ -185,7 +185,7 @@
 #  a line, only one space either side of "=", and no trailing space or any other
 #  characters):
 #    Filename: $m2kdir/showTranslations
-#      My Guide Show Title = www.TheTvDb.com Show Title
+#      My Guide Show Title = www.TheTVDB.com Show Title
 #      Battlestar Gallactica = Battlestar Gallactica (2003)
 #      The Office = The Office (US)
 #      Millionaire = Who Wants To Be A Millionaire
@@ -208,9 +208,9 @@ AlternateMoveDir="/home/librarian/recordedTV"
 TargetPathIsInputPath="Disabled"
 #Internet access Timeout in seconds: Default Timeout=50 (seconds)
 Timeout=50
-#Update database time in seconds, Longer duration means faster processing time and less strain on TheTvDb. Default='88920' (1 day + eps)
+#Update database time in seconds, Longer duration means faster processing time and less strain on TheTVDB. Default='88920' (1 day + eps)
 UpdateDatabase=88920
-#TODO: Consider adding variable binpath=/usr/local/bin/ as a step toward non-root install.
+#TODO: Consider adding variable binpath=/usr/local/bin as a step toward non-root install.
 #myth2kodi working file dir: Default=$HOME/.myth2kodi (home/username/.myth2kodi)
 m2kdir="$HOME/.myth2kodi"
 ###For testing###m2kdir="/data/sknock/TEMP/.mythicalLibrarian"
@@ -220,11 +220,9 @@ FailSafeMode="Enabled"
 FailSafeDir="/home/librarian/FailSafe"  #<------THIS VALUE MUST BE SET-------
 #DirTracking will check for and remove the folders created by myth2kodi
 DirTracking="Enabled"
-#the following line contains the API key from www.TheTvDb.Com. Default project code: 6DF511BB2A64E0E9
+#the following line contains the API key from www.TheTVDB.Com. Default project code: 6DF511BB2A64E0E9
 APIkey="6DF511BB2A64E0E9"
 #TODO: If I ever put this on GitHub I should register a fresh APIkey - http://thetvdb.com/?tab=apiregister
-#SAK: This one was set at some point for some reason: APIkey=0F3A338F0FCB29A2
-#  but it seems to be rejected for certain uses... Maybe the key used during configuration.
 #Language setting
 Language="en"
 
@@ -857,8 +855,8 @@ doFailSafeMode(){
     Warn "PERMISSION ERROR OR DRIVE FULL"
     Warn "ATTEMPTING SYMLINK TO FAILSAFE DIR: $FailSafeDir"
     ln -s "$InputPath" "$FailSafeDir/$ShowFileName.$OriginalExt"
-    test -f "$FailSafeDir/$ShowFileName.$OriginalExt" ; Inform "FAILSAFE MODE COMPLETE: SYMLINK CREATED"
-    test ! -f "$FailSafeDir/$ShowFileName.$OriginalExt"; Err "FAILSAFE MODE FAILURE CHECK PERMISSIONS AND FREE SPACE IN $FailSafeDir"
+    test -f "$FailSafeDir/$ShowFileName.$OriginalExt" && Inform "FAILSAFE MODE COMPLETE: SYMLINK CREATED"
+    test ! -f "$FailSafeDir/$ShowFileName.$OriginalExt" && Err "FAILSAFE MODE FAILURE CHECK PERMISSIONS AND FREE SPACE IN $FailSafeDir"
   fi
 
   test $Notify = Enabled && sudo -u "$NotifyUserName" /usr/local/bin/librarian-notify-send "myth2kodi FAILSAFE" "FAILSAFE mode active See $LogFile for more information" error
@@ -965,7 +963,7 @@ GetMythTvPythonBindings(){
     GenComSkip
   fi
 
-  #TODO: Consider making all the vars et here readonly "declare -r ", even if that means renaming
+  #TODO: Consider making all the vars set here readonly "declare -r ", even if that means renaming
   #  and tracking down the various inconsistent uses... NOTE: must do in non-python GetMythTv... as well.
 
   #Import mythtv values into myth2kodi values, don't clobber title, subtitle, season-number, or episode-number.
@@ -1044,10 +1042,12 @@ ProcessSchedulesDirect(){
   return 0
 }
 
-#TODO: Rename as ExtractSxxExxFromPlot for consistency...
-ExtractSxxExx(){
+ExtractSxxExxFromPlot(){
   Debug "ENTERING: ${FUNCNAME}()"
-  #TODO: Maybe change the * to \? in most cases below so the matching is less inclusive
+  DebugCont "SeasonEpisode: $SeasonEpisode"
+  DebugCont "InputSeasonNum: $InputSeasonNum"
+  DebugCont "InputEpisodeNum: $InputEpisodeNum"
+  DebugCont "Plot: $Plot"
   #TODO: Maybe add warning in the case of 4x4 in case it's not actually an SxxExx
   #If available use the season and episode fields from MythTV database, otherwise,
   #use or attempt to determine $SeasonEpisode
@@ -1059,7 +1059,8 @@ ExtractSxxExx(){
     #including it in the plot/description field instead of where it belongs
     #The below should work for any of the following forms:
     #S01E42 | (01x42) | s01e42 | 1X2 | S1E4 | (S01Ep42) | (S1Ep42) | 42x1 | (S.01Ep.42) | (S.01,Ep.42)
-    SeasonEpisode=`echo $Plot | grep -i --only-matching '\(s\.*[0-9]*[0-9]\,*\(e\|ep\)\.*[0-9][0-9]*\)\|\([0-9]*[0-9]x[0-9][0-9]*\)'`
+    #TODO:        $(grep -E -i --only-matching '(s\.?[0-9]?[0-9]\,?(e|ep)\.?[0-9][0-9]?)|([0-9]?[0-9]x[0-9][0-9]?)' <<< "$Plot")
+    SeasonEpisode=$(echo $Plot | grep -i --only-matching '\(s\.\?[0-9]\?[0-9]\,\?\(e\|ep\)\.\?[0-9][0-9]\?\)\|\([0-9]\?[0-9]x[0-9][0-9]\?\)')
   fi
   if [ "$InputSeasonNum" != "" ] && [ "$InputEpisodeNum" != "" ]; then
     Debug "Using season & episode information from MythTV DB season & episode fields."
@@ -1067,8 +1068,8 @@ ExtractSxxExx(){
     Exx="$InputEpisodeNum"
   elif [ "$SeasonEpisode" != "" ]; then
     Debug "Extracted season & episode information from Plot."
-    Sxx=`echo $SeasonEpisode | grep -i --only-matching '\(s\.*[0-9]*[0-9]\)\|\([0-9]*[0-9]x\)' | sed 's/s\.*\|x//I'`
-    Exx=`echo $SeasonEpisode | grep -i --only-matching '\(\(e\|ep\)\.*[0-9][0-9]*\)\|\(x[0-9][0-9]*\)' | sed 's/\(E\.*\|Ep\.*\)\|x//I'`
+    Sxx=$(echo $SeasonEpisode | grep -i --only-matching '\(s\.\?[0-9]\?[0-9]\)\|\([0-9]\?[0-9]x\)' | sed 's/s\.\?\|x//I')
+    Exx=$(echo $SeasonEpisode | grep -i --only-matching '\(\(e\|ep\)\.\?[0-9][0-9]\?\)\|\(x[0-9][0-9]\?\)' | sed 's/\(E\.\?\|Ep\.\?\)\|x//I')
     #Strip leading zero
     Sxx=${Sxx#0}
     Exx=${Exx#0}
@@ -1087,10 +1088,11 @@ RemoveSeasonEpisodeFromPlot(){
   Debug "ENTERING: ${FUNCNAME}()"
   if [ "$SeasonEpisode" != "" ] ; then
     #Check if it's in the leading position and if so, remove it
-    local SEstring=`echo $Plot | grep -i --only-matching '(\?\(s\.*[0-9]*[0-9]\,*\(e\|ep\)\.*[0-9][0-9]*\))\?\s*\|(\?\([0-9]*[0-9]x[0-9][0-9]*\))\?\s*'`
+    #TODO:          $(grep -E -i --only-matching '(\(?s\.?[0-9]?[0-9]\,?(e|ep)\.?[0-9][0-9]?\)?)\s*|(\(?[0-9]?[0-9]x[0-9][0-9]?\)?)\s*' <<< "$Plot")
+    local SEstring=`echo $Plot | grep -i --only-matching '(\?\(s\.\?[0-9]\?[0-9]\,\?\(e\|ep\)\.\?[0-9][0-9]\?\))\?\s*\|(\?\([0-9]\?[0-9]x[0-9][0-9]\?\))\?\s*'`
     if [ "$SEstring" != "" ] ; then
       Warn "${FUNCNAME}() SeasonEpisode was in the leading position of the Plot field, removing it to simplify subsequent processing."
-      Plot=`echo $Plot | sed s/"$SEstring"/""/`
+      Plot=$(sed s/"$SEstring"/""/ <<< "$Plot")
       #TODO: Still need to strip any trailing space or leading "- " from the Plot
     fi
   else
@@ -1174,7 +1176,7 @@ ProcessSydFTA(){
 
   #If the information is already available, set the Sxx & Exx variables
   if [ "$m2kProgramIDCheck" = "EP" ]; then
-    ExtractSxxExx
+    ExtractSxxExxFromPlot
     RemoveSeasonEpisodeFromPlot
     #If we haven't set a Subtitle yet, try and get one from $Plot
     if [ "$InputSubtitle" = "" ]; then
@@ -1183,12 +1185,15 @@ ProcessSydFTA(){
     fi
   fi
 
+  #Remove hashtag reference from the Plot field #TODO: Will probably need to check and extend this.
+  Plot=$(sed s/"\s#\w\{2,7\}"/""/ <<< $Plot)
+
   #Strip the Movie: tag that some stations very helpfully put in the title field...
   if [ "$m2kProgramIDCheck" = "MV" ]; then
-    InputTitle=`echo $InputTitle | sed s/"Movie:\s*"/""/I`
+    InputTitle=$(echo $InputTitle | sed s/"Movie:\s*"/""/I)
   fi
 
-  #Extrapolate data from Programid
+  #Extrapolate data from m2kProgramIDCheck
   test "$m2kProgramIDCheck" = "SH" && ProgramIDType="Generic Episode With No Data"
   test "$m2kProgramIDCheck" = "MV" && ProgramIDType="Movie"
   test "$m2kProgramIDCheck" = "EP" && ProgramIDType="Series With Episode Data"
@@ -1196,13 +1201,14 @@ ProcessSydFTA(){
 
   #FTA stations providing a ProgramID use CRID: https://en.wikipedia.org/wiki/Crid
   #Remove the leading CRID://
-  ProgramID=`echo $ProgramID | sed s/"crid:\/\/"//I`
+  ProgramID=$(echo $ProgramID | sed s/"crid:\/\/"//I)
   #Extract the Authority, ie the station broadcasting the show
-  ProgramAuthority=`echo $ProgramID | cut -f1 -d"/"`
+  ProgramAuthority=$(echo $ProgramID | cut -f1 -d"/")
   #Extract the show specific information, removing the leading /
-  ProgramData=`echo $ProgramID | sed s/$ProgramAuthority"\/"//`
+  ProgramData=$(echo $ProgramID | sed s/$ProgramAuthority"\/"//)
   #Populate the ProgramID variable with the ProgramData field of CRID
   ProgramID=$ProgramData
+  #TODO: figure out if anything useful can actually be done with this ProgramID.
 
   #strip needless chars from date
   datehour=`echo "$ShowStartTime" | tr ":" "." | tr " " "@"`
@@ -1219,7 +1225,7 @@ ProcessSydFTA(){
 }
 
 #####PROCESS DATABASE INFORMATION#####
-####NoLookup is an alternate mode where TheTvDb is not used for lookups
+####NoLookup is an alternate mode where TheTVDB is not used for lookups
 ProcessNoLookup(){
   Debug "ENTERING: ${FUNCNAME}()"
   Inform "Processing MythTV database info as NoLookup."
@@ -1284,8 +1290,8 @@ setSxxAndExxFromAbsoluteEpisodeNumber(){
   EpisodeSubtitle=`sed -n $AbsoluteEpisodeNumber'p' "$m2kdir"/"$NewShowName"/"$NewShowName".actualEname.txt`
 
   #gather series and episode names from files created earlier.
-  Exx=`sed -n $AbsoluteEpisodeNumber'p' "$m2kdir"/"$NewShowName"/"$NewShowName".E.txt`
-  Sxx=`sed -n $AbsoluteEpisodeNumber'p' "$m2kdir"/"$NewShowName"/"$NewShowName".S.txt`
+  Exx=$(sed -n $AbsoluteEpisodeNumber'p' "$m2kdir"/"$NewShowName"/"$NewShowName".E.txt)
+  Sxx=$(sed -n $AbsoluteEpisodeNumber'p' "$m2kdir"/"$NewShowName"/"$NewShowName".S.txt)
   test $Sxx != "" && SeasonNumber=$Sxx
 
   #Single digit episode and show names are not allowed Ex and Sx replaced with Exx Sxx
@@ -1311,12 +1317,13 @@ determineIfDatabaseIsUpToDate(){
 
   #If no last updated time, then assign a never updated value and update now
   elif [ ! -f "$m2kdir/$NewShowName/lastupdated.time" ]; then
+    Inform "Seems we've never updated $NewShowName from TheTVDB -- can't find lastupdated.time file."
     return 1
   fi
 
   #if time server is down, then just update
   if [ "$CurrentTime" = "" -o "$CurrentTime" = "99999999" ]; then
-    Warn "${FUNCNAME}() THETVDB TIME SERVER WAS DOWN"
+    Warn "${FUNCNAME}() TheTVDB TIME SERVER WAS DOWN"
     return 1
   fi
 
@@ -1337,7 +1344,7 @@ determineIfDatabaseIsUpToDate(){
   #Send report to the log if database was not updated.
   elif [ $CurrentTime -le $NextUpdate ]; then
     Inform "DATABASE IS MAINTAINED. TIME IS:$CurrentTime NEXT UPDATE IS:$NextUpdate"
-    return
+    return 0
   fi
   #some other condition was present. update anyways.
   return 1
@@ -1491,7 +1498,7 @@ GetSeriesLineNumberFromTableWithZap2itID(){
   Debug "ENTERING: ${FUNCNAME}()"
   if [ -n $Zap2itSeriesID ] ; then
     serieslinenumber=0
-    #loop through all show names received by TheTvDb and match Zap2it ID.
+    #loop through all show names received by TheTVDB and match Zap2it ID.
     while read line ; do
       (( ++ serieslinenumber ))
       Info "TESTING FOR ZAP2ITID MATCH:$line `sed -n $serieslinenumber"p" $m2kdir/shn.txt`"
@@ -1684,7 +1691,7 @@ getAbsoluteEpisodeNumberWithFuzzyPlotMatch(){
     Warn "${FUNCNAME}() - Guess of AbsoluteEpisodeNumber from Plot is too fuzzy."
     return 1
   fi
-  #Guess is probably ok, we'll use it
+  #Guess at fuzzy Plot match is probably ok, we'll use it
   AbsoluteEpisodeNumber="$AENguess"
   Inform "${FUNCNAME}() - Identified AbsoluteEpisodeNumber: $AbsoluteEpisodeNumber"
   return 0
@@ -1715,12 +1722,12 @@ getAbsoluteEpisodeNumberWithFuzzyLogic(){
   return 1
 }
 
-#####SEARCH THETVDB AND CREATE DATA FILES#####
-searchTheTvDbAndReturnTxtFileTables(){
+#####SEARCH TheTVDB AND CREATE DATA FILES#####
+searchTheTVDBAndReturnTxtFileTables(){
   Debug "ENTERING: ${FUNCNAME}()"
   Inform "SEARCHING www.TheTVDB.com FOR $tvdbshowname"
   #TODO: Instance searching rather then global.  Need to create an instance variable based on time and chanid.
-  #Search TheTvDb and return an XML file with results
+  #Search TheTVDB and return an XML file with results
   curl -L -s -m"$Timeout" www.thetvdb.com/api/GetSeries.php?seriesname=$tvdbshowname>"$m2kdir/working.xml"
 
   #Separate the XML into textual DBs containing SeriesID, ShowName and Zap2it IDs
@@ -1890,13 +1897,13 @@ InvalidFileErrorMessage(){
 tvDbIsIncomplete(){
   Debug "ENTERING: ${FUNCNAME}()"
   Err     "%%%% OPERATION FAILED, INFORMATION COULD NOT BE OBTAINED %%%%"
-  ErrCont "%%%% TheTvDB information is incomplete for $InputTitle, ${InputSubtitle}."
+  ErrCont "%%%% TheTVDB information is incomplete for $InputTitle, ${InputSubtitle}."
   ErrCont "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%"
   ErrCont "%%%% Please consider helping out and adding to TheTVDB %%%%"
   ErrCont "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%"
   ErrCont "TO PROCESS THIS FILE PREVENT THIS ERROR IN THE FUTURE, ENABLE HANDLING OF UNRECOGNIZED SHOWS."
   local errtype="myth2kodi Error"
-  local errmsg="Could not obtain information from server about: $InputTitle. TheTvDb is incomplete"
+  local errmsg="Could not obtain information from server about: $InputTitle. TheTVDB is incomplete"
   if [ "$Notify" = "Enabled" ] ; then
     sudo -u "$NotifyUserName" /usr/local/bin/librarian-notify-send "$errtype" "$errmsg" web-browser
   fi
@@ -1938,10 +1945,10 @@ SymlinkNotCreated(){
 genericUnspecifiedError(){
   Debug "ENTERING: ${FUNCNAME}()"
   Err  "%%%% OPERATION FAILED: genericUnspecifiedError %%%%"
-  ErrCont "NO MATCH FOUND.  TROUBLESHOOTING: Check www.TheTvDb TO SEE IF $InputTitle EXISTS."
+  ErrCont "NO MATCH FOUND.  TROUBLESHOOTING: Check TheTVDB TO SEE IF $InputTitle EXISTS."
   ErrCont "CHECK EPISODE NAME $InputSubtitle. CHECK INTERNET CONNECTION. CHECK API KEY."
   ErrCont "NOT ENOUGH INFORMATION PULLED FROM DATABASE TO IDENTIFY FILE AS MOVIE OR EPISODE"
-  ErrCont "CHECK www.TheTvDb.com  RUN myth2kodi LINK COMMAND PROMPT."
+  ErrCont "CHECK www.TheTVDB.com  RUN myth2kodi LINK COMMAND PROMPT."
   ErrCont "FOR MORE INFORMATION SEE http://kodi.wiki/index.php?title=mythicalLibrarian" #TODO: If I ever make this public, remember to make a thread.
   ErrCont "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%"
 }
@@ -1984,6 +1991,13 @@ determinePrimaryOrAlternateFolderUsage(){
 #####MAKE FOLDER#####
 MakeFolder(){
   Debug "ENTERING: ${FUNCNAME}()"
+  DebugCont "NewShowName: $NewShowName"
+  DebugCont "MoveDir: $MoveDir"
+  DebugCont "SeasonNumber: $SeasonNumber"
+  DebugCont "Notify: $Notify"
+  DebugCont "NotifyUserName: $NotifyUserName"
+  DebugCont "FailSafeDir: $FailSafeDir"
+
   #If specified, make $movedir = $movedir/show name
   if [ "$NewShowName" != "" ]; then
     MoveDir="$MoveDir/$NewShowName"
@@ -2003,14 +2017,14 @@ MakeFolder(){
         echo "$MoveDir">>"$m2kdir"/dir.tracking
       fi
     fi
-
   fi
+
   #Error message if folder was not created
   if [ ! -d "$MoveDir" ]; then
-    echo "COULD NOT CREATE $MoveDir/$NewShowName">>"$LogFile"
-    echo "##########################################################">>"$LogFile"
-    echo "#############FAILSAFE MODE HAS BEEN ACTIVATED#############">>"$LogFile"
-    echo "##########################################################">>"$LogFile"
+    Err "COULD NOT CREATE $MoveDir/$NewShowName"
+    ErrCont "##################################################"
+    ErrCont "######## FAILSAFE MODE HAS BEEN ACTIVATED ########"
+    ErrCont "##################################################"
     if [ $Notify = "Enabled" ]; then
       sudo -u "$NotifyUserName" /usr/local/bin/librarian-notify-send "myth2kodi error" "failsafe mode activated."  error
     fi
@@ -2827,7 +2841,7 @@ special(){
   echo " ShowTranslations can be applied by creating a file called:"
   echo " $m2kdir/showTranslations"
   echo " ##############################################################"
-  echo " #My Guide Show Title = www.TheTvDb.com Show Title            #"
+  echo " #My Guide Show Title = www.TheTVDB.com Show Title            #"
   echo " #Battlestar Gallactica = Battlestar Gallactica (2003)        #"
   echo " #The Office = The Office (US)                                #"
   echo " #Millionaire = Who Wants To Be A Millionaire                 #"
@@ -2891,9 +2905,9 @@ improveConfidence(){
   echo -e " 1. myth2kodi --special provides information on how"
   echo -e "    to improve Episode matching confidence by using a "
   echo -e "    showTranslations file to compensate for bad guide data."
-  echo -e " 2. Add your favorite show's Zap2it ID to TheTvDb.com."
-  echo -e " 3. Add your favorite show's OriginalAirdate to TheTvDb.com."
-  echo -e " 4. Add your favorite show's proper Title to TheTvDb.com"
+  echo -e " 2. Add your favorite show's Zap2it ID to TheTVDB.com."
+  echo -e " 3. Add your favorite show's OriginalAirdate to TheTVDB.com."
+  echo -e " 4. Add your favorite show's proper Title to TheTVDB.com"
   echo -e "done."
   exit 0
 }
@@ -2905,7 +2919,7 @@ getSeriesInfo(){
   Inform "Searching for series: $InputTitle"
   ShowName="$InputTitle"
   local tvdbshowname=$(echo $ShowName | sed s/" "/"%20"/g | sed s/"&"/"%26"/g)
-  searchTheTvDbAndReturnTxtFileTables
+  searchTheTVDBAndReturnTxtFileTables
   GetSeriesLineNumberFromTableWithFuzzyLogic
   #if we have a series line number then translate that into a series id
   if [ "$serieslinenumber" != "" ] && [ $serieslinenumber -gt 0 ]; then
@@ -2966,14 +2980,14 @@ fi
 SeriesID=""
 NewShowName=""
 RequiresDoover=0
-ConfidenceRating=0
-SeriesConfidenceRating=0
+declare -i ConfidenceRating=0
+declare -i SeriesConfidenceRating=0
 
 #Setup defaults for searching Episode information
 Exx=""
 Sxx=""
 GotEpisodeNumber=0
-EpisodeConfidenceRating=0
+declare -i EpisodeConfidenceRating=0
 MythicalEpiShow=0
 
 #Load variables from a file if required
@@ -3076,14 +3090,11 @@ test "${InputTitle:0:1}" = "-" && mythicalHelp
 
 #Initial log entry
 mythicalPlatform="`uname`"
-echo "@@@@@@@@@@@@@@@@ NEW SEARCH INITIATED $Today AT $Time @@@@@@@@@@@@@@@@">>"$LogFile"
-echo "$mythicalVersion on $mythicalPlatform">>"$LogFile"
-echo "$mythicalVersion"
+printf '%s\n' "@@@@@@@@ NEW SEARCH INITIATED $Today AT $Time @@@@@@@@" >> "$LogFile"
+printf '%s\n' "$mythicalVersion on $mythicalPlatform" >> "$LogFile"
+printf '%s\n' "$mythicalVersion"
 
-InputFileBasename=`basename "$InputPath"`
-
-####INSERT PYTHON BINDINGS GENERATION HERE
-#If not specified, grab Title and subtitle from database using basename for reference
+InputFileBasename=$(basename "$InputPath")
 
 #####GATHER INFORMATION FROM MythTV DATABASE#####
 #Get information if database is enabled
@@ -3123,8 +3134,8 @@ fi
 Inform "Input and MythTV-DB Guide Data for $InputFileBasename"
 InformCont "RECSTART:$ShowStartTime  DATE:$MovieAirDate $OriginalAirDate"
 InformCont "PROGRAMID:$ProgramID  ShowCategory:$ShowCategory"
-test "$InputSubtitle" != "" && InformCont "InputSubtitle:$InputSubtitle  "  || InformCont "InputSubtitle: UNKNOWN  "
-test "$Sxx" != "" && InformCont "Sxx:$Sxx  " || InformCont "Sxx: UNKNOWN  "
+test "$InputSubtitle" != "" && InformCont "InputSubtitle:$InputSubtitle" || InformCont "InputSubtitle: UNKNOWN"
+test "$Sxx" != "" && InformCont "Sxx:$Sxx" || InformCont "Sxx: UNKNOWN"
 test "$Exx" != "" && InformCont "Exx:$Exx" || InformCont "Exx: UNKNOWN"
 InformCont "PLOT: $Plot"
 ShowName=$InputTitle
@@ -3142,9 +3153,9 @@ FileName="$InputPath"
 ShowTranslations
 #Do not process files in files categoricIgnore or titleIgnore, just exit
 ignoreList
-SafeShowName=`echo "$ShowName" | sed 's/;.*//' | tr -d '|\?*<":>+[]/'`
-#Format Show name for Sending to www.TheTvDb.com and KODI
-tvdbshowname=`echo $ShowName | sed s/" "/"%20"/g | sed s/"&"/"%26"/g`
+SafeShowName=$(echo "$ShowName" | sed 's/;.*//' | tr -d '|\?*<":>+[]/')
+#Format Show name for Sending to www.TheTVDB.com and KODI
+tvdbshowname=$(echo $ShowName | sed s/" "/"%20"/g | sed s/"&"/"%26"/g)
 #Setup paths if TargetPathIsInputPath is active.
 test "$TargetPathIsInputPath" = "Enabled" && setTargetFolderAsInputPathFolder
 
@@ -3156,8 +3167,8 @@ DoMaintenance
 
 #Process as though it's an episode of a tv series.
 if [ "$m2kProgramIDCheck" != "SH" ] && [ "$m2kProgramIDCheck" != "MV" ]; then
-  #Query thetvdb on show title, then return a list of Zap2itID, ShowName and seriesid.
-  searchTheTvDbAndReturnTxtFileTables
+  #Query TheTVDB on show title, then return a list of Zap2itID, ShowName and seriesid.
+  searchTheTVDBAndReturnTxtFileTables
 
   #TODO: This would be better if it could be [ "$GuideDataType" = "SchedulesDirect" ]
   #  Figure out if that's ok with respect to NoLookUp...
@@ -3167,7 +3178,7 @@ if [ "$m2kProgramIDCheck" != "SH" ] && [ "$m2kProgramIDCheck" != "MV" ]; then
     if [ $? = 0 ]; then
       ((++SeriesConfidenceRating))
       ConfidenceReasoning="$ConfidenceReasoning Successful;"
-      echo "MATCH FOUND BASED ON Zap2itID:$NewShowName" | tee -a "$LogFile"
+      Inform "MATCH FOUND BASED ON Zap2itID:$NewShowName"
     else
       ((--SeriesConfidenceRating))
       ConfidenceReasoning="$ConfidenceReasoning Failed;"
@@ -3198,9 +3209,9 @@ if [ "$m2kProgramIDCheck" != "SH" ] && [ "$m2kProgramIDCheck" != "MV" ]; then
   #if we have a series line number then translate that into a series id
   if [ "$serieslinenumber" != "" ] && [ $serieslinenumber -gt 0 ]; then
     setSeriesIDandNewShowNameBasedOnSeriesLineNumber
-    echo "FOUND:$NewShowName ID#:$SeriesID WITH CONFIDENCE:$SeriesConfidenceRating" | tee -a "$LogFile"
+    Inform "FOUND:$NewShowName ID#:$SeriesID WITH CONFIDENCE:$SeriesConfidenceRating"
   else
-    echo "WARNING: SERIESID COULD NOT BE DETERMINED" | tee -a "$LogFile"
+    Warn "SERIESID COULD NOT BE DETERMINED"
   fi
 fi
 
@@ -3221,16 +3232,20 @@ if [ "$SeriesID" != "" ] ; then
   if [ "$?" != "0" ]; then
     downloadInfoAboutMatchedTitleAndCreateTxtFileTables
     if [ "$?" != "0" ]; then
-      echo "WARNING: COULD NOT DOWNLOAD UP-TO-DATE INFORMATION!" | tee -a "$LogFile"
+      Warn "COULD NOT DOWNLOAD UP-TO-DATE INFORMATION FROM TheTVDB!"
       RequiresDoover=1
     fi
   fi
 #if series id is not obtained send failure message
 elif [ -z "$SeriesID" ] && [ "$m2kProgramIDCheck" != "SH" ] && [ "$m2kProgramIDCheck" != "MV" ]; then
   ConfidenceReasoning="$ConfidenceReasoning Failed; "
-  echo "SERIES ID WAS NOT FOUND. THETVDB MAY BE DOWN. TRY USING A showTranslations">>"$LogFile"
+  Warn "SERIES ID WAS NOT FOUND. TheTVDB MAY BE DOWN. IF NOT TRY USING A showTranslations FILE."
   if [ "$Database" = "Enabled" ]; then
-    echo "DB ENTIRES- RECSTART:$ShowStartTime- MOVIE:$MovieAirDate- ORIGAIRDATE:$OriginalAirDate- CHID:$ChanID- CAT:$ShowCategory-">>"$LogFile"
+    WarnCont "RECSTART:$ShowStartTime-"
+    WarnCont "Movie Air Date:$MovieAirDate-"
+    WarnCont "Original Air Date:$OriginalAirDate-"
+    WarnCont "Channel ID:$ChanID-"
+    WarnCont "Show Category:$ShowCategory-"
     test  "${Exx:2:1}" = "" && Exx=$null
   fi
 fi
@@ -3240,7 +3255,7 @@ fi
 #####PROCESS EPISODE INFORMATION#####
 #If we have a SeriesID but don't already have Season and Episode information
 if [ "$SeriesID" != "" ] ; then
-  Inform "SEARCHING: www.TheTvDb.com information for EPISODE: $EpisodeSubtitle"
+  Inform "SEARCHING: www.TheTVDB.com information for EPISODE: $EpisodeSubtitle"
   #####GET ABSOLUTE EPISODE NUMBER#####
   if [ "$GuideDataType" = "SchedulesDirect" ] ; then
     ConfidenceReasoning="$ConfidenceReasoning Attempted match on OriginalAirDate:"
@@ -3253,7 +3268,7 @@ if [ "$SeriesID" != "" ] ; then
       ConfidenceReasoning="$ConfidenceReasoning Successful; "
       GotEpisodeNumber=1
     else
-      echo "AIRDATE FAILED. TITLE MATCH ON ABSOLUTE EPISODE NUMBER: $AbsoluteEpisodeNumber" | tee -a "$LogFile"
+      Warn "AIRDATE FAILED. TITLE MATCH ON ABSOLUTE EPISODE NUMBER: $AbsoluteEpisodeNumber"
       ((--EpisodeConfidenceRating))
       ConfidenceReasoning="$ConfidenceReasoning Failed;"
     fi
@@ -3265,7 +3280,7 @@ if [ "$SeriesID" != "" ] ; then
     if [ "$?" = "0" ]; then
       ConfidenceReasoning="$ConfidenceReasoning Successful; "
     else
-      echo "AIRDATE/STANDARD LOGIC FAILED. FUZZY LOGIC ABSOLUTE: $AbsoluteEpisodeNumber" | tee -a "$LogFile"
+      Warn "AIRDATE/STANDARD LOGIC FAILED. FUZZY LOGIC ABSOLUTE: $AbsoluteEpisodeNumber"
       RequiresDoover=1
       ((--EpisodeConfidenceRating))
       ConfidenceReasoning="$ConfidenceReasoning Failed; Attempted SubTitle match on Fuzzy logic:"
@@ -3384,7 +3399,7 @@ if [ "$PlotMatchFallback" = "Enabled" ] ; then
     getAbsoluteEpisodeNumberWithFuzzyPlotMatch
     if [[ "$?" = "0" && "$AbsoluteEpisodeNumber" != "" ]]; then
       Inform "Setting Sxx, Exx, and EpisodeSubtitle based on FuzzyPlotMatch:"
-      #NOTE: this function also sets EpisodeSubtitle and SeasonNumber
+      #NOTE: setSxxAndExxFromAbsoluteEpisodeNumber also sets EpisodeSubtitle and SeasonNumber
       setSxxAndExxFromAbsoluteEpisodeNumber
       ((--ConfidenceRating)) #Decrement confidence, because this is a guess.
       ConfidenceReasoning="$ConfidenceReasoning Found AbsoluteEpisodeNumber with fuzzy plot match, Guess; "
@@ -3411,24 +3426,16 @@ elif [ "$m2kProgramIDCheck" = "MV" ] || [ "$m2kProgramIDCheck" = "SH" ] ; then
 fi
 
 #if the confidence was low, then show requires a doover
-#TODO: Use test for short, if for long, ie: ((ConfidenceRating <= -4)) && RequiresDoover=1
-if [ $ConfidenceRating -le -4 ]; then
-  RequiresDoover=1
-fi
+((ConfidenceRating <= -4)) && RequiresDoover=1
 
 #If file is a link then activate link mode so the original link is not screwed up.
 if [ -L "$InputPath" ]; then
-  echo "WARNING: FILE IS A LINK FORCING SYMLINK LINK MODE" | tee -a "$LogFile"
+  Warn "FILE IS A LINK FORCING SYMLINK LINK MODE"
   SYMLINK=LINK
 fi
 
 #If user wants database data deleted, then we will do that if the match was a good confidence level
-#TODO: Use test for short, if for long, ie: [[ "$SYMLINK" = "Disabled" ]] && ((ConfidenceRating > -4)) && RequiresDoover=0
-if [ "$SYMLINK" = "Disabled" ]; then
-  if [ $ConfidenceRating -gt -4 ]; then
-    RequiresDoover=0
-  fi
-fi
+[[ "$SYMLINK" = "Disabled" ]] && ((ConfidenceRating > -4)) && RequiresDoover=0
 
 #####INVALID FILE HANDLING####
 #If file to be moved does not exist, then report
@@ -3476,7 +3483,7 @@ checkPermissions "5000" "$WorkingDirFreeSpace" "$m2kdir"
 WorkingDirWritable=$TMoveDirWritable
 
 #Report naming decisions
-echo "CONFIDENCE:$ConfidenceRating LOGIC PATH: $ConfidenceReasoning"
+Inform "CONFIDENCE:$ConfidenceRating LOGIC PATH: $ConfidenceReasoning"
 
 #####DEBUG MODE OUTPUT BLOCK#####
 if [ "$DEBUGMODE" = "Enabled" ]; then
@@ -3504,7 +3511,7 @@ if [ "$DEBUGMODE" = "Enabled" ]; then
     echo " PROGRAMID:$ProgramID- CHANNEL ID:$ChanID- CATEGORY:$ShowCategory- GOFORDOOVER:$GoForDoover-">>"$LogFile"
     echo " EXTRAPOLATED DATA DETERMINED THIS RECORDING AS A:$ProgramIDType- STARS:$Stars RATING:$rating">> "$LogFile"
     echo " ZAP2IT SERIES ID:$Zap2itSeriesID- MATCHED TVDB SERIES ID:$MatchedSeriesID-" >>"$LogFile"
-    echo PLOT: "$Plot" >>"$LogFile"
+    echo "PLOT: $Plot" >>"$LogFile"
   fi
   echo "####################END OF DEBUG LOG#####################">>"$LogFile"
 fi
@@ -3513,7 +3520,7 @@ fi
 #if no episode data and it's not a movie or a test
 if [ "$Exx" = "" ] && [ "$InputPath" != "testfile.ext" ] ; then
   if [ "$ChanID" = "" ] && [ "$InputPath" ]; then
-    echo "This episode could not be matched based on supplied Title and SubTitle."
+    Warn "This episode could not be matched based on supplied Title and SubTitle."
     jobType="NameCouldNotBeAssigned"
     runjob
   elif [ "$m2kProgramIDCheck" = "MV" ]; then
@@ -3531,7 +3538,7 @@ if [ "$Exx" = "" ] && [ "$InputPath" != "testfile.ext" ] ; then
     NewShowName=$SafeShowName
     DisplayShowWarning
   else
-    #This marks Episodes as shows.  AKA EpiShows.  Episodes for which no information cannot be obtained currently.
+    #This marks Episodes as shows. AKA EpiShows. Episodes for which no information can currently be obtained.
     MythicalEpiShow=1
     #change the show to a Generic type
     NewShowName=$SafeShowName
@@ -3545,9 +3552,9 @@ determinePrimaryOrAlternateFolderUsage
 #####OUTPUT FILE NAME FORMATTING#####
 #universally not accepted file system characters:  |\?*<":>+[]/
 #Format Shows
-EpisodeSubtitle=`echo $EpisodeSubtitle | tr -d '!|\?*<":>+[]/'"'"`
-NewShowName=`echo $NewShowName | tr -d '!|\?*<":>+[]/'"'"`
-ShowName=`echo $ShowName | tr -d '!|\?*<":>+[]/'"'"`
+EpisodeSubtitle=$(echo $EpisodeSubtitle | tr -d '!|\?*<":>+[]/'"'")
+NewShowName=$(echo $NewShowName | tr -d '!|\?*<":>+[]/'"'")
+ShowName=$(echo $ShowName | tr -d '!|\?*<":>+[]/'"'")
 
 #Format Episodes showname=show name Sxx=season number Exx=episode number EpisodeSubtitle=episode name
 if [ "$NamingConvention" = "" ]; then
@@ -3562,7 +3569,7 @@ fi
 MakeFolder
 
 #check to see if output folder exists
-test -d "$MoveDir" && echo "TARGET SET:$MoveDir/$ShowFileName.$OriginalExt" || echo "ERROR: COULD NOT CREATE FOLDER:$MoveDir/$ShowFileName"
+test -d "$MoveDir" && Inform "TARGET SET:$MoveDir/$ShowFileName.$OriginalExt" || Err "COULD NOT CREATE FOLDER:$MoveDir/$ShowFileName"
 
 #####FAILSAFE HANDLING#####
 #If failsafe state is set then create link in FailSafeMode
@@ -3588,14 +3595,14 @@ if [ -f "$MoveDir/$ShowFileName.$OriginalExt" ]; then
     #If file does not exist, then it is a valid target
     if [ ! -e "$MoveDir/$ShowFileName-$myth2kodiCounter.$OriginalExt" ]; then
       NameCheck="1"
-      ShowFileName=`echo "$ShowFileName"-"$myth2kodiCounter"`
-      echo "FILE NAME EXISTS.  FILE WILL BE KNOWN AS: $ShowFileName"
+      ShowFileName=$(echo "$ShowFileName"-"$myth2kodiCounter")
+      Warn "FILE NAME EXISTS.  FILE WILL BE KNOWN AS: $ShowFileName"
     fi
   done
 fi
 
 #If this is a test file, then exit now.
-test "$InputPath" = "testfile.ext" && test "$Exx" != "E07" && echo 'FUZZY FAILURE' && exit 1
+test "$InputPath" = "testfile.ext" && test "$Exx" != "E07" && Err 'FUZZY FAILURE' && exit 1
 test "$InputPath" = "testfile.ext" && DoTestFileExit
 
 #If the user is not mythtv and the settings are set for mythtv only, then exit, display a clear status message.
@@ -3608,7 +3615,7 @@ test  "$m2kProgramIDCheck" = "SH" && DisplayShowWarning
 #If symlink is not in LINK mode, Move and rename the file.
 if [ "$SYMLINK" != "LINK" ]; then
   #Send notifications, Move the file and rename
-  echo "MOVING FILE: '$InputPath' to '$MoveDir/$ShowFileName.$OriginalExt'">>"$LogFile"
+  Inform "MOVING FILE: '$InputPath' to '$MoveDir/$ShowFileName.$OriginalExt'"
   test "$Notify" = "Enabled" && sudo -u "$NotifyUserName" /usr/local/bin/librarian-notify-send "myth2kodi Moving" "Moving and renaming $ShowFileName" drive-harddisk
   mv "$InputPath" "$MoveDir/$ShowFileName.$OriginalExt"
 
@@ -3622,9 +3629,9 @@ if [ "$SYMLINK" != "LINK" ]; then
       fi
       #Make symlink back to original file
       if [ "$SYMLINK" = "MOVE" ]; then
-        echo CREATING SYMLINK IN MOVE MODE
+        Inform "CREATING SYMLINK IN MOVE MODE"
         ln -s  "$MoveDir/$ShowFileName.$OriginalExt" "$InputPath"
-        test ! -L "$InputPath" && echo "ERROR CREATING SYMLINK: FILESYSTEM MAY NOT SUPPORT SYMLINKS" | tee -a "$LogFile"
+        test ! -L "$InputPath" && Err "ERROR CREATING SYMLINK: FILESYSTEM MAY NOT SUPPORT SYMLINKS"
       fi
       DisplayCompletedMoveMessage
 
@@ -3634,9 +3641,9 @@ if [ "$SYMLINK" != "LINK" ]; then
         if [ "$RequiresDoover" != "1" ]; then
           DeleteRelevantDatabaseFilesAndPictures
         else
-          echo CREATING SYMLINK IN SYMLINK=DISABLED MODE
+          Inform "CREATING SYMLINK IN SYMLINK=DISABLED MODE"
           ln -s  "$MoveDir/$ShowFileName.$OriginalExt" "$InputPath"
-          test ! -L "$InputPath" && echo "ERROR CREATING SYMLINK: FILESYSTEM MAY NOT SUPPORT SYMLINKS" | tee -a "$LogFile"
+          test ! -L "$InputPath" && Err "ERROR CREATING SYMLINK: FILESYSTEM MAY NOT SUPPORT SYMLINKS"
         fi
       fi
 
@@ -3673,14 +3680,14 @@ if [ "$SYMLINK" != "LINK" ]; then
 #####LINK MODE HANDLING#####
 #If symlink is in LINK mode then create symlink
 elif [ "$SYMLINK" = "LINK" ]; then
-  echo "CREATING LINK IN LINK MODE WITH CONFIDENCE:$ConfidenceRating"
+  Inform "CREATING LINK IN LINK MODE WITH CONFIDENCE:$ConfidenceRating"
 
   ln -s "$InputPath" "$MoveDir/$ShowFileName.$OriginalExt"
 
   #if file was created
   if [ -L "$MoveDir/$ShowFileName.$OriginalExt" ]; then
-    echo "Symlink created $MoveDir/$ShowFileName.$OriginalExt">>"$LogFile"
-    echo "@@@@@@@@@@@@@OPERATION COMPLETE" `date` "@@@@@@@@@@@@@@@@">>"$LogFile"
+    Inform "Symlink created $MoveDir/$ShowFileName.$OriginalExt"
+    echo "@@@@@@@@ OPERATION COMPLETE" `date` "@@@@@@@@">>"$LogFile"
     if [ "$Notify" = "Enabled" ]; then
       sudo -u "$NotifyUserName" /usr/local/bin/librarian-notify-send "myth2kodi Success" "$ShowFileName linked to $MoveDir" info
     fi

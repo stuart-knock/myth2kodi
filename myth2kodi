@@ -211,7 +211,7 @@ Timeout=50
 #Update database time in seconds, Longer duration means faster processing time and less strain on TheTVDB. Default='88920' (1 day + eps)
 UpdateDatabase=88920
 #TODO: Consider adding variable binpath=/usr/local/bin as a step toward non-root install.
-#myth2kodi working file dir: Default=$HOME/.myth2kodi (home/username/.myth2kodi)
+#myth2kodi working directory: Default=$HOME/.myth2kodi (ie, /home/username/.myth2kodi)
 m2kdir="$HOME/.myth2kodi"
 ###For testing###m2kdir="/data/sknock/TEMP/.mythicalLibrarian"
 #FailSafe mode will enable symlinks to be formed in FailSafeDir if the move or symlink operation fails. Enabled|Disabled
@@ -1059,7 +1059,7 @@ ExtractSxxExxFromPlot(){
     #including it in the plot/description field instead of where it belongs
     #The below should work for any of the following forms:
     #S01E42 | (01x42) | s01e42 | 1X2 | S1E4 | (S01Ep42) | (S1Ep42) | 42x1 | (S.01Ep.42) | (S.01,Ep.42)
-    #TODO:        $(grep -E -i --only-matching '(s\.?[0-9]?[0-9]\,?(e|ep)\.?[0-9][0-9]?)|([0-9]?[0-9]x[0-9][0-9]?)' <<< "$Plot")
+    #TODO: SeasonEpisode=$(grep -E -i --only-matching '(s\.?[0-9]?[0-9]\,?(e|ep)\.?[0-9][0-9]?)|([0-9]?[0-9]x[0-9][0-9]?)' <<< "$Plot")
     SeasonEpisode=$(echo $Plot | grep -i --only-matching '\(s\.\?[0-9]\?[0-9]\,\?\(e\|ep\)\.\?[0-9][0-9]\?\)\|\([0-9]\?[0-9]x[0-9][0-9]\?\)')
   fi
   if [ "$InputSeasonNum" != "" ] && [ "$InputEpisodeNum" != "" ]; then
@@ -1088,15 +1088,18 @@ RemoveSeasonEpisodeFromPlot(){
   Debug "ENTERING: ${FUNCNAME}()"
   if [ "$SeasonEpisode" != "" ] ; then
     #Check if it's in the leading position and if so, remove it
-    #TODO:          $(grep -E -i --only-matching '(\(?s\.?[0-9]?[0-9]\,?(e|ep)\.?[0-9][0-9]?\)?)\s*|(\(?[0-9]?[0-9]x[0-9][0-9]?\)?)\s*' <<< "$Plot")
+    #TODO: local SEstring=$(grep -E -i --only-matching '(\(?s\.?[0-9]?[0-9]\,?(e|ep)\.?[0-9][0-9]?\)?)\s*|(\(?[0-9]?[0-9]x[0-9][0-9]?\)?)\s*' <<< "$Plot")
     local SEstring=`echo $Plot | grep -i --only-matching '(\?\(s\.\?[0-9]\?[0-9]\,\?\(e\|ep\)\.\?[0-9][0-9]\?\))\?\s*\|(\?\([0-9]\?[0-9]x[0-9][0-9]\?\))\?\s*'`
     if [ "$SEstring" != "" ] ; then
       Warn "${FUNCNAME}() SeasonEpisode was in the leading position of the Plot field, removing it to simplify subsequent processing."
       Plot=$(sed s/"$SEstring"/""/ <<< "$Plot")
-      #TODO: Still need to strip any trailing space or leading "- " from the Plot
+      #Also remove any left over leading hyphen, colon, or space 
+      Plot=$(sed s/^"\s*[-|:]\?\s*"/""/ <<< "$Plot")
+      #TODO: Still may need to strip any trailing space from the Plot
     fi
   else
-    Debug "SeasonEpisode isn't currently set, so not going to discard it from Plot field."
+    Debug "SeasonEpisode isn't currently set:"
+    DebugCont "So, either it's not there or we haven't extracted it yet, either way, not going to discard it from Plot field."
   fi
 }
 
@@ -1116,6 +1119,7 @@ RemoveSubtitleFromPlot(){
   Debug "ENTERING: ${FUNCNAME}()"
   #TODO: If we extracted a subtitle from Plot variable then remove that text from Plot.
   if [ "$InputSubtitle" != "" ] ; then
+    #TODO: local STstring=$(grep -E --only-matching '^((((\w+)(.?\s*))|(\&\s*)){1,7})( -|\:)\s*' <<< "$Plot")
     local STstring=$(echo $Plot | grep --only-matching '^\(\(\(\(\w\+\)\(.\?\s*\)\)\|\(\&\s*\)\)\{1,7\}\)\( -\|\:\)\s*')
     if [ "$STstring" != "" ] ; then
       Warn "${FUNCNAME}() Episode subtitle was in the Plot field, removing it to simplify subsequent processing."
@@ -1192,6 +1196,8 @@ ProcessSydFTA(){
   if [ "$m2kProgramIDCheck" = "MV" ]; then
     InputTitle=$(echo $InputTitle | sed s/"Movie:\s*"/""/I)
   fi
+
+  #TODO: If it's a movie, check Title and Plot for a release year, assuming format (YYYY) seems reasonable.
 
   #Extrapolate data from m2kProgramIDCheck
   test "$m2kProgramIDCheck" = "SH" && ProgramIDType="Generic Episode With No Data"
@@ -1989,6 +1995,7 @@ determinePrimaryOrAlternateFolderUsage(){
 }
 
 #####MAKE FOLDER#####
+#TODO: Consider being more explicit by renaming this function to something like: MakeShowDir
 MakeFolder(){
   Debug "ENTERING: ${FUNCNAME}()"
   DebugCont "NewShowName: $NewShowName"
@@ -2376,6 +2383,11 @@ mythicalDiagnostics(){
   Inform "myth2kodi will now conduct a series of tests."
   read -n1 -p "press any key to verify installed packages..."
 
+  #TODO: Should check that our own scripts etc are available: exist, executable
+  #    /usr/local/bin/librarian-notify-send
+  #    /usr/local/bin/bashlogging
+  #    /usr/local/bin/MythDataGrabber
+
   #Test if required packages are installed and accessible to caller.
   test `which curl`>/dev/null  || checkc="curl"
   test `which agrep`>/dev/null || checkd="agrep or tre-agrep"
@@ -2566,7 +2578,7 @@ mythicalDiagnostics(){
   if [ "$packagecheck" = "***PASSED***" ] && [ "$folderchecks" = "***PASSED***" ] ; then
     overallchecks="***PASSED***"
   else
-    overallchecks="***FAILURE***"
+    overallchecks="***FAILURE***" #TODO: Probably more consistent to set overallchecks to "***FAILED***" -- see 4 occurrences.
   fi
   if [ "$overallchecks" = "***PASSED***" ]; then
     read -n1 -p "press any key to test myth2kodi..."
@@ -2956,6 +2968,33 @@ getSeriesInfo(){
 #  running commands with sudo and the need for undo to be run as root can be
 #  removed... Need to check expectations of MythDataGrabber and other auxiliary
 #  functions before making this change.
+
+#TODO: At some point this main needs to be cleaned up, at the moment it's a 
+#  little bit too organic, final structure should be something like:
+#    #Basic setup    
+#      #Basic tests to make sure we were called correctly.
+#      #Who am I, where am I, When am I
+#      #Settings to override those at the top of file
+#      #If first run make workspace
+#    #Command line switches: Are we doing something other than moving a recording?
+#    #If trying to move a recording, get info from command line
+#    #Command line sanity checks
+#    #Now we have all important settings, and know were not performing some other function, do filesystem checks etc -- no point doing a lot of work if we can't move anything at the end..
+#    #Do we have enough info from the command line to move, if so jump to verify
+#    #If not: Get info from the MythTV-DB
+#    #MythTV-DB Guide data basic/common post processing, then sanity checks.
+#    #Do we have enough info to move, if so jump to verify
+#    #If still lacking information, try matching against TheTVDB info
+#      #If SchedulesDirect, check zap2it
+#      #If US, check airdate
+#      #If SxxExx but no EpisodeTitle, use SxxExx to get EpisodeTitle.
+#      #If EpisodeTitle but no SxxExx, use EpisodeTitle to get SxxExx.
+#      #If No SxxExx and no EpisodeTitle: check against Plot.
+#    #Verify: do checks to make sure what we're moving and where we're moving it too makes sense, and that we have good confidence that the names we're using are correct. 
+#    #IF WE'RE NOT CONFIDENT OR ANYTHING ELSE DURING THE ABOVE STEPS IS WRONG, WRITE JOB TO DOOVER, REPORT WHAT WENT WRONG, BUT OTHERWISE DO NOTHING!
+#    #Move file...
+#    #Notify Kodi, RSS, and whoever else wanted to know that we're done and what it is we've done.
+#    #THE END
 
 #####DEFINE ENVIRONMENT AND VARIABLES#####
 #Who called the script:
@@ -3583,6 +3622,9 @@ if [ $FailSafeState = "1" ]; then
 fi
 
 #####ANTI-CLOBBER#####
+#TODO: IF WE'RE MAKING THE MISTAKE OF MOVING A RECORDING THAT WE'VE ALREADY MOVED, OR
+#    IF WE'VE IDENTIFIED A DIFFERENT SHOW AS THE SAME SHOW THEN SENSIBLE BEHAVIOUR 
+#    IS TO REPORT A DETAILED ERROR MESSAGE AND DO NOTHING!!! 
 #If file exists then make a new name for it
 if [ -f "$MoveDir/$ShowFileName.$OriginalExt" ]; then
   myth2kodiCounter=0

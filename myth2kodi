@@ -215,7 +215,7 @@ UpdateDatabase=88920
 m2kdir="$HOME/.myth2kodi"
 ###For testing###m2kdir="/data/sknock/TEMP/.mythicalLibrarian"
 #FailSafe mode will enable symlinks to be formed in FailSafeDir if the move or symlink operation fails. Enabled|Disabled
-FailSafeMode="Enabled"
+FailSafeMode="Disabled"
 #FailSafeDir is used when the file cannot be moved to the MoveDir. FailSafe will not create folders. eg. /home/username
 FailSafeDir="/home/librarian/FailSafe"  #<------THIS VALUE MUST BE SET-------
 #DirTracking will check for and remove the folders created by myth2kodi
@@ -346,6 +346,7 @@ fi
 #The RunJob function is a place where you can put your custom script to be run
 #at the end of execution. Though it may be at the top, this is actually the end
 #of the program.
+#TODO: Consider renaming as ExitJobs, seems more descriptive given usage...
 RunJob(){
   Debug "ENTERING: ${FUNCNAME}()"
   case $jobtype in
@@ -359,7 +360,7 @@ RunJob(){
       ;;
 
   #Information was not obtainable
-    TvDbIsIncomplete|GenericShow)
+    TheTVDBIsIncomplete|GenericShow)
       Warn "INSUFFICIENT INFORMATION WAS SUPPLIED: $jobtype"
       #Insert Custom User Job here
 
@@ -375,6 +376,16 @@ RunJob(){
       #
       exit 1
       ;;
+
+  #File name we're trying to move to already exists
+    FileAlreadyExists)
+      Err "NOT MOVING RECORDING: $jobtype"
+      #Insert Custom User Job here
+
+      #
+      exit 1
+      ;;
+
   #Generic error occurred
     GenericUnspecifiedError)
       Err "UNKNOWN ERROR OCCOURED: $jobtype"
@@ -383,6 +394,7 @@ RunJob(){
       #
       exit 3
       ;;
+
   #User elected not to process jobs which can not be properly categorized
     NameCouldNotBeAssigned)
       Warn "NAME COULD NOT BE ASSIGNED BASED UPON DATA SUPPLIED"
@@ -391,6 +403,7 @@ RunJob(){
       #
       exit 3
       ;;
+
   #User elected to use a title/category ignore file
     titleIgnore|categoricIgnore)
       Warn "Show Was ignored based on $jobtype"
@@ -845,18 +858,21 @@ performLoggingForLinkMode(){
 
 writeJobToDooverQue(){
   Debug "ENTERING: ${FUNCNAME}()"
+  Inform "Writing job to doover queue: $m2kdir/doover.sh"
   test "$InputPath" != "" && echo "myth2kodi '$1' '$2' '$3'">>"$m2kdir"/doover.sh
 }
 
 doFailSafeMode(){
   Debug "ENTERING: ${FUNCNAME}()"
   Warn "FAILSAFE FLAG WAS SET CHECK PERMISSIONS AND FOLDERS"
+  Warn "PERMISSION ERROR OR DRIVE FULL"
   if [ "$FailSafeMode" = "Enabled" ]; then
-    Warn "PERMISSION ERROR OR DRIVE FULL"
     Warn "ATTEMPTING SYMLINK TO FAILSAFE DIR: $FailSafeDir"
     ln -s "$InputPath" "$FailSafeDir/$ShowFileName.$OriginalExt"
     test -f "$FailSafeDir/$ShowFileName.$OriginalExt" && Inform "FAILSAFE MODE COMPLETE: SYMLINK CREATED"
     test ! -f "$FailSafeDir/$ShowFileName.$OriginalExt" && Err "FAILSAFE MODE FAILURE CHECK PERMISSIONS AND FREE SPACE IN $FailSafeDir"
+  else
+    Infrom "FailSafeMode Disabled, we won't try and make a link as a fallback."
   fi
 
   test $Notify = Enabled && sudo -u "$NotifyUserName" /usr/local/bin/librarian-notify-send "myth2kodi FAILSAFE" "FAILSAFE mode active See $LogFile for more information" error
@@ -1825,7 +1841,7 @@ DoMythTVPermissionsCheck(){
       ErrCont "AT THE END OF THE LINE YOU JUST RAN."
       ErrCont ""
       ErrCont "Done."
-      jobtype="PermissionErrorWhileMoving"
+      jobtype='PermissionErrorWhileMoving'
       RunJob
     fi
   fi
@@ -1840,7 +1856,7 @@ UserJobOutsideMythTV(){
   ErrCont "--OR when looking up a non database Episode--"
   ErrCont "  myth2kodi /path_to/file.ext \"Title of Show\" \"Subtitle of show\""
   ErrCont "done."
-  jobtype="GenericUnspecifiedError"
+  jobtype='GenericUnspecifiedError'
   RunJob
 }
 
@@ -2028,7 +2044,7 @@ MakeFolder(){
 
   #Error message if folder was not created
   if [ ! -d "$MoveDir" ]; then
-    Err "COULD NOT CREATE $MoveDir/$NewShowName"
+    Err "COULD NOT CREATE $MoveDir"
     ErrCont "##################################################"
     ErrCont "######## FAILSAFE MODE HAS BEEN ACTIVATED ########"
     ErrCont "##################################################"
@@ -2132,16 +2148,16 @@ ignoreList(){
   if [ -f "$m2kdir/titleIgnore" ]; then
     ignoreTest=`grep "$InputTitle" "$m2kdir/titleIgnore"`
     if [ "$InputTitle" = "$ignoreTest" ]; then
-      JobType=titleIgnore
-      runJob
+      jobtype='titleIgnore'
+      RunJob
     fi
   fi
   #Test if the Category is in the categoricIgnore file
   if [ -f "$m2kdir/categoricIgnore" ]; then
     ignoreTest=`grep "$ShowCategory" "$m2kdir/categoricIgnore"`
     if [ "$ShowCategory" = "$ignoreTest" ]; then
-      JobType=categoricIgnore
-      runJob
+      jobtype='categoricIgnore'
+      RunJob
     fi
   fi
   return 0
@@ -2284,29 +2300,29 @@ mythicalScan(){
     WarnCont "contamination of normally unprivileged files."
     WarnCont "Do not run this command with sudo."
     read -p "Possible permission contamination. Continue anyway? yes/(no)" yesorno
-    #Default to safety, ie do nothing and exit.
+    #Default to safety, ie do nothing and return with status 1.
     test "$yesorno" = "" && yesorno="no"
     if "$yesorno" != "yes" } ; then
       Debug "Type 'yes' to force the scan to continue, aborting."
-      exit 1
+      return 1
     fi
     Warn "Continuation forced by $MyUserName, despite possible permission contamination."
   fi
   if [ "$checkext" = "" ]; then
     ScanUsageMsg 'Cannot process blank file extensions.'
-    exit 1
+    return 1
   elif [ "${checkext:0:1}" = "." ]; then
     ScanUsageMsg 'Please do not prepend a "." to the file extension.'
-    exit 1
+    return 1
   elif [ "$scanpath" = "" ]; then
     ScanUsageMsg 'Please supply a path'
-    exit 1
+    return 1
   elif [ ! -d "$scanpath" ]; then
     ScanUsageMsg "This folder does not exist: $scanpath"
-    exit 1
+    return 1
   elif [ "${scanpath:0:1}" != "/" ]; then
     ScanUsageMsg 'Please specify the full path to the file'
-    exit 1
+    return 1
   fi
 
   Warn "--You have entered scan Mode."
@@ -2343,12 +2359,12 @@ mythicalScan(){
     done<"$m2kdir/scan.temp"
     Debug "Removing the temporary scan file: $m2kdir/scan.temp"
     rm -f "$m2kdir/scan.temp"
-    exit 0
+    return 0
   else
     Warn "You must press 'y' to scan, aborting."
-    exit 0
+    return 0
   fi
-  exit 1
+  return 1
 }
 
 setGroupPermissions(){
@@ -2377,6 +2393,7 @@ mythicalDiagnostics(){
   local DBTest=""
   local notifytest=""
   local PythonBindingsCheck=""
+  local exitstatus
   Inform "Diagnostic mode entered: $(date)"
   Inform "myth2kodi will now conduct a series of tests."
   read -n1 -p "press any key to verify installed packages..."
@@ -2776,8 +2793,8 @@ mythicalHelp(){
   Debug "ENTERING: ${FUNCNAME}()"
   if [ "$InputPath" = "%DIR%/%FILE%" ]; then
     UserJobOutsideMythTV
-    jobType="GenericUnspecifiedError"
-    runJob
+    jobtype='GenericUnspecifiedError'
+    RunJob
   fi
   echo " myth2kodi --:invalid pattern"
   echo ""
@@ -2997,6 +3014,7 @@ getSeriesInfo(){
 #####DEFINE ENVIRONMENT AND VARIABLES#####
 #Who called the script:
 declare -r MyUserName=$(whoami)
+Debug "Running myth2kodi as $MyUserName"
 #And when, 
 declare -r Today=$(date +%F)  #Date in IEEE standard format, ie YYYY-mm-dd
 #TODO: Consider renaming Time to ScriptStartTime, as it's fixed at the start of the script.
@@ -3056,6 +3074,7 @@ case "$InputPath" in
 
   --scan|-s)
     mythicalScan
+    exit $?
   ;;
   --mythicalDiagnostics|-m)
     PreCallLogFile="$LogFile"
@@ -3483,7 +3502,7 @@ if [ ! -f "$InputPath" ] && [ "$InputPath" != "testfile.ext" ]; then
   if [ $Notify = Enabled ]; then
     sudo -u "$NotifyUserName" /usr/local/bin/librarian-notify-send "myth2kodi Error" "Invalid File supplied" error
   fi
-  jobtype=InvalidFileNameSupplied
+  jobtype='InvalidFileNameSupplied'
   RunJob
 fi
 
@@ -3560,8 +3579,8 @@ fi
 if [ "$Exx" = "" ] && [ "$InputPath" != "testfile.ext" ] ; then
   if [ "$ChanID" = "" ] && [ "$InputPath" ]; then
     Warn "This episode could not be matched based on supplied Title and SubTitle."
-    jobType="NameCouldNotBeAssigned"
-    runjob
+    jobtype='NameCouldNotBeAssigned'
+    RunJob
   elif [ "$m2kProgramIDCheck" = "MV" ]; then
     #Ensures the doover value was not set for the movie and use safe show name
     RequiresDoover=0
@@ -3570,8 +3589,8 @@ if [ "$Exx" = "" ] && [ "$InputPath" != "testfile.ext" ] ; then
   elif [ "$ShowStopper" = "Enabled" ]; then
     tvDbIsIncomplete
     writeJobToDooverQue
-    jobtype=NameCouldNotBeAssigned
-    runjob
+    jobtype='NameCouldNotBeAssigned'
+    RunJob
   elif [ "$m2kProgramIDCheck" = "SH" ]; then
     #Ensures the doover value was not set for the show and use safe show name
     NewShowName=$SafeShowName
@@ -3607,17 +3626,18 @@ fi
 #####MAKE THE FOLDER#####
 MakeFolder
 
-#check to see if output folder exists
-test -d "$MoveDir" && Inform "TARGET SET:$MoveDir/$ShowFileName.$OriginalExt" || Err "COULD NOT CREATE FOLDER:$MoveDir/$ShowFileName"
+#Check that the output folder exists and report where we're moving the recording.
+test -d "$MoveDir" && Inform "TARGET SET: $MoveDir/$ShowFileName.$OriginalExt" #TODO: Probably should error message and exit if our MoveDir doesn't exist.
 
 #####FAILSAFE HANDLING#####
+#TODO: Review the "FailSafe" handling throughout the script.
 #If failsafe state is set then create link in FailSafeMode
 if [ $FailSafeState = "1" ]; then
   #doFailSafeMode activates movedir = failsafe dir and link mode is used
   doFailSafeMode
   #--doover will reprocess the show
   writeJobToDooverQue
-  jobtype=FailSafeModeComplete
+  jobtype='FailSafeModeComplete'
   RunJob
 fi
 
@@ -3625,22 +3645,30 @@ fi
 #TODO: IF WE'RE MAKING THE MISTAKE OF MOVING A RECORDING THAT WE'VE ALREADY MOVED, OR
 #    IF WE'VE IDENTIFIED A DIFFERENT SHOW AS THE SAME SHOW THEN SENSIBLE BEHAVIOUR 
 #    IS TO REPORT A DETAILED ERROR MESSAGE AND DO NOTHING!!! 
-#If file exists then make a new name for it
 if [ -f "$MoveDir/$ShowFileName.$OriginalExt" ]; then
-  myth2kodiCounter=0
-  NameCheck=0
-  while [ $NameCheck = '0' ]; do
-    #TODO: Sublime text syntax highlighting fails here, the different coloured 2 in
-    #  the variable name below isn't actually a problem, fix the syntax highlighting.
-    ((++myth2kodiCounter))
+  Err "FILE NAME ALREADY EXISTS:"
+  ErrCont "$MoveDir/$ShowFileName.$OriginalExt"
+  ErrCont "CALLED AS: myth2kodi '$1' '$2' '$3' '$4'"
+  ErrCont "WE'VE EITHER ALREADY PROCESSED THIS RECORDING OR OUR FILE NAME GENERATION IS TOO GENERIC."
+  ErrCont "EITHER WAY, ABORTING."
+  jobtype='FileAlreadyExists'
+  RunJob
+  #TODO: When refactoring main, consider allowing forced move with auto name incrementing when move-to file already exists.
+  #If file exists then make a new name for it
+  # myth2kodiCounter=0
+  # NameCheck=0
+  # while [ $NameCheck = '0' ]; do
+  #   #TODO: Sublime text syntax highlighting fails here, the different coloured 2 in
+  #   #  the variable name below isn't actually a problem, fix the syntax highlighting.
+  #   ((++myth2kodiCounter))
 
-    #If file does not exist, then it is a valid target
-    if [ ! -e "$MoveDir/$ShowFileName-$myth2kodiCounter.$OriginalExt" ]; then
-      NameCheck="1"
-      ShowFileName=$(echo "$ShowFileName"-"$myth2kodiCounter")
-      Warn "FILE NAME EXISTS.  FILE WILL BE KNOWN AS: $ShowFileName"
-    fi
-  done
+  #   #If file does not exist, then it is a valid target
+  #   if [ ! -e "$MoveDir/$ShowFileName-$myth2kodiCounter.$OriginalExt" ]; then
+  #     NameCheck="1"
+  #     ShowFileName=$(echo "$ShowFileName"-"$myth2kodiCounter")
+  #     Warn "FILE NAME EXISTS.  FILE WILL BE KNOWN AS: $ShowFileName"
+  #   fi
+  # done
 fi
 
 #If this is a test file, then exit now.
@@ -3689,7 +3717,7 @@ if [ "$SYMLINK" != "LINK" ]; then
         fi
       fi
 
-      #Send notification of completion and exit
+      #Send notification of completion
       test $Notify = "Enabled" && sudo -u "$NotifyUserName" /usr/local/bin/librarian-notify-send "myth2kodi Success" "$ShowFileName moved to $MoveDir" info
 
       #Additional features, notifications, rss, daily report.
@@ -3700,7 +3728,7 @@ if [ "$SYMLINK" != "LINK" ]; then
       dailyreport
       generaterss
       test "$SYMLINK" = "Disabled" && setGroupPermissions
-      jobtype=MoveModeSuccessful
+      jobtype='MoveModeSuccessful'
       RunJob
 
     #if file was not moved, then fail
@@ -3708,14 +3736,14 @@ if [ "$SYMLINK" != "LINK" ]; then
       rm -f "$MoveDir/$ShowFileName.$OriginalExt"
       writeJobToDooverQue
       Wrote0LengthFile
-      jobtype=PermissionError0Length
+      jobtype='PermissionError0Length'
       RunJob
 
     fi
   elif [ ! -f "$MoveDir/$ShowFileName.$OriginalExt" ]; then
     writeJobToDooverQue
     PermissionErrorWhileMoving
-    jobtype=PermissionErrorWhileMoving
+    jobtype='PermissionErrorWhileMoving'
     RunJob
   fi
 
@@ -3748,7 +3776,7 @@ elif [ "$SYMLINK" = "LINK" ]; then
     dailyreport
     generaterss
     test "$SYMLINK" = "Disabled" && setGroupPermissions
-    jobtype=LinkModeSuccessful
+    jobtype='LinkModeSuccessful'
     RunJob
 
     #If link failure, send notification and fail
@@ -3758,7 +3786,7 @@ elif [ "$SYMLINK" = "LINK" ]; then
     writeJobToDooverQue
 
   fi
-  jobtype=LinkModeFailed
+  jobtype='LinkModeFailed'
   RunJob
 
 fi
@@ -3772,7 +3800,7 @@ if [ "$Notify" = "Enabled" ] ; then
   sudo -u "$NotifyUserName" /usr/local/bin/librarian-notify-send "myth2kodi error" "myth2kodi operation failed See $LogFile for more information" error
 if
 writeJobToDooverQue
-jobtype=GenericUnspecifiedError
+jobtype='GenericUnspecifiedError'
 RunJob
 
 exit 4

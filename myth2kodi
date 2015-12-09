@@ -633,15 +633,15 @@ checkPermissions(){
 #Function GenComSkip creates a comskip.txt file for use with the show upon moving, created from data from library
 GenComSkip(){
   Debug "ENTERING: ${FUNCNAME}()"
-  myth2kodiCounter=1
+  local -i Counter=1
   #Set up comskip file
   test -f "$m2kdir/markupframes.txt" && rm -f "$m2kdir/markupframes.txt"
   echo "FILE PROCESSING COMPLETE">"$m2kdir"/markupframes.txt
   echo "------------------------">>"$m2kdir"/markupframes.txt
   while read line ; do
-    myth2kodiCounter=`expr $myth2kodiCounter + 1`;
-    StartData=`sed -n "$myth2kodiCounter"p "$m2kdir/markupstart.txt"`
-    StopData=`sed -n "$myth2kodiCounter"p "$m2kdir/markupstop.txt"`
+    ((++Counter))
+    StartData=`sed -n "$Counter"p "$m2kdir/markupstart.txt"`
+    StopData=`sed -n "$Counter"p "$m2kdir/markupstop.txt"`
     if [ ! -z "$StopData" ]; then
       echo "$StartData $StopData">>"$m2kdir"/markupframes.txt
       CommercialMarkup="Created"
@@ -2180,15 +2180,13 @@ DoMaintenance(){
   #Check for commskip (.txt) and .nfo files listed in created.tracking and
   #remove them if their associated "main" file (.mpg) is missing.
   if [ "$CommercialMarkupCleanup" = "Enabled" ] && [ -f "$m2kdir/created.tracking" ]; then
-    myth2kodiCounter=0
+    local -i Counter=0
     Inform "PERFORMING CLEANUP OF ORPHANED SUPPORT FILES."
     local SupportFile=""
     while read line ; do
-      #TODO: Sublime text syntax highlighting fails here, the different coloured 2 in
-      #  the variable name below isn't actually a problem, fix the syntax highlighting.
-      (( ++myth2kodiCounter ))
+      (( ++Counter ))
       #TODO: Figure out the purpose of redirect to stderr and trailing 5 spaces before converting to new messaging mechanism...
-      echo -ne "File record $myth2kodiCounter: ${SupportFile:0:20}     \n" 1>&2
+      echo -ne "File record $Counter: ${SupportFile:0:20}     \n" 1>&2
       SupportFile=`echo $line|cut -d"'" -f2`
       MainFile=`echo $line|cut -d"'" -f4`
       ls "$MainFile" > /dev/null 2>&1
@@ -2215,11 +2213,9 @@ DoMaintenance(){
   #Check if folders are empty and remove dir if needed and it was created by myth2kodi
   if [ "$DirTracking" = "Enabled" ] && [ -f "$m2kdir/dir.tracking" ]; then
     while read line ; do
-      #TODO: Sublime text syntax highlighting fails here, the different coloured 2 in
-      #  the variable name below isn't actually a problem, fix the syntax highlighting.
-      (( ++myth2kodiCounter ))
+      (( ++Counter ))
       #TODO: Figure out the purpose of redirect to stderr and trailing 5 spaces before converting to new messaging mechanism...
-      echo -ne "Folder record $myth2kodiCounter: ${DirToCheckCheck:0:20}    \n" 1>&2
+      echo -ne "Folder record $Counter: ${DirToCheckCheck:0:20}    \n" 1>&2
       DirToCheck=$line
       if [ -d "$DirToCheck" ]; then
         DirToCheckCheck=`ls "$line" | sed s/"tvshow.nfo"/""/g | grep -m1 ^`
@@ -2245,10 +2241,8 @@ DoMaintenance(){
     ls -A -1 "$m2kdir" > "$m2kdir/cleanup"
 
     while read line ; do
-      #TODO: Sublime text syntax highlighting fails here, the different coloured 2 in
-      #  the variable name below isn't actually a problem, fix the syntax highlighting.
-      (( ++myth2kodiCounter ))
-      echo -ne "Cleansing myth2kodi Database:$myth2kodiCounter ${folderToCheck:0:20}    \n" 1>&2
+      (( ++Counter ))
+      echo -ne "Cleansing myth2kodi Database:$Counter ${folderToCheck:0:20}    \n" 1>&2
       folderToCheck="$m2kdir/$line"
       if [ -d "$folderToCheck" ]; then
         if [ "$folderToCheck" != "$m2kdir/DailyReport" ] &&  [ "$folderToCheck" != "$m2kdir/mythicalSetup" ]; then
@@ -2262,6 +2256,14 @@ DoMaintenance(){
   test ! -d "$m2kdir/mythicalSetup" && mkdir "$m2kdir/mythicalSetup"
 }
 
+ScanUsageMsg(){
+  Debug "ENTERING: ${FUNCNAME}()"
+  #Log the input arg ($1) as an ERROR message and append usage for --scan to the log.
+  Err "$1"
+  ErrCont '  usage: myth2kodi --scan "ext" "/path/to/folder"'
+  ErrCont '  example: myth2kodi --scan "mpg" "/home/mythtv/videos"'
+}
+
 #####SCAN MODE#####
 #TODO: Need to go through this function line-by-line and make sure it can be run without causing damage.
 #This function will scan a folder and process the entire library
@@ -2272,7 +2274,7 @@ mythicalScan(){
   #Map myth2kodi input variables to local variables for our current purpose.
   local checkext=$InputTitle
   local scanpath=$InputSubtitle
-  Inform "Running ${FUNCNAME}() on $checkext files in $"
+  Debug "Running ${FUNCNAME}() on $checkext files in $scanpath"
   #Do some basic checks before we get started.
   if [ "$UID" = "0" -o "$USER" = "root" ]; then
     #SAK: my fault
@@ -2281,61 +2283,57 @@ mythicalScan(){
     WarnCont "running as a privileged user.  This may lead to permission"
     WarnCont "contamination of normally unprivileged files."
     WarnCont "Do not run this command with sudo."
-    read -p "Exit? yes/(no)" exitvalue
-    test "$exitvalue" = "y" && exit 1
-    test "$exitvalue" = "Y" && exit 1
-    test "$exitvalue" = "yes" && exit 1
+    read -p "Possible permission contamination. Continue anyway? yes/(no)" yesorno
+    #Default to safety, ie do nothing and exit.
+    test "$yesorno" = "" && yesorno="no"
+    if "$yesorno" != "yes" } ; then
+      Debug "Type 'yes' to force the scan to continue, aborting."
+      exit 1
+    fi
+    Warn "Continuation forced by $MyUserName, despite possible permission contamination."
   fi
   if [ "$checkext" = "" ]; then
-    Err     'Cannot process blank file extensions.'
-    ErrCont '  usage: myth2kodi --scan "ext" "/path/to/folder"'
-    ErrCont '  example: myth2kodi --scan "mpg" "/home/mythtv/videos"'
+    ScanUsageMsg 'Cannot process blank file extensions.'
     exit 1
   elif [ "${checkext:0:1}" = "." ]; then
-    Err     'Please do not prepend a "." to the file extension.'
-    ErrCont '  usage: myth2kodi --scan "ext" "/path/to/folder"'
-    ErrCont '  example: myth2kodi --scan "mpg" "/home/mythtv/videos"'
+    ScanUsageMsg 'Please do not prepend a "." to the file extension.'
     exit 1
   elif [ "$scanpath" = "" ]; then
-    Err     'Please supply a path'
-    ErrCont '  usage: myth2kodi --scan "ext" "/path/to/folder"'
-    ErrCont '  usage: myth2kodi --scan "mpg" "/home/mythtv/videos"'
+    ScanUsageMsg 'Please supply a path'
     exit 1
   elif [ ! -d "$scanpath" ]; then
-    Err     'This folder does not exist: $scanpath'
-    ErrCont '  usage: myth2kodi --scan "ext" "/path/to/folder"'
-    ErrCont '  example: myth2kodi --scan "mpg" "/home/mythtv/videos"'
+    ScanUsageMsg "This folder does not exist: $scanpath"
     exit 1
   elif [ "${scanpath:0:1}" != "/" ]; then
-    Err     'Please specify the full path to the file'
-    ErrCont '  usage: myth2kodi --scan "ext" "/path/to/folder"'
-    ErrCont '  example: myth2kodi --scan "mpg" "/home/mythtv/videos"'
+    ScanUsageMsg 'Please specify the full path to the file'
     exit 1
   fi
 
-  echo "--You have entered scan Mode."
-  echo " myth2kodi will conduct a scan of the folder:"
-  echo " $scanpath"
-  echo " searching for file types:$checkext. Each file will be"
-  echo " processed through myth2kodi. This mode will"
-  echo " only work when database access is functional."
-  echo " please scan a single file to test capabilities before"
-  echo " running the scan mode of operation using the following"
-  echo " eg. myth2kodi /path/to/file.ext"
-  echo " myth2kodi will first run the doovers to prevent"
-  echo " clobbering and creation of unnecessary links."
-  echo " This operation can be reversed using the following command:"
-  echo " sudo myth2kodi --undo"
-  echo " Data loss can occur if this operation is interrupted."
-  read -n1 -p " Would you like myth2kodi to conduct a scan? (y)/n>" yesorno
-  echo ""
-  test "$yesorno" = "" && yesorno="y"
+  Warn "--You have entered scan Mode."
+  WarnCont "myth2kodi will conduct a scan of the folder:"
+  WarnCont "  $scanpath"
+  WarnCont "searching for file types: $checkext. Each file will be processed"
+  WarnCont "through myth2kodi. This mode will only work when database access"
+  WarnCont "is functional."
+  WarnCont "Please scan a single file to test myth2kodi before running in"
+  WarnCont "scan mode. That is, use the following form to test operation:"
+  WarnCont "  myth2kodi '/path/to/file.ext'"
+  WarnCont "In scan mode, myth2kodi will first run the doovers to prevent"
+  WarnCont "clobbering and creation of unnecessary links."
+  WarnCont "All myth2kodi operations can be reversed using the following command:"
+  WarnCont "  sudo myth2kodi --undo"
+  Warn "Data loss can occur if this operation is interrupted."
+  read -n1 -p "  Would you like myth2kodi to conduct a scan? y/(n)>" yesorno
+  printf '\n'
+  #Default to safety, ie do nothing.
+  test "$yesorno" = "" && yesorno="n"
   if [ "$yesorno" = "y" ]; then
     myth2kodi --doover
     Debug "Creating a temporary scan file: $m2kdir/scan.temp"
-    ls -1 $scanpath/*.$checkext>"$m2kdir/scan.temp"
-    echo $scanpath $checkext
+    ls -1 $scanpath/*.$checkext > "$m2kdir/scan.temp"
+    Inform "Scanning $scanpath for $checkext files"
     while read line ; do
+      Debug "Attempting to envoke myth2kodi on $line"
       if [ "$InputOption" = "--BypassPermissionsCheck" ]; then
         Warn "${FUNCNAME}() Running myth2kodi with --BypassPermissionsCheck option."
         test ! -L "$line" && test ! -S "$line" && test ! -d "$line" && myth2kodi "$line" "--BypassPermissionsCheck"
@@ -2347,7 +2345,7 @@ mythicalScan(){
     rm -f "$m2kdir/scan.temp"
     exit 0
   else
-    echo "you must press 'y' to scan"
+    Warn "You must press 'y' to scan, aborting."
     exit 0
   fi
   exit 1
@@ -3001,7 +2999,9 @@ getSeriesInfo(){
 declare -r MyUserName=$(whoami)
 #And when, 
 declare -r Today=$(date +%F)  #Date in IEEE standard format, ie YYYY-mm-dd
+#TODO: Consider renaming Time to ScriptStartTime, as it's fixed at the start of the script.
 declare -r Time="$(date +%H:%M:%S)" #Time in a readable IEEE standard format, ie HH:MM:SS
+#TODO: Consider making FileNameNow and a variable called Now contain the date function, to be evaluated when called rather than fixed at the start of the script.
 declare -r FileNameNow=$(date +%FT%H%M%S)  #ISO 8601: YYYY-mm-ddThhMMSS
 
 #Set global values for settings, this overrides those set at the top of this file

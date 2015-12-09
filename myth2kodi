@@ -280,6 +280,7 @@ CommercialMarkupCleanup="Enabled"
 
 ###Reporting/Communications###
 #Enables debug mode. This is a verbose mode of logging which should be used for troubleshooting.  Enabled|Disabled
+#TODO: The Debug form of the new logging mechanism should supersede this...
 DEBUGMODE="Enabled"
 #DailyReport provides a local log of shows added to your library per day. Enabled|Disabled
 DailyReport="Enabled"
@@ -526,7 +527,7 @@ TraditionalNamingConventions(){
     MoveDir="$PrimaryMovieDir"
     #TODO: If adding a year then we really want original release date so the Kodi metadata lookup works reliably.
     if [ "$MovieAirDate" != "" ]; then
-      Warn "${FUNCNAME}() Currently forcing bypass adding MovieAirDate to Movie file names."
+      Warn "${FUNCNAME}() Currently forcing bypass of adding MovieAirDate to Movie file names."
       ShowFileName="$NewShowName" # ShowFileName="$NewShowName ($MovieAirDate)"
     else
       ShowFileName="$NewShowName"
@@ -1124,8 +1125,10 @@ GuessSubtitle(){
   Debug "ENTERING: ${FUNCNAME}()"
   #NOTE:
   #Try to extract a subtitle from the plot field (Luv Ya SBS)
+  #TODO: InputSubtitle=$(grep -E --only-matching '^((((\w+)(.?\s*))|(\&\s*)){1,7})( -|\:)' <<< "$Plot")
   InputSubtitle=`echo $Plot | grep --only-matching '^\(\(\(\(\w\+\)\(.\?\s*\)\)\|\(\&\s*\)\)\{1,7\}\)\( -\|\:\)'`
   #Clean off the trailing " -" or ":" that we're using to identify it
+  #TODO: InputSubtitle=$(grep -E --only-matching '(((\w+)(.?\s*))|(\&\s*)){,7}(\w+)' <<< "$InputSubtitle")
   InputSubtitle=`echo $InputSubtitle | grep --only-matching '\(\(\(\w\+\)\(.*\s*\)\)\|\(\&\s*\)\)\{,7\}\(\w\+\)'`
   Inform "Guessed Subtitle from Plot field as '$InputSubtitle'"
   return 0
@@ -1206,7 +1209,7 @@ ProcessSydFTA(){
   fi
 
   #Remove hashtag reference from the Plot field #TODO: Will probably need to check and extend this.
-  Plot=$(sed s/"\s#\w\{2,7\}"/""/ <<< $Plot)
+  Plot=$(sed s/"\s#\w\{2,16\}"/""/ <<< $Plot)
 
   #Strip the Movie: tag that some stations very helpfully put in the title field...
   if [ "$m2kProgramIDCheck" = "MV" ]; then
@@ -1430,7 +1433,7 @@ downloadInfoAboutMatchedTitleAndCreateTxtFileTables(){
         elif [[ $line == \<\/Episode\> ]]; then
           (( ++recordNumber ))
           #Write Episode info to files
-          Debug "Building Record:$recordNumber ${actualEname:0:20}"
+          Debug "Building Record:$recordNumber ${actualEname:0:42}"
           printf '%s\n' "$actualEname"     >> "$m2kdir/$NewShowName/$NewShowName.actualEname.txt"
           printf '%s\n' "$Ename"           >> "$m2kdir/$NewShowName/$NewShowName.Ename.txt"
           printf '%s\n' "$FAired"          >> "$m2kdir/$NewShowName/$NewShowName.FAired.txt"
@@ -1708,6 +1711,7 @@ getAbsoluteEpisodeNumberWithFuzzyPlotMatch(){
   # #Normalise the cost, allowing for truncated plots.
   # local -i normcost=cost-lendif ; normcost=${normcost/#-/}
   # DebugCont "Normalised Cost: $normcost"
+  #TODO: Should check that MatchedPlot is longer than PlotLength, which is essentially what we're assuming below.
   #If the cost is greater than a 1/3 of characters in the plot we're trying to match #TODO: figure out the critical ratio here.
   if (( cost > (PlotLength / 3) )) ; then
     Warn "${FUNCNAME}() - Guess of AbsoluteEpisodeNumber from Plot is too fuzzy."
@@ -3463,6 +3467,7 @@ if [ "$PlotMatchFallback" = "Enabled" ] ; then
       ConfidenceReasoning="$ConfidenceReasoning Found AbsoluteEpisodeNumber with fuzzy plot match, Guess; "
     else
       Err "Failed in last ditch attempt to identify episode with fuzzy plot match, we have no SxxExx."
+      #TODO: Probably should exit here...
     fi
   fi
 fi

@@ -298,6 +298,7 @@ KODIClean="Disabled"
 #Send Notifications to KODI UI when library is updated Enabled|Disabled
 KODINotify="Enabled"
 #Ip Address and port for KODI Notifications Eg.KODIIPs=( "192.168.1.110:8080" "192.168.1.111:8080" "XBOX:8080" )
+#NOTE: If you've set username and password for remote access to kodi then you'll need to prepend user:password@ to the ip addresses
 KODIIPs=( "192.168.1.42:8080" ) #<------THIS VALUE MUST BE SET-------
 #RSSmaxItems controls the number of items in the RSS. RSS Can be activated by creating a folder in /var/www/mythical-rss.
 #NOTE: setting this to 0 will essentially be ignored as generateRSS() considers it unset and uses the default of 8
@@ -314,7 +315,7 @@ declare -i RSSmaxItems=8
 #Recommend 2 to start with or if you want to keep track of what myth2kodi is doing.
 #Recommend 1 for usual operation, once you're confident that everything is working fine.
 #Only use 3 if you have a particular problem that you're trying to track down.
-declare -i LogLevel=2
+LogLevel=2
 #LogFile is the name of the log file, this will be placed in myth2kodi's working directory, $m2kdir set above.
 #DEFAULT: 'output.log' #NOTE: LogFile is overridden in special contexts, such as running Diagnostics.
 LogFile='output.log'
@@ -2206,7 +2207,8 @@ DoMaintenance(){
     while read line ; do
       (( ++Counter ))
       #TODO: Figure out the purpose of redirect to stderr and trailing 5 spaces before converting to new messaging mechanism...
-      echo -ne "File record $Counter: ${SupportFile:0:20}     \n" 1>&2
+      #echo -ne "File record $Counter: ${SupportFile:0:20}     \n" 1>&2
+      Debug "File record $Counter: ${SupportFile:0:83}"
       SupportFile=`echo $line|cut -d"'" -f2`
       MainFile=`echo $line|cut -d"'" -f4`
       ls "$MainFile" > /dev/null 2>&1
@@ -2235,7 +2237,8 @@ DoMaintenance(){
     while read line ; do
       (( ++Counter ))
       #TODO: Figure out the purpose of redirect to stderr and trailing 5 spaces before converting to new messaging mechanism...
-      echo -ne "Folder record $Counter: ${DirToCheckCheck:0:20}    \n" 1>&2
+      #echo -ne "Folder record $Counter: ${DirToCheckCheck:0:20}    \n" 1>&2
+      Debug "Folder record $Counter: ${DirToCheckCheck:0:83}"
       DirToCheck=$line
       if [ -d "$DirToCheck" ]; then
         DirToCheckCheck=`ls "$line" | sed s/"tvshow.nfo"/""/g | grep -m1 ^`
@@ -2438,7 +2441,7 @@ mythicalDiagnostics(){
     test "$checka" = "" && Inform "package 'libmyth-python' found."
     test "$checkb" = "" && Inform "package 'python-lxml' found."
   fi
-  if [ $packagecheck != "" ] ; then
+  if [ "$packagecheck" != "" ] ; then
     packagecheck="***FAILED***"
     Err "Installed packages check ***FAILED***"
     ErrCont "Missing packages are: $checkc $checkd $checke $checkf $checka $checkb"

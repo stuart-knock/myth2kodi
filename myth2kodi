@@ -62,7 +62,7 @@
 #
 #Output-target:
 #  If an error occurs and the file cannot be moved, then no change will occur to
-#  the original file. If the Movedir is full or not available, such as when
+#  the original file. If the MoveDir is full or not available, such as when
 #  running a NAS and the computer is disconnected from the network, the
 #  AlternateMoveDir will be used. If both of these dirs fail, the show will be
 #  SymLinked in the FailSafeDir. You may elect to run the user job at a later
@@ -279,9 +279,6 @@ CommercialMarkup="Enabled"
 CommercialMarkupCleanup="Enabled"
 
 ###Reporting/Communications###
-#Enables debug mode. This is a verbose mode of logging which should be used for troubleshooting.  Enabled|Disabled
-#TODO: The Debug form of the new logging mechanism should supersede this...
-DEBUGMODE="Enabled"
 #DailyReport provides a local log of shows added to your library per day. Enabled|Disabled
 DailyReport="Enabled"
 #Notify tells myth2kodi to send a notification to GNOME Desktop upon completion. Enabled|Disabled
@@ -324,7 +321,7 @@ LogFile='output.log'
 LogType='both'
 ########################## END USER SETTINGS ###################################
 
-mythicalVersion="myth2kodi Version 0.4.2; mythicalLibrarian 953ish+"
+mythicalVersion="myth2kodi Version 0.6.4; mythicalLibrarian 953ish+"
 
 #The full path version of the file to which logging output will be sent:
 LogFile="$m2kdir/output.log"
@@ -499,7 +496,7 @@ RunJob(){
 #$Sxx = Season number or blank in case of movie
 #$SeriesID = TheTVDB series ID
 #$TvDbTime = current tvdb time
-#$LastUpdated = last updated time (for Episodes only others will be blank)
+#$LastUpdatedTVDB = last updated time from TheTVDB (for Episodes only others will be blank)
 # = tvdb order numbering
 
 ####MOVIES####
@@ -1333,13 +1330,13 @@ determineIfDatabaseIsUpToDate(){
   curl -L -s -m"$Timeout" "http://www.thetvdb.com/api/Updates.php?type=none">"$m2kdir/$NewShowName/current.time"
 
   #Get the time from the file
-  test -f "$m2kdir/$NewShowName/current.time" && CurrentTime=`cat "$m2kdir/$NewShowName/current.time" | grep '<Time>' | sed s/"<\/\?Time>"/""/g`
-  test "$CurrentTime" = "" && CurrentTime=99999999
+  test -f "$m2kdir/$NewShowName/current.time" && CurrentTimeTVDB=`cat "$m2kdir/$NewShowName/current.time" | grep '<Time>' | sed s/"<\/\?Time>"/""/g`
+  test "$CurrentTimeTVDB" = "" && CurrentTimeTVDB=99999999
   rm -f "$m2kdir/$NewShowName/current.time"
 
   #If file exist for last updated time, then get value
   if [ -f "$m2kdir/$NewShowName/lastupdated.time" ]; then
-    LastUpdated=`cat "$m2kdir/$NewShowName/lastupdated.time"`
+    LastUpdatedTVDB=`cat "$m2kdir/$NewShowName/lastupdated.time"`
 
   #If no last updated time, then assign a never updated value and update now
   elif [ ! -f "$m2kdir/$NewShowName/lastupdated.time" ]; then
@@ -1348,28 +1345,28 @@ determineIfDatabaseIsUpToDate(){
   fi
 
   #if time server is down, then just update
-  if [ "$CurrentTime" = "" -o "$CurrentTime" = "99999999" ]; then
+  if [ "$CurrentTimeTVDB" = "" -o "$CurrentTimeTVDB" = "99999999" ]; then
     Warn "${FUNCNAME}() TheTVDB TIME SERVER WAS DOWN"
     return 1
   fi
 
-  #Apply Database Update interval to last update time  LastUpdated = NextUpdated
+  #Apply Database Update interval to last update time  LastUpdatedTVDB = NextUpdated
   NextUpdate=0
-  let NextUpdate=$LastUpdated+$UpdateDatabase
+  let NextUpdate=$LastUpdatedTVDB+$UpdateDatabase
 
   #if episode information is out of date or not created
-  if [ $CurrentTime -gt $NextUpdate ]; then
-    curl -L -s -m"$Timeout" " http://www.thetvdb.com/api/Updates.php?type=all&time=$LastUpdated" >> "$m2kdir/$NewShowName/UpdatesList.txt"
+  if [ $CurrentTimeTVDB -gt $NextUpdate ]; then
+    curl -L -s -m"$Timeout" " http://www.thetvdb.com/api/Updates.php?type=all&time=$LastUpdatedTVDB" >> "$m2kdir/$NewShowName/UpdatesList.txt"
     grep "$SeriesID" "$m2kdir/$NewShowName/UpdatesList.txt"
     if [ "$?" != 0 ]; then
-      Inform "DATABASE IS OUT OF DATE. NEXT UPDATE $NextUpdate Current $CurrentTime"
+      Inform "DATABASE IS OUT OF DATE. NEXT UPDATE $NextUpdate Current $CurrentTimeTVDB"
       return 1
     else
       return 0
     fi
   #Send report to the log if database was not updated.
-  elif [ $CurrentTime -le $NextUpdate ]; then
-    Inform "DATABASE IS MAINTAINED. TIME IS:$CurrentTime NEXT UPDATE IS:$NextUpdate"
+  elif [ $CurrentTimeTVDB -le $NextUpdate ]; then
+    Inform "DATABASE IS MAINTAINED. TIME IS:$CurrentTimeTVDB NEXT UPDATE IS:$NextUpdate"
     return 0
   fi
   #some other condition was present. update anyways.
@@ -1385,7 +1382,7 @@ downloadInfoAboutMatchedTitleAndCreateTxtFileTables(){
   local TheTVDBShowXML="http://www.thetvdb.com/api/$APIkey/series/$SeriesID/all/$Language.xml"
   local FieldsWeWant="(</?Series>|</?seriesid>|</?Status>|</?lastupdated>|</?Episode>|</?SeasonNumber>|</?EpisodeNumber>|</?EpisodeName>|</?Overview>|</?FirstAired>)"
   curl -L -s -m"$Timeout" $TheTVDBShowXML | grep -E $FieldsWeWant > "$m2kdir/$NewShowName/$NewShowName.xmlTest"
-  test $? = 0 && echo "$CurrentTime" > "$m2kdir/$NewShowName/lastupdated.time" && chmod 666 "$m2kdir/$NewShowName/lastupdated.time"
+  test $? = 0 && echo "$CurrentTimeTVDB" > "$m2kdir/$NewShowName/lastupdated.time" && chmod 666 "$m2kdir/$NewShowName/lastupdated.time"
 
   #Validate that the show has at least one EpisodeName tag and is a valid download before clobbering our old download.
   local grepTest=""
@@ -1897,12 +1894,13 @@ FuzzyLogicDoesNotJiveMessage(){
   WarnCont "%%%%%%%%%%%%%%%%%%%%% bad tvdb episode name %%%%%%%%%%%%%%%"
   WarnCont "%%%%%%%%%%%%%%%%%%%%% bad tvdb zap2it id %%%%%%%%%%%%%%%%%%"
   WarnCont "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%"
-  DEBUGMODE=Enabled
+  Inform "Setting LogLevel=3 (Debug) DUE TO AIRDATE/FUZZY-LOGIC DISAGREEMENT."
+  LogLevel=3 #Enable debug level logging
 }
 
 StandardLogicDoesNotJiveMessage(){
   Debug "ENTERING: ${FUNCNAME}()"
-  Warn     "%%%% AIRDATE MATCH AND FUZZY LOGIC ARE IN DISAGREEMENT %%%%"
+  Warn     "%% AIRDATE MATCH AND STANDARD LOGIC ARE IN DISAGREEMENT %%"
   WarnCont "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%"
   WarnCont "%%%%%%%%%%% GUIDE DATA AND TVDB DATA DO NOT MATCH %%%%%%%%%"
   WarnCont "%%%% Possible causes: small variations in episode name %%%%"
@@ -1911,7 +1909,8 @@ StandardLogicDoesNotJiveMessage(){
   WarnCont "%%%%%%%%%%%%%%%%%%%%% bad tvdb episode name %%%%%%%%%%%%%%%"
   WarnCont "%%%%%%%%%%%%%%%%%%%%% bad tvdb zap2it id %%%%%%%%%%%%%%%%%%"
   WarnCont "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%"
-  DEBUGMODE=Enabled
+  Inform "Setting LogLevel=3 (Debug) DUE TO AIRDATE/STANDARD-LOGIC DISAGREEMENT."
+  LogLevel=3 #Enable debug level logging
 }
 
 InvalidFileErrorMessage(){
@@ -1983,16 +1982,17 @@ genericUnspecifiedError(){
 MaintenanceWarning(){
   Debug "ENTERING: ${FUNCNAME}()"
   local yesorno=""
-  echo "  --You have entered Maintenance mode."
-  echo "  myth2kodi will perform maintenance on it's records."
-  echo "  Please ensure that All network attached storage and removable"
-  echo "  storage drives are connected and mounted properly before continuing"
+  Inform "  --You have entered Maintenance mode."
+  InformCont "  myth2kodi will perform maintenance on it's records."
+  InformCont "  Please ensure that All network attached storage and removable"
+  InformCont "  storage drives are connected and mounted properly before continuing"
   read -n1 -p "Would you like myth2kodi to conduct a scan? y/(n)>" yesorno
   if [ "$yesorno" != "y" ]; then
-    echo ""
-    echo "You must press 'y' to continue"
-    exit 1
+    printf '\n'
+    Inform "You must press 'y' to continue"
+    return 1
   fi
+  return 0
 }
 
 determinePrimaryOrAlternateFolderUsage(){
@@ -2026,7 +2026,7 @@ MakeFolder(){
   DebugCont "NotifyUserName: $NotifyUserName"
   DebugCont "FailSafeDir: $FailSafeDir"
 
-  #If specified, make $movedir = $movedir/show name
+  #If specified, make $MoveDir = $MoveDir/show name
   if [ "$NewShowName" != "" ]; then
     MoveDir="$MoveDir/$NewShowName"
     if [ ! -d "$MoveDir" ]; then
@@ -2064,7 +2064,7 @@ MakeFolder(){
 }
 
 #####USE ORIGINAL DIR#####
-#If TargetPathIsInputPath is set, then this changes movedir to original dir.
+#If TargetPathIsInputPath is set, then this changes MoveDir to original dir.
 setTargetFolderAsInputPathFolder(){
   Debug "ENTERING: ${FUNCNAME}()"
   #Set originaldir name if none was supplied
@@ -2265,9 +2265,11 @@ DoMaintenance(){
 
     while read line ; do
       (( ++Counter ))
-      echo -ne "Cleansing myth2kodi Database:$Counter ${folderToCheck:0:20}    \n" 1>&2
+      Debug "Cleansing myth2kodi Database:$Counter ${folderToCheck}"
+      #echo -ne "Cleansing myth2kodi Database:$Counter ${folderToCheck:0:20}    \n" 1>&2
       folderToCheck="$m2kdir/$line"
       if [ -d "$folderToCheck" ]; then
+        #TODO: Check we haven't added new dirs that need protecting...
         if [ "$folderToCheck" != "$m2kdir/DailyReport" ] &&  [ "$folderToCheck" != "$m2kdir/mythicalSetup" ]; then
           Inform "Removing myth2kodi database directory: $folderToCheck"
           rm -Rf "$folderToCheck"
@@ -2534,6 +2536,8 @@ mythicalDiagnostics(){
   else
     KODIcomm="***FAILED***"
     Err "KODI Communications $KODIcomm"
+    ErrCont "Expected response: '{d:1,jsonrpc:2.0,resu:OK}'"
+    ErrCont "Got response: '$KODIresp'"
   fi
 
   #Check filesystem permissions
@@ -2600,7 +2604,7 @@ mythicalDiagnostics(){
   if [ "$packagecheck" = "***PASSED***" ] && [ "$folderchecks" = "***PASSED***" ] ; then
     overallchecks="***PASSED***"
   else
-    overallchecks="***FAILURE***" #TODO: Probably more consistent to set overallchecks to "***FAILED***" -- see 4 occurrences.
+    overallchecks="***FAILED***"
   fi
   if [ "$overallchecks" = "***PASSED***" ]; then
     read -n1 -p "press any key to test myth2kodi..."
@@ -2619,7 +2623,7 @@ mythicalDiagnostics(){
     else
       Err "OVERALL FAILURE -- checks passed, but test run failed."
       mythicaltest="COULD NOT COMPLETE"
-      overallchecks="***FAILURE***"
+      overallchecks="***FAILED***"
     fi
   else
     Err "OVERALL FAILURE"
@@ -2661,6 +2665,8 @@ mythicalDiagnostics(){
     Err "Kodi communication tests failed"
     ErrCont "KODI Communications have failed.  Likely causes: Improper IP address,"
     ErrCont "or KODI is not equipped to handle external network commands in settings."
+    ErrCont "If you've set a user and password for http access to kodi, make sure that"
+    ErrCont "it's prepended to the ip addresses user:password@192..."
     ErrCont "myth2kodi can not send messages or library update requests."
     printf '\n' | tee -a "$DiagnosticsFile"
   fi
@@ -2693,14 +2699,14 @@ mythicalDiagnostics(){
     ErrCont "reading then asking at: http://forum.kodi.tv/showthread.php?tid=65644" #TODO: If make public, change to new thread that I should've started.
     printf '\n' | tee -a "$DiagnosticsFile"
   fi
-  if [ "$overallchecks" = "***FAILURE***" ]; then
+  if [ "$overallchecks" = "***FAILED***" ]; then
     Inform "The issues mentioned above must be corrected for myth2kodi to perform correctly."
   fi
 
   Inform "Diagnostic mode completed: $(date)"
   Inform "A diagnostics log file was written to: $LogFile"
 
-  test "$overallchecks" = "***FAILURE***" && return 1
+  test "$overallchecks" = "***FAILED***" && return 1
 
   return 0
 }
@@ -2719,11 +2725,10 @@ executeDoOver(){
     RunSudo=1
   fi
   test "$SUDO_USER" = "" && SUDO_USER=`whoami`
-  echo "--You have entered doover mode."
-  echo " In this mode of operation, myth2kodi will rerun"
-  echo " mythicalLibrarain against all files which failed on the"
-  echo " last run of myth2kodi.  It is important that this"
-  echo " process does not get interrupted or data loss may occur."
+  Warn "--You have entered doover mode."
+  WarnCont "In this mode of operation, myth2kodi will rerun myth2kodi against all"
+  WarnCont "files which failed on the last run of myth2kodi."
+  WarnCont "It is important that this process isn't interrupted or data loss may occur."
   test "$DoOverBypass" != "1" && read -n1 -p "  Press 'y' to continue or 'n' to exit..... y/(n):>" yesorno
   test "$DoOverBypass" = "1" && yesorno="y"
 
@@ -2740,13 +2745,13 @@ executeDoOver(){
       cat "$m2kdir/doover.sh" >> "$m2kdir/doover.sh.old"
       "$m2kdir/doover.sh"
     fi
-    echo "done."
-    exit 0
+    Inform "done."
+    return 0
   else
-    test -f "$m2kdir/doover.sh" && echo "You must press y to execute Doover." || echo "No Doover jobs exist."
-    exit 0
+    test -f "$m2kdir/doover.sh" && Inform "You must press y to execute Doover." || Inform "No Doover jobs exist."
+    return 0
   fi
-  exit 1
+  return 1
 }
 
 #####UNDO JOBS#####
@@ -3107,12 +3112,12 @@ case "$InputPath" in
   ;;
   --doover|-d)
     executeDoOver
-    exit 0
+    exit $?
   ;;
   --unmanned_doover)
     DoOverBypass=1
     executeDoOver
-    exit 0
+    exit $?
   ;;
   --undo)
     executeUndo
@@ -3135,6 +3140,7 @@ case "$InputPath" in
   ;;
   --doMaintenance)
     MaintenanceWarning
+    [[ "$?" != 0 ]] && exit $?
     removedead=1
     DoMaintenance
     echo "done."
@@ -3552,35 +3558,64 @@ WorkingDirWritable=$TMoveDirWritable
 Inform "CONFIDENCE:$ConfidenceRating LOGIC PATH: $ConfidenceReasoning"
 
 #####DEBUG MODE OUTPUT BLOCK#####
-if [ "$DEBUGMODE" = "Enabled" ]; then
-  echo "###################DEBUG MODE ENABLED####################">>"$LogFile"
-  echo "MY USER NAME:$MyUserName-">>"$LogFile"
-  echo "JOB: myth2kodi '$InputPath' '$InputTitle' '$InputSubtitle'"
-  echo "LISTING INTERNAL VARIABLES USED BY myth2kodi.">>"$LogFile"
-  echo "INTERNET TIMEOUT:$Timeout- TVDB API KEY:$APIkey- myth2kodi WORKING DIR:$m2kdir-">>"$LogFile"
-  echo "MOVE DIR:$MoveDir-">>"$LogFile"
-  echo "FAILSAFE MODE:$FailSafeMode- FAILSAFE DIR:$FailSafeDir- ALTERNATE MOVE DIR:$AlternateMoveDir-">>"$LogFile"
-  echo "USE ORIGINAL DIR:$TargetPathIsInputPath NOTIFICATIONS:$Notify">>"$LogFile"
-  echo "INPUT SHOW NAME:$InputTitle- LOCAL SHOW NAME TRANSLATION:${showtranslation}- ShowName:$ShowName">>"$LogFile"
-  echo "DATABASE UPDATED:$DatabaseWasUpdated- TVDB LAST UPDATED:$LastUpdated- CURRENT:$TvDbTime-">>"$LogFile"
-  echo "RESOLVED SERIES ID:$SeriesID- RESOVED SHOW NAME:$NewShowName-">>"$LogFile"
-  echo "INPUT EPISODE NAME:$InputSubtitle- Absolute EPISODE NUMBER:$AbsoluteEpisodeNumber- RESOLVED EPISODE NAME:$EpisodeSubtitle-">>"$LogFile"
-  echo "SEASON:$Sxx- EPISODE:$Exx- SYMLINK MODE:$SYMLINK- FILESIZE: $MoveFileSize""kB-">>"$LogFile"
-  echo "CONFIDENCE:$ConfidenceRating LOGIC PATH: $ConfidenceReasoning">> "$LogFile"
-  echo "CREATE AND DELETE FLAGS: ORIGINALDIR:$OriginalDirWritable- FREE:$OriginaldirFreeSpace""kB- WORKINGDIR:$WorkingDirWritable FREE:$WorkingDirFreeSpace""kB""-">>"$LogFile"
-  echo "MOVEDIRWRITABLE:$MoveDirWritable- FREE:$MoveDirFreeSpace""kB- ALTERNATEMOVEDIR:$AlternateMoveDirWritable- FREE:$AlternateMoveDirFreeSpace""kB-">>"$LogFile"
-  if [ "$Database" = "Enabled"  ]; then
-    echo "PRIMARYSHOWDIRWRITABLE:$PrimaryShowDirWritable-  FREE:$PrimaryShowDirFreeSpace""kB-""ALTERNATESHOWDIRWRITABLE:$AlternateShowDirWritable- FREE:$AlternateShowDirFreeSpace""kB-">>"$LogFile"
-    echo "PRIMARYMOVIEDIRWRITABLE:$PrimaryMovieDirWritable- FREE:$PrimaryMovieDirFreeSpace""kB""- ALTERNATEMOVIEDIR:$AlternateMoveDirWritable- FREE:$AlternateMovieDirFreeSpace""kB""-">>"$LogFile"
-    echo "DATABASE TYPE:$XMLTVGrabber-">>"$LogFile"
-    echo " RECSTART:$ShowStartTime- MOVIE YEAR:$MovieAirDate- ORIGINAL SERIES DATE:$OriginalAirDate-">>"$LogFile"
-    echo " PROGRAMID:$ProgramID- CHANNEL ID:$ChanID- CATEGORY:$ShowCategory- GOFORDOOVER:$GoForDoover-">>"$LogFile"
-    echo " EXTRAPOLATED DATA DETERMINED THIS RECORDING AS A:$ProgramIDType- STARS:$Stars RATING:$rating">> "$LogFile"
-    echo " ZAP2IT SERIES ID:$Zap2itSeriesID- MATCHED TVDB SERIES ID:$MatchedSeriesID-" >>"$LogFile"
-    echo "PLOT: $Plot" >>"$LogFile"
-  fi
-  echo "####################END OF DEBUG LOG#####################">>"$LogFile"
+Debug "################ DEBUG SUMMARY ################"
+DebugCont "JOB: myth2kodi '$1' '$2' '$3' '$4'"
+DebugCont "mythicalVersion=$mythicalVersion-"
+DebugCont "MyUserName=$MyUserName-"
+DebugCont "InputPath=$InputPath-"
+DebugCont "InputTitle=$InputTitle-"
+DebugCont "InputSubtitle=$InputSubtitle-"
+DebugCont "Timeout=$Timeout-"
+DebugCont "APIkey=$APIkey-"
+DebugCont "m2kdir=$m2kdir-"
+DebugCont "MoveDir=$MoveDir-"
+DebugCont "FailSafeMode=$FailSafeMode-"
+DebugCont "FailSafeDir=$FailSafeDir-"
+DebugCont "AlternateMoveDir=$AlternateMoveDir-"
+DebugCont "TargetPathIsInputPath=$TargetPathIsInputPath-"
+DebugCont "Notify=$Notify-"
+DebugCont "showtranslation=$showtranslation-"
+DebugCont "ShowName=$ShowName-"
+DebugCont "LastUpdatedTVDB=$LastUpdatedTVDB-"
+DebugCont "CurrentTimeTVDB=$CurrentTimeTVDB-"
+DebugCont "SeriesID=$SeriesID-"
+DebugCont "NewShowName=$NewShowName-"
+DebugCont "AbsoluteEpisodeNumber=$AbsoluteEpisodeNumber-"
+DebugCont "EpisodeSubtitle=$EpisodeSubtitle-"
+DebugCont "Sxx=$Sxx- Exx=$Exx-"
+DebugCont "SYMLINK=$SYMLINK-"
+DebugCont "MoveFileSize=${MoveFileSize}kB"
+DebugCont "ConfidenceRating=$ConfidenceRating-"
+DebugCont "ConfidenceReasoning=$ConfidenceReasoning-"
+#TODO: Move the summary table of writeable directories code in Diagnostics to a function and reuse here
+DebugCont "CREATE AND DELETE FLAGS: 0='NOT WRITEABLE' ; 1='WRITEABLE'"
+DebugCont "    OriginalDirWritable=$OriginalDirWritable- FREE:${OriginaldirFreeSpace}kB"
+DebugCont "    WorkingDirWritable=$WorkingDirWritable- FREE:${WorkingDirFreeSpace}kB"
+DebugCont "    MoveDirWritable=$MoveDirWritable- FREE:${MoveDirFreeSpace}kB"
+DebugCont "    AlternateMoveDirWritable=$AlternateMoveDirWritable- FREE:${AlternateMoveDirFreeSpace}kB"
+if [ "$Database" = "Enabled" ]; then
+  DebugCont "    PrimaryShowDirWritable=$PrimaryShowDirWritable- FREE:${PrimaryShowDirFreeSpace}kB"
+  DebugCont "    AlternateShowDirWritable=$AlternateShowDirWritable- FREE:${AlternateShowDirFreeSpace}kB"
+  DebugCont "    PrimaryMovieDirWritable=$PrimaryMovieDirWritable- FREE:${PrimaryMovieDirFreeSpace}kB"
+  DebugCont "    AlternateMovieDirWritable=$AlternateMovieDirWritable- FREE:${AlternateMovieDirFreeSpace}kB"
+  DebugCont "XMLTVGrabber=$XMLTVGrabber-"
+  DebugCont "ShowStartTime=$ShowStartTime-"
+  DebugCont "MovieAirDate=$MovieAirDate-"
+  DebugCont "OriginalAirDate=$OriginalAirDate-"
+  DebugCont "ProgramID=$ProgramID-"
+  DebugCont "ChanID=$ChanID-"
+  DebugCont "StorageGroup=$StorageGroup-"
+  DebugCont "ShowCategory=ShowCategory-"
+  DebugCont "GoForDoover=$GoForDoover-"
+  DebugCont "ProgramIDType=$ProgramIDType-"
+  DebugCont "rating=$rating-"
+  DebugCont "Zap2itSeriesID=$Zap2itSeriesID-"
+  DebugCont "MatchedSeriesID=$MatchedSeriesID-"
+  DebugCont "InputSeasonNum=$InputSeasonNum-"
+  DebugCont "InputEpisodeNum=$InputEpisodeNum-"
+  DebugCont "Plot=$Plot-"
 fi
+Debug "################ END OF DEBUG SUMMARY ################"
 
 ######PRE-NAMING CHECKS#####
 #if no episode data and it's not a movie or a test
@@ -3612,7 +3647,7 @@ if [ "$Exx" = "" ] && [ "$InputPath" != "testfile.ext" ] ; then
   fi
 fi
 
-#Figure out if the file can go in the movedir, or if the alternate should be used
+#Figure out if the file can go in the MoveDir, or if the alternate should be used
 determinePrimaryOrAlternateFolderUsage
 
 #####OUTPUT FILE NAME FORMATTING#####
@@ -3641,7 +3676,7 @@ test -d "$MoveDir" && Inform "TARGET SET: $MoveDir/$ShowFileName.$OriginalExt" #
 #TODO: Review the "FailSafe" handling throughout the script.
 #If failsafe state is set then create link in FailSafeMode
 if [ $FailSafeState = "1" ]; then
-  #doFailSafeMode activates movedir = failsafe dir and link mode is used
+  #doFailSafeMode activates MoveDir = failsafe dir and link mode is used
   doFailSafeMode
   #--doover will reprocess the show
   writeJobToDooverQue
@@ -3713,7 +3748,7 @@ if [ "$SYMLINK" != "LINK" ]; then
       fi
       DisplayCompletedMoveMessage
 
-      #If symlink=disabled, remove database entries
+      #If SYMLINK=Disabled, remove database entries
       if [ "$SYMLINK" = "Disabled" ]; then
         chmod 775 "$MoveDir/$ShowFileName.$OriginalExt"
         if [ "$RequiresDoover" != "1" ]; then

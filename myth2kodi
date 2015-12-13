@@ -1113,6 +1113,7 @@ RemoveSeasonEpisodeFromPlot(){
       #Also remove any left over leading hyphen, colon, or space 
       Plot=$(sed s/^"\s*[-|:]\?\s*"/""/ <<< "$Plot")
       #TODO: Still may need to strip any trailing space from the Plot
+      #Plot=$(sed s/"\s*"$/""/ <<< "$Plot")
     fi
   else
     Debug "SeasonEpisode isn't currently set:"
@@ -1120,20 +1121,25 @@ RemoveSeasonEpisodeFromPlot(){
   fi
 }
 
-#TODO: Rename as ExtractSubtitleFromPlot for consistency -- guessing will now be done elsewhere
-GuessSubtitle(){
+#Try to extract a subtitle from the plot field (Luv Ya SBS)
+ExtractSubtitleFromPlot(){
+  #This function works under the assumption that a Subtitle (EpisodeTitle) is prepended to
+  #the Plot field of the guide data and that it is separated from the actual plot by either
+  #' -' or ':'. This is often the case for FTA guide data from SBS Australia, and occasionally
+  #for other Australian stations as well.
   Debug "ENTERING: ${FUNCNAME}()"
-  #NOTE:
-  #Try to extract a subtitle from the plot field (Luv Ya SBS)
+  #TODO: Probably should do things conditionally based on whether or not we actually managed
+  #  to extract a Subtitle. And maybe return failure state.
   #TODO: InputSubtitle=$(grep -E --only-matching '^((((\w+)(.?\s*))|(\&\s*)){1,7})( -|\:)' <<< "$Plot")
   InputSubtitle=`echo $Plot | grep --only-matching '^\(\(\(\(\w\+\)\(.\?\s*\)\)\|\(\&\s*\)\)\{1,7\}\)\( -\|\:\)'`
   #Clean off the trailing " -" or ":" that we're using to identify it
   #TODO: InputSubtitle=$(grep -E --only-matching '(((\w+)(.?\s*))|(\&\s*)){,7}(\w+)' <<< "$InputSubtitle")
   InputSubtitle=`echo $InputSubtitle | grep --only-matching '\(\(\(\w\+\)\(.*\s*\)\)\|\(\&\s*\)\)\{,7\}\(\w\+\)'`
-  Inform "Guessed Subtitle from Plot field as '$InputSubtitle'"
+  Inform "Attempt to extract Subtitle from Plot field gave '$InputSubtitle'"
   return 0
 }
 
+#Called after ExtractSubtitleFromPlot(), it uses the same logic to...
 RemoveSubtitleFromPlot(){
   Debug "ENTERING: ${FUNCNAME}()"
   #TODO: If we extracted a subtitle from Plot variable then remove that text from Plot.
@@ -1203,13 +1209,14 @@ ProcessSydFTA(){
     RemoveSeasonEpisodeFromPlot
     #If we haven't set a Subtitle yet, try and get one from $Plot
     if [ "$InputSubtitle" = "" ]; then
-      GuessSubtitle
+      ExtractSubtitleFromPlot
+      #TODO: Only makes sense to call RemoveSubtitleFromPlot if ExtractSubtitleFromPlot found one.
       RemoveSubtitleFromPlot
     fi
   fi
 
-  #Remove hashtag reference from the Plot field #TODO: Will probably need to check and extend this.
-  Plot=$(sed s/"\s#\w\{2,16\}"/""/ <<< $Plot)
+  #Remove hashtag reference/s from the Plot field #TODO: Will probably need to check and extend this.
+  Plot=$(sed s/"\s#\w\{2,16\}"/""/g <<< $Plot)
 
   #Strip the Movie: tag that some stations very helpfully put in the title field...
   if [ "$m2kProgramIDCheck" = "MV" ]; then
@@ -1217,6 +1224,8 @@ ProcessSydFTA(){
   fi
 
   #TODO: If it's a movie, check Title and Plot for a release year, assuming format (YYYY) seems reasonable.
+  #  If we find it, check its between 1942 & ThisYear, then store it and remove it from where we found it,
+  #  especially important to remove from Title -- to avoid repetition in NewFileName if we use it to generate that name.
 
   #Extrapolate data from m2kProgramIDCheck
   test "$m2kProgramIDCheck" = "SH" && ProgramIDType="Generic Episode With No Data"

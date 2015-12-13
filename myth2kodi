@@ -595,6 +595,7 @@ dailyreport(){
 #CheckPermissions takes file size, free space on dir, and the dir, then it performs
 #tests. The result will be $TMoveDirWritable as a 1 or a 0 for writable or not.
 #$1=filesize $2=freespace $3=folder to check
+#TODO: Consider making this function return non-zero on error
 checkPermissions(){
   Debug "ENTERING: ${FUNCNAME}()"
   DebugCont "Called with $# arguments"
@@ -714,6 +715,7 @@ KODIAutomate(){
 #with:
 #  <feed updateinterval="30">http://[youripaddress]/mythical-rss/rss.xml</feed>
 #Big thanks to barney_1!
+#TODO: return codes from this function aren't captured...
 generaterss(){
   Debug "ENTERING: ${FUNCNAME}()"
   #user settings:
@@ -871,7 +873,7 @@ doFailSafeMode(){
     test -f "$FailSafeDir/$ShowFileName.$OriginalExt" && Inform "FAILSAFE MODE COMPLETE: SYMLINK CREATED"
     test ! -f "$FailSafeDir/$ShowFileName.$OriginalExt" && Err "FAILSAFE MODE FAILURE CHECK PERMISSIONS AND FREE SPACE IN $FailSafeDir"
   else
-    Infrom "FailSafeMode Disabled, we won't try and make a link as a fallback."
+    Inform "FailSafeMode Disabled, we won't try and make a link as a fallback."
   fi
 
   test $Notify = Enabled && sudo -u "$NotifyUserName" /usr/local/bin/librarian-notify-send "myth2kodi FAILSAFE" "FAILSAFE mode active See $LogFile for more information" error
@@ -1009,7 +1011,7 @@ ProcessSchedulesDirect(){
   Debug "ENTERING: ${FUNCNAME}()"
   Inform "Processing MythTV database info as SchedulesDirect."
   #Check for database permissions
-  test "$ChanID" = "" && echo "%%%NO DATABASE INFORMATION. CHECK LOGIN/PASS OR FILE %%%%%">>"$LogFile"
+  test "$ChanID" = "" && Err "%%% NO DATABASE INFORMATION. CHECK LOGIN/PASS OR FILE %%%%%"
   #disqualify invalid movie airdates
   test ! -z "$MovieAirDate" && test $MovieAirDate -lt 1900 && MovieAirDate=$null
 
@@ -1152,7 +1154,7 @@ ProcessSydFTA(){
   Debug "ENTERING: ${FUNCNAME}()"
   Inform "Processing MythTV database info as SydFTA."
   #Check for database permissions
-  test "$ChanID" = "" && Err "%%%NO DATABASE INFORMATION. CHECK LOGIN/PASS OR FILE %%%%%"
+  test "$ChanID" = "" && Err "%%%% NO DATABASE INFORMATION. CHECK LOGIN/PASS OR FILE %%%%"
   #disqualify invalid movie airdates
   test ! -z "$MovieAirDate" && test $MovieAirDate -lt 1900 && MovieAirDate=$null
 
@@ -1253,7 +1255,7 @@ ProcessNoLookup(){
   Debug "ENTERING: ${FUNCNAME}()"
   Inform "Processing MythTV database info as NoLookup."
   #Check for database permissions
-  test "$ChanID" = "" && Err "%%%NO DATABASE INFORMATION. CHECK LOGIN/PASS OR FILE %%%%%"
+  test "$ChanID" = "" && Err "%%%% NO DATABASE INFORMATION. CHECK LOGIN/PASS OR FILE %%%%"
   #disqualify invalid movie airdates
   test ! -z "$MovieAirDate" && test $MovieAirDate -lt 1900 && MovieAirDate=$null
 
@@ -1510,7 +1512,7 @@ downloadInfoAboutMatchedTitleAndCreateTxtFileTables(){
     Inform "LOCAL DATABASE UPDATED: $m2kdir/$NewShowName"
     return 0
   elif [ ! -f "$m2kdir/$NewShowName/$NewShowName.Ename.txt" ]; then
-    Err "${FUNCNAME}() PERMISSION ERROR for $m2kdir/$NewShowName/"
+    Err "${FUNCNAME}() PERMISSION ERROR for $m2kdir/$NewShowName"
     return 1
   fi
   return 1
@@ -1833,8 +1835,8 @@ DoMythTVPermissionsCheck(){
       ErrCont "########################################################################"
       ErrCont "##############################  ERROR  #################################"
       ErrCont "########################################################################"
-      ErrCont "USER NAME:$UserName ATTEMPTED TO RENAME A MYTHTV OWNED FILE"
-      ErrCont "myth2kodi HAS PREVENTED THIS UNAUTHORIZED FILE ACTION"
+      ErrCont "USER NAME:$UserName ATTEMPTED TO RENAME A MYTHTV OWNED FILE."
+      ErrCont "myth2kodi HAS PREVENTED THIS UNAUTHORIZED FILE ACTION."
       ErrCont "THIS IS A SAFETY FEATURE TO PRESERVE FILE PERMISSIONS."
       ErrCont "PLEASE RUN THE FOLLOWING TO SET PROPER PERMISSIONS WHEN RENAMING FILES:"
       ErrCont "    sudo su mythtv"
@@ -1900,7 +1902,7 @@ FuzzyLogicDoesNotJiveMessage(){
 
 StandardLogicDoesNotJiveMessage(){
   Debug "ENTERING: ${FUNCNAME}()"
-  Warn     "%% AIRDATE MATCH AND STANDARD LOGIC ARE IN DISAGREEMENT %%"
+  Warn     "%% AIRDATE MATCH AND STANDARD LOGIC ARE IN DISAGREEMENT. %%"
   WarnCont "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%"
   WarnCont "%%%%%%%%%%% GUIDE DATA AND TVDB DATA DO NOT MATCH %%%%%%%%%"
   WarnCont "%%%% Possible causes: small variations in episode name %%%%"
@@ -1922,12 +1924,12 @@ InvalidFileErrorMessage(){
 
 tvDbIsIncomplete(){
   Debug "ENTERING: ${FUNCNAME}()"
-  Err     "%%%% OPERATION FAILED, INFORMATION COULD NOT BE OBTAINED %%%%"
-  ErrCont "%%%% TheTVDB information is incomplete for $InputTitle, ${InputSubtitle}."
-  ErrCont "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%"
-  ErrCont "%%%% Please consider helping out and adding to TheTVDB %%%%"
-  ErrCont "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%"
-  ErrCont "TO PROCESS THIS FILE PREVENT THIS ERROR IN THE FUTURE, ENABLE HANDLING OF UNRECOGNIZED SHOWS."
+  Err     "%% OPERATION FAILED, INFORMATION COULD NOT BE OBTAINED %%"
+  ErrCont "%% TheTVDB information is incomplete for $InputTitle, ${InputSubtitle}."
+  ErrCont "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%"
+  ErrCont "%% Please consider helping out and adding to TheTVDB %%"
+  ErrCont "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%"
+  ErrCont "TO PROCESS THIS FILE & PREVENT THIS ERROR IN THE FUTURE, ENABLE HANDLING OF UNRECOGNIZED SHOWS."
   local errtype="myth2kodi Error"
   local errmsg="Could not obtain information from server about: $InputTitle. TheTVDB is incomplete"
   if [ "$Notify" = "Enabled" ] ; then
@@ -1937,12 +1939,12 @@ tvDbIsIncomplete(){
 
 Wrote0LengthFile(){
   Debug "ENTERING: ${FUNCNAME}()"
+  Err "%%%% OPERATION FAILED: WROTE 0 LENGTH FILE %%%%"
   local errtype="myth2kodi Failure"
   local errmsg="$ShowFileName could not be moved to $MoveDir"
   if [ "$Notify" = "Enabled" ] ; then
     sudo -u "$NotifyUserName" /usr/local/bin/librarian-notify-send "$errtype" "$errmsg" stop
   fi
-  Err "%%%% OPERATION FAILED: WROTE 0 LENGTH FILE %%%%"
 }
 
 PermissionErrorWhileMoving(){
@@ -1967,6 +1969,7 @@ SymlinkNotCreated(){
 }
 
 #####GENERIC UNSPECIFIED ERROR#####
+#TODO: Use consistent naming for message only functions, eg prepend or append  Msg
 #This function provides an error message on generic errors
 genericUnspecifiedError(){
   Debug "ENTERING: ${FUNCNAME}()"
@@ -2483,7 +2486,7 @@ mythicalDiagnostics(){
     read -n1 -p "Press any key to perform a test of the MythTV Database python bindings..."
     printf '\n'
     Inform "Performing MythTV Python Bindings database test."
-    if [ "$checkf" = "" ]  ; then
+    if [ "$checkf" = "" ] ; then
       Inform "Python: $(which python)"
       Inform "Version: $python_version"
     fi

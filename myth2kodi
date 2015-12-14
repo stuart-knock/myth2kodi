@@ -676,7 +676,13 @@ KODIAutomate(){
     local curlPOST='curl -L -s -m3 --connect-timeout 5 -X POST -H "Content-Type: application/json" -d'
     for KODIIP in ${KODIIPs[@]} ; do
       Inform "SENDING REQUESTED COMMANDS TO: $KODIIP"
-      #TODO:Updating the Library prior to sending the Notification probably makes more sense.
+      #Request Kodi update its library
+      if [ "$KODIUpdate" = "Enabled" ] ; then
+        data=\''{"jsonrpc":"2.0", "method":"VideoLibrary.Scan", "id":1}'\'
+        $curlPOST $data http://$KODIIP/jsonrpc > /dev/null 2>&1
+        Inform 'SENT: VideoLibrary.Scan request.'
+      fi
+      #Send a message to Kodi that a new show has been added
       if [ "$KODINotify" = "Enabled" ] ; then
         data=\''{"jsonrpc":"2.0",
                  "method":"GUI.ShowNotification",
@@ -684,11 +690,6 @@ KODIAutomate(){
                  "id":1}'\'
         $curlPOST $data http://$KODIIP/jsonrpc > /dev/null 2>&1
         Inform "SENT: GUI.ShowNotification for $tvdbshowname"
-      fi
-      if [ "$KODIUpdate" = "Enabled" ] ; then
-        data=\''{"jsonrpc":"2.0", "method":"VideoLibrary.Scan", "id":1}'\'
-        $curlPOST $data http://$KODIIP/jsonrpc > /dev/null 2>&1
-        Inform 'SENT: VideoLibrary.Scan request.'
       fi
       #TODO: Requesting Kodi to Clean its Library doesn't seem to make sense in the same
       #  context as Update & Notify, that is, cleaning after adding a new show makes
@@ -698,6 +699,7 @@ KODIAutomate(){
       #  Kodi to run Clean of its Library after myth2kodi runs undo, doover, or any
       #  other means of removing or renaming a file of which Kodi is aware... Perhaps
       #  split KODIAutomate() into KodiNewShow() and KodiCleanup()...
+      #Request Kodi remove any no-longer reachable files from its library. 
       if [ "$KODIClean" = "Enabled" ] ; then
         data=\''{"jsonrpc":"2.0", "method":"VideoLibrary.Clean", "id":1}'\'
         $curlPOST $data http://$KODIIP/jsonrpc > /dev/null 2>&1
@@ -743,44 +745,44 @@ generaterss(){
   fi
 
   #Setup the rss file
-  echo -e '<?xml version="1.0" encoding="ISO-8859-1" ?>' > $rssDir/$TEMPrssFile
-  echo -e '<rss version="2.0">' >> $rssDir/$TEMPrssFile
-  echo -e '<channel>' >> $rssDir/$TEMPrssFile
-  echo -e '\t<title>myth2kodi</title>' >> $rssDir/$TEMPrssFile
-  echo -e '\t<link>http://kodi.tv</link>' >> $rssDir/$TEMPrssFile
-  echo -e '\t<description>myth2kodi Daily Report Information</description>' >> $rssDir/$TEMPrssFile
+  echo -e '<?xml version="1.0" encoding="ISO-8859-1" ?>'                    > "$rssDir/$TEMPrssFile"
+  echo -e '<rss version="2.0">'                                             >> "$rssDir/$TEMPrssFile"
+  echo -e '<channel>'                                                       >> "$rssDir/$TEMPrssFile"
+  echo -e '\t<title>myth2kodi</title>'                                      >> "$rssDir/$TEMPrssFile"
+  echo -e '\t<link>http://kodi.tv</link>'                                   >> "$rssDir/$TEMPrssFile"
+  echo -e '\t<description>myth2kodi Daily Report Information</description>' >> "$rssDir/$TEMPrssFile"
 
   #write current recording information to first item.
-  echo -e "\t\t<item>">>$rssDir/$TEMPrssFile
-  echo -e "\t\t\t<title>$NewShowName</title>">>$rssDir/$TEMPrssFile
+  echo -e "\t\t<item>" >> "$rssDir/$TEMPrssFile"
+  echo -e "\t\t\t<title>$NewShowName</title>" >> "$rssDir/$TEMPrssFile"
 
   if [ "$m2kProgramIDCheck" = "EP" ]; then
-    echo -e "\t\t\t<link>http://www.thetvdb.com/?tab=series&amp;id=$SeriesID</link>">>$rssDir/$TEMPrssFile
+    echo -e "\t\t\t<link>http://www.thetvdb.com/?tab=series&amp;id=$SeriesID</link>" >> "$rssDir/$TEMPrssFile"
   elif [ "$m2kProgramIDCheck" = "MV" ]; then
-    echo -e "\t\t\t<link>http://www.imdb.com/search/title?release_date=,$MovieAirDate&amp;title=$ShowName&amp;title_type=feature</link>">>$rssDir/$TEMPrssFile
+    echo -e "\t\t\t<link>http://www.imdb.com/search/title?release_date=,$MovieAirDate&amp;title=$ShowName&amp;title_type=feature</link>" >> "$rssDir/$TEMPrssFile"
   else
     tvdotcomshowname=$(sed s/" "/"%20"/g <<< "$ShowName")
-    echo -e "\t\t\t<link>http://www.tv.com/search.php?type=11&amp;stype=all&amp;tag=search%3Bfrontdoor&amp;qs=$tvdotcomshowname </link>">>$rssDir/$TEMPrssFile
+    echo -e "\t\t\t<link>http://www.tv.com/search.php?type=11&amp;stype=all&amp;tag=search%3Bfrontdoor&amp;qs=$tvdotcomshowname </link>" >> "$rssDir/$TEMPrssFile"
   fi
 
   #TODO: Need to make the call to ifconfig more portable, maybe just revert to straight call and add /sbin to librarians path.
   #  The below assumed the first inet addr was the correct one, but that can lead to the loopback, using m2 and removing 127.0.0.1 avoids this problem,
   #  though it's probably better to just set myip in the configuration at top of file
-  which /sbin/ifconfig >/dev/null && myip=`/sbin/ifconfig | grep 'inet addr' -m2 | cut -d: -f2 | awk '{ print $1}' | grep -v "127.0.0.1"`
+  which /sbin/ifconfig >/dev/null && myip=$(/sbin/ifconfig | grep 'inet addr' -m2 | cut -d: -f2 | awk '{ print $1}' | grep -v "127.0.0.1")
   rssEpisodeSubtitle=$(sed s/"&"/"&amp;"/g <<< "$EpisodeSubtitle")
   rssNewShowName=$(sed s/"&"/"&amp;"/g <<< "$NewShowName")
   rssPlot=$(sed s/"&"/"&amp;"/g <<< "$Plot")
   mythicalGUID=$(echo "$MyUserName@$myip""$MoveDir/$ShowFileName.$OriginalExt" | sed s/"("/"%28"/g | sed s/")"/"%29"/g | sed s/"\ "/"%20"/g) #TODO: Check that "\ " in the final sed is correct and shouldn't just be " "
-  echo -e "\t\t\t<guid>sftp://$mythicalGUID</guid>">>$rssDir/$TEMPrssFile
-  echo -e "\t\t\t<pubDate>"$(date -R -d "$ShowStartTime")"</pubDate>">>$rssDir/$TEMPrssFile
-  echo -e "\t\t\t<description>">>$rssDir/$TEMPrssFile
-  echo -e "\t\t\t\tEpisode Title: $rssEpisodeSubtitle$lineBreak">>$rssDir/$TEMPrssFile
-  echo -e "\t\t\t\tProgram: $rssNewShowName$lineBreak">>$rssDir/$TEMPrssFile
-  echo -e "\t\t\t\tSeason: $Sxx$lineBreak">>$rssDir/$TEMPrssFile
-  echo -e "\t\t\t\tEpisode: $Exx$lineBreak$lineBreak">>$rssDir/$TEMPrssFile
-  echo -e "\t\t\t\tPlot: $rssPlot">>$rssDir/$TEMPrssFile
-  echo -e "\t\t\t</description>">>$rssDir/$TEMPrssFile
-  echo -e "\t\t</item>">>$rssDir/$TEMPrssFile
+  echo -e "\t\t\t<guid>sftp://$mythicalGUID</guid>"                   >> "$rssDir/$TEMPrssFile"
+  echo -e "\t\t\t<pubDate>"$(date -R -d "$ShowStartTime")"</pubDate>" >> "$rssDir/$TEMPrssFile"
+  echo -e "\t\t\t<description>"                                       >> "$rssDir/$TEMPrssFile"
+  echo -e "\t\t\t\tEpisode Title: $rssEpisodeSubtitle$lineBreak"      >> "$rssDir/$TEMPrssFile"
+  echo -e "\t\t\t\tProgram: $rssNewShowName$lineBreak"                >> "$rssDir/$TEMPrssFile"
+  echo -e "\t\t\t\tSeason: $Sxx$lineBreak"                            >> "$rssDir/$TEMPrssFile"
+  echo -e "\t\t\t\tEpisode: $Exx$lineBreak$lineBreak"                 >> "$rssDir/$TEMPrssFile"
+  echo -e "\t\t\t\tPlot: $rssPlot"                                    >> "$rssDir/$TEMPrssFile"
+  echo -e "\t\t\t</description>"                                      >> "$rssDir/$TEMPrssFile"
+  echo -e "\t\t</item>"                                               >> "$rssDir/$TEMPrssFile"
 
   #If there is an old RSS file
   if [ -e "$rssDir/$OLDrssFile" ]; then
@@ -807,7 +809,7 @@ generaterss(){
     arrayLen=${#old_rss_data[@]}
     #iterate through the array
     for index in $(seq $((firstLine-1)) $((lastLine-1))) ; do
-      echo "${old_rss_data[$index]}" >> $rssDir/$TEMPrssFile
+      echo "${old_rss_data[$index]}" >> "$rssDir/$TEMPrssFile"
     done
     #copy line from old to new
     #if copied line is </item>
@@ -817,8 +819,8 @@ generaterss(){
   fi
 
   #close the file.
-  echo -e '\t</channel>' >> $rssDir/$TEMPrssFile
-  echo -e '</rss>' >> $rssDir/$TEMPrssFile
+  echo -e '\t</channel>' >> "$rssDir/$TEMPrssFile"
+  echo -e '</rss>' >> "$rssDir/$TEMPrssFile"
 
   #move fully formed temp file on top of the old file
   mv "$rssDir/$TEMPrssFile" "$rssDir/$OLDrssFile"
@@ -831,14 +833,36 @@ generaterss(){
 #TODO: This function doesn't really provide logging so much as it creates the undo and doover entries for this recording...
 performLoggingForMoveMode(){
   Debug "ENTERING: ${FUNCNAME}()"
-  #Create undo and doover file if not present
-  test ! -f "$m2kdir/undo.sh"   && echo "rm -f \"$m2kdir/undo.sh\"">>"$m2kdir/undo.sh"     && chmod 666 "$m2kdir/undo.sh"
-  test ! -f "$m2kdir/doover.sh" && echo "rm -f \"$m2kdir/doover.sh\"">>"$m2kdir/doover.sh" && chmod 666 "$m2kdir/doover.sh"
+  #Create undo and doover file if not present, the first command of these scripts is to remove themselves.
+  test ! -f "$m2kdir/undo.sh"   && echo "rm -f \"$m2kdir/undo.sh\""   >> "$m2kdir/undo.sh"   && chmod 666 "$m2kdir/undo.sh"
+  test ! -f "$m2kdir/doover.sh" && echo "rm -f \"$m2kdir/doover.sh\"" >> "$m2kdir/doover.sh" && chmod 666 "$m2kdir/doover.sh"
 
-  test "$SYMLINK" != "Disabled" && echo  "test -L \"$InputPath\" && rm -f \"$InputPath\" && echo removed \"$InputPath\"">>"$m2kdir/undo.sh"
-  test "$SYMLINK" != "Disabled" && echo  "test -f \"$MoveDir/$ShowFileName.$OriginalExt\" && mv \"$MoveDir/$ShowFileName.$OriginalExt\" \"$InputPath\" && echo moved \"$MoveDir/$ShowFileName.$OriginalExt\" to \"$InputPath\"">>"$m2kdir/undo.sh"
+  #if [ "$SYMLINK" != "Disabled" ] ; then
+  #  #Write undo.sh line that removes link:
+  #  printf '%s'   "test -L \"$InputPath\" &&"    >> "$m2kdir/undo.sh"
+  #  printf '%s'   " rm -f \"$InputPath\" &&"     >> "$m2kdir/undo.sh"
+  #  printf '%s\n' " echo removed \"$InputPath\"" >> "$m2kdir/undo.sh"
+  #  #Write undo.sh line that moves already-moved-file back to original location:
+  #  printf '%s'   "test -f \"$MoveDir/$ShowFileName.$OriginalExt\" &&"                    >> "$m2kdir/undo.sh"
+  #  printf '%s'   " mv \"$MoveDir/$ShowFileName.$OriginalExt\" \"$InputPath\" &&"         >> "$m2kdir/undo.sh"
+  #  printf '%s\n' " echo moved \"$MoveDir/$ShowFileName.$OriginalExt\" to \"$InputPath\"" >> "$m2kdir/undo.sh"
+  #fi
+  test "$SYMLINK" != "Disabled" && echo "test -L \"$InputPath\" && rm -f \"$InputPath\" && echo removed \"$InputPath\"">>"$m2kdir/undo.sh"
+  test "$SYMLINK" != "Disabled" && echo "test -f \"$MoveDir/$ShowFileName.$OriginalExt\" && mv \"$MoveDir/$ShowFileName.$OriginalExt\" \"$InputPath\" && echo moved \"$MoveDir/$ShowFileName.$OriginalExt\" to \"$InputPath\"">>"$m2kdir/undo.sh"
 
   if [ "$SYMLINK" = "MOVE" ]; then
+    # if [ "$RequiresDoover" = "1" ] ; then
+    #  #Write doover.sh line that removes link:
+    #  printf '%s' "test -f \"$MoveDir/$ShowFileName.$OriginalExt\" &&" >> "$m2kdir/doover.sh"
+    #  printf '%s'   " test -L \"$InputPath\" &&"                       >> "$m2kdir/doover.sh"
+    #  printf '%s'   " rm -f \"$InputPath\" &&"                         >> "$m2kdir/doover.sh"
+    #  printf '%s\n' " echo Moving \"$InputPath\" to original location" >> "$m2kdir/doover.sh"
+    #  #Write doover.sh line that moves already-moved-file back to original location:
+    #  printf '%s'   "test -f \"$MoveDir/$ShowFileName.$OriginalExt\" &&"       >> "$m2kdir/doover.sh"
+    #  printf '%s\n' " mv \"$MoveDir/$ShowFileName.$OriginalExt\" '$InputPath'" >> "$m2kdir/doover.sh"
+    #  #Write doover.sh line that recalls myth2kodi:
+    #  printf '%s\n' "myth2kodi \"$InputPath\" \"$InputTitle\" \"$InputSubtitle\"" >> "$m2kdir/doover.sh"
+    # fi
     test "$RequiresDoover" = "1" && echo "test -f \"$MoveDir/$ShowFileName.$OriginalExt\" && test -L \"$InputPath\" && rm -f \"$InputPath\" && echo Moving \"$InputPath\" to original location">>"$m2kdir/doover.sh"
     test "$RequiresDoover" = "1" && echo "test -f \"$MoveDir/$ShowFileName.$OriginalExt\" && mv \"$MoveDir/$ShowFileName.$OriginalExt\" '$InputPath'">>"$m2kdir/doover.sh"
     test "$RequiresDoover" = "1" && echo "myth2kodi \"$InputPath\" \"$InputTitle\" \"$InputSubtitle\"" >>"$m2kdir/doover.sh"
@@ -886,6 +910,15 @@ doFailSafeMode(){
 #This function gathers information from the MythTV database for use in the program
 GetMythTVDatabase(){
   Debug "ENTERING: ${FUNCNAME}()"
+  DebugCont "m2kdir: $m2kdir"
+  DebugCont "InputFileBasename: $InputFileBasename"
+  DebugCont "MySQLMythDb: $MySQLMythDb"
+  DebugCont "MySQLuser: $MySQLuser"
+  DebugCont "MySQLpass: $MySQLpass"
+  DebugCont "InputTitle: $InputTitle"
+  DebugCont "InputSubtitle: $InputSubtitle"
+  DebugCont "InputSeasonNum: $InputSeasonNum"
+  DebugCont "InputEpisodeNum: $InputEpisodeNum"
   #TODO: try compressing the below with something like:
   # local dbselect="mysql -u$MySQLuser -p$MySQLpass -e \"use '$MySQLMythDb' ; printf \"select %s from recorded where basename like '$InputFileBasename';\""
   # #then we'd have:

@@ -210,7 +210,8 @@ TargetPathIsInputPath="Disabled"
 Timeout=50
 #Update database time in seconds, Longer duration means faster processing time and less strain on TheTVDB. Default='88920' (1 day + eps)
 UpdateDatabase=88920
-#TODO: Consider adding variable binpath=/usr/local/bin as a step toward non-root install.
+#The path which contains myth2kodi and associated scripts default=/usr/local/bin
+binpath="/usr/local/bin"
 #myth2kodi working directory: Default=$HOME/.myth2kodi (ie, /home/username/.myth2kodi)
 m2kdir="$HOME/.myth2kodi"
 ###For testing###m2kdir="/data/sknock/TEMP/.mythicalLibrarian"
@@ -311,7 +312,7 @@ declare -i RSSmaxItems=8
 #    3=provides debugging output.
 #Recommend 2 to start with or if you want to keep track of what myth2kodi is doing.
 #Recommend 1 for usual operation, once you're confident that everything is working fine.
-#Only use 3 if you have a particular problem that you're trying to track down.
+#Only use 3 if you have a particular problem that you're trying to track down, it significantly increases the output.
 LogLevel=2
 #LogFile is the name of the log file, this will be placed in myth2kodi's working directory, $m2kdir set above.
 #DEFAULT: 'output.log' #NOTE: LogFile is overridden in special contexts, such as running Diagnostics.
@@ -327,10 +328,10 @@ mythicalVersion="myth2kodi Version 0.6.4; mythicalLibrarian 953ish+"
 LogFile="$m2kdir/output.log"
 declare -r DiagnosticsFile="$m2kdir/diagnostics.log"
 
-if [ -f /usr/local/bin/bashlogging ] ; then
-  source /usr/local/bin/bashlogging "$LogType"
+if [ -f "$binpath"/bashlogging ] ; then
+  source "$binpath"/bashlogging "$LogType"
 else
-  printf 'ERROR: %s\n' "/usr/local/bin/bashlogging doesn't exist." | tee -a $LogFile
+  printf 'ERROR: %s\n' "$binpath/bashlogging doesn't exist." | tee -a $LogFile
   exit 1
 fi
 
@@ -517,7 +518,7 @@ TraditionalNamingConventions(){
   #Format Episodes showname=show name Sxx=season number Exx=episode number EpisodeSubtitle=episode name
   if [[ "$Exx" != "" && "$Exx" != "E" ]]; then
     Debug "Naming as episode"
-    ShowFileName=`echo "$NewShowName $Sxx$Exx ($EpisodeSubtitle)"`
+    ShowFileName="$NewShowName $Sxx$Exx ($EpisodeSubtitle)"
   #Format Movies
   elif [ "$m2kProgramIDCheck" = "MV" ]; then
     Debug "Naming as movie"
@@ -535,7 +536,7 @@ TraditionalNamingConventions(){
     Debug "Naming as generic show"
     Exx="Generic"
     MoveDir="$PrimaryShowDir"
-    ShowFileName=`echo "$ShowName S0E0 ($EpisodeSubtitle Recorded $datehour on $ChanID)"`
+    ShowFileName="$ShowName S0E0 ($EpisodeSubtitle Recorded $datehour on $ChanID)"
     RequiresNFO=1
     test "$m2kProgramIDCheck" = "EP" && RequiresDoover=1
   fi
@@ -548,7 +549,7 @@ CategoricNamingConventions(){
   if [ "${OriginalAirDate:0:4}" != "0000" ] && [ "${OriginalAirDate:0:4}" != "" ] && [ "$UseMethod2" != "1" ] ; then
     EventYear="${OriginalAirDate:0:4}"
     Sxx=$EventYear
-    EventMonthDay=`echo "${OriginalAirDate:5:5}" | tr -d "-" | sed 's/0*//'`
+    EventMonthDay=$(echo "${OriginalAirDate:5:5}" | tr -d "-" | sed 's/0*//')
     Exx=$EventMonthDay
     test "$NewShowName" = "" && NewShowName=$ShowName
   else #Flag failure of Method1
@@ -563,7 +564,7 @@ CategoricNamingConventions(){
 
   #Method2 -
   if [ "$testedmethod1" != "1" ]; then
-    test "${ShowStartTime:0:4}" != 0000 && test "${ShowStartTime:0:4}" != "" && EventYear="${ShowStartTime:0:4}" && EventMonthDay=`echo "${ShowStartTime:5:5}" | tr -d "-" | sed 's/0*//'`
+    test "${ShowStartTime:0:4}" != 0000 && test "${ShowStartTime:0:4}" != "" && EventYear="${ShowStartTime:0:4}" && EventMonthDay=$(echo "${ShowStartTime:5:5}" | tr -d "-" | sed 's/0*//')
     Exx=$EventMonthDay
     Sxx=$EventYear
     #Check validity of Method2
@@ -585,7 +586,7 @@ dailyreport(){
     test ! -d "$m2kdir/DailyReport" && mkdir "$m2kdir/DailyReport"
     local reporttime=`date +%T`
     Inform "Writing to DailyReport file: ${Today}"
-    echo "$reporttime - $ShowFileName">>"$m2kdir/DailyReport/${Today}"
+    printf '%s\n' "$reporttime - $ShowFileName">>"$m2kdir/DailyReport/${Today}"
   fi
   return 0
 }
@@ -758,7 +759,7 @@ generaterss(){
   elif [ "$m2kProgramIDCheck" = "MV" ]; then
     echo -e "\t\t\t<link>http://www.imdb.com/search/title?release_date=,$MovieAirDate&amp;title=$ShowName&amp;title_type=feature</link>">>$rssDir/$TEMPrssFile
   else
-    tvdotcomshowname=`echo $ShowName | sed s/" "/"%20"/g`
+    tvdotcomshowname=$(sed s/" "/"%20"/g <<< "$ShowName")
     echo -e "\t\t\t<link>http://www.tv.com/search.php?type=11&amp;stype=all&amp;tag=search%3Bfrontdoor&amp;qs=$tvdotcomshowname </link>">>$rssDir/$TEMPrssFile
   fi
 
@@ -766,10 +767,10 @@ generaterss(){
   #  The below assumed the first inet addr was the correct one, but that can lead to the loopback, using m2 and removing 127.0.0.1 avoids this problem,
   #  though it's probably better to just set myip in the configuration at top of file
   which /sbin/ifconfig >/dev/null && myip=`/sbin/ifconfig | grep 'inet addr' -m2 | cut -d: -f2 | awk '{ print $1}' | grep -v "127.0.0.1"`
-  rssEpisodeSubtitle=`echo $EpisodeSubtitle | sed s/"&"/"&amp;"/g`
-  rssNewShowName=`echo $NewShowName | sed s/"&"/"&amp;"/g`
-  rssPlot=`echo $Plot | sed s/"&"/"&amp;"/g`
-  mythicalGUID=`echo "$MyUserName@$myip""$MoveDir/$ShowFileName.$OriginalExt" | sed s/"("/"%28"/g | sed s/")"/"%29"/g | sed s/"\ "/"%20"/g`
+  rssEpisodeSubtitle=$(sed s/"&"/"&amp;"/g <<< "$EpisodeSubtitle")
+  rssNewShowName=$(sed s/"&"/"&amp;"/g <<< "$NewShowName")
+  rssPlot=$(sed s/"&"/"&amp;"/g <<< "$Plot")
+  mythicalGUID=$(echo "$MyUserName@$myip""$MoveDir/$ShowFileName.$OriginalExt" | sed s/"("/"%28"/g | sed s/")"/"%29"/g | sed s/"\ "/"%20"/g) #TODO: Check that "\ " in the final sed is correct and shouldn't just be " "
   echo -e "\t\t\t<guid>sftp://$mythicalGUID</guid>">>$rssDir/$TEMPrssFile
   echo -e "\t\t\t<pubDate>"$(date -R -d "$ShowStartTime")"</pubDate>">>$rssDir/$TEMPrssFile
   echo -e "\t\t\t<description>">>$rssDir/$TEMPrssFile
@@ -827,6 +828,7 @@ generaterss(){
 
 #####MOVE MODE LOGGING#####
 #This function provides logging for move mode
+#TODO: This function doesn't really provide logging so much as it creates the undo and doover entries for this recording...
 performLoggingForMoveMode(){
   Debug "ENTERING: ${FUNCNAME}()"
   #Create undo and doover file if not present
@@ -869,6 +871,7 @@ doFailSafeMode(){
   Warn "PERMISSION ERROR OR DRIVE FULL"
   if [ "$FailSafeMode" = "Enabled" ]; then
     Warn "ATTEMPTING SYMLINK TO FAILSAFE DIR: $FailSafeDir"
+    Inform "FailSafe link name set as: $FailSafeDir/$ShowFileName.$OriginalExt"
     ln -s "$InputPath" "$FailSafeDir/$ShowFileName.$OriginalExt"
     test -f "$FailSafeDir/$ShowFileName.$OriginalExt" && Inform "FAILSAFE MODE COMPLETE: SYMLINK CREATED"
     test ! -f "$FailSafeDir/$ShowFileName.$OriginalExt" && Err "FAILSAFE MODE FAILURE CHECK PERMISSIONS AND FREE SPACE IN $FailSafeDir"
@@ -876,25 +879,39 @@ doFailSafeMode(){
     Inform "FailSafeMode Disabled, we won't try and make a link as a fallback."
   fi
 
-  test $Notify = Enabled && sudo -u "$NotifyUserName" /usr/local/bin/librarian-notify-send "myth2kodi FAILSAFE" "FAILSAFE mode active See $LogFile for more information" error
+  test $Notify = Enabled && sudo -u "$NotifyUserName" "$binpath"/librarian-notify-send "myth2kodi FAILSAFE" "FAILSAFE mode active See $LogFile for more information" error
 }
 
 #####MYTHTV DATABASE#####
 #This function gathers information from the MythTV database for use in the program
 GetMythTVDatabase(){
   Debug "ENTERING: ${FUNCNAME}()"
+  #TODO: try compressing the below with something like:
+  # local dbselect="mysql -u$MySQLuser -p$MySQLpass -e \"use '$MySQLMythDb' ; printf \"select %s from recorded where basename like '$InputFileBasename';\""
+  # #then we'd have:
+  # test "$InputTitle" = ""      && InputTitle=$(     $dbselect \"title\"    | sed s/"title"/""/g    | sed -n "2p")
+  # test "$InputSubtitle" = ""   && InputSubtitle=$(  $dbselect \"subtitle\" | sed s/"subtitle"/""/g | sed -n "2p")
+  # test "$InputSeasonNum" = ""  && InputSeasonNum=$( $dbselect \"season\"   | sed s/"season"/""/g   | sed -n "2p")
+  # test "$InputEpisodeNum" = "" && InputEpisodeNum=$($dbselect \"episode\"  | sed s/"episode"/""/g  | sed -n "2p")
+  # #TODO: Determine if substitution of "/" with "" below is SchedulesDirect specific, if so move it to ProcessSchedulesDirect...
+  # ChanID=$(         $dbselect \"chanid\"          | sed s/"\/"/""/g | sed -n "2p" | sed s/"chanid"/""/g | sed s/" "/""/g)
+  # ProgramID=$(      $dbselect \"programid\"       | sed s/"\/"/""/g | sed -n "2p" | sed s/"programid"/""/g)
+  # LocalSeriesID=$(  $dbselect \"seriesid\"        | sed s/"\/"/""/g | sed -n "2p" | sed s/"seriesid"/""/g)
+  # Plot=$(           $dbselect \"description\"     | sed s/"\/"/""/g | sed -n "2p" | sed s/"description"/""/g)
+  # Stars=$(          $dbselect \"stars\"           | sed s/"\/"/""/g | sed -n "2p" | sed s/"stars"/""/g) #TODO: stars in final sed had capital S, think it was bug, but check...
+  # ShowStartTime=$(  $dbselect \"starttime\"       | sed s/"\/"/""/g | sed -n "2p" | sed s/"starttime"/""/g)
+  # ShowCategory=$(   $dbselect \"category\"        | sed s/"\/"/""/g | sed -n "2p" | sed s/"category"/""/g)
+  # StorageGroup=$(   $dbselect \"storagegroup\"    | sed s/"\/"/""/g | sed -n "2p" | sed s/"storagegroup"/""/g)
+  # OriginalAirDate=$($dbselect \"originalairdate\" | sed s/"\/"/""/g | sed -n "2p" | sed s/"originalairdate"/""/g)
+  # test "$OriginalAirDate" = "0000-00-00" && OriginalAirDate="$null"
+
   #TODO: This conditional seems weird as PythonBindings isn't set anywhere and
   #  even if it were set to True then this function would do nothing rather
   #  than accessing the database via the Python bindings...
-  #TODO: try compressing the below with something like:
-  #local dbselect="mysql -u$MySQLuser -p$MySQLpass -e \"use '$MySQLMythDb' ; printf \"select %s from recorded where basename like '$InputFileBasename';\""
-  #then we'd have:
-  #test "$InputTitle" = "" && InputTitle=`$dbselect  \"title\" | sed s/"title"/""/g | sed -n "2p"`
-  #ChanID=`$dbselect  \"chanid\" | sed s/"\/"/""/g | sed -n 2p | sed s/"chanid"/""/g | sed s/" "/""/g`
-  #etc
   if [ "$PythonBindings" != "True" ]; then
     #Obtain MythTV Database Information
-    Inform "Accessing MythTV DataBase:"
+    Inform "Accessing MythTV DataBase Using mysql Commands:"
+    Inform "Attempting to pull database information on $InputPath"
     #get Title
     test "$InputTitle" = "" && InputTitle=`mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select title from recorded where basename like '$InputFileBasename'; " | sed s/"title"/""/g | sed -n "2p"`
     #get Subtitle
@@ -953,12 +970,30 @@ GetMythTVDatabase(){
 #TODO: Check functionality of and if necessary clean-up MythDataGrabber
 GetMythTvPythonBindings(){
   Debug "ENTERING: ${FUNCNAME}()"
+  DebugCont "m2kdir: $m2kdir"
+  DebugCont "binpath: $binpath"
+  DebugCont "InputFileBasename: $InputFileBasename"
+  DebugCont "DBPin: $DBPin"
+  DebugCont "DBHostName: $DBHostName"
+  DebugCont "MySQLMythDb: $MySQLMythDb"
+  DebugCont "MySQLuser: $MySQLuser"
+  DebugCont "MySQLpass: $MySQLpass"
+  DebugCont "InputTitle: $InputTitle"
+  DebugCont "InputSubtitle: $InputSubtitle"
+  DebugCont "InputSeasonNum: $InputSeasonNum"
+  DebugCont "InputEpisodeNum: $InputEpisodeNum"
+  Inform "Accessing MythTV DataBase Using PythonBindings:"
   Inform "Attempting to pull database information on $InputPath"
   #make a named pipe for database output
   test ! -p "$m2kdir/mythicalDbOut" && mkfifo "$m2kdir/mythicalDbOut"
 
   #run the python bindings and output to named pipe
-  /usr/local/bin/MythDataGrabber --filename="$InputFileBasename" --DBPin="$DBPin" --DBHostName="$DBHostName" --DBName="$MySQLMythDb" --DBUserName="$MySQLuser" --DBPassword="$MySQLpass"> "$m2kdir/mythicalDbOut" &
+  "$binpath"/MythDataGrabber --filename="$InputFileBasename" \
+                             --DBPin="$DBPin"                \
+                             --DBHostName="$DBHostName"      \
+                             --DBName="$MySQLMythDb"         \
+                             --DBUserName="$MySQLuser"       \
+                             --DBPassword="$MySQLpass" >"$m2kdir/mythicalDbOut" &
   pythonExitStatus=$?
   if [ "$pythonExitStatus" != "0" ] ; then
     Err "${FUNCNAME}() DATABASE ACCESS ERROR: COULD NOT OBTAIN INFORMATION"
@@ -967,9 +1002,8 @@ GetMythTvPythonBindings(){
 
   #read values from named pipe, remove quotes and declare $Variable=$Value
   while read var equals value ; do
-    value=`echo $value | tr -d \"`
-    test "$equals" = "=" && declare $var="$value"
-    echo $var$equals$value
+    value=$(tr -d \" <<< "$value")
+    test "$equals" = "=" && declare $var="$value" && Inform "$var$equals$value"
   done < "$m2kdir/mythicalDbOut" > /dev/null 2>&1
 
   if [ "$CommercialMarkup" = "Enabled" ]; then
@@ -982,6 +1016,10 @@ GetMythTvPythonBindings(){
 
   #TODO: Consider making all the vars set here readonly "declare -r ", even if that means renaming
   #  and tracking down the various inconsistent uses... NOTE: must do in non-python GetMythTv... as well.
+  #GuideTitle InputTitle => Title #Can be Series or Movie or ...
+  #GuideSubtitle InputSubtitle ExtractPlotSubtitle SxxExxSubtitle FuzzyPlotSubtitle nlpPlotSubtitle => EpisodeTitle
+  #GuideSeasonNum InputSeasonNum LogicSubtitleSeasonNum FuzzySubtitleSeasonNum FuzzyPlotSeasonNum nlpPlotSeasonNum => EpisodeSeasonNum
+  #GuideEpisodeNum InputEpisodeNum LogicSubtitleEpisodeNum FuzzySubtitleEpisodeNum FuzzyPlotEpisodeNum nlpPlotEpisodeNum => EpisodeEpisodeNum
 
   #Import mythtv values into myth2kodi values, don't clobber title, subtitle, season-number, or episode-number.
   test "$InputTitle" = "" && InputTitle=$title
@@ -1033,7 +1071,7 @@ ProcessSchedulesDirect(){
   test "$m2kProgramIDCheck" = "SP" && ProgramIDType="Sports Programming" && m2kProgramIDCheck=SH
 
   #account for .0123's in EITonly data type
-  ProgramID=`echo $ProgramID | cut -f1 -d"."`
+  ProgramID=$(cut -f1 -d"." <<< "$ProgramID")
 
   #Check if database contains enough information to put into doover que
   GoForDoover=0
@@ -1041,12 +1079,12 @@ ProcessSchedulesDirect(){
   test "$EpisodeSubtitle" != "" && GoForDoover=1
 
   #Get barebones zap2it series id.
-  Zap2itSeriesID=`echo $ProgramID | tr -d MVSHEP | sed 's/0*//' | sed 's/.\{4\}$//'`
+  Zap2itSeriesID=$(echo $ProgramID | tr -d MVSHEP | sed 's/0*//' | sed 's/.\{4\}$//')
 
   #strip needless chars from date
-  datehour=`echo "$ShowStartTime" | tr ":" "." | tr " " "@"`
+  datehour=$(echo "$ShowStartTime" | tr ":" "." | tr " " "@")
   #get 4 digit year
-  seasonyear=`echo "${ShowStartTime:0:4}"`
+  seasonyear=$(echo "${ShowStartTime:0:4}")
 
   #predefined naming conventions
   if [ "$ShowCategory" = "Sports event" -o "$ShowCategory" = "News" -o "$ShowCategory" = "Newsmagazine" ]; then
@@ -1085,7 +1123,9 @@ ExtractSxxExxFromPlot(){
     Exx="$InputEpisodeNum"
   elif [ "$SeasonEpisode" != "" ]; then
     Debug "Extracted season & episode information from Plot."
+    #TODO: Sxx=$(echo $SeasonEpisode | grep -E -i --only-matching '(s\.?[0-9]?[0-9])|([0-9]?[0-9]x)' | sed 's/s\.\?\|x//I')
     Sxx=$(echo $SeasonEpisode | grep -i --only-matching '\(s\.\?[0-9]\?[0-9]\)\|\([0-9]\?[0-9]x\)' | sed 's/s\.\?\|x//I')
+    #TODO: Exx=$(echo $SeasonEpisode | grep -E -i --only-matching '((e|ep)\.?[0-9][0-9]?)|(x[0-9][0-9]?)' | sed 's/\(E\.\?\|Ep\.\?\)\|x//I')
     Exx=$(echo $SeasonEpisode | grep -i --only-matching '\(\(e\|ep\)\.\?[0-9][0-9]\?\)\|\(x[0-9][0-9]\?\)' | sed 's/\(E\.\?\|Ep\.\?\)\|x//I')
     #Strip leading zero
     Sxx=${Sxx#0}
@@ -1148,7 +1188,7 @@ RemoveSubtitleFromPlot(){
     local STstring=$(echo $Plot | grep --only-matching '^\(\(\(\(\w\+\)\(.\?\s*\)\)\|\(\&\s*\)\)\{1,7\}\)\( -\|\:\)\s*')
     if [ "$STstring" != "" ] ; then
       Warn "${FUNCNAME}() Episode subtitle was in the Plot field, removing it to simplify subsequent processing."
-      Plot=$(echo $Plot | sed s/"$STstring"/""/)
+      Plot=$(sed s/"$STstring"/""/ <<< "$Plot")
     fi
   else
     Debug "InputSubtitle isn't currently set, so not going to discard it from Plot field."
@@ -1220,7 +1260,7 @@ ProcessSydFTA(){
 
   #Strip the Movie: tag that some stations very helpfully put in the title field...
   if [ "$m2kProgramIDCheck" = "MV" ]; then
-    InputTitle=$(echo $InputTitle | sed s/"Movie:\s*"/""/I)
+    InputTitle=$(sed s/"Movie:\s*"/""/I <<< "$InputTitle")
   fi
 
   #TODO: If it's a movie, check Title and Plot for a release year, assuming format (YYYY) seems reasonable.
@@ -1235,20 +1275,20 @@ ProcessSydFTA(){
 
   #FTA stations providing a ProgramID use CRID: https://en.wikipedia.org/wiki/Crid
   #Remove the leading CRID://
-  ProgramID=$(echo $ProgramID | sed s/"crid:\/\/"//I)
+  ProgramID=$(sed s/"crid:\/\/"//I <<< "$ProgramID")
   #Extract the Authority, ie the station broadcasting the show
-  ProgramAuthority=$(echo $ProgramID | cut -f1 -d"/")
+  ProgramAuthority=$(cut -f1 -d"/" <<< "$ProgramID")
   #Extract the show specific information, removing the leading /
-  ProgramData=$(echo $ProgramID | sed s/$ProgramAuthority"\/"//)
+  ProgramData=$(sed s/$ProgramAuthority"\/"// <<< "$ProgramID")
   #Populate the ProgramID variable with the ProgramData field of CRID
   ProgramID=$ProgramData
   #TODO: figure out if anything useful can actually be done with this ProgramID.
 
   #strip needless chars from date
-  datehour=`echo "$ShowStartTime" | tr ":" "." | tr " " "@"`
+  datehour=$(echo "$ShowStartTime" | tr ":" "." | tr " " "@")
 
   #predefined naming conventions
-  if [ "$ShowCategory" = "Sports event" -o "$ShowCategory" = "News" -o "$ShowCategory" = "Newsmagazine" ]; then
+  if [[ "$ShowCategory" =~ ^(Sports event|News|Newsmagazine)$ ]]; then
     NamingConvention=$ShowCategory
   fi
 
@@ -1284,17 +1324,17 @@ ProcessNoLookup(){
   test "$m2kProgramIDCheck" = "SP" && ProgramIDType="Sports Programming" && m2kProgramIDCheck=SH
 
   #account for .0123's in EITonly data type
-  ProgramID=`echo $ProgramID | cut -f1 -d"."`
+  ProgramID=$(cut -f1 -d"." <<< "$ProgramID")
 
   #This probably isn't necessary, but adding it for the time-being match previous state. #SAK
   Zap2itSeriesID="$LocalSeriesID"
 
   #strip needless chars from date
-  datehour=`echo "$ShowStartTime" | tr ":" "." | tr " " "@"`
+  datehour=$(echo "$ShowStartTime" | tr ":" "." | tr " " "@")
   #get 4 digit year
-  seasonyear=`echo "${ShowStartTime:0:4}"`
+  seasonyear="${ShowStartTime:0:4}"
 
-  if [ "$ShowCategory" = "Sports event" -o "$ShowCategory" = "News" -o "$ShowCategory" = "Newsmagazine" ]; then
+  if [[ "$ShowCategory" =~ ^(Sports event|News|Newsmagazine)$ ]]; then
     NamingConvention=$ShowCategory
   fi
   test NamingConvention="News" && UseMethod2=1
@@ -1311,6 +1351,7 @@ DeleteRelevantDatabaseFilesAndPictures(){
     #Remove recording entry from mysql database
     Warn "${FUNCNAME}() REMOVING - $FileBaseName - THUMBNAILS - DATABASE ENTRIES"
     mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; delete from recorded where basename like '$FileBaseName'; "
+    #TODO: Capture return state of mysql command so we can log success/failure.
     #Remove thumbnails
     rm -f "$originaldirname/$FileBaseName".*
   fi
@@ -1536,7 +1577,7 @@ GetSeriesLineNumberFromTableWithZap2itID(){
     while read line ; do
       (( ++ serieslinenumber ))
       Info "TESTING FOR ZAP2ITID MATCH:$line `sed -n $serieslinenumber"p" $m2kdir/shn.txt`"
-      Zap2ItTest=`echo $line | tr -d MVSHEP | sed 's/0*//'`
+      Zap2ItTest=$(echo $line | tr -d MVSHEP | sed 's/0*//')
       if [ "$Zap2ItTest" = "$Zap2itSeriesID" ] && [ "$Zap2itSeriesID" != "" ]; then
         return 0
         break
@@ -1942,7 +1983,7 @@ tvDbIsIncomplete(){
   local errtype="myth2kodi Error"
   local errmsg="Could not obtain information from server about: $InputTitle. TheTVDB is incomplete"
   if [ "$Notify" = "Enabled" ] ; then
-    sudo -u "$NotifyUserName" /usr/local/bin/librarian-notify-send "$errtype" "$errmsg" web-browser
+    sudo -u "$NotifyUserName" "$binpath"/librarian-notify-send "$errtype" "$errmsg" web-browser
   fi
 }
 
@@ -1952,7 +1993,7 @@ Wrote0LengthFile(){
   local errtype="myth2kodi Failure"
   local errmsg="$ShowFileName could not be moved to $MoveDir"
   if [ "$Notify" = "Enabled" ] ; then
-    sudo -u "$NotifyUserName" /usr/local/bin/librarian-notify-send "$errtype" "$errmsg" stop
+    sudo -u "$NotifyUserName" "$binpath"/librarian-notify-send "$errtype" "$errmsg" stop
   fi
 }
 
@@ -1962,7 +2003,7 @@ PermissionErrorWhileMoving(){
   local errtype="myth2kodi Failure"
   local errmsg="$ShowFileName could not be moved to $MoveDir"
   if [ "$Notify" = "Enabled" ] ; then
-    sudo -u "$NotifyUserName" /usr/local/bin/librarian-notify-send "$errtype" "$errmsg" stop
+    sudo -u "$NotifyUserName" "$binpath"/librarian-notify-send "$errtype" "$errmsg" stop
   fi
 }
 
@@ -1973,7 +2014,7 @@ SymlinkNotCreated(){
   local errtype="myth2kodi Error"
   local errmsg="Failure while creating link. Check permissions"
   if [ "$Notify" = "Enabled" ] ; then
-    sudo -u "$NotifyUserName" /usr/local/bin/librarian-notify-send "$errtype" "$errmsg" stop
+    sudo -u "$NotifyUserName" "$binpath"/librarian-notify-send "$errtype" "$errmsg" stop
   fi
 }
 
@@ -2027,9 +2068,8 @@ determinePrimaryOrAlternateFolderUsage(){
   test "$m2kProgramIDCheck" = "SH" -a "$PrimaryshowDirWritable" != "1" -a "$AlternateShowDirWritable" != "1" && FailSafeState=1
 }
 
-#####MAKE FOLDER#####
-#TODO: Consider being more explicit by renaming this function to something like: MakeShowDir
-MakeFolder(){
+##### MAKE DIRECTORY TO MOVE RECORDING TO IF NECESSARY #####
+MakeShowDir(){
   Debug "ENTERING: ${FUNCNAME}()"
   DebugCont "NewShowName: $NewShowName"
   DebugCont "MoveDir: $MoveDir"
@@ -2042,7 +2082,7 @@ MakeFolder(){
   if [ "$NewShowName" != "" ]; then
     MoveDir="$MoveDir/$NewShowName"
     if [ ! -d "$MoveDir" ]; then
-      Inform "CREATING FOLDER: $MoveDir"
+      Inform "CREATING SERIES FOLDER: $MoveDir"
       echo "$MoveDir">>"$m2kdir"/dir.tracking
       mkdir "$MoveDir"
       chmod 775 "$MoveDir"
@@ -2052,6 +2092,7 @@ MakeFolder(){
     if [ "$SeasonNumber" != "" ]; then
       MoveDir="$MoveDir/Season $SeasonNumber"
       if [ ! -d "$MoveDir" ]; then
+        Inform "CREATING SEASON FOLDER: $MoveDir"
         mkdir "$MoveDir"
         chmod 775 "$MoveDir"
         echo "$MoveDir">>"$m2kdir"/dir.tracking
@@ -2066,12 +2107,17 @@ MakeFolder(){
     ErrCont "######## FAILSAFE MODE HAS BEEN ACTIVATED ########"
     ErrCont "##################################################"
     if [ $Notify = "Enabled" ]; then
-      sudo -u "$NotifyUserName" /usr/local/bin/librarian-notify-send "myth2kodi error" "failsafe mode activated."  error
+      sudo -u "$NotifyUserName" "$binpath"/librarian-notify-send "myth2kodi error" "failsafe mode activated."  error
     fi
     SYMLINK=LINK
     MoveDir=$FailSafeDir
     FailSafeState=1
     RequiresDoover=1
+    Inform "FailSafe MOVE DIRECTORY SET AS: $MoveDir"
+    return 1
+  else
+    Inform "MOVE DIRECTORY SET AS: $MoveDir"
+    return 0
   fi
 }
 
@@ -2221,8 +2267,8 @@ DoMaintenance(){
       #TODO: Figure out the purpose of redirect to stderr and trailing 5 spaces before converting to new messaging mechanism...
       #echo -ne "File record $Counter: ${SupportFile:0:20}     \n" 1>&2
       Debug "File record $Counter: ${SupportFile:0:83}"
-      SupportFile=`echo $line|cut -d"'" -f2`
-      MainFile=`echo $line|cut -d"'" -f4`
+      SupportFile=$(cut -d"'" -f2 <<< "$line")
+      MainFile=$(cut -d"'" -f4 <<< "$line")
       ls "$MainFile" > /dev/null 2>&1
       if [ "$?" != "0" ]; then
         if [ -d "`dirname "$SupportFile"`" ]; then
@@ -2309,8 +2355,8 @@ mythicalScan(){
   local yesorno=""
   DoMythTVPermissionsCheck
   #Map myth2kodi input variables to local variables for our current purpose.
-  local checkext=$InputTitle
-  local scanpath=$InputSubtitle
+  local checkext="$InputTitle"
+  local scanpath="$InputSubtitle"
   Debug "Running ${FUNCNAME}() on $checkext files in $scanpath"
   #Do some basic checks before we get started.
   if [ "$UID" = "0" -o "$USER" = "root" ]; then
@@ -2419,10 +2465,10 @@ mythicalDiagnostics(){
   Inform "myth2kodi will now conduct a series of tests."
   read -n1 -p "press any key to verify installed packages..."
 
-  #TODO: Should check that our own scripts etc are available: exist, executable
-  #    /usr/local/bin/librarian-notify-send
-  #    /usr/local/bin/bashlogging
-  #    /usr/local/bin/MythDataGrabber
+  #TODO: Should check that our own scripts etc are available: exist, executable if necessary
+  #    "$binpath"/librarian-notify-send
+  #    "$binpath"/bashlogging
+  #    "$binpath"/MythDataGrabber
 
   #Test if required packages are installed and accessible to caller.
   test `which curl`>/dev/null  || checkc="curl"
@@ -2432,7 +2478,7 @@ mythicalDiagnostics(){
     which python &> /dev/null ; test "$?" = "0" || checkf="python"
     if [ "$checkf" = "" ] ; then
       python_version=$(python --version 2>&1)  #Python returns version info to stderr
-      pyver=`echo $python_version | sed s/"python\s*"//I | cut -f1-2 -d"." | tr -d '.'`
+      pyver=$(echo $python_version | sed s/"python\s*"//I | cut -f1-2 -d"." | tr -d '.')
       python -c "from MythTV import MythDB ; exit()" &> /dev/null
       test "$?" != "0" && checka="libmyth-python"
       python -c "import lxml ; exit()" &> /dev/null
@@ -2478,7 +2524,7 @@ mythicalDiagnostics(){
     Inform "Performing librarian-notify-send test"
     InformCont "This test verifies that the message was sent to the DBUS."
     InformCont "This test does not verify the user has a valid desktop open."
-    sudo -u "$NotifyUserName" /usr/local/bin/librarian-notify-send "myth2kodi test" "Testing Desktop Communications" "info"
+    sudo -u "$NotifyUserName" "$binpath"/librarian-notify-send "myth2kodi test" "Testing Desktop Communications" "info"
     if [ "$?" = "0" ] ; then
       notifytest="***PASSED***"
       Inform "Desktop Notifications test $notifytest"
@@ -2503,7 +2549,7 @@ mythicalDiagnostics(){
     #If checks above found python-lxml & libmyth-python, do a more thorough testing of MythTV python bindings
     if [ "$checkf$checka$checkb" = "" ] ; then
       #Use MythDataGrabber's internal diagnostics function
-      /usr/local/bin/MythDataGrabber --Diagnostic=True
+      "$binpath"/MythDataGrabber --Diagnostic=True
       test $? = "0" && PythonBindingsCheck="OK" || PythonBindingsCheck="FAILED"
       if [ "$PythonBindingsCheck" = "OK" ]; then
         Inform "MythTV Python Bindings are installed properly."
@@ -2542,6 +2588,7 @@ mythicalDiagnostics(){
     fi
   done
   #SAK: REPLACED BELOW, SEE http://forum.kodi.tv/showthread.php?tid=65644&page=65&highlight=json
+  #TODO: The evaluation of echo below seems redundant, but check before replacing.
   if [ "`echo $KODIresp`" = "{d:1,jsonrpc:2.0,resu:OK}" ] ; then
     KODIcomm="***PASSED***"
     Inform "KODI Communications $KODIcomm"
@@ -2771,20 +2818,20 @@ executeDoOver(){
 executeUndo(){
   Debug "ENTERING: ${FUNCNAME}()"
   if [ "$(id -u)" != "0" ]; then
-    echo "You do not have sufficient privileges to run this script."
-    echo "--undo must be executed with the sudo command"
-    echo "eg. 'sudo myth2kodi --undo'"
+    Err "You do not have sufficient privileges to run this script."
+    ErrCont "--undo must be executed with the sudo command"
+    ErrCont "eg. 'sudo myth2kodi --undo'"
     exit 1
   fi
   test "$SUDO_USER" = "" && SUDO_USER=`whoami`
-  echo "--You have entered undo mode."
-  echo " In this mode of operation, myth2kodi will reverse"
-  echo " file changes created by the current user while running."
-  echo " myth2kodi. There will be no indicators while undo"
-  echo " is running. It is important that this process is not "
-  echo " interrupted or data loss may occur"
+  Warn "--You have entered undo mode."
+  WarnCont " In this mode of operation, myth2kodi will reverse"
+  WarnCont " file changes created by the current user while running."
+  WarnCont " myth2kodi. There will be no indicators while undo"
+  WarnCont " is running. It is important that this process is not "
+  WarnCont " interrupted or data loss may occur"
   read -n1 -p "  Press 'y' to continue or 'n' to exit..... y/(n):>" yesorno
-  echo ""
+  printf '\n'
   if [ "$yesorno" = "y" ]; then
     Warn "Running undo.sh DO NOT INTERRUPT THIS PROCESS OR DATA LOSS MAY OCCUR."
     cp "$m2kdir/undo.sh" "$m2kdir/undo.lock"
@@ -2805,7 +2852,7 @@ executeUndo(){
     Inform "Done, undo.sh has finished running."
     exit 0
   else
-    echo "You must press y to execute undo"
+    Inform "You must press y to execute undo"
     exit 0
   fi
   exit 1
@@ -2824,8 +2871,8 @@ mythicalHelp(){
   echo ""
   echo "usage: myth2kodi 'path/to/file' ['title'] ['subtitle']"
   echo "usage: myth2kodi --mode [parameter] [parameter]"
-  echo " items in brackets are [context sensitive]"
-
+  echo "  items in brackets are [context sensitive]"
+  #TODO: Update this, probably remove short versions, especially for potentially dangerous modes, change --mythicalDiagnostics to --diagnostics
   if [ "$switchhelp" = "1" ]; then
     echo ""
     echo "Author: Adam Outler outleradam(at)hotmail.com"
@@ -3103,14 +3150,13 @@ case "$InputPath" in
   --mythicalDiagnostics|-m)
     PreCallLogFile="$LogFile"
     PreCallLogLevel="$LogLevel"
+    (( LogLevel < 3 )) && LogLevel=3 && Inform "Escalating LogLevel to Debug (3)."
     if [[ "$LogType" != "stdout" ]] ; then
-     Warn "Running diagnostics, so setting LogLevel=3 and redirecting subsequent messages to $DiagnosticsFile"
+     Inform "Running diagnostics, so redirecting subsequent messages to $DiagnosticsFile"
     else
      Warn "Running diagnostics without any logging to file, consider using LogType 'logfile' or 'both'"
-     Warn "Setting LogLevel=3"
     fi
     LogFile="$DiagnosticsFile"
-    LogLogLevel=3
     mythicalDiagnostics
     declare -i diagnosticsreturnstatus="$?"
     #Reset the LogFile & LogLevel to previous state, in case we ever call myth2kodi --mythicalDiagnostics from within myth2kodi
@@ -3221,15 +3267,15 @@ test "$InputSubtitle" != "" && InformCont "InputSubtitle:$InputSubtitle" || Info
 test "$Sxx" != "" && InformCont "Sxx:$Sxx" || InformCont "Sxx: UNKNOWN"
 test "$Exx" != "" && InformCont "Exx:$Exx" || InformCont "Exx: UNKNOWN"
 InformCont "PLOT: $Plot"
-ShowName=$InputTitle
+ShowName="$InputTitle"
 test "$ShowName" = "" && mythicalHelp
 
 #split on semicolon, there will only be one episode looked up.  Remove non-filesystem-compliant chars.
-EpisodeSubtitle=`echo $InputSubtitle | sed 's/;.*//' | tr -d '!|\?*<":>+[]/'`
-ExtensionPrep=`basename "$InputPath"`
-OriginalExt=`echo "${ExtensionPrep#*.}"`
-originaldirname=`dirname "$InputPath"`
-FileBaseName=${InputPath##*/}
+EpisodeSubtitle=$(echo $InputSubtitle | sed 's/;.*//' | tr -d '!|\?*<":>+[]/')
+ExtensionPrep=$(basename "$InputPath")
+OriginalExt="${ExtensionPrep#*.}"
+originaldirname=$(dirname "$InputPath")
+FileBaseName="${InputPath##*/}"
 FileName="$InputPath"
 
 #Check for show Title translations relating to the show in question.
@@ -3299,8 +3345,8 @@ if [ "$m2kProgramIDCheck" != "SH" ] && [ "$m2kProgramIDCheck" != "MV" ]; then
 fi
 
 #If it's not a recognized episode, then we need to assign the name myth2kodi will use.
-test -z "$ShowName" && ShowName=$InputTitle
-test -z "$NewShowName" && NewShowName=$ShowName
+test -z "$ShowName" && ShowName="$InputTitle"
+test -z "$NewShowName" && NewShowName="$ShowName"
 
 if [ "$SeriesID" != "" ] ; then
   makeShowDirIfNeeded
@@ -3423,7 +3469,8 @@ if [ "$SeriesID" != "" ] ; then
 
   #Statistical Fuzzy Logic monitoring
   updateRunningTotalMatchesCount
-  echo "TOTAL MATCHES:$FuzzyLogicMatches TOTAL VERIFIED FUZZY ERRORS:`test -f "$m2kdir"/FuzzyLogicError.log && cat "$m2kdir"/FuzzyLogicError.log || echo "0"`"
+  Inform "TOTAL FUZZY LOGIC MATCHES:$FuzzyLogicMatches"
+  Inform "TOTAL VERIFIED FUZZY ERRORS:$(test -f "$m2kdir"/FuzzyLogicError.log && cat "$m2kdir"/FuzzyLogicError.log || echo "0")"
 fi
 
 #If we already have Sxx and Exx from MythTV DB, use them. If we also had a Subtitle, then do some verification.
@@ -3526,7 +3573,7 @@ fi
 if [ ! -f "$InputPath" ] && [ "$InputPath" != "testfile.ext" ]; then
   InvalidFileErrorMessage
   if [ $Notify = Enabled ]; then
-    sudo -u "$NotifyUserName" /usr/local/bin/librarian-notify-send "myth2kodi Error" "Invalid File supplied" error
+    sudo -u "$NotifyUserName" "$binpath"/librarian-notify-send "myth2kodi Error" "Invalid File supplied" error
   fi
   jobtype='InvalidFileNameSupplied'
   RunJob
@@ -3665,9 +3712,9 @@ determinePrimaryOrAlternateFolderUsage
 #####OUTPUT FILE NAME FORMATTING#####
 #universally not accepted file system characters:  |\?*<":>+[]/
 #Format Shows
-EpisodeSubtitle=$(echo $EpisodeSubtitle | tr -d '!|\?*<":>+[]/'"'")
-NewShowName=$(echo $NewShowName | tr -d '!|\?*<":>+[]/'"'")
-ShowName=$(echo $ShowName | tr -d '!|\?*<":>+[]/'"'")
+EpisodeSubtitle=$(tr -d '!|\?*<":>+[]/'"'" <<< "$EpisodeSubtitle")
+NewShowName=$(tr -d '!|\?*<":>+[]/'"'" <<< "$NewShowName")
+ShowName=$(tr -d '!|\?*<":>+[]/'"'" <<< "$ShowName")
 
 #Format Episodes showname=show name Sxx=season number Exx=episode number EpisodeSubtitle=episode name
 if [ "$NamingConvention" = "" ]; then
@@ -3678,11 +3725,8 @@ else
   RequiresNFO=1
 fi
 
-#####MAKE THE FOLDER#####
-MakeFolder
-
-#Check that the output folder exists and report where we're moving the recording.
-test -d "$MoveDir" && Inform "TARGET SET: $MoveDir/$ShowFileName.$OriginalExt" #TODO: Probably should error message and exit if our MoveDir doesn't exist.
+#### MAKE THE DIRECTORY WE'LL MOVE THE RECORDING TO ####
+MakeShowDir
 
 #####FAILSAFE HANDLING#####
 #TODO: Review the "FailSafe" handling throughout the script.
@@ -3741,7 +3785,7 @@ test  "$m2kProgramIDCheck" = "SH" && DisplayShowWarning
 if [ "$SYMLINK" != "LINK" ]; then
   #Send notifications, Move the file and rename
   Inform "MOVING FILE: '$InputPath' to '$MoveDir/$ShowFileName.$OriginalExt'"
-  test "$Notify" = "Enabled" && sudo -u "$NotifyUserName" /usr/local/bin/librarian-notify-send "myth2kodi Moving" "Moving and renaming $ShowFileName" drive-harddisk
+  test "$Notify" = "Enabled" && sudo -u "$NotifyUserName" "$binpath"/librarian-notify-send "myth2kodi Moving" "Moving and renaming $ShowFileName" drive-harddisk
   mv "$InputPath" "$MoveDir/$ShowFileName.$OriginalExt"
 
   #Check and report if file was moved
@@ -3773,7 +3817,7 @@ if [ "$SYMLINK" != "LINK" ]; then
       fi
 
       #Send notification of completion
-      test $Notify = "Enabled" && sudo -u "$NotifyUserName" /usr/local/bin/librarian-notify-send "myth2kodi Success" "$ShowFileName moved to $MoveDir" info
+      test $Notify = "Enabled" && sudo -u "$NotifyUserName" "$binpath"/librarian-notify-send "myth2kodi Success" "$ShowFileName moved to $MoveDir" info
 
       #Additional features, notifications, rss, daily report.
       test  "$RequiresNFO" = "1" && GenerateTVShowNFO
@@ -3814,7 +3858,7 @@ elif [ "$SYMLINK" = "LINK" ]; then
     Inform "Symlink created $MoveDir/$ShowFileName.$OriginalExt"
     echo "@@@@@@@@ OPERATION COMPLETE" `date` "@@@@@@@@">>"$LogFile"
     if [ "$Notify" = "Enabled" ]; then
-      sudo -u "$NotifyUserName" /usr/local/bin/librarian-notify-send "myth2kodi Success" "$ShowFileName linked to $MoveDir" info
+      sudo -u "$NotifyUserName" "$binpath"/librarian-notify-send "myth2kodi Success" "$ShowFileName linked to $MoveDir" info
     fi
 
     #Move comskip data to proper folder
@@ -3852,7 +3896,7 @@ test "$Exx" = "" &&  genericUnspecifiedError
 
 #send notification if enabled
 if [ "$Notify" = "Enabled" ] ; then
-  sudo -u "$NotifyUserName" /usr/local/bin/librarian-notify-send "myth2kodi error" "myth2kodi operation failed See $LogFile for more information" error
+  sudo -u "$NotifyUserName" "$binpath"/librarian-notify-send "myth2kodi error" "myth2kodi operation failed See $LogFile for more information" error
 if
 writeJobToDooverQue
 jobtype='GenericUnspecifiedError'

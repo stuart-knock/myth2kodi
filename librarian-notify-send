@@ -1,0 +1,31 @@
+#!/bin/bash
+
+# This file goes in /usr/local/bin/ and should be named librarian-notify-send
+# This file is a modified version of alt-notify-send. It has been modified to send images with the notifications
+# See:http://xbmc.org/wiki/?title=MythicalLibrarian#GNOME_Desktop_Notifications for usage
+
+user=`whoami`
+pids=`pgrep -u $user gnome-session`
+title=$1
+text=$2
+image=$3
+
+if [ -z "$title" ]; then
+        echo You need to give me a title >&2
+        exit 1
+fi
+if [ -z "$text" ]; then
+        text=$title
+fi
+if [ -z "$timeout" ]; then
+        timeout=60000
+fi
+
+for pid in $pids; do
+        # find DBUS session bus for this session
+        DBUS_SESSION_BUS_ADDRESS=`grep -z DBUS_SESSION_BUS_ADDRESS \
+                /proc/$pid/environ | sed -e 's/DBUS_SESSION_BUS_ADDRESS=//'`
+        # send message to DBUS
+        DBUS_SESSION_BUS_ADDRESS=$DBUS_SESSION_BUS_ADDRESS \
+        notify-send -u low -i "$image" "$title" "$text"
+done

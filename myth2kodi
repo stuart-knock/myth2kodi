@@ -331,7 +331,7 @@ declare -r DiagnosticsFile="$m2kdir/diagnostics.log"
 if [ -f "$binpath"/bashlogging ] ; then
   source "$binpath"/bashlogging "$LogType"
 else
-  printf 'ERROR: %s\n' "$binpath/bashlogging doesn't exist." | tee -a $LogFile
+  printf 'ERROR: %s\n' "$binpath/bashlogging doesn't exist." | tee -a "$LogFile"
   exit 1
 fi
 
@@ -349,7 +349,7 @@ fi
 #TODO: Consider renaming as ExitJobs, seems more descriptive given usage...
 RunJob(){
   Debug "ENTERING: ${FUNCNAME}()"
-  case $jobtype in
+  case "$jobtype" in
   #Successful Completion of myth2kodi
     LinkModeSuccessful|MoveModeSuccessful)
       Inform "SUCCESSFUL COMPLETION TYPE: $jobtype"
@@ -548,10 +548,10 @@ CategoricNamingConventions(){
   #Method1 - use airdate for season
   if [ "${OriginalAirDate:0:4}" != "0000" ] && [ "${OriginalAirDate:0:4}" != "" ] && [ "$UseMethod2" != "1" ] ; then
     EventYear="${OriginalAirDate:0:4}"
-    Sxx=$EventYear
-    EventMonthDay=$(echo "${OriginalAirDate:5:5}" | tr -d "-" | sed 's/0*//')
-    Exx=$EventMonthDay
-    test "$NewShowName" = "" && NewShowName=$ShowName
+    Sxx="$EventYear"
+    EventMonthDay="$(echo "${OriginalAirDate:5:5}" | tr -d "-" | sed 's/0*//')"
+    Exx="$EventMonthDay"
+    test "$NewShowName" = "" && NewShowName="$ShowName"
   else #Flag failure of Method1
     testedmethod1=0
   fi
@@ -564,9 +564,9 @@ CategoricNamingConventions(){
 
   #Method2 -
   if [ "$testedmethod1" != "1" ]; then
-    test "${ShowStartTime:0:4}" != 0000 && test "${ShowStartTime:0:4}" != "" && EventYear="${ShowStartTime:0:4}" && EventMonthDay=$(echo "${ShowStartTime:5:5}" | tr -d "-" | sed 's/0*//')
-    Exx=$EventMonthDay
-    Sxx=$EventYear
+    test "${ShowStartTime:0:4}" != 0000 && test "${ShowStartTime:0:4}" != "" && EventYear="${ShowStartTime:0:4}" && EventMonthDay="$(echo "${ShowStartTime:5:5}" | tr -d "-" | sed 's/0*//')"
+    Exx="$EventMonthDay"
+    Sxx="$EventYear"
     #Check validity of Method2
   fi
 
@@ -714,8 +714,8 @@ KODIAutomate(){
 
 #####GENERATE RSS ENTRY#####
 #This function generates an RSS feed for use on the web server. This can be used
-#in /home/<kodi-user>/.kodi/userdata/RssFeeds.xml replace the feeds.feedburner.com link
-#with:
+#in /home/<kodi-user>/.kodi/userdata/RssFeeds.xml, replace or add to the default
+#feeds with:
 #  <feed updateinterval="30">http://[youripaddress]/mythical-rss/rss.xml</feed>
 #Big thanks to barney_1!
 #TODO: return codes from this function aren't captured...
@@ -761,18 +761,18 @@ generaterss(){
   elif [ "$m2kProgramIDCheck" = "MV" ]; then
     echo -e "\t\t\t<link>http://www.imdb.com/search/title?release_date=,$MovieAirDate&amp;title=$ShowName&amp;title_type=feature</link>" >> "$rssDir/$TEMPrssFile"
   else
-    tvdotcomshowname=$(sed s/" "/"%20"/g <<< "$ShowName")
+    tvdotcomshowname="$(sed s/" "/"%20"/g <<< "$ShowName")"
     echo -e "\t\t\t<link>http://www.tv.com/search.php?type=11&amp;stype=all&amp;tag=search%3Bfrontdoor&amp;qs=$tvdotcomshowname </link>" >> "$rssDir/$TEMPrssFile"
   fi
 
   #TODO: Need to make the call to ifconfig more portable, maybe just revert to straight call and add /sbin to librarians path.
   #  The below assumed the first inet addr was the correct one, but that can lead to the loopback, using m2 and removing 127.0.0.1 avoids this problem,
   #  though it's probably better to just set myip in the configuration at top of file
-  which /sbin/ifconfig >/dev/null && myip=$(/sbin/ifconfig | grep 'inet addr' -m2 | cut -d: -f2 | awk '{ print $1}' | grep -v "127.0.0.1")
-  rssEpisodeSubtitle=$(sed s/"&"/"&amp;"/g <<< "$EpisodeSubtitle")
-  rssNewShowName=$(sed s/"&"/"&amp;"/g <<< "$NewShowName")
-  rssPlot=$(sed s/"&"/"&amp;"/g <<< "$Plot")
-  mythicalGUID=$(echo "$MyUserName@$myip""$MoveDir/$ShowFileName.$OriginalExt" | sed s/"("/"%28"/g | sed s/")"/"%29"/g | sed s/"\ "/"%20"/g) #TODO: Check that "\ " in the final sed is correct and shouldn't just be " "
+  which /sbin/ifconfig >/dev/null && myip="$(/sbin/ifconfig | grep 'inet addr' -m2 | cut -d: -f2 | awk '{ print $1}' | grep -v "127.0.0.1")"
+  rssEpisodeSubtitle="$(sed s/"&"/"&amp;"/g <<< "$EpisodeSubtitle")"
+  rssNewShowName="$(sed s/"&"/"&amp;"/g <<< "$NewShowName")"
+  rssPlot="$(sed s/"&"/"&amp;"/g <<< "$Plot")"
+  mythicalGUID="$(echo "$MyUserName@$myip""$MoveDir/$ShowFileName.$OriginalExt" | sed s/"("/"%28"/g | sed s/")"/"%29"/g | sed s/"\ "/"%20"/g)" #TODO: Check that "\ " in the final sed is correct and shouldn't just be " "
   echo -e "\t\t\t<guid>sftp://$mythicalGUID</guid>"                   >> "$rssDir/$TEMPrssFile"
   echo -e "\t\t\t<pubDate>"$(date -R -d "$ShowStartTime")"</pubDate>" >> "$rssDir/$TEMPrssFile"
   echo -e "\t\t\t<description>"                                       >> "$rssDir/$TEMPrssFile"
@@ -799,9 +799,9 @@ generaterss(){
     fi
 
     #get the line number for the first <item> tag
-    firstLine=$(grep -n -m 1 "<item>" "$rssDir/$OLDrssFile" | cut -d ":" -f 1)
+    firstLine="$(grep -n -m 1 "<item>" "$rssDir/$OLDrssFile" | cut -d ":" -f 1)"
     #get the line number for our last </item> tag
-    lastLine=$(grep -n -m $(($itemLimit-1)) "</item>" "$rssDir/$OLDrssFile" | tail -n1 | cut -d ":" -f 1)
+    lastLine="$(grep -n -m $(($itemLimit-1)) "</item>" "$rssDir/$OLDrssFile" | tail -n1 | cut -d ":" -f 1)"
     #set IFS to use line break as a delineator
     local IFS=$'\n'
     #Read in the old RSS file
@@ -873,9 +873,9 @@ performLoggingForMoveMode(){
 #This function performs logging for link mode
 performLoggingForLinkMode(){
   Debug "ENTERING: ${FUNCNAME}()"
-  #Create undo and doover file if not present
-  test ! -f "$m2kdir/undo.sh" && echo "rm -f \"$m2kdir/undo.sh\"" >> "$m2kdir/undo.sh" && chmod 666 "$m2kdir/undo.sh"
-  test ! -f "$m2kdir/doover.sh" && echo "rm -f \"$m2kdir/doover.sh\"">>"$m2kdir/doover.sh" && chmod 666 "$m2kdir/doover.sh"
+  #Create undo and doover file if not present, the first command of these scripts is to remove themselves.
+  test ! -f "$m2kdir/undo.sh"   && echo "rm -f \"$m2kdir/undo.sh\""   >> "$m2kdir/undo.sh"   && chmod 666 "$m2kdir/undo.sh"
+  test ! -f "$m2kdir/doover.sh" && echo "rm -f \"$m2kdir/doover.sh\"" >> "$m2kdir/doover.sh" && chmod 666 "$m2kdir/doover.sh"
 
   test "$RequiresDoover" = "1" && echo "test -L \"$MoveDir/$ShowFileName.$OriginalExt\" && rm -f \"$MoveDir/$ShowFileName.$OriginalExt\"">>"$m2kdir/doover.sh"
   test "$RequiresDoover" = "1" && echo "myth2kodi \"$InputPath\" \"$InputTitle\" \"$InputSubtitle\"">>"$m2kdir/doover.sh"
@@ -885,8 +885,10 @@ performLoggingForLinkMode(){
 
 writeJobToDooverQue(){
   Debug "ENTERING: ${FUNCNAME}()"
+  DebugCont "m2kdir: $m2kdir"
+  DebugCont "InputPath: $InputPath"
   Inform "Writing job to doover queue: $m2kdir/doover.sh"
-  test "$InputPath" != "" && echo "myth2kodi '$1' '$2' '$3'">>"$m2kdir"/doover.sh
+  test "$InputPath" != "" && echo "myth2kodi '$1' '$2' '$3'" >> "$m2kdir"/doover.sh
 }
 
 doFailSafeMode(){
@@ -922,20 +924,20 @@ GetMythTVDatabase(){
   #TODO: try compressing the below with something like:
   # local dbselect="mysql -u$MySQLuser -p$MySQLpass -e \"use '$MySQLMythDb' ; printf \"select %s from recorded where basename like '$InputFileBasename';\""
   # #then we'd have:
-  # test "$InputTitle" = ""      && InputTitle=$(     $dbselect \"title\"    | sed s/"title"/""/g    | sed -n "2p")
-  # test "$InputSubtitle" = ""   && InputSubtitle=$(  $dbselect \"subtitle\" | sed s/"subtitle"/""/g | sed -n "2p")
-  # test "$InputSeasonNum" = ""  && InputSeasonNum=$( $dbselect \"season\"   | sed s/"season"/""/g   | sed -n "2p")
-  # test "$InputEpisodeNum" = "" && InputEpisodeNum=$($dbselect \"episode\"  | sed s/"episode"/""/g  | sed -n "2p")
+  # test "$InputTitle" = ""      && InputTitle="$(     $dbselect \"title\"    | sed s/"title"/""/g    | sed -n "2p")"
+  # test "$InputSubtitle" = ""   && InputSubtitle="$(  $dbselect \"subtitle\" | sed s/"subtitle"/""/g | sed -n "2p")"
+  # test "$InputSeasonNum" = ""  && InputSeasonNum="$( $dbselect \"season\"   | sed s/"season"/""/g   | sed -n "2p")"
+  # test "$InputEpisodeNum" = "" && InputEpisodeNum="$($dbselect \"episode\"  | sed s/"episode"/""/g  | sed -n "2p")"
   # #TODO: Determine if substitution of "/" with "" below is SchedulesDirect specific, if so move it to ProcessSchedulesDirect...
-  # ChanID=$(         $dbselect \"chanid\"          | sed s/"\/"/""/g | sed -n "2p" | sed s/"chanid"/""/g | sed s/" "/""/g)
-  # ProgramID=$(      $dbselect \"programid\"       | sed s/"\/"/""/g | sed -n "2p" | sed s/"programid"/""/g)
-  # LocalSeriesID=$(  $dbselect \"seriesid\"        | sed s/"\/"/""/g | sed -n "2p" | sed s/"seriesid"/""/g)
-  # Plot=$(           $dbselect \"description\"     | sed s/"\/"/""/g | sed -n "2p" | sed s/"description"/""/g)
-  # Stars=$(          $dbselect \"stars\"           | sed s/"\/"/""/g | sed -n "2p" | sed s/"stars"/""/g) #TODO: stars in final sed had capital S, think it was bug, but check...
-  # ShowStartTime=$(  $dbselect \"starttime\"       | sed s/"\/"/""/g | sed -n "2p" | sed s/"starttime"/""/g)
-  # ShowCategory=$(   $dbselect \"category\"        | sed s/"\/"/""/g | sed -n "2p" | sed s/"category"/""/g)
-  # StorageGroup=$(   $dbselect \"storagegroup\"    | sed s/"\/"/""/g | sed -n "2p" | sed s/"storagegroup"/""/g)
-  # OriginalAirDate=$($dbselect \"originalairdate\" | sed s/"\/"/""/g | sed -n "2p" | sed s/"originalairdate"/""/g)
+  # ChanID="$(         $dbselect \"chanid\"          | sed s/"\/"/""/g | sed -n "2p" | sed s/"chanid"/""/g | sed s/" "/""/g)"
+  # ProgramID="$(      $dbselect \"programid\"       | sed s/"\/"/""/g | sed -n "2p" | sed s/"programid"/""/g)"
+  # LocalSeriesID="$(  $dbselect \"seriesid\"        | sed s/"\/"/""/g | sed -n "2p" | sed s/"seriesid"/""/g)"
+  # Plot="$(           $dbselect \"description\"     | sed s/"\/"/""/g | sed -n "2p" | sed s/"description"/""/g)"
+  # Stars="$(          $dbselect \"stars\"           | sed s/"\/"/""/g | sed -n "2p" | sed s/"stars"/""/g)" #TODO: stars in final sed had capital S, think it was bug, but check...
+  # ShowStartTime="$(  $dbselect \"starttime\"       | sed s/"\/"/""/g | sed -n "2p" | sed s/"starttime"/""/g)"
+  # ShowCategory="$(   $dbselect \"category\"        | sed s/"\/"/""/g | sed -n "2p" | sed s/"category"/""/g)"
+  # StorageGroup="$(   $dbselect \"storagegroup\"    | sed s/"\/"/""/g | sed -n "2p" | sed s/"storagegroup"/""/g)"
+  # OriginalAirDate="$($dbselect \"originalairdate\" | sed s/"\/"/""/g | sed -n "2p" | sed s/"originalairdate"/""/g)"
   # test "$OriginalAirDate" = "0000-00-00" && OriginalAirDate="$null"
 
   #TODO: This conditional seems weird as PythonBindings isn't set anywhere and
@@ -1035,7 +1037,7 @@ GetMythTvPythonBindings(){
 
   #read values from named pipe, remove quotes and declare $Variable=$Value
   while read var equals value ; do
-    value=$(tr -d \" <<< "$value")
+    value="$(tr -d \" <<< "$value")"
     test "$equals" = "=" && declare $var="$value" && Inform "$var$equals$value"
   done < "$m2kdir/mythicalDbOut" > /dev/null 2>&1
 
@@ -1055,22 +1057,22 @@ GetMythTvPythonBindings(){
   #GuideEpisodeNum InputEpisodeNum LogicSubtitleEpisodeNum FuzzySubtitleEpisodeNum FuzzyPlotEpisodeNum nlpPlotEpisodeNum => EpisodeEpisodeNum
 
   #Import mythtv values into myth2kodi values, don't clobber title, subtitle, season-number, or episode-number.
-  test "$InputTitle" = "" && InputTitle=$title
-  test "$InputSubtitle" = "" && InputSubtitle=$subtitle
-  test "$InputSeasonNum" = "" && InputSeasonNum=$season
-  test "$InputEpisodeNum" = "" && InputEpisodeNum=$episode
+  test "$InputTitle" = "" && InputTitle="$title"
+  test "$InputSubtitle" = "" && InputSubtitle="$subtitle"
+  test "$InputSeasonNum" = "" && InputSeasonNum="$season"
+  test "$InputEpisodeNum" = "" && InputEpisodeNum="$episode"
 
   #redefine database var names into myth2kodi var names
-  MovieAirDate=$airdate
-  OriginalAirDate=$originalairdate
-  ShowCategory=$category
-  StorageGroup=$storagegroup
-  Stars=$stars
-  Plot=$description
-  LocalSeriesID=$seriesid
-  ProgramID=$programid
-  ChanID=$chanid
-  ShowStartTime=$starttime
+  MovieAirDate="$airdate"
+  OriginalAirDate="$originalairdate"
+  ShowCategory="$category"
+  StorageGroup="$storagegroup"
+  Stars="$stars"
+  Plot="$description"
+  LocalSeriesID="$seriesid"
+  ProgramID="$programid"
+  ChanID="$chanid"
+  ShowStartTime="$starttime"
 
   #cleanup, remove the fifo named pipe
   test -p "$m2kdir/mythicalDbOut" && rm -f "$m2kdir/mythicalDbOut"
@@ -1082,7 +1084,7 @@ ProcessSchedulesDirect(){
   Debug "ENTERING: ${FUNCNAME}()"
   Inform "Processing MythTV database info as SchedulesDirect."
   #Check for database permissions
-  test "$ChanID" = "" && Err "%%% NO DATABASE INFORMATION. CHECK LOGIN/PASS OR FILE %%%%%"
+  test "$ChanID" = "" && Err "%%%% NO DATABASE INFORMATION. CHECK LOGIN/PASS OR FILE %%%%"
   #disqualify invalid movie airdates
   test ! -z "$MovieAirDate" && test $MovieAirDate -lt 1900 && MovieAirDate=$null
 
@@ -1104,7 +1106,7 @@ ProcessSchedulesDirect(){
   test "$m2kProgramIDCheck" = "SP" && ProgramIDType="Sports Programming" && m2kProgramIDCheck=SH
 
   #account for .0123's in EITonly data type
-  ProgramID=$(cut -f1 -d"." <<< "$ProgramID")
+  ProgramID="$(cut -f1 -d"." <<< "$ProgramID")"
 
   #Check if database contains enough information to put into doover que
   GoForDoover=0
@@ -1147,7 +1149,7 @@ ExtractSxxExxFromPlot(){
     #including it in the plot/description field instead of where it belongs
     #The below should work for any of the following forms:
     #S01E42 | (01x42) | s01e42 | 1X2 | S1E4 | (S01Ep42) | (S1Ep42) | 42x1 | (S.01Ep.42) | (S.01,Ep.42)
-    #TODO: SeasonEpisode=$(grep -E -i --only-matching '(s\.?[0-9]?[0-9]\,?(e|ep)\.?[0-9][0-9]?)|([0-9]?[0-9]x[0-9][0-9]?)' <<< "$Plot")
+    #TODO: SeasonEpisode="$(grep -E -i --only-matching '(s\.?[0-9]?[0-9]\,?(e|ep)\.?[0-9][0-9]?)|([0-9]?[0-9]x[0-9][0-9]?)' <<< "$Plot")"
     SeasonEpisode=$(echo $Plot | grep -i --only-matching '\(s\.\?[0-9]\?[0-9]\,\?\(e\|ep\)\.\?[0-9][0-9]\?\)\|\([0-9]\?[0-9]x[0-9][0-9]\?\)')
   fi
   if [ "$InputSeasonNum" != "" ] && [ "$InputEpisodeNum" != "" ]; then
@@ -1156,9 +1158,9 @@ ExtractSxxExxFromPlot(){
     Exx="$InputEpisodeNum"
   elif [ "$SeasonEpisode" != "" ]; then
     Debug "Extracted season & episode information from Plot."
-    #TODO: Sxx=$(echo $SeasonEpisode | grep -E -i --only-matching '(s\.?[0-9]?[0-9])|([0-9]?[0-9]x)' | sed 's/s\.\?\|x//I')
+    #TODO: Sxx="$(echo $SeasonEpisode | grep -E -i --only-matching '(s\.?[0-9]?[0-9])|([0-9]?[0-9]x)' | sed 's/s\.\?\|x//I')"
     Sxx=$(echo $SeasonEpisode | grep -i --only-matching '\(s\.\?[0-9]\?[0-9]\)\|\([0-9]\?[0-9]x\)' | sed 's/s\.\?\|x//I')
-    #TODO: Exx=$(echo $SeasonEpisode | grep -E -i --only-matching '((e|ep)\.?[0-9][0-9]?)|(x[0-9][0-9]?)' | sed 's/\(E\.\?\|Ep\.\?\)\|x//I')
+    #TODO: Exx="$(echo $SeasonEpisode | grep -E -i --only-matching '((e|ep)\.?[0-9][0-9]?)|(x[0-9][0-9]?)' | sed 's/\(E\.\?\|Ep\.\?\)\|x//I')"
     Exx=$(echo $SeasonEpisode | grep -i --only-matching '\(\(e\|ep\)\.\?[0-9][0-9]\?\)\|\(x[0-9][0-9]\?\)' | sed 's/\(E\.\?\|Ep\.\?\)\|x//I')
     #Strip leading zero
     Sxx=${Sxx#0}
@@ -1178,15 +1180,15 @@ RemoveSeasonEpisodeFromPlot(){
   Debug "ENTERING: ${FUNCNAME}()"
   if [ "$SeasonEpisode" != "" ] ; then
     #Check if it's in the leading position and if so, remove it
-    #TODO: local SEstring=$(grep -E -i --only-matching '(\(?s\.?[0-9]?[0-9]\,?(e|ep)\.?[0-9][0-9]?\)?)\s*|(\(?[0-9]?[0-9]x[0-9][0-9]?\)?)\s*' <<< "$Plot")
+    #TODO: local SEstring="$(grep -E -i --only-matching '(\(?s\.?[0-9]?[0-9]\,?(e|ep)\.?[0-9][0-9]?\)?)\s*|(\(?[0-9]?[0-9]x[0-9][0-9]?\)?)\s*' <<< "$Plot")"
     local SEstring=`echo $Plot | grep -i --only-matching '(\?\(s\.\?[0-9]\?[0-9]\,\?\(e\|ep\)\.\?[0-9][0-9]\?\))\?\s*\|(\?\([0-9]\?[0-9]x[0-9][0-9]\?\))\?\s*'`
     if [ "$SEstring" != "" ] ; then
       Warn "${FUNCNAME}() SeasonEpisode was in the leading position of the Plot field, removing it to simplify subsequent processing."
-      Plot=$(sed s/"$SEstring"/""/ <<< "$Plot")
+      Plot="$(sed s/"$SEstring"/""/ <<< "$Plot")"
       #Also remove any left over leading hyphen, colon, or space 
-      Plot=$(sed s/^"\s*[-|:]\?\s*"/""/ <<< "$Plot")
+      Plot="$(sed s/^"\s*[-|:]\?\s*"/""/ <<< "$Plot")"
       #TODO: Still may need to strip any trailing space from the Plot
-      #Plot=$(sed s/"\s*"$/""/ <<< "$Plot")
+      #Plot="$(sed s/"\s*"$/""/ <<< "$Plot")" #TODO: should be a substitution pattern for this... Plot="${Plot%%*([[:space:]])}"
     fi
   else
     Debug "SeasonEpisode isn't currently set:"
@@ -1203,10 +1205,10 @@ ExtractSubtitleFromPlot(){
   Debug "ENTERING: ${FUNCNAME}()"
   #TODO: Probably should do things conditionally based on whether or not we actually managed
   #  to extract a Subtitle. And maybe return failure state.
-  #TODO: InputSubtitle=$(grep -E --only-matching '^((((\w+)(.?\s*))|(\&\s*)){1,7})( -|\:)' <<< "$Plot")
+  #TODO: InputSubtitle="$(grep -E --only-matching '^((((\w+)(.?\s*))|(\&\s*)){1,7})( -|\:)' <<< "$Plot")"
   InputSubtitle=`echo $Plot | grep --only-matching '^\(\(\(\(\w\+\)\(.\?\s*\)\)\|\(\&\s*\)\)\{1,7\}\)\( -\|\:\)'`
   #Clean off the trailing " -" or ":" that we're using to identify it
-  #TODO: InputSubtitle=$(grep -E --only-matching '(((\w+)(.?\s*))|(\&\s*)){,7}(\w+)' <<< "$InputSubtitle")
+  #TODO: InputSubtitle="$(grep -E --only-matching '(((\w+)(.?\s*))|(\&\s*)){,7}(\w+)' <<< "$InputSubtitle")"
   InputSubtitle=`echo $InputSubtitle | grep --only-matching '\(\(\(\w\+\)\(.*\s*\)\)\|\(\&\s*\)\)\{,7\}\(\w\+\)'`
   Inform "Attempt to extract Subtitle from Plot field gave '$InputSubtitle'"
   return 0
@@ -1217,11 +1219,11 @@ RemoveSubtitleFromPlot(){
   Debug "ENTERING: ${FUNCNAME}()"
   #TODO: If we extracted a subtitle from Plot variable then remove that text from Plot.
   if [ "$InputSubtitle" != "" ] ; then
-    #TODO: local STstring=$(grep -E --only-matching '^((((\w+)(.?\s*))|(\&\s*)){1,7})( -|\:)\s*' <<< "$Plot")
+    #TODO: local STstring="$(grep -E --only-matching '^((((\w+)(.?\s*))|(\&\s*)){1,7})( -|\:)\s*' <<< "$Plot")"
     local STstring=$(echo $Plot | grep --only-matching '^\(\(\(\(\w\+\)\(.\?\s*\)\)\|\(\&\s*\)\)\{1,7\}\)\( -\|\:\)\s*')
     if [ "$STstring" != "" ] ; then
       Warn "${FUNCNAME}() Episode subtitle was in the Plot field, removing it to simplify subsequent processing."
-      Plot=$(sed s/"$STstring"/""/ <<< "$Plot")
+      Plot="$(sed s/"$STstring"/""/ <<< "$Plot")"
     fi
   else
     Debug "InputSubtitle isn't currently set, so not going to discard it from Plot field."
@@ -1243,7 +1245,7 @@ ProcessSydFTA(){
 
   #TODO:#NOTE: Stars field in SydFTA data tends to be empty, consider what to do here.
   #Get rating from Stars
-  rating=`printf "%0.f" $Stars`
+  rating=$(printf "%0.f" $Stars)
   test $rating != "" && let rating=$rating*2
   test $rating = "" && rating=1
 
@@ -1289,11 +1291,11 @@ ProcessSydFTA(){
   fi
 
   #Remove hashtag reference/s from the Plot field #TODO: Will probably need to check and extend this.
-  Plot=$(sed s/"\s#\w\{2,16\}"/""/g <<< $Plot)
+  Plot="$(sed s/"\s#\w\{2,16\}"/""/g <<< $Plot)"
 
   #Strip the Movie: tag that some stations very helpfully put in the title field...
   if [ "$m2kProgramIDCheck" = "MV" ]; then
-    InputTitle=$(sed s/"Movie:\s*"/""/I <<< "$InputTitle")
+    InputTitle="$(sed s/"Movie:\s*"/""/I <<< "$InputTitle")"
   fi
 
   #TODO: If it's a movie, check Title and Plot for a release year, assuming format (YYYY) seems reasonable.
@@ -1308,22 +1310,20 @@ ProcessSydFTA(){
 
   #FTA stations providing a ProgramID use CRID: https://en.wikipedia.org/wiki/Crid
   #Remove the leading CRID://
-  ProgramID=$(sed s/"crid:\/\/"//I <<< "$ProgramID")
+  ProgramID="$(sed s/"crid:\/\/"//I <<< "$ProgramID")"
   #Extract the Authority, ie the station broadcasting the show
-  ProgramAuthority=$(cut -f1 -d"/" <<< "$ProgramID")
+  ProgramAuthority="$(cut -f1 -d"/" <<< "$ProgramID")"
   #Extract the show specific information, removing the leading /
-  ProgramData=$(sed s/$ProgramAuthority"\/"// <<< "$ProgramID")
+  ProgramData="$(sed s/$ProgramAuthority"\/"// <<< "$ProgramID")"
   #Populate the ProgramID variable with the ProgramData field of CRID
-  ProgramID=$ProgramData
+  ProgramID="$ProgramData"
   #TODO: figure out if anything useful can actually be done with this ProgramID.
 
   #strip needless chars from date
-  datehour=$(echo "$ShowStartTime" | tr ":" "." | tr " " "@")
+  datehour="$(echo "$ShowStartTime" | tr ":" "." | tr " " "@")"
 
   #predefined naming conventions
-  if [[ "$ShowCategory" =~ ^(Sports event|News|Newsmagazine)$ ]]; then
-    NamingConvention=$ShowCategory
-  fi
+  [[ "$ShowCategory" =~ ^(Sports event|News|Newsmagazine)$ ]] && NamingConvention="$ShowCategory"
 
   #If news, bypass Categoric naming convention 1
   test NamingConvention="News" && UseMethod2=1
@@ -1367,9 +1367,10 @@ ProcessNoLookup(){
   #get 4 digit year
   seasonyear="${ShowStartTime:0:4}"
 
-  if [[ "$ShowCategory" =~ ^(Sports event|News|Newsmagazine)$ ]]; then
-    NamingConvention=$ShowCategory
-  fi
+  #predefined naming conventions
+  [[ "$ShowCategory" =~ ^(Sports event|News|Newsmagazine)$ ]] && NamingConvention="$ShowCategory"
+
+  #If news, bypass Categoric naming convention 1
   test NamingConvention="News" && UseMethod2=1
 
   return 0
@@ -1395,11 +1396,11 @@ DeleteRelevantDatabaseFilesAndPictures(){
 setSxxAndExxFromAbsoluteEpisodeNumber(){
   Debug "ENTERING: ${FUNCNAME}()"
   #if line match is obtained, then gather new episode name, Sxx and Exx
-  EpisodeSubtitle=`sed -n $AbsoluteEpisodeNumber'p' "$m2kdir"/"$NewShowName"/"$NewShowName".actualEname.txt`
+  EpisodeSubtitle="$(sed -n $AbsoluteEpisodeNumber'p' "$m2kdir"/"$NewShowName"/"$NewShowName".actualEname.txt)"
 
   #gather series and episode names from files created earlier.
-  Exx=$(sed -n $AbsoluteEpisodeNumber'p' "$m2kdir"/"$NewShowName"/"$NewShowName".E.txt)
-  Sxx=$(sed -n $AbsoluteEpisodeNumber'p' "$m2kdir"/"$NewShowName"/"$NewShowName".S.txt)
+  Exx="$(sed -n $AbsoluteEpisodeNumber'p' "$m2kdir"/"$NewShowName"/"$NewShowName".E.txt)"
+  Sxx="$(sed -n $AbsoluteEpisodeNumber'p' "$m2kdir"/"$NewShowName"/"$NewShowName".S.txt)"
   test $Sxx != "" && SeasonNumber=$Sxx
 
   #Single digit episode and show names are not allowed Ex and Sx replaced with Exx Sxx
@@ -1466,7 +1467,7 @@ downloadInfoAboutMatchedTitleAndCreateTxtFileTables(){
   local GotNewInformation=0
   local TheTVDBShowXML="http://www.thetvdb.com/api/$APIkey/series/$SeriesID/all/$Language.xml"
   local FieldsWeWant="(</?Series>|</?seriesid>|</?Status>|</?lastupdated>|</?Episode>|</?SeasonNumber>|</?EpisodeNumber>|</?EpisodeName>|</?Overview>|</?FirstAired>)"
-  curl -L -s -m"$Timeout" $TheTVDBShowXML | grep -E $FieldsWeWant > "$m2kdir/$NewShowName/$NewShowName.xmlTest"
+  curl -L -s -m"$Timeout" "$TheTVDBShowXML" | grep -E "$FieldsWeWant" > "$m2kdir/$NewShowName/$NewShowName.xmlTest"
   test $? = 0 && echo "$CurrentTimeTVDB" > "$m2kdir/$NewShowName/lastupdated.time" && chmod 666 "$m2kdir/$NewShowName/lastupdated.time"
 
   #Validate that the show has at least one EpisodeName tag and is a valid download before clobbering our old download.
@@ -1508,12 +1509,9 @@ downloadInfoAboutMatchedTitleAndCreateTxtFileTables(){
           #  a file called Status.Ended in the $m2kdir/$NewShowName/
           #  directory, then add a check for this before we bother trying to
           #  download information again. Also, use the lastupdated field if present.
-          #Skip lines until the end series block tag is found
-          if [[ $line == \<\/Series\> ]]; then
-            #Start processing the episode info
-            recordNumber=0
-          fi
-        elif [[ $line == \<\/Episode\> ]]; then
+          #Skip lines until the end series block tag is found, then start processing the episode info
+          [[ "$line" == "</Series>" ]] && recordNumber=0
+        elif [[ "$line" == "</Episode>" ]]; then
           (( ++recordNumber ))
           #Write Episode info to files
           Debug "Building Record:$recordNumber ${actualEname:0:42}"
@@ -1531,13 +1529,15 @@ downloadInfoAboutMatchedTitleAndCreateTxtFileTables(){
           EpisodeNr=""
           EpisodeOverview=""
         #Get actual show name
-        elif [[ $line == \<EpisodeName\>* ]]; then
-          line=${line/<\/EpisodeName>/}
+        elif [[ $line == "<EpisodeName>"* ]]; then
+          line=${line/"<\EpisodeName>"/}
           line=${line/<EpisodeName>/}
           line=${line/&lt;/}
           line=${line/&gt;/}
           line=${line/&quot;/}
           line=${line/&amp;/&}
+          #TODO: If the idea here is to strip problem characters then surely the below would be better replaced with:
+          #  line="$(tr -d '|?*:+\/[]"\'' <<< "$line")" #And why not also get rid of #!$ while we're at it...
           line=${line/|/}
           line=${line/\?/}
           line=${line/\*/}
@@ -1549,25 +1549,25 @@ downloadInfoAboutMatchedTitleAndCreateTxtFileTables(){
           line=${line/]/}
           line=${line/\'/}
           line=${line/\"/}
-          actualEname=${line/&ndash;/-}
-          Ename=${actualEname/;*/}
+          actualEname=${line/&ndash;/-} #TODO: does this belong with the &amp above or does it serve some additional purpose???
+          Ename=${actualEname/;*/} #TODO: This strips everything following the first ";" (semi-colon). Is that intentional because there are sometimes multiple EpisodeNames seperated by semi-colons???
         #Get OriginalAirDate
-        elif [[ $line == \<FirstAired\>* ]]; then
+        elif [[ $line == "<FirstAired>"* ]]; then
           line=${line/<\/FirstAired>/}
           line=${line/<FirstAired>/}
           FAired=$line
         #Get Season number
-        elif [[ $line == \<SeasonNumber\>* ]]; then
+        elif [[ $line == "<SeasonNumber>"* ]]; then
           line=${line/<\/SeasonNumber>/}
           line=${line/<SeasonNumber>/}
           SeasonNr=$line
         #Get Episode number
-        elif [[ $line == \<EpisodeNumber\>* ]]; then
+        elif [[ $line == "<EpisodeNumber>"* ]]; then
           line=${line/<\/EpisodeNumber>/}
           line=${line/<EpisodeNumber>/}
           EpisodeNr=$line
         #Get Episode Overview
-        elif [[ $line == \<Overview\>* ]]; then
+        elif [[ $line == "<Overview>"* ]]; then
           line=${line/<\/Overview>/}
           line=${line/<Overview>/}
           EpisodeOverview=$line
@@ -1604,13 +1604,13 @@ downloadInfoAboutMatchedTitleAndCreateTxtFileTables(){
 #####MATCH ZAP2ITID TO TVDB#####
 GetSeriesLineNumberFromTableWithZap2itID(){
   Debug "ENTERING: ${FUNCNAME}()"
-  if [ -n $Zap2itSeriesID ] ; then
+  if [ -n "$Zap2itSeriesID" ] ; then
     serieslinenumber=0
     #loop through all show names received by TheTVDB and match Zap2it ID.
     while read line ; do
       (( ++ serieslinenumber ))
-      Info "TESTING FOR ZAP2ITID MATCH:$line `sed -n $serieslinenumber"p" $m2kdir/shn.txt`"
-      Zap2ItTest=$(echo $line | tr -d MVSHEP | sed 's/0*//')
+      Info "TESTING FOR ZAP2ITID MATCH:$line $(sed -n $serieslinenumber"p" $m2kdir/shn.txt)"
+      Zap2ItTest="$(echo $line | tr -d MVSHEP | sed 's/0*//')"
       if [ "$Zap2ItTest" = "$Zap2itSeriesID" ] && [ "$Zap2itSeriesID" != "" ]; then
         return 0
         break
@@ -1643,7 +1643,7 @@ GetSeriesLineNumberFromTableWithFuzzyLogic(){
 #####STANDARD TITLE RECOGNITION OF SERIES#####
 GetSeriesLineNumberFromTableWithStandardLogic(){
   Debug "ENTERING: ${FUNCNAME}()"
-  serieslinenumber=`grep -nix "$ShowName" "$m2kdir/shn.txt" | sed 's/:.*//' | grep -m1 ^`
+  serieslinenumber="$(grep -nix "$ShowName" "$m2kdir/shn.txt" | sed 's/:.*//' | grep -m1 ^)"
 
   #Correct for serieslinenumber = ""
   test "$serieslinenumber" = "" && serieslinenumber="0"
@@ -1715,8 +1715,8 @@ makeShowDirIfNeeded(){
 setSeriesIDandNewShowNameBasedOnSeriesLineNumber(){
   Debug "ENTERING: ${FUNCNAME}()"
   #Get the seriesid based on the showname
-  SeriesID=`sed -n $serieslinenumber'p' "$m2kdir"/sid.txt | grep -m1 ^`
-  NewShowName=`sed -n $serieslinenumber'p' "$m2kdir"/shn.txt | grep -m1 ^ | sed s/"&amp;"/"\&"/g`
+  SeriesID="$(sed -n $serieslinenumber'p' "$m2kdir"/sid.txt | grep -m1 ^)"
+  NewShowName="$(sed -n $serieslinenumber'p' "$m2kdir"/shn.txt | grep -m1 ^ | sed s/"&amp;"/"\&"/g)"
 
   #Cleanup files to prevent mismatch next time
   test -f "$m2kdir"/sid.txt && rm -f "$m2kdir"/sid.txt
@@ -1729,12 +1729,12 @@ getAbsoluteEpisodeNumberWithOriginalAirdate(){
   Debug "ENTERING: ${FUNCNAME}()"
   AbsoluteEpisodeNumber=""
   if [ "$OriginalAirDate" != "" ] ; then
-    AbsoluteEpisodeNumber=`grep -n "$OriginalAirDate" "$m2kdir/$NewShowName/$NewShowName.FAired.txt" | grep -m1 ^ | sed 's/:.*//'`
+    AbsoluteEpisodeNumber="$(grep -n "$OriginalAirDate" "$m2kdir/$NewShowName/$NewShowName.FAired.txt" | grep -m1 ^ | sed 's/:.*//')"
   fi
   #Account for original series airdate
   if [ "$AbsoluteEpisodeNumber" != "" ] && [ $AbsoluteEpisodeNumber -gt 0 ]; then
     #Account for original show airdate = first air date
-    NumberOriginalAirdates=`grep "$OriginalAirDate" "$m2kdir/$NewShowName/$NewShowName.FAired.txt" | wc -l`
+    NumberOriginalAirdates=$(grep "$OriginalAirDate" "$m2kdir/$NewShowName/$NewShowName.FAired.txt" | wc -l)
     test $NumberOriginalAirdates -gt 1 && return 1
     Inform "Absolute Exx NR:$AbsoluteEpisodeNumber BASED ON AIRDATE:$OriginalAirDate"
     return 0
@@ -1778,14 +1778,14 @@ getAbsoluteEpisodeNumberWithFuzzyPlotMatch(){
   #If Plot length is short this really won't work well, so give up #TODO: figure out what length is genuinely too short...
   ((PlotLength<42)) && Warn "${FUNCNAME}() - Plot is too short to attempt fuzzy guess." && return 1
   #Fuzzy guess at plot, prepended with: "AbsoluteEpisodeNumber:cost:"
-  local FuzzyPlot=$(agrep -ikByns "$Plot" "$m2kdir/$NewShowName/$NewShowName.Plot.txt")
+  local FuzzyPlot="$(agrep -ikByns "$Plot" "$m2kdir/$NewShowName/$NewShowName.Plot.txt")"
   [[ "$FuzzyPlot" = "" ]] && Warn "${FUNCNAME}() - No fuzzy match on Plot" && return 1
   #Extract our guessed AbsoluteEpisodeNumber
   local -i AENguess=$(cut -f1 -d":" <<< "$FuzzyPlot")
   DebugCont "AbsoluteEpisodeNumber guess: $AENguess"
   local -i cost=$(cut -f2 -d":" <<< "$FuzzyPlot")
   DebugCont "Cost: $cost"
-  local MatchedPlot=$(sed -n $AENguess'p' "$m2kdir"/"$NewShowName"/"$NewShowName".Plot.txt)
+  local MatchedPlot="$(sed -n $AENguess'p' "$m2kdir"/"$NewShowName"/"$NewShowName".Plot.txt)"
   DebugCont "MatchedPlot: $MatchedPlot"
   # local -i MatchedPlotLength=$(wc --chars <<< "$MatchedPlot")
   # DebugCont "MatchedPlotLength: $MatchedPlotLength"
@@ -1837,7 +1837,7 @@ searchTheTVDBAndReturnTxtFileTables(){
   Inform "SEARCHING www.TheTVDB.com FOR $tvdbshowname"
   #TODO: Instance searching rather then global.  Need to create an instance variable based on time and chanid.
   #Search TheTVDB and return an XML file with results
-  curl -L -s -m"$Timeout" www.thetvdb.com/api/GetSeries.php?seriesname=$tvdbshowname>"$m2kdir/working.xml"
+  curl -L -s -m"$Timeout" "www.thetvdb.com/api/GetSeries.php?seriesname=$tvdbshowname" > "$m2kdir/working.xml"
 
   #Separate the XML into textual DBs containing SeriesID, ShowName and Zap2it IDs
   cat "$m2kdir/working.xml" | grep "<seriesid>" | sed -e s/"<\/\?seriesid>"//g \
@@ -2143,7 +2143,7 @@ MakeShowDir(){
       sudo -u "$NotifyUserName" "$binpath"/librarian-notify-send "myth2kodi error" "failsafe mode activated."  error
     fi
     SYMLINK=LINK
-    MoveDir=$FailSafeDir
+    MoveDir="$FailSafeDir"
     FailSafeState=1
     RequiresDoover=1
     Inform "FailSafe MOVE DIRECTORY SET AS: $MoveDir"
@@ -2242,7 +2242,7 @@ ignoreList(){
   local ignoreTest=""
   #Test if the title is in the titleIgnore file
   if [ -f "$m2kdir/titleIgnore" ]; then
-    ignoreTest=`grep "$InputTitle" "$m2kdir/titleIgnore"`
+    ignoreTest="$(grep "$InputTitle" "$m2kdir/titleIgnore")"
     if [ "$InputTitle" = "$ignoreTest" ]; then
       jobtype='titleIgnore'
       RunJob
@@ -2250,7 +2250,7 @@ ignoreList(){
   fi
   #Test if the Category is in the categoricIgnore file
   if [ -f "$m2kdir/categoricIgnore" ]; then
-    ignoreTest=`grep "$ShowCategory" "$m2kdir/categoricIgnore"`
+    ignoreTest="$(grep "$ShowCategory" "$m2kdir/categoricIgnore")"
     if [ "$ShowCategory" = "$ignoreTest" ]; then
       jobtype='categoricIgnore'
       RunJob
@@ -2265,9 +2265,9 @@ ignoreList(){
 ShowTranslations(){
   Debug "ENTERING: ${FUNCNAME}()"
   if [ -f "$m2kdir"/showTranslations ] && [ "$ShowName" != "" ]; then
-    showtranslation=`grep "$ShowName = " "$m2kdir/showTranslations" | sed s/"$ShowName = "/""/g `
+    showtranslation="$(grep "$ShowName = " "$m2kdir/showTranslations" | sed s/"$ShowName = "/""/g)"
     if [ "$showtranslation" != "" ]; then
-      ShowName=$showtranslation
+      ShowName="$showtranslation"
       Inform "USER TRANSLATION: $InputTitle = $ShowName"
     elif [ "$showtranslation" = "" ]; then
       showtranslation="Inactive"
@@ -2286,8 +2286,8 @@ DoMaintenance(){
   test -f "$m2kdir/undo.lock" && test ! -f "$m2kdir/undo.sh" && mv "$m2kdir/undo.lock" "$m2kdir/undo.sh"
 
   #Check and make doover.sh and undo.sh if it does not exist
-  test ! -f "$m2kdir/doover.sh" && echo 'rm -f "'$m2kdir'"/doover.sh'>"$m2kdir/doover.sh" && chmod 666 "$m2kdir/doover.sh"
-  test ! -f "$m2kdir/undo.sh" && echo 'rm -f "'$m2kdir'"/undo.sh'>"$m2kdir/undo.sh" && chmod 666 "$m2kdir/undo.sh"
+  test ! -f "$m2kdir/doover.sh" && echo "rm -f \"$m2kdir/doover.sh\"" > "$m2kdir/doover.sh" && chmod 666 "$m2kdir/doover.sh"
+  test ! -f "$m2kdir/undo.sh"   && echo "rm -f \"$m2kdir/undo.sh\""   > "$m2kdir/undo.sh"   && chmod 666 "$m2kdir/undo.sh"
 
   #Check for commskip (.txt) and .nfo files listed in created.tracking and
   #remove them if their associated "main" file (.mpg) is missing.
@@ -2300,11 +2300,11 @@ DoMaintenance(){
       #TODO: Figure out the purpose of redirect to stderr and trailing 5 spaces before converting to new messaging mechanism...
       #echo -ne "File record $Counter: ${SupportFile:0:20}     \n" 1>&2
       Debug "File record $Counter: ${SupportFile:0:83}"
-      SupportFile=$(cut -d"'" -f2 <<< "$line")
-      MainFile=$(cut -d"'" -f4 <<< "$line")
+      SupportFile="$(cut -d"'" -f2 <<< "$line")"
+      MainFile="$(cut -d"'" -f4 <<< "$line")"
       ls "$MainFile" > /dev/null 2>&1
       if [ "$?" != "0" ]; then
-        if [ -d "`dirname "$SupportFile"`" ]; then
+        if [ -d "$(dirname "$SupportFile")" ]; then
           Inform "REMOVING ORPHAN FILE: $SupportFile"
           rm -f "$SupportFile"
         else
@@ -2330,10 +2330,10 @@ DoMaintenance(){
       #TODO: Figure out the purpose of redirect to stderr and trailing 5 spaces before converting to new messaging mechanism...
       #echo -ne "Folder record $Counter: ${DirToCheckCheck:0:20}    \n" 1>&2
       Debug "Folder record $Counter: ${DirToCheckCheck:0:83}"
-      DirToCheck=$line
+      DirToCheck="$line"
       if [ -d "$DirToCheck" ]; then
-        DirToCheckCheck=`ls "$line" | sed s/"tvshow.nfo"/""/g | grep -m1 ^`
-        test "$DirToCheckCheck" = "" && DirToCheckCheck=`ls "$line" | sed s/"tvshow.nfo"/""/g | grep -m2 ^`
+        DirToCheckCheck=$(ls "$line" | sed s/"tvshow.nfo"/""/g | grep -m1 ^)
+        test "$DirToCheckCheck" = "" && DirToCheckCheck=$(ls "$line" | sed s/"tvshow.nfo"/""/g | grep -m2 ^)
         if [ "$DirToCheckCheck" = "" ]; then
           Inform "REMOVING ORPHAN FOLDER: $line"
           test -f "$line/tvshow.nfo" && rm -f "$line/tvshow.nfo"
@@ -2446,7 +2446,7 @@ mythicalScan(){
   if [ "$yesorno" = "y" ]; then
     myth2kodi --doover
     Debug "Creating a temporary scan file: $m2kdir/scan.temp"
-    ls -1 $scanpath/*.$checkext > "$m2kdir/scan.temp"
+    ls -1 "$scanpath"/*."$checkext" > "$m2kdir/scan.temp"
     Inform "Scanning $scanpath for $checkext files"
     while read line ; do
       Debug "Attempting to envoke myth2kodi on $line"
@@ -2510,8 +2510,8 @@ mythicalDiagnostics(){
   if [ "$DatabaseType" = "MythTVPythonBindings" ]; then
     which python &> /dev/null ; test "$?" = "0" || checkf="python"
     if [ "$checkf" = "" ] ; then
-      python_version=$(python --version 2>&1)  #Python returns version info to stderr
-      pyver=$(echo $python_version | sed s/"python\s*"//I | cut -f1-2 -d"." | tr -d '.')
+      python_version="$(python --version 2>&1)"  #Python returns version info to stderr
+      pyver="$(echo "$python_version" | sed s/"python\s*"//I | cut -f1-2 -d"." | tr -d '.')"
       python -c "from MythTV import MythDB ; exit()" &> /dev/null
       test "$?" != "0" && checka="libmyth-python"
       python -c "import lxml ; exit()" &> /dev/null
@@ -2613,7 +2613,7 @@ mythicalDiagnostics(){
                    "method":"GUI.ShowNotification",
                    "params":{"title":"mythical Librarian Test","message":"'$PythonBindingsCheck'"},
                    "id":1}'\'
-    local KODIresp=$($curlPOST $data http://$KODIIP/jsonrpc | tr -d "</html>i^")
+    local KODIresp="$($curlPOST $data http://$KODIIP/jsonrpc | tr -d "</html>i^")"
     if [ "$KODIresp" != "" ] ; then
       InformCont "TESTING: $KODIresp"
     else
@@ -2622,7 +2622,7 @@ mythicalDiagnostics(){
   done
   #SAK: REPLACED BELOW, SEE http://forum.kodi.tv/showthread.php?tid=65644&page=65&highlight=json
   #TODO: The evaluation of echo below seems redundant, but check before replacing.
-  if [ "`echo $KODIresp`" = "{d:1,jsonrpc:2.0,resu:OK}" ] ; then
+  if [ "$(printf '%s' $KODIresp)" = "{d:1,jsonrpc:2.0,resu:OK}" ] ; then
     KODIcomm="***PASSED***"
     Inform "KODI Communications $KODIcomm"
   else
@@ -2668,11 +2668,11 @@ mythicalDiagnostics(){
     AlternateShowDirWritable=$TMoveDirWritable
   fi
   if [ "$TargetPathIsInputPath" = "Enabled" ]; then
-    OriginaldirFreeSpace=`df -P "$originaldirname" | sed -n 2p | awk '{print $4}'`
+    OriginaldirFreeSpace="$(df -P "$originaldirname" | sed -n 2p | awk '{print $4}')"
     checkPermissions "1" "$OriginaldirFreeSpace" "$originaldirname"
     OriginalDirWritable=$TMoveDirWritable
   fi
-  WorkingDirFreeSpace=`df -P "$m2kdir" | sed -n 2p | awk '{print $4}'`
+  WorkingDirFreeSpace="$(df -P "$m2kdir" | sed -n 2p | awk '{print $4}')"
   checkPermissions "5000" "$WorkingDirFreeSpace" "$m2kdir"
   WorkingDirWritable=$TMoveDirWritable
   
@@ -2813,10 +2813,10 @@ executeDoOver(){
     #TODO: So, if id of user is 0, and thus root, test $SUDO_USER is set as
     #  "root" and if it is assign whoami (which for uid=0 will return root) to
     #  the variable  SUDO_USER... Something is wrong here.
-    test "$SUDO_USER" = "root" && SUDO_USER=`whoami`
+    test "$SUDO_USER" = "root" && SUDO_USER=$(whoami)
     RunSudo=1
   fi
-  test "$SUDO_USER" = "" && SUDO_USER=`whoami`
+  test "$SUDO_USER" = "" && SUDO_USER=$(whoami)
   Warn "--You have entered doover mode."
   WarnCont "In this mode of operation, myth2kodi will rerun myth2kodi against all"
   WarnCont "files which failed on the last run of myth2kodi."
@@ -3049,7 +3049,7 @@ getSeriesInfo(){
   #Usage example: myth2kodi --getSeriesInfo "Black Books"
   Inform "Searching for series: $InputTitle"
   ShowName="$InputTitle"
-  local tvdbshowname=$(echo $ShowName | sed s/" "/"%20"/g | sed s/"&"/"%26"/g)
+  local tvdbshowname="$(echo $ShowName | sed s/" "/"%20"/g | sed s/"&"/"%26"/g)"
   searchTheTVDBAndReturnTxtFileTables
   GetSeriesLineNumberFromTableWithFuzzyLogic
   #if we have a series line number then translate that into a series id
@@ -3120,11 +3120,11 @@ getSeriesInfo(){
 declare -r MyUserName=$(whoami)
 Debug "Running myth2kodi as $MyUserName"
 #And when, 
-declare -r Today=$(date +%F)  #Date in IEEE standard format, ie YYYY-mm-dd
+declare -r Today="$(date +%F)"  #Date in IEEE standard format, ie YYYY-mm-dd
 #TODO: Consider renaming Time to ScriptStartTime, as it's fixed at the start of the script.
 declare -r Time="$(date +%H:%M:%S)" #Time in a readable IEEE standard format, ie HH:MM:SS
 #TODO: Consider making FileNameNow and a variable called Now contain the date function, to be evaluated when called rather than fixed at the start of the script.
-declare -r FileNameNow=$(date +%FT%H%M%S)  #ISO 8601: YYYY-mm-ddThhMMSS
+declare -r FileNameNow="$(date +%FT%H%M%S)"  #ISO 8601: YYYY-mm-ddThhMMSS
 
 #Set global values for settings, this overrides those set at the top of this file
 test -f "/etc/myth2kodi/globalSettings" && source /etc/myth2kodi/globalSettings
@@ -3256,7 +3256,7 @@ printf '%s\n' "@@@@@@@@ NEW SEARCH INITIATED $Today AT $Time @@@@@@@@" >> "$LogF
 printf '%s\n' "$mythicalVersion on $mythicalPlatform" >> "$LogFile"
 printf '%s\n' "$mythicalVersion"
 
-InputFileBasename=$(basename "$InputPath")
+InputFileBasename="$(basename "$InputPath")"
 
 #####GATHER INFORMATION FROM MythTV DATABASE#####
 #Get information if database is enabled
@@ -3304,10 +3304,10 @@ ShowName="$InputTitle"
 test "$ShowName" = "" && mythicalHelp
 
 #split on semicolon, there will only be one episode looked up.  Remove non-filesystem-compliant chars.
-EpisodeSubtitle=$(echo $InputSubtitle | sed 's/;.*//' | tr -d '!|\?*<":>+[]/')
-ExtensionPrep=$(basename "$InputPath")
+EpisodeSubtitle="$(echo $InputSubtitle | sed 's/;.*//' | tr -d '!|\?*<":>+[]/')"
+ExtensionPrep="$(basename "$InputPath")"
 OriginalExt="${ExtensionPrep#*.}"
-originaldirname=$(dirname "$InputPath")
+originaldirname="$(dirname "$InputPath")"
 FileBaseName="${InputPath##*/}"
 FileName="$InputPath"
 
@@ -3719,7 +3719,7 @@ if [ "$Exx" = "" ] && [ "$InputPath" != "testfile.ext" ] ; then
   elif [ "$m2kProgramIDCheck" = "MV" ]; then
     #Ensures the doover value was not set for the movie and use safe show name
     RequiresDoover=0
-    NewShowName=$SafeShowName
+    NewShowName="$SafeShowName"
   #If user has determined that they do not want unrecognisable tv shows in their library
   elif [ "$ShowStopper" = "Enabled" ]; then
     tvDbIsIncomplete
@@ -3728,13 +3728,13 @@ if [ "$Exx" = "" ] && [ "$InputPath" != "testfile.ext" ] ; then
     RunJob
   elif [ "$m2kProgramIDCheck" = "SH" ]; then
     #Ensures the doover value was not set for the show and use safe show name
-    NewShowName=$SafeShowName
+    NewShowName="$SafeShowName"
     DisplayShowWarning
   else
     #This marks Episodes as shows. AKA EpiShows. Episodes for which no information can currently be obtained.
     MythicalEpiShow=1
     #change the show to a Generic type
-    NewShowName=$SafeShowName
+    NewShowName="$SafeShowName"
     DisplayEpiShowMessage
   fi
 fi
@@ -3745,15 +3745,15 @@ determinePrimaryOrAlternateFolderUsage
 #####OUTPUT FILE NAME FORMATTING#####
 #universally not accepted file system characters:  |\?*<":>+[]/
 #Format Shows
-EpisodeSubtitle=$(tr -d '!|\?*<":>+[]/'"'" <<< "$EpisodeSubtitle")
-NewShowName=$(tr -d '!|\?*<":>+[]/'"'" <<< "$NewShowName")
-ShowName=$(tr -d '!|\?*<":>+[]/'"'" <<< "$ShowName")
+EpisodeSubtitle="$(tr -d '!|\?*<":>+[]/'"'" <<< "$EpisodeSubtitle")"
+NewShowName="$(tr -d '!|\?*<":>+[]/'"'" <<< "$NewShowName")"
+ShowName="$(tr -d '!|\?*<":>+[]/'"'" <<< "$ShowName")"
 
 #Format Episodes showname=show name Sxx=season number Exx=episode number EpisodeSubtitle=episode name
 if [ "$NamingConvention" = "" ]; then
   TraditionalNamingConventions
 else
-  test "$NewShowName" = "" && NewShowName=$ShowName
+  test "$NewShowName" = "" && NewShowName="$ShowName"
   CategoricNamingConventions
   RequiresNFO=1
 fi

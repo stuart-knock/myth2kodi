@@ -213,8 +213,8 @@ UpdateDatabase=88920
 #The path which contains myth2kodi and associated scripts default=/usr/local/bin
 binpath="/usr/local/bin"
 #myth2kodi working directory: Default=$HOME/.myth2kodi (ie, /home/username/.myth2kodi)
-m2kdir="$HOME/.myth2kodi"
-###For testing###m2kdir="/data/sknock/TEMP/.mythicalLibrarian"
+###For Testing###m2kdir="$HOME/.myth2kodi"
+m2kdir="/data/sknock/TEMP/.myth2kodi"
 #FailSafe mode will enable symlinks to be formed in FailSafeDir if the move or symlink operation fails. Enabled|Disabled
 FailSafeMode="Disabled"
 #FailSafeDir is used when the file cannot be moved to the MoveDir. FailSafe will not create folders. eg. /home/username
@@ -313,7 +313,7 @@ declare -i RSSmaxItems=8
 #Recommend 2 to start with or if you want to keep track of what myth2kodi is doing.
 #Recommend 1 for usual operation, once you're confident that everything is working fine.
 #Only use 3 if you have a particular problem that you're trying to track down, it significantly increases the output.
-LogLevel=2
+LogLevel=3
 #LogFile is the name of the log file, this will be placed in myth2kodi's working directory, $m2kdir set above.
 #DEFAULT: 'output.log' #NOTE: LogFile is overridden in special contexts, such as running Diagnostics.
 LogFile='output.log'
@@ -328,19 +328,19 @@ mythicalVersion="myth2kodi Version 0.6.4; mythicalLibrarian 953ish+"
 LogFile="$m2kdir/output.log"
 declare -r DiagnosticsFile="$m2kdir/diagnostics.log"
 
-if [ -f "$binpath"/bashlogging ] ; then
-  source "$binpath"/bashlogging "$LogType"
+###For Testing###if [ -f "$binpath"/bashlogging ] ; then
+###For Testing###  source "$binpath"/bashlogging "$LogType"
+###For Testing###else
+###For Testing###  printf 'ERROR: %s\n' "$binpath/bashlogging doesn't exist." | tee -a "$LogFile"
+###For Testing###  exit 1
+###For Testing###fi
+
+if [ -f /home/sknock/GitHub/bash-tools/bashlogging ] ; then
+  source /home/sknock/GitHub/bash-tools/bashlogging "$LogType"
 else
-  printf 'ERROR: %s\n' "$binpath/bashlogging doesn't exist." | tee -a "$LogFile"
+  printf 'ERROR: %s\n' "/home/sknock/GitHub/bash-tools/bashlogging doesn't exist." | tee -a $LogFile
   exit 1
 fi
-
-###For testing###if [ -f /home/sknock/GitHub/bash-tools/bashlogging ] ; then
-###For testing###  source /home/sknock/GitHub/bash-tools/bashlogging "$LogType"
-###For testing###else
-###For testing###  printf 'ERROR: %s\n' "/home/sknock/GitHub/bash-tools/bashlogging doesn't exist." | tee -a $LogFile
-###For testing###  exit 1
-###For testing###fi
 
 ########################### BEGIN USER JOBS ####################################
 #The RunJob function is a place where you can put your custom script to be run
@@ -1297,6 +1297,8 @@ ProcessSydFTA(){
 
   #If the information is already available, set the Sxx & Exx variables
   if [ "$m2kProgramIDCheck" = "EP" ]; then
+    Debug "The MythTV Guide data Plot before we messed with it:"
+    DebugCont "$Plot"
     ExtractSxxExxFromPlot
     RemoveSeasonEpisodeFromPlot
     #If we haven't set a Subtitle yet, try and get one from $Plot
@@ -1309,6 +1311,9 @@ ProcessSydFTA(){
 
   #Remove hashtag reference/s from the Plot field #TODO: Will probably need to check and extend this.
   Plot="$(sed s/"\s#\w\{2,16\}"/""/g <<< $Plot)"
+
+  #Finally strip any troublesome characters that still remain in Plot, this matches what we do with TheTVDB.
+  Plot="$(tr -d '’@%^`~!#$|\?*<":>+[]/'"'" <<< $Plot)"
 
   #Strip the Movie: tag that some stations very helpfully put in the title field...
   if [ "$m2kProgramIDCheck" = "MV" ]; then
@@ -1532,63 +1537,51 @@ downloadInfoAboutMatchedTitleAndCreateTxtFileTables(){
         elif [[ "$line" == "</Episode>" ]]; then
           (( ++recordNumber ))
           #Write Episode info to files
-          Debug "Building Record:$recordNumber ${actualEname:0:42}"
+          Debug "Building Record:$recordNumber -${actualEname}-"
           printf '%s\n' "$actualEname"     >> "$m2kdir/$NewShowName/$NewShowName.actualEname.txt"
           printf '%s\n' "$Ename"           >> "$m2kdir/$NewShowName/$NewShowName.Ename.txt"
           printf '%s\n' "$FAired"          >> "$m2kdir/$NewShowName/$NewShowName.FAired.txt"
           printf '%s\n' "$SeasonNr"        >> "$m2kdir/$NewShowName/$NewShowName.S.txt"
           printf '%s\n' "$EpisodeNr"       >> "$m2kdir/$NewShowName/$NewShowName.E.txt"
           printf '%s\n' "$EpisodeOverview" >> "$m2kdir/$NewShowName/$NewShowName.Plot.txt"
-          #Clear Episode information variables for next pass #TODO: this is probably redundant...
-          Ename=""
-          actualEname=""
-          FAired=""
-          SeasonNr=""
-          EpisodeNr=""
-          EpisodeOverview=""
         #Get actual show name
-        elif [[ $line == "<EpisodeName>"* ]]; then
-          line=${line/"<\EpisodeName>"/}
-          line=${line/<EpisodeName>/}
-          line=${line/&lt;/}
-          line=${line/&gt;/}
-          line=${line/&quot;/}
-          line=${line/&amp;/&}
-          #TODO: If the idea here is to strip problem characters then surely the below would be better replaced with:
-          #  line="$(tr -d '|?*:+\/[]"\'' <<< "$line")" #And why not also get rid of #!$ while we're at it...
-          line=${line/|/}
-          line=${line/\?/}
-          line=${line/\*/}
-          line=${line/:/}
-          line=${line/+/}
-          line=${line/\\/}
-          line=${line/\//}
-          line=${line/[/}
-          line=${line/]/}
-          line=${line/\'/}
-          line=${line/\"/}
-          actualEname=${line/&ndash;/-} #TODO: does this belong with the &amp above or does it serve some additional purpose???
-          Ename=${actualEname/;*/} #TODO: This strips everything following the first ";" (semi-colon). Is that intentional because there are sometimes multiple EpisodeNames seperated by semi-colons???
+        elif [[ "$line" == "<EpisodeName>"* ]]; then
+          line="${line/"</EpisodeName>"/}"
+          line="${line/<EpisodeName>/}"
+          line="${line//&lt;/}"
+          line="${line//&gt;/}"
+          line="${line//&quot;/}"
+          line="${line//&amp;/&}"
+          line="${line//&ndash;/-}"
+          line="$(tr -d '’@%^`~!#$|\?*<":>+[]/'"'" <<< "$line")"
+          actualEname="${line}"
+          Ename="${actualEname/;*/}" #TODO: This strips everything following the first ";" (semi-colon). Is that intentional because there are sometimes multiple EpisodeNames separated by semi-colons???
         #Get OriginalAirDate
-        elif [[ $line == "<FirstAired>"* ]]; then
-          line=${line/<\/FirstAired>/}
-          line=${line/<FirstAired>/}
-          FAired=$line
+        elif [[ "$line" == "<FirstAired>"* ]]; then
+          line="${line/"</FirstAired>"/}"
+          line="${line/<FirstAired>/}"
+          FAired="$line"
         #Get Season number
-        elif [[ $line == "<SeasonNumber>"* ]]; then
-          line=${line/<\/SeasonNumber>/}
-          line=${line/<SeasonNumber>/}
-          SeasonNr=$line
+        elif [[ "$line" == "<SeasonNumber>"* ]]; then
+          line="${line/"</SeasonNumber>"/}"
+          line="${line/<SeasonNumber>/}"
+          SeasonNr="$line"
         #Get Episode number
-        elif [[ $line == "<EpisodeNumber>"* ]]; then
-          line=${line/<\/EpisodeNumber>/}
-          line=${line/<EpisodeNumber>/}
-          EpisodeNr=$line
+        elif [[ "$line" == "<EpisodeNumber>"* ]]; then
+          line="${line/"</EpisodeNumber>"/}"
+          line="${line/<EpisodeNumber>/}"
+          EpisodeNr="$line"
         #Get Episode Overview
-        elif [[ $line == "<Overview>"* ]]; then
-          line=${line/<\/Overview>/}
-          line=${line/<Overview>/}
-          EpisodeOverview=$line
+        elif [[ "$line" == "<Overview>"* ]]; then
+          line="${line/"</Overview>"/}"
+          line="${line/<Overview>/}"
+          line="${line//&lt;/}"
+          line="${line//&gt;/}"
+          line="${line//&quot;/}"
+          line="${line//&amp;/&}"
+          line="${line//&ndash;/-}"
+          line="$(tr -d '’@%^`~!#$|\?*<":>+[]/'"'" <<< "$line")"
+          EpisodeOverview="$line"
         fi
       done < "$m2kdir/$NewShowName/$NewShowName.xml"
 
@@ -1859,17 +1852,17 @@ searchTheTVDBAndReturnTxtFileTables(){
 
   #Separate the XML into textual DBs containing SeriesID, ShowName and Zap2it IDs
   cat "$m2kdir/working.xml" | grep "<seriesid>" | sed -e s/"<\/\?seriesid>"//g \
-                                                      -e s/'&quot;'/'"'/       \
-                                                      -e s/"&amp;"/"\&"/       \
-                                                      -e s/'&ndash;'/'-'/      \
-                                                      -e s/"&lt;"/"<"/         \
-                                                      -e s/"&gt;"/">"/ >"$m2kdir/sid.txt"
+                                                      -e s/'&quot;'/'"'/g      \
+                                                      -e s/"&amp;"/"\&"/g      \
+                                                      -e s/'&ndash;'/'-'/g     \
+                                                      -e s/"&lt;"/"<"/g        \
+                                                      -e s/"&gt;"/">"/g >"$m2kdir/sid.txt"
   cat "$m2kdir/working.xml" | grep "<SeriesName>" | sed -e s/"<\/\?SeriesName>"//g \
-                                                        -e s/'&quot;'/'"'/         \
-                                                        -e s/"&amp;"/"\&"/         \
-                                                        -e s/'&ndash;'/'-'/        \
-                                                        -e s/"&lt;"/"<"/           \
-                                                        -e s/"&gt;"/">"/ >"$m2kdir/shn.txt"
+                                                        -e s/'&quot;'/'"'/g        \
+                                                        -e s/"&amp;"/"\&"/g        \
+                                                        -e s/'&ndash;'/'-'/g       \
+                                                        -e s/"&lt;"/"<"/g          \
+                                                        -e s/"&gt;"/">"/g >"$m2kdir/shn.txt"
 
   #parse the XML for shows with Zap2ItIDs
   test -f "$m2kdir/zap2it.txt" && rm -f "$m2kdir/zap2it.txt"
@@ -1878,12 +1871,12 @@ searchTheTVDBAndReturnTxtFileTables(){
     test "$line" = "</Series>" && test "$NextShow" = "1" && echo "" >>"$m2kdir/zap2it.txt" && NextShow=0
 
     if [[ $line =~ '<zap2it_id>'* ]] ; then
-      echo $line | sed -e s/"<\/\?zap2it_id>"// \
-                       -e s/'&quot;'/'"'/       \
-                       -e s/"&amp;"/"\&"/       \
-                       -e s/'&ndash;'/'-'/      \
-                       -e s/"&lt;"/"<"/         \
-                       -e s/"&gt;"/">"/ >>"$m2kdir/zap2it.txt"
+      echo $line | sed -e s/"<\/\?zap2it_id>"//g \
+                       -e s/'&quot;'/'"'/g       \
+                       -e s/"&amp;"/"\&"/g       \
+                       -e s/'&ndash;'/'-'/g      \
+                       -e s/"&lt;"/"<"/g         \
+                       -e s/"&gt;"/">"/g >>"$m2kdir/zap2it.txt"
       NextShow=0
     fi
   done < "$m2kdir/working.xml"
@@ -2282,7 +2275,7 @@ ignoreList(){
 #The show title will be replaced by the one in the user created showTranslations file
 ShowTranslations(){
   Debug "ENTERING: ${FUNCNAME}()"
-  if [ -f "$m2kdir"/showTranslations ] && [[ -n "$ShowName" ]]; then
+  if [[ -f "$m2kdir"/showTranslations && -n "$ShowName" ]]; then
     showtranslation="$(grep "$ShowName = " "$m2kdir/showTranslations" | sed s/"$ShowName = "/""/g)"
     if [[ -n "$showtranslation" ]]; then
       ShowName="$showtranslation"
@@ -3151,8 +3144,9 @@ test -f "/etc/myth2kodi/globalSettings" && source /etc/myth2kodi/globalSettings
 if [ ! -d "$m2kdir" ]; then
   mkdir "$m2kdir"
   #Keep this as a printf so it's created here regardless of LogType & LogLevel. Or maybe convert to a touch
-  printf 'Creating %s and log file: %s' "$m2kdir" "$LogFile" >> "$LogFile"
-  printf 'Created on %s at %s' "$Today" "$Time" >> "$LogFile"
+  printf 'Creating Working Directory: %s\n' "$m2kdir" >> "$LogFile"
+  printf 'Creating Log File: %s\n' "$LogFile"         >> "$LogFile"
+  printf 'Created on %s at %s\n' "$Today" "$Time"     >> "$LogFile"
 fi
 
 #Setup defaults for searching Series information
@@ -3322,7 +3316,7 @@ ShowName="$InputTitle"
 [[ -z "$ShowName" ]] && mythicalHelp
 
 #split on semicolon, there will only be one episode looked up.  Remove non-filesystem-compliant chars.
-EpisodeSubtitle="$(echo $InputSubtitle | sed 's/;.*//' | tr -d '!|\?*<":>+[]/')"
+EpisodeSubtitle="$(echo $InputSubtitle | sed 's/;.*//' | tr -d '’@%^`~!#$|\?*<":>+[]/'"'")"
 ExtensionPrep="$(basename "$InputPath")"
 OriginalExt="${ExtensionPrep#*.}"
 originaldirname="$(dirname "$InputPath")"
@@ -3333,7 +3327,7 @@ FileName="$InputPath"
 ShowTranslations
 #Do not process files in files categoricIgnore or titleIgnore, just exit
 ignoreList
-SafeShowName=$(echo "$ShowName" | sed 's/;.*//' | tr -d '|\?*<":>+[]/')
+SafeShowName=$(echo "$ShowName" | sed 's/;.*//' | tr -d '’@%^`~!#$|\?*<":>+[]/'"'")
 #Format Show name for Sending to www.TheTVDB.com and KODI
 tvdbshowname=$(echo $ShowName | sed s/" "/"%20"/g | sed s/"&"/"%26"/g)
 #Setup paths if TargetPathIsInputPath is active.
@@ -3761,11 +3755,11 @@ fi
 determinePrimaryOrAlternateFolderUsage
 
 #####OUTPUT FILE NAME FORMATTING#####
-#universally not accepted file system characters:  |\?*<":>+[]/
+#universally not accepted file system characters:  !#$|\?*<":>+[]/'
 #Format Shows
-EpisodeSubtitle="$(tr -d '!|\?*<":>+[]/'"'" <<< "$EpisodeSubtitle")"
-NewShowName="$(tr -d '!|\?*<":>+[]/'"'" <<< "$NewShowName")"
-ShowName="$(tr -d '!|\?*<":>+[]/'"'" <<< "$ShowName")"
+EpisodeSubtitle="$(tr -d '’@%^`~!#$|\?*<":>+[]/'"'" <<< "$EpisodeSubtitle")"
+NewShowName="$(tr -d '’@%^`~!#$|\?*<":>+[]/'"'" <<< "$NewShowName")"
+ShowName="$(tr -d '’@%^`~!#$|\?*<":>+[]/'"'" <<< "$ShowName")"
 
 #Format Episodes showname=show name Sxx=season number Exx=episode number EpisodeSubtitle=episode name
 if [[ -z "$NamingConvention" ]]; then

@@ -13,20 +13,15 @@
 # "network.disconnected"  A network disconnected notification. This should not be confused with device.removed for disconnected network devices.
 # "network.error" A network-related or connection-related error. 
 
-user=$(whoami)
-pids=$(pgrep -u $user gnome-session)
-title=$1
-text=$2
-image=$3
+user="$(whoami)"
+pids="$(pgrep -u $user gnome-session)"
+title="$1"
+text="$2"
+image="$3"
 
-if [ -z "$title" ]; then
-  printf '%s\n' 'You need to give me a title' >&2
-  exit 1
-fi
+[[ -z "$title" ]] && printf '%s\n' 'You need to give me a title' >&2 && exit 1
 
-if [ -z "$text" ]; then
-  text=$title
-fi
+[[ -z "$text" ]] && text=$title
 
 #TODO: this isn't used... #NOTE: Ubuntu's Notify OSD and GNOME Shell both ignore this parameter.
 if [ -z "$timeout" ]; then

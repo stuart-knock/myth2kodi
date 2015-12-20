@@ -918,98 +918,59 @@ GetMythTVDatabase(){
   DebugCont "InputSubtitle: $InputSubtitle"
   DebugCont "InputSeasonNum: $InputSeasonNum"
   DebugCont "InputEpisodeNum: $InputEpisodeNum"
-  #TODO: try compressing the below with something like:
-  # [[ -z "$InputTitle" ]]      && InputTitle="$(     dbselect title    | sed s/"title"/""/g    | sed -n "2p")"
-  # [[ -z "$InputSubtitle" ]]   && InputSubtitle="$(  dbselect subtitle | sed s/"subtitle"/""/g | sed -n "2p")"
-  # [[ -z "$InputSeasonNum" ]]  && InputSeasonNum="$( dbselect season   | sed s/"season"/""/g   | sed -n "2p")"
-  # [[ -z "$InputEpisodeNum" ]] && InputEpisodeNum="$(dbselect episode  | sed s/"episode"/""/g  | sed -n "2p")"
-  # #TODO: Determine if substitution of "/" with "" below is SchedulesDirect specific, if so move it to ProcessSchedulesDirect...
-  # ChanID="$(         dbselect chanid          | sed s/"\/"/""/g | sed -n "2p" | sed s/"chanid"/""/g | sed s/" "/""/g)"
-  # ProgramID="$(      dbselect programid       | sed s/"\/"/""/g | sed -n "2p" | sed s/"programid"/""/g)"
-  # LocalSeriesID="$(  dbselect seriesid        | sed s/"\/"/""/g | sed -n "2p" | sed s/"seriesid"/""/g)"
-  # Plot="$(           dbselect description     | sed s/"\/"/""/g | sed -n "2p" | sed s/"description"/""/g)"
-  # Stars="$(          dbselect stars           | sed s/"\/"/""/g | sed -n "2p" | sed s/"stars"/""/g)" #TODO: stars in final sed had capital S, think it was bug, but check...
-  # ShowStartTime="$(  dbselect starttime       | sed s/"\/"/""/g | sed -n "2p" | sed s/"starttime"/""/g)"
-  # ShowCategory="$(   dbselect category        | sed s/"\/"/""/g | sed -n "2p" | sed s/"category"/""/g)"
-  # StorageGroup="$(   dbselect storagegroup    | sed s/"\/"/""/g | sed -n "2p" | sed s/"storagegroup"/""/g)"
-  # OriginalAirDate="$(dbselect originalairdate | sed s/"\/"/""/g | sed -n "2p" | sed s/"originalairdate"/""/g)"
-  # [[ "$OriginalAirDate" = "0000-00-00" ]] && OriginalAirDate="$null"
-  #TODO: Above seems redundant unless it takes care of a DB structure from an older mythtv, the following works in 0.27.5
-  # [[ -z "$InputTitle" ]]      && InputTitle="$(     dbselect title    | sed -n "2p")"
-  # [[ -z "$InputSubtitle" ]]   && InputSubtitle="$(  dbselect subtitle | sed -n "2p")"
-  # [[ -z "$InputSeasonNum" ]]  && InputSeasonNum="$( dbselect season   | sed -n "2p")"
-  # [[ -z "$InputEpisodeNum" ]] && InputEpisodeNum="$(dbselect episode  | sed -n "2p")"
-  # #TODO: Determine if substitution of "/" with "" below is SchedulesDirect specific, if so move it to ProcessSchedulesDirect...
-  # ChanID="$(         dbselect chanid          | sed -n "2p")"
-  # ProgramID="$(      dbselect programid       | sed -n "2p")"
-  # LocalSeriesID="$(  dbselect seriesid        | sed -n "2p")"
-  # Plot="$(           dbselect description     | sed -n "2p")"
-  # Stars="$(          dbselect stars           | sed -n "2p")"
-  # ShowStartTime="$(  dbselect starttime       | sed -n "2p")"
-  # ShowCategory="$(   dbselect category        | sed -n "2p")"
-  # StorageGroup="$(   dbselect storagegroup    | sed -n "2p")"
-  # OriginalAirDate="$(dbselect originalairdate | sed -n "2p")"
-  # [[ "$OriginalAirDate" = "0000-00-00" ]] && OriginalAirDate="$null"
 
-  #TODO: This conditional seems weird as PythonBindings isn't set anywhere and
-  #  even if it were set to True then this function would do nothing rather
-  #  than accessing the database via the Python bindings...
-  if [ "$PythonBindings" != "True" ]; then
-    #Obtain MythTV Database Information
-    Inform "Accessing MythTV DataBase Using mysql Commands:"
-    Inform "Attempting to pull database information on $InputPath"
-    #get Title
-    test "$InputTitle" = "" && InputTitle=`mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select title from recorded where basename like '$InputFileBasename'; " | sed s/"title"/""/g | sed -n "2p"`
-    #get Subtitle
-    test "$InputSubtitle" = "" && InputSubtitle=`mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select subtitle from recorded where basename like '$InputFileBasename' ; " | sed s/"subtitle"/""/g | sed -n "2p"`
-    #TODO: It's possible the following two lines require the '| sed -n "2p"' for filtering what is returned by the mysql SELECT -- So far I think I've only used the PythonBindings.
-    #get Season Number, SydFTA sometimes has a season field #TODO: change call to enable Season Number as an input
-    test "$InputSeasonNum" = "" && InputSeasonNum=`mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select season from recorded where basename like '$InputFileBasename' ;" | sed s/"season"/""/g | sed -n "2p"`
-    #get Episode Number, SydFTA sometimes has an episode field  #TODO: change call to enable Episode Number as an input
-    test "$InputEpisodeNum" = "" && InputEpisodeNum=`mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select episode from recorded where basename like '$InputFileBasename' ; " | sed s/"episode"/""/g | sed -n "2p"`
-    #TODO: Determine if substitution of "/" with "" below is SchedulesDirect specific, if so move it to ProcessSchedulesDirect...
-    #get chanid for recordings to identify program table
-    ChanID=`mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select chanid from recorded where basename like '$InputFileBasename';" | sed s/"\/"/""/g | sed -n 2p | sed s/"chanid"/""/g | sed s/" "/""/g`
-    #get ProgramID from recorded to identify program
-    ProgramID=`mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select programid from recorded where basename like '$InputFileBasename' ; " | sed s/"\/"/""/g | sed -n "2p" | sed s/"programid"/""/g`
-    #Get series id from basename to identify program
-    LocalSeriesID=`mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select seriesid from recorded where basename like '$InputFileBasename' ; " | sed s/"\/"/""/g | sed -n "2p" | sed s/"seriesid"/""/g`
-    #Get Plot from basename to identify program
-    Plot=`mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select description from recorded where basename like '$InputFileBasename' ; " | sed s/"\/"/""/g | sed -n "2p" | sed s/"description"/""/g`
-    #Get rating from basename to identify program
-    Stars=`mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select stars from recorded where basename like '$InputFileBasename' ; " | sed s/"\/"/""/g | sed -n "2p" | sed s/"Stars"/""/g`
-    #get show start time to identify program ----future development
-    ShowStartTime=`mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select starttime from recorded where basename like '$InputFileBasename' ; " | sed s/"\/"/""/g | sed -n "2p" | sed s/"starttime"/""/g`
-    #get category from recorded to identify program table
-    ShowCategory=`mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select category from recorded where basename like '$InputFileBasename' ; " | sed s/"\/"/""/g | sed -n "2p" | sed s/"category"/""/g`
-    #get storagegroup from recorded as a possible fallback to identify movies
-    StorageGroup=`mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select storagegroup from recorded where basename like '$InputFileBasename' ; " | sed s/"\/"/""/g | sed -n "2p" | sed s/"storagegroup"/""/g`
-    #get original air date for tv shows
-    OriginalAirDate=`mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select originalairdate from recorded where basename like '$InputFileBasename' ; " | sed s/"\/"/""/g | sed -n "2p" | sed s/"originalairdate"/""/g`
-    test "$OriginalAirDate" = "0000-00-00" && OriginalAirDate="$null"
-    #get DataType
-    XMLTVGrabber=`mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select xmltvgrabber from videosource ; " | sed s/"xmltvgrabber"/""/g | sed s/"\/"/""/g | sed -n "2p" | sed s/" "/""/g`
-    #get year for movies
-    MovieAirDate=`mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select airdate from recordedprogram where programid like '$ProgramID' and chanid like '$ChanID' ; " | sed s/"\/"/""/g | sed s/"airdate"/""/g | sed -n "2p" | sed s/" "/""/g`
-    #Blank year if it is invalid
-    if [ ! -z "$MovieAirDate" ] && [ $MovieAirDate -lt 1900 ]; then
-      MovieAirDate=$null
-    fi
+  #Obtain MythTV Database Information
+  Inform "Accessing MythTV DataBase Using mysql Commands:"
+  Inform "Attempting to pull database information on $InputPath"
+  #NOTE: Previously the info retrieved from the MythTV-DB was also passed through additional sed commands
+  #  where "/", the thing being selected (eg "title") and occasionally spaces were stripped. At least for 
+  #  mythtv 0.27.5 and "mysql  Ver 15.1 Distrib 10.0.22-MariaDB, for Linux (x86_64) using readline 5.2",
+  #  these seem to be redundant. In case there was an old DB schema or older mysql version that required
+  #  this additional processing, if this doesn't work for you try adding back in the additional sed commands,
+  #  something like: 
+  #    | sed s/"\/"/""/g | sed -n "2p" | sed s/"chanid"/""/g | sed s/" "/""/g
+  #  to replace the 
+  #    | sed -n "2p"
+  #  found below. Finally, if any of the above processing turns out to be SchedulesDirect specific then it
+  #  should be moved to ProcessSchedulesDirect().
+  [[ -z "$InputTitle" ]]      && InputTitle="$(     dbselect title    | sed -n "2p")"
+  [[ -z "$InputSubtitle" ]]   && InputSubtitle="$(  dbselect subtitle | sed -n "2p")"
+  [[ -z "$InputSeasonNum" ]]  && InputSeasonNum="$( dbselect season   | sed -n "2p")"
+  [[ -z "$InputEpisodeNum" ]] && InputEpisodeNum="$(dbselect episode  | sed -n "2p")"
+  ChanID="$(         dbselect chanid          | sed -n "2p")"
+  ProgramID="$(      dbselect programid       | sed -n "2p")"
+  LocalSeriesID="$(  dbselect seriesid        | sed -n "2p")"
+  Plot="$(           dbselect description     | sed -n "2p")"
+  Stars="$(          dbselect stars           | sed -n "2p")"
+  ShowStartTime="$(  dbselect starttime       | sed -n "2p")"
+  ShowCategory="$(   dbselect category        | sed -n "2p")"
+  StorageGroup="$(   dbselect storagegroup    | sed -n "2p")"
+  OriginalAirDate="$(dbselect originalairdate | sed -n "2p")"
+  [[ "$OriginalAirDate" = "0000-00-00" ]] && OriginalAirDate="$null"
 
-    #####COMSKIP DATA#####
-    #Set up counter, remove old markup data and generate new markup file from markupstart and stop
-    if [ "$CommercialMarkup" = "Enabled" ]; then
-      #Remove old and generate a comskip Start list
-      echo "">"$m2kdir/markupstart.txt"
-      mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select mark from recordedmarkup where starttime like '$ShowStartTime' and chanid like '$ChanID' and type like "4" ; " | sed s/"mark"/""/g | sed s/" "/""/g>>$m2kdir/markupstart.txt
-      #Remove old and generate comskip Stop list
-      echo "">"$m2kdir/markupstop.txt"
-      mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select mark from recordedmarkup where starttime like '$ShowStartTime' and chanid like '$ChanID' and type like "5" ; " | sed s/"mark"/""/g | sed s/" "/""/g>>$m2kdir/markupstop.txt
-      #Combine commercial data into a single comskip file and remove the initial files
-      GenComSkip
-    fi
-    return 0
+  #TODO: Clean up all the following mysql commands, like we've done for the above.
+  #get DataType
+  XMLTVGrabber=`mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select xmltvgrabber from videosource ; " | sed s/"xmltvgrabber"/""/g | sed s/"\/"/""/g | sed -n "2p" | sed s/" "/""/g`
+  #get year for movies
+  MovieAirDate=`mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select airdate from recordedprogram where programid like '$ProgramID' and chanid like '$ChanID' ; " | sed s/"\/"/""/g | sed s/"airdate"/""/g | sed -n "2p" | sed s/" "/""/g`
+  #Blank year if it is invalid
+  if [ ! -z "$MovieAirDate" ] && [ $MovieAirDate -lt 1900 ]; then
+    MovieAirDate=$null
   fi
+
+  #####COMSKIP DATA#####
+  #Set up counter, remove old markup data and generate new markup file from markupstart and stop
+  if [ "$CommercialMarkup" = "Enabled" ]; then
+    #Remove old and generate a comskip Start list
+    echo "">"$m2kdir/markupstart.txt"
+    mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select mark from recordedmarkup where starttime like '$ShowStartTime' and chanid like '$ChanID' and type like "4" ; " | sed s/"mark"/""/g | sed s/" "/""/g>>$m2kdir/markupstart.txt
+    #Remove old and generate comskip Stop list
+    echo "">"$m2kdir/markupstop.txt"
+    mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select mark from recordedmarkup where starttime like '$ShowStartTime' and chanid like '$ChanID' and type like "5" ; " | sed s/"mark"/""/g | sed s/" "/""/g>>$m2kdir/markupstop.txt
+    #Combine commercial data into a single comskip file and remove the initial files
+    GenComSkip
+  fi
+  return 0
 }
 
 #####UTILIZE PYTHON BINDINGS TO GET MYTHTV DB##### Requires dependency

@@ -1008,27 +1008,11 @@ GetMythTvPythonBindings(){
   fi
 
   #read values from named pipe, remove quotes and declare $Variable=$Value
+  Debug "Guide data as extracted by: ${FUNCNAME}()"
   while read var equals value ; do
     value="$(tr -d \" <<< "$value")"
-    test "$equals" = "=" && declare $var="$value" && Inform "$var$equals$value"
+    test "$equals" = "=" && declare $var="$value" && DebugCont "$var$equals$value"
   done < "$m2kdir/mythicalDbOut" > /dev/null 2>&1
-
-  #TODO: The Inform in the above while block is swallowed by the trailing > /dev/null, probably best to convert the Inform to Debug and strip " > /dev/null 2>&1" from the end...
-  Debug "Guide data as extracted by: ${FUNCNAME}()"
-  DebugCont "title: $title"
-  DebugCont "subtitle: $subtitle"
-  DebugCont "season: $season"
-  DebugCont "episode: $episode"
-  DebugCont "airdate: $airdate"
-  DebugCont "originalairdate: $originalairdate"
-  DebugCont "category: $category"
-  DebugCont "storagegroup: $storagegroup"
-  DebugCont "stars: $stars"
-  DebugCont "seriesid: $seriesid"
-  DebugCont "programid: $programid"
-  DebugCont "chanid: $chanid"
-  DebugCont "starttime: $starttime"
-  DebugCont "description: $description"
 
   if [ "$CommercialMarkup" = "Enabled" ]; then
     #Output commercial data to initial files
@@ -1045,23 +1029,24 @@ GetMythTvPythonBindings(){
   #GuideSeasonNum InputSeasonNum LogicSubtitleSeasonNum FuzzySubtitleSeasonNum FuzzyPlotSeasonNum nlpPlotSeasonNum => EpisodeSeasonNum
   #GuideEpisodeNum InputEpisodeNum LogicSubtitleEpisodeNum FuzzySubtitleEpisodeNum FuzzyPlotEpisodeNum nlpPlotEpisodeNum => EpisodeEpisodeNum
 
+  Inform "Setting the following variables based on MythTV-DB guide data:"
   #Import mythtv values into myth2kodi values, don't clobber title, subtitle, season-number, or episode-number.
-  [[ -z "$InputTitle" ]] && InputTitle="$title"
-  [[ -z "$InputSubtitle" ]] && InputSubtitle="$subtitle"
-  [[ -z "$InputSeasonNum" ]] && InputSeasonNum="$season"
-  [[ -z "$InputEpisodeNum" ]] && InputEpisodeNum="$episode"
+  [[ -z "$InputTitle" ]]      && InputTitle="$title"        && InformCont "InputTitle=$title"
+  [[ -z "$InputSubtitle" ]]   && InputSubtitle="$subtitle"  && InformCont "InputSubtitle=$subtitle"
+  [[ -z "$InputSeasonNum" ]]  && InputSeasonNum="$season"   && InformCont "InputSeasonNum=$season"
+  [[ -z "$InputEpisodeNum" ]] && InputEpisodeNum="$episode" && InformCont "InputEpisodeNum=$episode"
 
   #redefine database var names into myth2kodi var names
-  MovieAirDate="$airdate"
-  OriginalAirDate="$originalairdate"
-  ShowCategory="$category"
-  StorageGroup="$storagegroup"
-  Stars="$stars"
-  Plot="$description"
-  LocalSeriesID="$seriesid"
-  ProgramID="$programid"
-  ChanID="$chanid"
-  ShowStartTime="$starttime"
+  MovieAirDate="$airdate"            && InformCont "MovieAirDate=$airdate"
+  OriginalAirDate="$originalairdate" && InformCont "OriginalAirDate=$originalairdate"
+  ShowCategory="$category"           && InformCont "ShowCategory=$category"
+  StorageGroup="$storagegroup"       && InformCont "StorageGroup=$storagegroup"
+  Stars="$stars"                     && InformCont "Stars=$stars"
+  Plot="$description"                && InformCont "Plot=$description"
+  LocalSeriesID="$seriesid"          && InformCont "LocalSeriesID=$seriesid"
+  ProgramID="$programid"             && InformCont "ProgramID=$programid"
+  ChanID="$chanid"                   && InformCont "ChanID=$chanid"
+  ShowStartTime="$starttime"         && InformCont "ShowStartTime=$starttime"
 
   #cleanup, remove the fifo named pipe
   test -p "$m2kdir/mythicalDbOut" && rm -f "$m2kdir/mythicalDbOut"

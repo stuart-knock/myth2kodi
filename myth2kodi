@@ -1123,8 +1123,7 @@ ExtractSxxExxFromPlot(){
     #including it in the plot/description field instead of where it belongs
     #The below should work for any of the following forms:
     #S01E42 | (01x42) | s01e42 | 1X2 | S1E4 | (S01Ep42) | (S1Ep42) | 42x1 | (S.01Ep.42) | (S.01,Ep.42)
-    #TODO: SeasonEpisode="$(grep -E -i --only-matching '(s\.?[0-9]?[0-9]\,?(e|ep)\.?[0-9][0-9]?)|([0-9]?[0-9]x[0-9][0-9]?)' <<< "$Plot")"
-    SeasonEpisode=$(echo $Plot | grep -i --only-matching '\(s\.\?[0-9]\?[0-9]\,\?\(e\|ep\)\.\?[0-9][0-9]\?\)\|\([0-9]\?[0-9]x[0-9][0-9]\?\)')
+    SeasonEpisode="$(grep -E -i --only-matching '(s\.?[0-9]?[0-9]\,?(e|ep)\.?[0-9][0-9]?)|([0-9]?[0-9]x[0-9][0-9]?)' <<< "$Plot")"
   fi
   if [[ -n "$InputSeasonNum" && -n "$InputEpisodeNum" ]]; then
     Debug "Using season & episode information from MythTV DB season & episode fields."
@@ -1132,10 +1131,8 @@ ExtractSxxExxFromPlot(){
     Exx="$InputEpisodeNum"
   elif [[ -n "$SeasonEpisode" ]]; then
     Debug "Extracted season & episode information from Plot."
-    #TODO: Sxx="$(echo $SeasonEpisode | grep -E -i --only-matching '(s\.?[0-9]?[0-9])|([0-9]?[0-9]x)' | sed 's/s\.\?\|x//I')"
-    Sxx=$(echo $SeasonEpisode | grep -i --only-matching '\(s\.\?[0-9]\?[0-9]\)\|\([0-9]\?[0-9]x\)' | sed 's/s\.\?\|x//I')
-    #TODO: Exx="$(echo $SeasonEpisode | grep -E -i --only-matching '((e|ep)\.?[0-9][0-9]?)|(x[0-9][0-9]?)' | sed 's/\(E\.\?\|Ep\.\?\)\|x//I')"
-    Exx=$(echo $SeasonEpisode | grep -i --only-matching '\(\(e\|ep\)\.\?[0-9][0-9]\?\)\|\(x[0-9][0-9]\?\)' | sed 's/\(E\.\?\|Ep\.\?\)\|x//I')
+    Sxx="$(echo $SeasonEpisode | grep -E -i --only-matching '(s\.?[0-9]?[0-9])|([0-9]?[0-9]x)' | sed 's/s\.\?\|x//I')"
+    Exx="$(echo $SeasonEpisode | grep -E -i --only-matching '((e|ep)\.?[0-9][0-9]?)|(x[0-9][0-9]?)' | sed 's/\(E\.\?\|Ep\.\?\)\|x//I')"
     #Strip leading zero
     Sxx=${Sxx#0}
     Exx=${Exx#0}
@@ -1154,15 +1151,14 @@ RemoveSeasonEpisodeFromPlot(){
   Debug "ENTERING: ${FUNCNAME}()"
   if [[ -n "$SeasonEpisode" ]]; then
     #Check if it's in the leading position and if so, remove it
-    #TODO: local SEstring="$(grep -E -i --only-matching '(\(?s\.?[0-9]?[0-9]\,?(e|ep)\.?[0-9][0-9]?\)?)\s*|(\(?[0-9]?[0-9]x[0-9][0-9]?\)?)\s*' <<< "$Plot")"
-    local SEstring=`echo $Plot | grep -i --only-matching '(\?\(s\.\?[0-9]\?[0-9]\,\?\(e\|ep\)\.\?[0-9][0-9]\?\))\?\s*\|(\?\([0-9]\?[0-9]x[0-9][0-9]\?\))\?\s*'`
+    local SEstring="$(grep -E -i --only-matching '(\(?s\.?[0-9]?[0-9]\,?(e|ep)\.?[0-9][0-9]?\)?)\s*|(\(?[0-9]?[0-9]x[0-9][0-9]?\)?)\s*' <<< "$Plot")"
     if [[ -n "$SEstring" ]]; then
       Warn "${FUNCNAME}() SeasonEpisode was in the leading position of the Plot field, removing it to simplify subsequent processing."
       Plot="$(sed s/"$SEstring"/""/ <<< "$Plot")"
       #Also remove any left over leading hyphen, colon, or space 
       Plot="$(sed s/^"\s*[-|:]\?\s*"/""/ <<< "$Plot")"
-      #TODO: Still may need to strip any trailing space from the Plot
-      #Plot="$(sed s/"\s*"$/""/ <<< "$Plot")" #TODO: should be a substitution pattern for this... Plot="${Plot%%*([[:space:]])}"
+      #Remove any trailing space from the Plot
+      Plot="${Plot%%*([[:space:]])}"
     fi
   else
     Debug "SeasonEpisode isn't currently set:"
@@ -1179,11 +1175,9 @@ ExtractSubtitleFromPlot(){
   Debug "ENTERING: ${FUNCNAME}()"
   #TODO: Probably should do things conditionally based on whether or not we actually managed
   #  to extract a Subtitle. And maybe return failure state.
-  #TODO: InputSubtitle="$(grep -E --only-matching '^((((\w+)(.?\s*))|(\&\s*)){1,7})( -|\:)' <<< "$Plot")"
-  InputSubtitle=`echo $Plot | grep --only-matching '^\(\(\(\(\w\+\)\(.\?\s*\)\)\|\(\&\s*\)\)\{1,7\}\)\( -\|\:\)'`
+  InputSubtitle="$(grep -E --only-matching '^((((\w+)(.?\s*))|(\&\s*)){1,7})( -|\:)' <<< "$Plot")"
   #Clean off the trailing " -" or ":" that we're using to identify it
-  #TODO: InputSubtitle="$(grep -E --only-matching '(((\w+)(.?\s*))|(\&\s*)){,7}(\w+)' <<< "$InputSubtitle")"
-  InputSubtitle=`echo $InputSubtitle | grep --only-matching '\(\(\(\w\+\)\(.*\s*\)\)\|\(\&\s*\)\)\{,7\}\(\w\+\)'`
+  InputSubtitle="$(grep -E --only-matching '(((\w+)(.?\s*))|(\&\s*)){,7}(\w+)' <<< "$InputSubtitle")"
   Inform "Attempt to extract Subtitle from Plot field gave '$InputSubtitle'"
   return 0
 }
@@ -1193,8 +1187,7 @@ RemoveSubtitleFromPlot(){
   Debug "ENTERING: ${FUNCNAME}()"
   #TODO: If we extracted a subtitle from Plot variable then remove that text from Plot.
   if [[ -n "$InputSubtitle" ]]; then
-    #TODO: local STstring="$(grep -E --only-matching '^((((\w+)(.?\s*))|(\&\s*)){1,7})( -|\:)\s*' <<< "$Plot")"
-    local STstring=$(echo $Plot | grep --only-matching '^\(\(\(\(\w\+\)\(.\?\s*\)\)\|\(\&\s*\)\)\{1,7\}\)\( -\|\:\)\s*')
+    local STstring="$(grep -E --only-matching '^((((\w+)(.?\s*))|(\&\s*)){1,7})( -|\:)\s*' <<< "$Plot")"
     if [[ -n "$STstring" ]]; then
       Warn "${FUNCNAME}() Episode subtitle was in the Plot field, removing it to simplify subsequent processing."
       Plot="$(sed s/"$STstring"/""/ <<< "$Plot")"

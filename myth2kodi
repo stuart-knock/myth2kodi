@@ -23,7 +23,7 @@
 #    myth2kodi
 #    bashlogging
 #    MythDataGrabber
-#    librarian-notify-send
+#    m2k_notify
 #    showTranslations.SydFTA
 
 #TODO: Make use of TMDb (https://www.themoviedb.org/) when the recorded
@@ -145,7 +145,7 @@
 #  Some of the functionality of this script is provided in other files, these
 #  will need to be placed in /usr/local/bin/ along with this script. They are:
 #  MythDataGrabber -- Uses MythTV python bindings to access database information.
-#  librarian-notify-send -- A script for sending notifications to Gnome Desktop.
+#  m2k_notify -- A script for sending notifications to Gnome Desktop.
 #  bashlogging -- A set of bash functions that provide a simple way to produce 
 #                 log messages, with control over the type of messages returned
 #                 and where they are directed, ie stdout, a log file, both. See,
@@ -159,9 +159,8 @@
 #  temporarily become your user name in order to send a notification to your
 #  desktop. This requires the use of a separate script, and for mythtv to have a
 #  sudoers group with no password option. Notifications are an optional feature
-#  and will only work on the MythTV backend computer. The librarian-notify-send
-#  script should be located in /usr/local/bin. You can get this script here:
-#    https://sourceforge.net/projects/mythicallibrari/files/mythicalLibrarianBeta/librarian-notify-send/download
+#  and will only work on the MythTV backend computer. The m2k_notify
+#  script should be located in /usr/local/bin. 
 #
 #KODI Notifications:
 #   If options are enabled, myth2kodi will send a http requests to a
@@ -213,8 +212,7 @@ UpdateDatabase=88920
 #The path which contains myth2kodi and associated scripts default=/usr/local/bin
 binpath="/usr/local/bin"
 #myth2kodi working directory: Default=$HOME/.myth2kodi (ie, /home/username/.myth2kodi)
-###For Testing###m2kdir="$HOME/.myth2kodi"
-m2kdir="/data/sknock/TEMP/.myth2kodi"
+m2kdir="$HOME/.myth2kodi"
 #FailSafe mode will enable symlinks to be formed in FailSafeDir if the move or symlink operation fails. Enabled|Disabled
 FailSafeMode="Disabled"
 #FailSafeDir is used when the file cannot be moved to the MoveDir. FailSafe will not create folders. eg. /home/username
@@ -249,7 +247,7 @@ Database="Enabled"
 #Database Type MythTV|MythTVPythonBindings  Default=MythTVPythonBinding
 DatabaseType="MythTVPythonBindings"
 #Guide data type: SchedulesDirect currently covers DataDirect, MC2XML and others.  NoLookup will bypass tvdb scanning
-#Options: SchedulesDirect|NoLookup
+#Options: SchedulesDirect|NoLookup|SydFTA
 GuideDataType="SydFTA"
 #The IP address or name of the server for MythTV Database (used in python bindings only)
 DBHostName="192.168.1.42"
@@ -328,17 +326,10 @@ mythicalVersion="myth2kodi Version 0.6.4; mythicalLibrarian 953ish+"
 LogFile="$m2kdir/output.log"
 declare -r DiagnosticsFile="$m2kdir/diagnostics.log"
 
-###For Testing###if [ -f "$binpath"/bashlogging ] ; then
-###For Testing###  source "$binpath"/bashlogging "$LogType"
-###For Testing###else
-###For Testing###  printf 'ERROR: %s\n' "$binpath/bashlogging doesn't exist." | tee -a "$LogFile"
-###For Testing###  exit 1
-###For Testing###fi
-
-if [ -f /home/sknock/GitHub/bash-tools/bashlogging ] ; then
-  source /home/sknock/GitHub/bash-tools/bashlogging "$LogType"
+if [ -f "$binpath"/bashlogging ] ; then
+  source "$binpath"/bashlogging "$LogType"
 else
-  printf 'ERROR: %s\n' "/home/sknock/GitHub/bash-tools/bashlogging doesn't exist." | tee -a $LogFile
+  printf 'ERROR: %s\n' "$binpath/bashlogging doesn't exist." | tee -a "$LogFile"
   exit 1
 fi
 
@@ -885,6 +876,8 @@ performLoggingForLinkMode(){
 
 writeJobToDooverQue(){
   Debug "ENTERING: ${FUNCNAME}()"
+  DebugCont "Called with $# arguments"
+  local -i i=0 ; local var ; for var in "$@"; do ((++i)) ; DebugCont "arg $i = ${var}" ; done
   DebugCont "m2kdir: $m2kdir"
   DebugCont "InputPath: $InputPath"
   Inform "Writing job to doover queue: $m2kdir/doover.sh"
@@ -905,7 +898,11 @@ doFailSafeMode(){
     Inform "FailSafeMode Disabled, we won't try and make a link as a fallback."
   fi
 
-  test $Notify = Enabled && sudo -u "$NotifyUserName" "$binpath"/librarian-notify-send "myth2kodi FAILSAFE" "FAILSAFE mode active See $LogFile for more information" error
+  test $Notify = Enabled && sudo -u "$NotifyUserName" "$binpath"/m2k_notify "myth2kodi FAILSAFE" "FAILSAFE mode active See $LogFile for more information" error
+}
+
+dbselect(){
+  mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; SELECT $1 FROM recorded WHERE basename LIKE '$InputFileBasename' ; "
 }
 
 #####MYTHTV DATABASE#####
@@ -922,22 +919,36 @@ GetMythTVDatabase(){
   DebugCont "InputSeasonNum: $InputSeasonNum"
   DebugCont "InputEpisodeNum: $InputEpisodeNum"
   #TODO: try compressing the below with something like:
-  # local dbselect="mysql -u$MySQLuser -p$MySQLpass -e \"use '$MySQLMythDb' ; printf \"select %s from recorded where basename like '$InputFileBasename';\""
-  # #then we'd have:
-  # [[ -z "$InputTitle" ]]      && InputTitle="$(     $dbselect \"title\"    | sed s/"title"/""/g    | sed -n "2p")"
-  # [[ -z "$InputSubtitle" ]]   && InputSubtitle="$(  $dbselect \"subtitle\" | sed s/"subtitle"/""/g | sed -n "2p")"
-  # [[ -z "$InputSeasonNum" ]]  && InputSeasonNum="$( $dbselect \"season\"   | sed s/"season"/""/g   | sed -n "2p")"
-  # [[ -z "$InputEpisodeNum" ]] && InputEpisodeNum="$($dbselect \"episode\"  | sed s/"episode"/""/g  | sed -n "2p")"
+  # [[ -z "$InputTitle" ]]      && InputTitle="$(     dbselect title    | sed s/"title"/""/g    | sed -n "2p")"
+  # [[ -z "$InputSubtitle" ]]   && InputSubtitle="$(  dbselect subtitle | sed s/"subtitle"/""/g | sed -n "2p")"
+  # [[ -z "$InputSeasonNum" ]]  && InputSeasonNum="$( dbselect season   | sed s/"season"/""/g   | sed -n "2p")"
+  # [[ -z "$InputEpisodeNum" ]] && InputEpisodeNum="$(dbselect episode  | sed s/"episode"/""/g  | sed -n "2p")"
   # #TODO: Determine if substitution of "/" with "" below is SchedulesDirect specific, if so move it to ProcessSchedulesDirect...
-  # ChanID="$(         $dbselect \"chanid\"          | sed s/"\/"/""/g | sed -n "2p" | sed s/"chanid"/""/g | sed s/" "/""/g)"
-  # ProgramID="$(      $dbselect \"programid\"       | sed s/"\/"/""/g | sed -n "2p" | sed s/"programid"/""/g)"
-  # LocalSeriesID="$(  $dbselect \"seriesid\"        | sed s/"\/"/""/g | sed -n "2p" | sed s/"seriesid"/""/g)"
-  # Plot="$(           $dbselect \"description\"     | sed s/"\/"/""/g | sed -n "2p" | sed s/"description"/""/g)"
-  # Stars="$(          $dbselect \"stars\"           | sed s/"\/"/""/g | sed -n "2p" | sed s/"stars"/""/g)" #TODO: stars in final sed had capital S, think it was bug, but check...
-  # ShowStartTime="$(  $dbselect \"starttime\"       | sed s/"\/"/""/g | sed -n "2p" | sed s/"starttime"/""/g)"
-  # ShowCategory="$(   $dbselect \"category\"        | sed s/"\/"/""/g | sed -n "2p" | sed s/"category"/""/g)"
-  # StorageGroup="$(   $dbselect \"storagegroup\"    | sed s/"\/"/""/g | sed -n "2p" | sed s/"storagegroup"/""/g)"
-  # OriginalAirDate="$($dbselect \"originalairdate\" | sed s/"\/"/""/g | sed -n "2p" | sed s/"originalairdate"/""/g)"
+  # ChanID="$(         dbselect chanid          | sed s/"\/"/""/g | sed -n "2p" | sed s/"chanid"/""/g | sed s/" "/""/g)"
+  # ProgramID="$(      dbselect programid       | sed s/"\/"/""/g | sed -n "2p" | sed s/"programid"/""/g)"
+  # LocalSeriesID="$(  dbselect seriesid        | sed s/"\/"/""/g | sed -n "2p" | sed s/"seriesid"/""/g)"
+  # Plot="$(           dbselect description     | sed s/"\/"/""/g | sed -n "2p" | sed s/"description"/""/g)"
+  # Stars="$(          dbselect stars           | sed s/"\/"/""/g | sed -n "2p" | sed s/"stars"/""/g)" #TODO: stars in final sed had capital S, think it was bug, but check...
+  # ShowStartTime="$(  dbselect starttime       | sed s/"\/"/""/g | sed -n "2p" | sed s/"starttime"/""/g)"
+  # ShowCategory="$(   dbselect category        | sed s/"\/"/""/g | sed -n "2p" | sed s/"category"/""/g)"
+  # StorageGroup="$(   dbselect storagegroup    | sed s/"\/"/""/g | sed -n "2p" | sed s/"storagegroup"/""/g)"
+  # OriginalAirDate="$(dbselect originalairdate | sed s/"\/"/""/g | sed -n "2p" | sed s/"originalairdate"/""/g)"
+  # [[ "$OriginalAirDate" = "0000-00-00" ]] && OriginalAirDate="$null"
+  #TODO: Above seems redundant unless it takes care of a DB structure from an older mythtv, the following works in 0.27.5
+  # [[ -z "$InputTitle" ]]      && InputTitle="$(     dbselect title    | sed -n "2p")"
+  # [[ -z "$InputSubtitle" ]]   && InputSubtitle="$(  dbselect subtitle | sed -n "2p")"
+  # [[ -z "$InputSeasonNum" ]]  && InputSeasonNum="$( dbselect season   | sed -n "2p")"
+  # [[ -z "$InputEpisodeNum" ]] && InputEpisodeNum="$(dbselect episode  | sed -n "2p")"
+  # #TODO: Determine if substitution of "/" with "" below is SchedulesDirect specific, if so move it to ProcessSchedulesDirect...
+  # ChanID="$(         dbselect chanid          | sed -n "2p")"
+  # ProgramID="$(      dbselect programid       | sed -n "2p")"
+  # LocalSeriesID="$(  dbselect seriesid        | sed -n "2p")"
+  # Plot="$(           dbselect description     | sed -n "2p")"
+  # Stars="$(          dbselect stars           | sed -n "2p")"
+  # ShowStartTime="$(  dbselect starttime       | sed -n "2p")"
+  # ShowCategory="$(   dbselect category        | sed -n "2p")"
+  # StorageGroup="$(   dbselect storagegroup    | sed -n "2p")"
+  # OriginalAirDate="$(dbselect originalairdate | sed -n "2p")"
   # [[ "$OriginalAirDate" = "0000-00-00" ]] && OriginalAirDate="$null"
 
   #TODO: This conditional seems weird as PythonBindings isn't set anywhere and
@@ -969,9 +980,9 @@ GetMythTVDatabase(){
     Stars=`mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select stars from recorded where basename like '$InputFileBasename' ; " | sed s/"\/"/""/g | sed -n "2p" | sed s/"Stars"/""/g`
     #get show start time to identify program ----future development
     ShowStartTime=`mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select starttime from recorded where basename like '$InputFileBasename' ; " | sed s/"\/"/""/g | sed -n "2p" | sed s/"starttime"/""/g`
-    #get category from recorded to identify program table -----future development
+    #get category from recorded to identify program table
     ShowCategory=`mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select category from recorded where basename like '$InputFileBasename' ; " | sed s/"\/"/""/g | sed -n "2p" | sed s/"category"/""/g`
-    #get storagegroup from recorded as a possible fallback to identify movies #TODO: Once accessing this works, make use of it...
+    #get storagegroup from recorded as a possible fallback to identify movies
     StorageGroup=`mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select storagegroup from recorded where basename like '$InputFileBasename' ; " | sed s/"\/"/""/g | sed -n "2p" | sed s/"storagegroup"/""/g`
     #get original air date for tv shows
     OriginalAirDate=`mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select originalairdate from recorded where basename like '$InputFileBasename' ; " | sed s/"\/"/""/g | sed -n "2p" | sed s/"originalairdate"/""/g`
@@ -1310,10 +1321,12 @@ ProcessSydFTA(){
   fi
 
   #Remove hashtag reference/s from the Plot field #TODO: Will probably need to check and extend this.
-  Plot="$(sed s/"\s#\w\{2,16\}"/""/g <<< $Plot)"
+  Plot="$(sed s/"\s#\w\{2,16\}"/""/g <<< "$Plot")"
+  #And @mentions, at least SBS2 does this '@SBS2'
+  Plot="$(sed s/"\s@\w\{2,16\}"/""/g <<< "$Plot")"
 
   #Finally strip any troublesome characters that still remain in Plot, this matches what we do with TheTVDB.
-  Plot="$(tr -d '’@%^`~!#$|\?*<":>+[]/'"'" <<< $Plot)"
+  Plot="$(tr -d '@%^`~!#$|\?*<":>+[]/'"'" <<< "$Plot")"
 
   #Strip the Movie: tag that some stations very helpfully put in the title field...
   if [ "$m2kProgramIDCheck" = "MV" ]; then
@@ -1436,7 +1449,7 @@ determineIfDatabaseIsUpToDate(){
   #Return state = 1 means the local database should be updated from TheTVDB
   #Return state = 0 means the local database is up to date with TheTVDB
   #Initialise a default CurrentTimeTVDB
-  [[ -z "$CurrentTimeTVDB" ]] && declare -i CurrentTimeTVDB=99999999
+  [[ -z "$CurrentTimeTVDB" ]] && CurrentTimeTVDB=99999999
   #Clean up any old TheTVDB_current.time file
   [[ -f "$m2kdir/$NewShowName/TheTVDB_current.time" ]] && rm -f "$m2kdir/$NewShowName/TheTVDB_current.time"
   #Get current server time
@@ -1449,12 +1462,12 @@ determineIfDatabaseIsUpToDate(){
 
   #If file exist for last updated time, then get value
   if [ -f "$m2kdir/$NewShowName/lastupdated.time" ]; then
-    declare -i LastUpdatedTVDB=$(cat "$m2kdir/$NewShowName/lastupdated.time")
+    LastUpdatedTVDB=$(cat "$m2kdir/$NewShowName/lastupdated.time")
 
   #If no last updated time, then assign a never updated value and update now
   elif [ ! -f "$m2kdir/$NewShowName/lastupdated.time" ]; then
     Inform "Seems we've never updated $NewShowName from TheTVDB -- can't find lastupdated.time file."
-    declare -i LastUpdatedTVDB=0
+    LastUpdatedTVDB=42
     return 1
   fi
 
@@ -1489,7 +1502,8 @@ downloadInfoAboutMatchedTitleAndCreateTxtFileTables(){
   Debug "ENTERING: ${FUNCNAME}()"
   #Download information from server
   Inform "Downloading Series: $SeriesID"
-  local GotNewInformation=0
+  local -i GotNewInformation=0
+  local -i ProcessingSuccesful=0
   local TheTVDBShowXML="http://www.thetvdb.com/api/$APIkey/series/$SeriesID/all/$Language.xml"
   local FieldsWeWant="(</?Series>|</?seriesid>|</?Status>|</?lastupdated>|</?Episode>|</?SeasonNumber>|</?EpisodeNumber>|</?EpisodeName>|</?Overview>|</?FirstAired>)"
   curl -L -s -m"$Timeout" "$TheTVDBShowXML" | grep -E "$FieldsWeWant" > "$m2kdir/$NewShowName/$NewShowName.xmlTest"
@@ -1580,7 +1594,11 @@ downloadInfoAboutMatchedTitleAndCreateTxtFileTables(){
           line="${line//&quot;/}"
           line="${line//&amp;/&}"
           line="${line//&ndash;/-}"
-          line="$(tr -d '’@%^`~!#$|\?*<":>+[]/'"'" <<< "$line")"
+          #TODO: Instead of trying to remove all the garbage here, maybe it'd be better to pass what we do want, ie alpha-numeric with only basic punctuation.
+          line="$(sed -r s'/[^[:alnum:]|^&,.-]/ /'g <<< "$line")"
+          line="$(sed -r s'/\s{2,}/ /'g <<< "$line")"
+          #line="$(tr -d '’@%^`~!#$|\?*<":>+[]/'"'" <<< "$line")"
+          #line="$(tr -d 'œ”¦' <<< "$line")" #TheTVDB occasionally has complete garbage characters like these
           EpisodeOverview="$line"
         fi
       done < "$m2kdir/$NewShowName/$NewShowName.xml"
@@ -1591,18 +1609,20 @@ downloadInfoAboutMatchedTitleAndCreateTxtFileTables(){
       chmod 666 "$m2kdir/$NewShowName/$NewShowName".S.txt
       chmod 666 "$m2kdir/$NewShowName/$NewShowName".E.txt
       chmod 666 "$m2kdir/$NewShowName/$NewShowName".Plot.txt
-      local ProcessingSuccesful=1
+      ProcessingSuccesful=1
 
     elif [ "$GotNewInformation" = "2" ]; then
       Err "${FUNCNAME}() UNEXPECTED ERROR comparing new to old information for $NewShowName"
+      return 1
     elif [ "$GotNewInformation" = "0" ]; then
       Inform "TheTVDB information for $NewShowName hasn't changed since last download."
+      return 0
     fi
   else
     Warn "${FUNCNAME}() COULD NOT DOWNLOAD: $TheTVDBShowXML"
   fi
   #check if files were created and generate message
-  if [ "$ProcessingSuccesful" = "1" ]; then
+  if ((ProcessingSuccesful == 1)) ; then
     Inform "LOCAL DATABASE UPDATED: $m2kdir/$NewShowName"
     return 0
   elif [ ! -f "$m2kdir/$NewShowName/$NewShowName.Ename.txt" ]; then
@@ -1790,6 +1810,7 @@ getAbsoluteEpisodeNumberWithFuzzyPlotMatch(){
   ((PlotLength<42)) && Warn "${FUNCNAME}() - Plot is too short to attempt fuzzy guess." && return 1
   #Fuzzy guess at plot, prepended with: "AbsoluteEpisodeNumber:cost:"
   local FuzzyPlot="$(agrep -ikByns "$Plot" "$m2kdir/$NewShowName/$NewShowName.Plot.txt")"
+  #TODO: Need to check for and deal with multiple results...
   [[ -z "$FuzzyPlot" ]] && Warn "${FUNCNAME}() - No fuzzy match on Plot" && return 1
   #Extract our guessed AbsoluteEpisodeNumber
   local -i AENguess=$(cut -f1 -d":" <<< "$FuzzyPlot")
@@ -2027,7 +2048,7 @@ tvDbIsIncomplete(){
   local errtype="myth2kodi Error"
   local errmsg="Could not obtain information from server about: $InputTitle. TheTVDB is incomplete"
   if [ "$Notify" = "Enabled" ] ; then
-    sudo -u "$NotifyUserName" "$binpath"/librarian-notify-send "$errtype" "$errmsg" web-browser
+    sudo -u "$NotifyUserName" "$binpath"/m2k_notify "$errtype" "$errmsg" web-browser
   fi
 }
 
@@ -2037,7 +2058,7 @@ Wrote0LengthFile(){
   local errtype="myth2kodi Failure"
   local errmsg="$ShowFileName could not be moved to $MoveDir"
   if [ "$Notify" = "Enabled" ] ; then
-    sudo -u "$NotifyUserName" "$binpath"/librarian-notify-send "$errtype" "$errmsg" stop
+    sudo -u "$NotifyUserName" "$binpath"/m2k_notify "$errtype" "$errmsg" stop
   fi
 }
 
@@ -2047,7 +2068,7 @@ PermissionErrorWhileMoving(){
   local errtype="myth2kodi Failure"
   local errmsg="$ShowFileName could not be moved to $MoveDir"
   if [ "$Notify" = "Enabled" ] ; then
-    sudo -u "$NotifyUserName" "$binpath"/librarian-notify-send "$errtype" "$errmsg" stop
+    sudo -u "$NotifyUserName" "$binpath"/m2k_notify "$errtype" "$errmsg" stop
   fi
 }
 
@@ -2058,7 +2079,7 @@ SymlinkNotCreated(){
   local errtype="myth2kodi Error"
   local errmsg="Failure while creating link. Check permissions"
   if [ "$Notify" = "Enabled" ] ; then
-    sudo -u "$NotifyUserName" "$binpath"/librarian-notify-send "$errtype" "$errmsg" stop
+    sudo -u "$NotifyUserName" "$binpath"/m2k_notify "$errtype" "$errmsg" stop
   fi
 }
 
@@ -2084,8 +2105,8 @@ MaintenanceWarning(){
   InformCont "  Please ensure that All network attached storage and removable"
   InformCont "  storage drives are connected and mounted properly before continuing"
   read -n1 -p "Would you like myth2kodi to conduct a scan? y/(n)>" yesorno
+  printf '\n'
   if [ "$yesorno" != "y" ]; then
-    printf '\n'
     Inform "You must press 'y' to continue"
     return 1
   fi
@@ -2151,7 +2172,7 @@ MakeShowDir(){
     ErrCont "######## FAILSAFE MODE HAS BEEN ACTIVATED ########"
     ErrCont "##################################################"
     if [ $Notify = "Enabled" ]; then
-      sudo -u "$NotifyUserName" "$binpath"/librarian-notify-send "myth2kodi error" "failsafe mode activated."  error
+      sudo -u "$NotifyUserName" "$binpath"/m2k_notify "myth2kodi error" "failsafe mode activated."  error
     fi
     SYMLINK=LINK
     MoveDir="$FailSafeDir"
@@ -2310,9 +2331,10 @@ DoMaintenance(){
       (( ++Counter ))
       #TODO: Figure out the purpose of redirect to stderr and trailing 5 spaces before converting to new messaging mechanism...
       #echo -ne "File record $Counter: ${SupportFile:0:20}     \n" 1>&2
-      Debug "File record $Counter: ${SupportFile:0:83}"
       SupportFile="$(cut -d"'" -f2 <<< "$line")"
+      Debug "File record $Counter: ${SupportFile}"
       MainFile="$(cut -d"'" -f4 <<< "$line")"
+      Debug "File record $Counter: ${MainFile}"
       ls "$MainFile" > /dev/null 2>&1
       if [ "$?" != "0" ]; then
         if [ -d "$(dirname "$SupportFile")" ]; then
@@ -2340,8 +2362,8 @@ DoMaintenance(){
       (( ++Counter ))
       #TODO: Figure out the purpose of redirect to stderr and trailing 5 spaces before converting to new messaging mechanism...
       #echo -ne "Folder record $Counter: ${DirToCheckCheck:0:20}    \n" 1>&2
-      Debug "Folder record $Counter: ${DirToCheckCheck:0:83}"
       DirToCheck="$line"
+      Debug "Folder record $Counter: ${DirToCheck}"
       if [ -d "$DirToCheck" ]; then
         DirToCheckCheck=$(ls "$line" | sed s/"tvshow.nfo"/""/g | grep -m1 ^)
         [[ -z "$DirToCheckCheck" ]] && DirToCheckCheck=$(ls "$line" | sed s/"tvshow.nfo"/""/g | grep -m2 ^)
@@ -2350,6 +2372,7 @@ DoMaintenance(){
           test -f "$line/tvshow.nfo" && rm -f "$line/tvshow.nfo"
           rmdir "$line"
         elif [[ -n "$DirToCheckCheck" ]]; then
+          DebugCont "Continuing to track folder record $Counter, it contains, at least: ${DirToCheckCheck}"
           echo "$DirToCheck" >> "$m2kdir/dir.tracking2"
         fi
       elif [ ! -d "$DirToCheck" ]; then
@@ -2411,6 +2434,7 @@ mythicalScan(){
     WarnCont "contamination of normally unprivileged files."
     WarnCont "Do not run this command with sudo."
     read -p "Possible permission contamination. Continue anyway? yes/(no)" yesorno
+    printf '\n'
     #Default to safety, ie do nothing and return with status 1.
     [[ -z "$yesorno" ]] && yesorno="no"
     if "$yesorno" != "yes" } ; then
@@ -2509,10 +2533,27 @@ mythicalDiagnostics(){
   Inform "myth2kodi will now conduct a series of tests."
   read -n1 -p "press any key to verify installed packages..."
 
-  #TODO: Should check that our own scripts etc are available: exist, executable if necessary
-  #    "$binpath"/librarian-notify-send
-  #    "$binpath"/bashlogging
-  #    "$binpath"/MythDataGrabber
+  #TODO: rename m2k_notify as m2k_notify
+  local -i bashlogging_file
+  local -i MythDataGrabber_file
+  local -i MythDataGrabber_exec
+  local -i m2k_notify_file
+  local -i m2k_notify_exec
+  local -i our_scripts
+  #Test if our own scripts are where they need to be and, if necessary, executable.
+  [[ -f "$binpath"/bashlogging ]] && bashlogging_file=0 || bashlogging_file=1
+  [[ -f "$binpath"/MythDataGrabber ]] && MythDataGrabber_file=0 || MythDataGrabber_file=1
+  [[ -x "$binpath"/MythDataGrabber ]] && MythDataGrabber_exec=0 || MythDataGrabber_exec=1
+  [[ -f "$binpath"/m2k_notify ]] && m2k_notify_file=0 || m2k_notify_file=1
+  [[ -x "$binpath"/m2k_notify ]] && m2k_notify_exec=0 || m2k_notify_exec=1
+  our_scripts=$((bashlogging_file+MythDataGrabber_file+MythDataGrabber_exec+m2k_notify_file+m2k_notify_exec))
+  #Provide initial feedback about our scripts.
+  ((bashlogging_file==0)) && Inform "Found: $binpath/bashlogging" || Err "Can't Find: $binpath/bashlogging"
+  ((MythDataGrabber_file==0)) && Inform "Found: $binpath/MythDataGrabber" || Err "Can't Find: $binpath/MythDataGrabber"
+  ((MythDataGrabber_exec==0)) && Inform "Executable: $binpath/MythDataGrabber" || Err "Not Executable: $binpath/MythDataGrabber"
+  ((m2k_notify_file==0)) && Inform "Found: $binpath/m2k_notify" || Err "Can't Find: $binpath/m2k_notify"
+  ((m2k_notify_exec==0)) && Inform "Executable: $binpath/m2k_notify" || Err "Not Executable: $binpath/m2k_notify"
+  ((our_scripts!=0)) && Err "Checks for our own scripts ***FAILED***"
 
   #Test if required packages are installed and accessible to caller.
   test `which curl`>/dev/null  || checkc="curl"
@@ -2565,10 +2606,10 @@ mythicalDiagnostics(){
   if [ "$mythicalPlatform" != "Darwin" ]; then
     read -n1 -p "Press any key to perform Desktop Message test..."
     printf '\n'
-    Inform "Performing librarian-notify-send test"
+    Inform "Performing m2k_notify test"
     InformCont "This test verifies that the message was sent to the DBUS."
     InformCont "This test does not verify the user has a valid desktop open."
-    sudo -u "$NotifyUserName" "$binpath"/librarian-notify-send "myth2kodi test" "Testing Desktop Communications" "info"
+    sudo -u "$NotifyUserName" "$binpath"/m2k_notify "myth2kodi test" "Testing Desktop Communications" "info"
     if [ "$?" = "0" ] ; then
       notifytest="***PASSED***"
       Inform "Desktop Notifications test $notifytest"
@@ -2760,7 +2801,7 @@ mythicalDiagnostics(){
   if [ "$notifytest" = "***FAILED***" ]; then
     Err "Notify tests failed"
     ErrCont "Notifications to the DBUS have failed. myth2kodi relies upon"
-    ErrCont "librarian-notify-send and package lib-notify to display messages on"
+    ErrCont "m2k_notify and package lib-notify to display messages on"
     ErrCont "GNOME desktop interface. These messages will not be displayed. "
     printf '\n' | tee -a "$DiagnosticsFile"
   fi
@@ -3143,6 +3184,7 @@ test -f "/etc/myth2kodi/globalSettings" && source /etc/myth2kodi/globalSettings
 #Make our working directory if it doesn't already exist
 if [ ! -d "$m2kdir" ]; then
   mkdir "$m2kdir"
+  touch "$LogFile"
   #Keep this as a printf so it's created here regardless of LogType & LogLevel. Or maybe convert to a touch
   printf 'Creating Working Directory: %s\n' "$m2kdir" >> "$LogFile"
   printf 'Creating Log File: %s\n' "$LogFile"         >> "$LogFile"
@@ -3263,10 +3305,9 @@ test "${InputTitle:0:1}" = "-" && mythicalHelp
 #####ENVIRONMENTAL VARIABLES CONTINUED#####
 
 #Initial log entry
-mythicalPlatform="`uname`"
+mythicalPlatform="$(uname)"
 printf '%s\n' "@@@@@@@@ NEW SEARCH INITIATED $Today AT $Time @@@@@@@@" >> "$LogFile"
 printf '%s\n' "$mythicalVersion on $mythicalPlatform" >> "$LogFile"
-printf '%s\n' "$mythicalVersion"
 
 InputFileBasename="$(basename "$InputPath")"
 
@@ -3618,7 +3659,7 @@ fi
 if [ ! -f "$InputPath" ] && [ "$InputPath" != "testfile.ext" ]; then
   InvalidFileErrorMessage
   if [ $Notify = Enabled ]; then
-    sudo -u "$NotifyUserName" "$binpath"/librarian-notify-send "myth2kodi Error" "Invalid File supplied" error
+    sudo -u "$NotifyUserName" "$binpath"/m2k_notify "myth2kodi Error" "Invalid File supplied" error
   fi
   jobtype='InvalidFileNameSupplied'
   RunJob
@@ -3735,7 +3776,7 @@ if [[ -z "$Exx" && "$InputPath" != "testfile.ext" ]]; then
   #If user has determined that they do not want unrecognisable tv shows in their library
   elif [ "$ShowStopper" = "Enabled" ]; then
     tvDbIsIncomplete
-    writeJobToDooverQue
+    writeJobToDooverQue "$1" "$2" "$3"
     jobtype='NameCouldNotBeAssigned'
     RunJob
   elif [ "$m2kProgramIDCheck" = "SH" ]; then
@@ -3780,7 +3821,7 @@ if [ $FailSafeState = "1" ]; then
   #doFailSafeMode activates MoveDir = failsafe dir and link mode is used
   doFailSafeMode
   #--doover will reprocess the show
-  writeJobToDooverQue
+  writeJobToDooverQue "$1" "$2" "$3"
   jobtype='FailSafeModeComplete'
   RunJob
 fi
@@ -3793,6 +3834,9 @@ if [ -f "$MoveDir/$ShowFileName.$OriginalExt" ]; then
   Err "FILE NAME ALREADY EXISTS:"
   ErrCont "$MoveDir/$ShowFileName.$OriginalExt"
   ErrCont "CALLED AS: myth2kodi '$1' '$2' '$3' '$4'"
+  ErrCont "InputTitle: $InputTitle"
+  ErrCont "InputSubtitle: $InputSubtitle"
+  ErrCont "Plot: $Plot"
   ErrCont "WE'VE EITHER ALREADY PROCESSED THIS RECORDING OR OUR FILE NAME GENERATION IS TOO GENERIC."
   ErrCont "EITHER WAY, ABORTING."
   jobtype='FileAlreadyExists'
@@ -3830,7 +3874,7 @@ test  "$m2kProgramIDCheck" = "SH" && DisplayShowWarning
 if [ "$SYMLINK" != "LINK" ]; then
   #Send notifications, Move the file and rename
   Inform "MOVING FILE: '$InputPath' to '$MoveDir/$ShowFileName.$OriginalExt'"
-  test "$Notify" = "Enabled" && sudo -u "$NotifyUserName" "$binpath"/librarian-notify-send "myth2kodi Moving" "Moving and renaming $ShowFileName" drive-harddisk
+  test "$Notify" = "Enabled" && sudo -u "$NotifyUserName" "$binpath"/m2k_notify "myth2kodi Moving" "Moving and renaming $ShowFileName" drive-harddisk
   mv "$InputPath" "$MoveDir/$ShowFileName.$OriginalExt"
 
   #Check and report if file was moved
@@ -3862,7 +3906,7 @@ if [ "$SYMLINK" != "LINK" ]; then
       fi
 
       #Send notification of completion
-      test $Notify = "Enabled" && sudo -u "$NotifyUserName" "$binpath"/librarian-notify-send "myth2kodi Success" "$ShowFileName moved to $MoveDir" info
+      test $Notify = "Enabled" && sudo -u "$NotifyUserName" "$binpath"/m2k_notify "myth2kodi Success" "$ShowFileName moved to $MoveDir" info
 
       #Additional features, notifications, rss, daily report.
       test  "$RequiresNFO" = "1" && GenerateTVShowNFO
@@ -3878,14 +3922,14 @@ if [ "$SYMLINK" != "LINK" ]; then
     #if file was not moved, then fail
     elif [ ! -s "$MoveDir/$ShowFileName.$OriginalExt" ]; then
       rm -f "$MoveDir/$ShowFileName.$OriginalExt"
-      writeJobToDooverQue
+      writeJobToDooverQue "$1" "$2" "$3"
       Wrote0LengthFile
       jobtype='PermissionError0Length'
       RunJob
 
     fi
   elif [ ! -f "$MoveDir/$ShowFileName.$OriginalExt" ]; then
-    writeJobToDooverQue
+    writeJobToDooverQue "$1" "$2" "$3"
     PermissionErrorWhileMoving
     jobtype='PermissionErrorWhileMoving'
     RunJob
@@ -3903,7 +3947,7 @@ elif [ "$SYMLINK" = "LINK" ]; then
     Inform "Symlink created $MoveDir/$ShowFileName.$OriginalExt"
     echo "@@@@@@@@ OPERATION COMPLETE" `date` "@@@@@@@@">>"$LogFile"
     if [ "$Notify" = "Enabled" ]; then
-      sudo -u "$NotifyUserName" "$binpath"/librarian-notify-send "myth2kodi Success" "$ShowFileName linked to $MoveDir" info
+      sudo -u "$NotifyUserName" "$binpath"/m2k_notify "myth2kodi Success" "$ShowFileName linked to $MoveDir" info
     fi
 
     #Move comskip data to proper folder
@@ -3925,9 +3969,9 @@ elif [ "$SYMLINK" = "LINK" ]; then
 
     #If link failure, send notification and fail
   elif [ ! -L "$MoveDir/$ShowFileName.$OriginalExt" ]; then
-    echo "myth2kodi '$1' '$2' '$3'" >> "$m2kdir"/doover.sh
+    #echo "myth2kodi '$1' '$2' '$3'" >> "$m2kdir"/doover.sh
     SymlinkNotCreated
-    writeJobToDooverQue
+    writeJobToDooverQue "$1" "$2" "$3"
 
   fi
   jobtype='LinkModeFailed'
@@ -3941,9 +3985,9 @@ fi
 
 #send notification if enabled
 if [ "$Notify" = "Enabled" ] ; then
-  sudo -u "$NotifyUserName" "$binpath"/librarian-notify-send "myth2kodi error" "myth2kodi operation failed See $LogFile for more information" error
+  sudo -u "$NotifyUserName" "$binpath"/m2k_notify "myth2kodi error" "myth2kodi operation failed See $LogFile for more information" error
 if
-writeJobToDooverQue
+writeJobToDooverQue "$1" "$2" "$3"
 jobtype='GenericUnspecifiedError'
 RunJob
 

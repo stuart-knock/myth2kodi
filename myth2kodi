@@ -281,18 +281,18 @@ CommercialMarkupCleanup="Enabled"
 #DailyReport provides a local log of shows added to your library per day. Enabled|Disabled
 DailyReport="Enabled"
 #Notify tells myth2kodi to send a notification to GNOME Desktop upon completion. Enabled|Disabled
-Notify="Enabled"
+Notify="Disabled"
 #If notifications are enabled, NotifyUserName should be the same as the user logged into the GNOME Session. (your username)
 NotifyUserName="librarian" #<------THIS VALUE MUST BE SET-------
 #Send a notification to KODI to Update library upon Successful move job Enabled|Disabled
-KODIUpdate="Enabled"
+KODIUpdate="Disabled"
 #Send a notification to KODI to cleanup the library upon Successful move job Enabled|Disabled
 #TODO:#NOTE:Don't fully trust the automated call of clean, and currently it doesn't even
 #  seem to be invoked at the times that would make sense, so for now I'm disabling it. See
 #  the TODO in KODIAutomate().
 KODIClean="Disabled"
 #Send Notifications to KODI UI when library is updated Enabled|Disabled
-KODINotify="Enabled"
+KODINotify="Disabled"
 #Ip Address and port for KODI Notifications Eg.KODIIPs=( "192.168.1.110:8080" "192.168.1.111:8080" "XBOX:8080" )
 #NOTE: If you've set username and password for remote access to kodi then you'll need to prepend user:password@ to the ip addresses
 KODIIPs=( "192.168.1.42:8080" ) #<------THIS VALUE MUST BE SET-------
@@ -311,7 +311,7 @@ declare -i RSSmaxItems=8
 #Recommend 2 to start with or if you want to keep track of what myth2kodi is doing.
 #Recommend 1 for usual operation, once you're confident that everything is working fine.
 #Only use 3 if you have a particular problem that you're trying to track down, it significantly increases the output.
-LogLevel=3
+LogLevel=2
 #LogFile is the name of the log file, this will be placed in myth2kodi's working directory, $m2kdir set above.
 #DEFAULT: 'output.log' #NOTE: LogFile is overridden in special contexts, such as running Diagnostics.
 LogFile='output.log'
@@ -320,7 +320,7 @@ LogFile='output.log'
 LogType='both'
 ########################## END USER SETTINGS ###################################
 
-mythicalVersion="myth2kodi Version 0.6.4; mythicalLibrarian 953ish+"
+mythicalVersion="myth2kodi Version 0.8.4; mythicalLibrarian 953ish+"
 
 #The full path version of the file to which logging output will be sent:
 LogFile="$m2kdir/output.log"
@@ -1420,8 +1420,7 @@ determineIfDatabaseIsUpToDate(){
   #if episode information is out of date or not created
   if ((CurrentTimeTVDB > NextUpdate)); then
     curl -L -s -m"$Timeout" "http://www.thetvdb.com/api/Updates.php?type=all&time=$LastUpdatedTVDB" >> "$m2kdir/$NewShowName/UpdatesList.txt"
-    grep "$SeriesID" "$m2kdir/$NewShowName/UpdatesList.txt"
-    if [[ $? != 0 ]]; then
+    if grep -q "$SeriesID" "$m2kdir/$NewShowName/UpdatesList.txt" ; then
       Inform "DATABASE IS OUT OF DATE. NEXT UPDATE $NextUpdate Current $CurrentTimeTVDB"
       return 1
     else
@@ -1464,11 +1463,11 @@ downloadInfoAboutMatchedTitleAndCreateTxtFileTables(){
       test -f "$m2kdir/$NewShowName/$NewShowName.xml" && mv "$m2kdir/$NewShowName/$NewShowName.xml" "$m2kdir/$NewShowName/${Today}_$NewShowName.xml"
       mv "$m2kdir/$NewShowName/$NewShowName.xmlTest" "$m2kdir/$NewShowName/$NewShowName.xml"
       test -f "$m2kdir/$NewShowName/$NewShowName.actualEname.txt" && rm -f "$m2kdir/$NewShowName/$NewShowName.actualEname.txt"
-      test -f "$m2kdir/$NewShowName/$NewShowName.Ename.txt" && rm -f "$m2kdir/$NewShowName/$NewShowName.Ename.txt"
-      test -f "$m2kdir/$NewShowName/$NewShowName.FAired.txt" && rm -f "$m2kdir/$NewShowName/$NewShowName.FAired.txt"
-      test -f "$m2kdir/$NewShowName/$NewShowName.S.txt" && rm -f "$m2kdir/$NewShowName/$NewShowName.S.txt"
-      test -f "$m2kdir/$NewShowName/$NewShowName.E.txt" && rm -f "$m2kdir/$NewShowName/$NewShowName.E.txt"
-      test -f "$m2kdir/$NewShowName/$NewShowName.Plot.txt" && rm -f "$m2kdir/$NewShowName/$NewShowName.Plot.txt"
+      test -f "$m2kdir/$NewShowName/$NewShowName.Ename.txt"       && rm -f "$m2kdir/$NewShowName/$NewShowName.Ename.txt"
+      test -f "$m2kdir/$NewShowName/$NewShowName.FAired.txt"      && rm -f "$m2kdir/$NewShowName/$NewShowName.FAired.txt"
+      test -f "$m2kdir/$NewShowName/$NewShowName.S.txt"           && rm -f "$m2kdir/$NewShowName/$NewShowName.S.txt"
+      test -f "$m2kdir/$NewShowName/$NewShowName.E.txt"           && rm -f "$m2kdir/$NewShowName/$NewShowName.E.txt"
+      test -f "$m2kdir/$NewShowName/$NewShowName.Plot.txt"        && rm -f "$m2kdir/$NewShowName/$NewShowName.Plot.txt"
 
       #create a folder/file "database" Strip XML tags.  Series, Exx and Sxx are separated into different files
       local Ename=""
@@ -1533,11 +1532,11 @@ downloadInfoAboutMatchedTitleAndCreateTxtFileTables(){
           line="${line//&quot;/}"
           line="${line//&amp;/&}"
           line="${line//&ndash;/-}"
-          #TODO: Instead of trying to remove all the garbage here, maybe it'd be better to pass what we do want, ie alpha-numeric with only basic punctuation.
+          #Only keep Alpha-numeric characters and the four basic punctuation chars & , . -
           line="$(sed -r s'/[^[:alnum:]|^&,.-]/ /'g <<< "$line")"
           line="$(sed -r s'/\s{2,}/ /'g <<< "$line")"
-          #line="$(tr -d '’@%^`~!#$|\?*<":>+[]/'"'" <<< "$line")"
-          #line="$(tr -d 'œ”¦' <<< "$line")" #TheTVDB occasionally has complete garbage characters like these
+          #Remove any trailing space
+          line="${line%%*([[:space:]])}"
           EpisodeOverview="$line"
         fi
       done < "$m2kdir/$NewShowName/$NewShowName.xml"
@@ -1727,7 +1726,7 @@ getAbsoluteEpisodeNumberWithSxxExx(){
   local Enum=${Exx#E} ; Enum=${Enum#0}
   local SxxAENs=$(grep -nix "$Snum" "$m2kdir/$NewShowName/$NewShowName.S.txt" | sed s/:.*//)
   local ExxAENs=$(grep -nix "$Enum" "$m2kdir/$NewShowName/$NewShowName.E.txt" | sed s/:.*//)
-  AbsoluteEpisodeNumber=$(comm -12 <(echo $SxxAENs | sed s/" "/"\n"/g | sort) <(echo $ExxAENs | sed s/" "/"\n"/g | sort))
+  AbsoluteEpisodeNumber=$(comm -12 <(sed s/" "/"\n"/g <<< $SxxAENs | sort) <(sed s/" "/"\n"/g <<< $ExxAENs | sort))
   if [[ -n "$AbsoluteEpisodeNumber" ]] && ((AbsoluteEpisodeNumber > 0)); then
     Inform "Using SxxExx, determined AbsoluteEpisodeNumber: $AbsoluteEpisodeNumber"
     return 0
@@ -1742,19 +1741,21 @@ getAbsoluteEpisodeNumberWithFuzzyPlotMatch(){
   DebugCont "NewShowName: $NewShowName"
   DebugCont "Plot: $Plot"
   AbsoluteEpisodeNumber=""
+  #set IFS to use line break as a delineator -- necessary for separating multiple agrep matches below.
+  local IFS=$'\n'
   #Length of the plot we're trying to match
   local -i PlotLength=$(wc --chars <<< "$Plot")
   DebugCont "PlotLength: $PlotLength"
   #If Plot length is short this really won't work well, so give up #TODO: figure out what length is genuinely too short...
   ((PlotLength<42)) && Warn "${FUNCNAME}() - Plot is too short to attempt fuzzy guess." && return 1
   #Fuzzy guess at plot, prepended with: "AbsoluteEpisodeNumber:cost:"
-  local FuzzyPlot="$(agrep -ikByns "$Plot" "$m2kdir/$NewShowName/$NewShowName.Plot.txt")"
+  local FuzzyPlot=($(agrep -ikByns "$Plot" "$m2kdir/$NewShowName/$NewShowName.Plot.txt"))
   #TODO: Need to check for and deal with multiple results...
-  [[ -z "$FuzzyPlot" ]] && Warn "${FUNCNAME}() - No fuzzy match on Plot" && return 1
+  [[ -z "${FuzzyPlot[0]}" ]] && Warn "${FUNCNAME}() - No fuzzy match on Plot" && return 1
   #Extract our guessed AbsoluteEpisodeNumber
-  local -i AENguess=$(cut -f1 -d":" <<< "$FuzzyPlot")
+  local -i AENguess=$(cut -f1 -d":" <<< "${FuzzyPlot[0]}")
   DebugCont "AbsoluteEpisodeNumber guess: $AENguess"
-  local -i cost=$(cut -f2 -d":" <<< "$FuzzyPlot")
+  local -i cost=$(cut -f2 -d":" <<< "${FuzzyPlot[0]}")
   DebugCont "Cost: $cost"
   local MatchedPlot="$(sed -n $AENguess'p' "$m2kdir"/"$NewShowName"/"$NewShowName".Plot.txt)"
   DebugCont "MatchedPlot: $MatchedPlot"
@@ -1768,12 +1769,63 @@ getAbsoluteEpisodeNumberWithFuzzyPlotMatch(){
   #TODO: Should check that MatchedPlot is longer than PlotLength, which is essentially what we're assuming below.
   #If the cost is greater than a 1/3 of characters in the plot we're trying to match #TODO: figure out the critical ratio here.
   if (( cost > (PlotLength / 3) )) ; then
-    Warn "${FUNCNAME}() - Guess of AbsoluteEpisodeNumber from Plot is too fuzzy."
+    Warn "${FUNCNAME}() - AbsoluteEpisodeNumber guess from full Plot too fuzzy, trying chunked match."
+    #Some Plots miss on match simply because the text is reordered or the middle is chopped out,
+    #something as simple as chopping up the Plot into 8 word blocks, overlapping by 2-4, and testing
+    #the agrep cost for each chunk, if at least a couple of the chunks match with a cost < say 10%
+    #then we could be fairly confident that it's actually a matching Plot.
+    local -i PlotWords=$(wc --words <<< "$Plot")
+    local chunk=""
+    local -i chunck_size=8
+    local -i chunk_overlap=4
+    local -i numchunks=$((PlotWords/(chunck_size-chunk_overlap)))
+    local -i len10per=0
+    local -a FuzzyChunks=()
+    local -a ChunkGuesses=()
+    local -a ChunkCosts=()
+    local -a ChunkLengths=()
+    local -a GoodChunkGuesses=()
+    Debug "Attempting chunked fuzzy match."
+    DebugCont "PlotWords=$PlotWords"
+    DebugCont "chunck_size=$chunck_size"
+    DebugCont "chunk_overlap=$chunk_overlap"
+    DebugCont "numchunks=$numchunks"
+    local -i Counter=0
+    for (( i = 0; i < $numchunks; i++ )) ; do
+      DebugCont "i=$i"
+      n=$(((i)*(chunck_size-chunk_overlap)+1))
+      DebugCont "n=$n"
+      m=$((n+chunck_size-1))
+      DebugCont "m=$m"
+      chunk="$(cut -d" " -f$n-$m <<< "$Plot")"
+      DebugCont "chunk=$chunk"
+      ChunkLengths[i]=$(wc --chars <<< "$chunk")
+      DebugCont "ChunkLengths[$i]=${ChunkLengths[i]}"
+      len10per=$((${ChunkLengths[i]}/10))
+      fuzzychunk=($(agrep -ikByns "$chunk" "$m2kdir/$NewShowName/$NewShowName.Plot.txt"))
+      FuzzyChunks[i]="${fuzzychunk[0]}"
+      DebugCont "FuzzyChunks[$i]=${FuzzyChunks[i]}"
+      ChunkGuesses[i]=$(cut -f1 -d":" <<< "${FuzzyChunks[i]}")
+      DebugCont "ChunkGuesses[$i]=${ChunkGuesses[i]}"
+      ChunkCosts[i]=$(cut -f2 -d":" <<< "${FuzzyChunks[i]}")
+      DebugCont "ChunkCosts[$i]=${ChunkCosts[i]}"
+      cost="${ChunkCosts[i]}"
+      ((cost < len10per)) && GoodChunkGuesses[Counter]=${ChunkGuesses[i]} && ((++Counter))
+    done
+    #If all ChunkGuess with ChunkCost < 10% are the same Absolute Episode Number
+    AENguess=($(printf '%s\n' "${GoodChunkGuesses[@]}" | sort -u))
+    if (( ${#AENguess[@]} == 1 )) ; then
+      AbsoluteEpisodeNumber="${AENguess[0]}"
+      Inform "${FUNCNAME}() - Identified AbsoluteEpisodeNumber: $AbsoluteEpisodeNumber using chunked Plot."
+      return 0
+    fi
+
+    Warn "${FUNCNAME}() - Chunked Plot match is still too fuzzy, failed to guess AbsoluteEpisodeNumber."
     return 1
   fi
   #Guess at fuzzy Plot match is probably ok, we'll use it
   AbsoluteEpisodeNumber="$AENguess"
-  Inform "${FUNCNAME}() - Identified AbsoluteEpisodeNumber: $AbsoluteEpisodeNumber"
+  Inform "${FUNCNAME}() - Identified AbsoluteEpisodeNumber: $AbsoluteEpisodeNumber using full Plot."
   return 0
 }
 
@@ -2426,6 +2478,7 @@ mythicalScan(){
       Debug "Attempting to envoke myth2kodi on $line"
       if [ "$InputOption" = "--BypassPermissionsCheck" ]; then
         Warn "${FUNCNAME}() Running myth2kodi with --BypassPermissionsCheck option."
+        #TODO: [[ ! -L "$line" && ! -S "$line" && ! -d "$line" ]]
         test ! -L "$line" && test ! -S "$line" && test ! -d "$line" && myth2kodi "$line" "--BypassPermissionsCheck"
       else
         test ! -L "$line" && test ! -S "$line" && test ! -d "$line" && myth2kodi "$line"
@@ -2471,6 +2524,7 @@ mythicalDiagnostics(){
   Inform "Diagnostic mode entered: $(date)"
   Inform "myth2kodi will now conduct a series of tests."
   read -n1 -p "press any key to verify installed packages..."
+  printf '\n'
 
   #TODO: rename m2k_notify as m2k_notify
   local -i bashlogging_file
@@ -2812,7 +2866,7 @@ executeDoOver(){
   WarnCont "In this mode of operation, myth2kodi will rerun myth2kodi against all"
   WarnCont "files which failed on the last run of myth2kodi."
   WarnCont "It is important that this process isn't interrupted or data loss may occur."
-  test "$DoOverBypass" != "1" && read -n1 -p "  Press 'y' to continue or 'n' to exit..... y/(n):>" yesorno
+  test "$DoOverBypass" != "1" && read -n1 -p "  Press 'y' to continue or 'n' to exit..... y/(n):>" yesorno && printf '\n'
   test "$DoOverBypass" = "1" && yesorno="y"
 
   if [ "$yesorno" = "y" ] && [ -f "$m2kdir/doover.sh" ]; then
@@ -3642,6 +3696,8 @@ WorkingDirWritable=$TMoveDirWritable
 Inform "CONFIDENCE:$ConfidenceRating LOGIC PATH: $ConfidenceReasoning"
 
 #####DEBUG MODE OUTPUT BLOCK#####
+loglevelbeforethispointincode="$LogLevel"
+LogLevel=3
 Debug "################ DEBUG SUMMARY ################"
 DebugCont "JOB: myth2kodi '$1' '$2' '$3' '$4'"
 DebugCont "mythicalVersion=$mythicalVersion-"
@@ -3698,8 +3754,10 @@ if [ "$Database" = "Enabled" ]; then
   DebugCont "InputSeasonNum=$InputSeasonNum-"
   DebugCont "InputEpisodeNum=$InputEpisodeNum-"
   DebugCont "Plot=$Plot-"
+  [[ -n "$AbsoluteEpisodeNumber" ]] && DebugCont "Matched Plot=$(sed -n $AbsoluteEpisodeNumber'p' "$m2kdir/$NewShowName/$NewShowName.Plot.txt")-"
 fi
 Debug "################ END OF DEBUG SUMMARY ################"
+LogLevel="$loglevelbeforethispointincode"
 
 ######PRE-NAMING CHECKS#####
 #if no episode data and it's not a movie or a test

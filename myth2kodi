@@ -320,10 +320,11 @@ LogFile='output.log'
 LogType='both'
 ########################## END USER SETTINGS ###################################
 
-mythicalVersion="myth2kodi Version 0.8.4; mythicalLibrarian 953ish+"
+mythicalVersion="myth2kodi Version 0.8.5; mythicalLibrarian 953ish+"
 
 #The full path version of the file to which logging output will be sent:
 LogFile="$m2kdir/output.log"
+#When running diagnostics mode, output will instead be sent to this file:
 declare -r DiagnosticsFile="$m2kdir/diagnostics.log"
 
 if [ -f "$binpath"/bashlogging ] ; then
@@ -555,7 +556,10 @@ CategoricNamingConventions(){
 
   #Method2 -
   if [ "$testedmethod1" != "1" ]; then
-    [[ "${ShowStartTime:0:4}" != 0000 && -n "${ShowStartTime:0:4}" ]] && EventYear="${ShowStartTime:0:4}" && EventMonthDay="$(echo "${ShowStartTime:5:5}" | tr -d "-" | sed 's/0*//')"
+    if [[ "${ShowStartTime:0:4}" != 0000 && -n "${ShowStartTime:0:4}" ]] ; then
+      EventYear="${ShowStartTime:0:4}"
+      EventMonthDay="$(echo "${ShowStartTime:5:5}" | tr -d "-" | sed 's/0*//')"
+    fi
     Exx="$EventMonthDay"
     Sxx="$EventYear"
     #Check validity of Method2
@@ -926,8 +930,8 @@ GetMythTVDatabase(){
   #  where "/", the thing being selected (eg "title") and occasionally spaces were stripped. At least for 
   #  mythtv 0.27.5 and "mysql  Ver 15.1 Distrib 10.0.22-MariaDB, for Linux (x86_64) using readline 5.2",
   #  these seem to be redundant. In case there was an old DB schema or older mysql version that required
-  #  this additional processing, if this doesn't work for you try adding back in the additional sed commands,
-  #  something like: 
+  #  this additional processing, if the below isn't working for you try adding back in the additional
+  #  sed commands, something like: 
   #    | sed s/"\/"/""/g | sed -n "2p" | sed s/"chanid"/""/g | sed s/" "/""/g
   #  to replace the 
   #    | sed -n "2p"
@@ -1197,6 +1201,17 @@ RemoveSubtitleFromPlot(){
   fi
 }
 
+#Some Australian channels (ABC, I'm looking at you), put cast info at the end of the Plot. 
+RemoveCastFromPlot(){
+  Debug "ENTERING: ${FUNCNAME}()"
+  #
+  local CastString="$(grep -iE --only-matching '\. CAST: ((\w+)(.?\s*)){1,8}$' <<< "$Plot")"
+  if [[ -n "$CastString" ]]; then
+    Warn "${FUNCNAME}() Plot field appears to contain Cast information, removing it to simplify subsequent processing."
+    Plot="$(sed s/"$CastString"/"."/ <<< "$Plot")"
+  fi
+}
+
 #A Process function compatible with Sydney over the air data...
 ProcessSydFTA(){
   Debug "ENTERING: ${FUNCNAME}()"
@@ -1263,6 +1278,8 @@ ProcessSydFTA(){
   Plot="$(sed s/"\s#\w\{2,16\}"/""/g <<< "$Plot")"
   #And @mentions, at least SBS2 does this '@SBS2'
   Plot="$(sed s/"\s@\w\{2,16\}"/""/g <<< "$Plot")"
+  #Some channels, particularly ABC, put cast info in the end of the plot field which can mess up fuzzy Plot matching
+  RemoveCastFromPlot
 
   #Finally strip any troublesome characters that still remain in Plot, this matches what we do with TheTVDB.
   Plot="$(tr -d '@%^`~!#$|\?*<":>+[]/'"'" <<< "$Plot")"

@@ -320,12 +320,14 @@ LogFile='output.log'
 LogType='both'
 ########################## END USER SETTINGS ###################################
 
-mythicalVersion="myth2kodi Version 0.8.5; mythicalLibrarian 953ish+"
+mythicalVersion="myth2kodi Version 0.8.6; mythicalLibrarian 953ish+"
 
 #The full path version of the file to which logging output will be sent:
 LogFile="$m2kdir/output.log"
 #When running diagnostics mode, output will instead be sent to this file:
 declare -r DiagnosticsFile="$m2kdir/diagnostics.log"
+#A file containing a list of possible duplicate recordings:
+declare -r DuplicatesFile="$m2kdir/duplicates.log"
 
 if [ -f "$binpath"/bashlogging ] ; then
   source "$binpath"/bashlogging "$LogType"
@@ -3854,6 +3856,9 @@ if [ -f "$MoveDir/$ShowFileName.$OriginalExt" ]; then
   ErrCont "WE'VE EITHER ALREADY PROCESSED THIS RECORDING OR OUR FILE NAME GENERATION IS TOO GENERIC."
   ErrCont "EITHER WAY, ABORTING."
   jobtype='FileAlreadyExists'
+  #Write an entry in the duplicates file, for easy check/removal of duplicates.
+  printf '%s\n' "$InputPath" >> "$DuplicatesFile"
+  printf '#Identified as: %s\n' "$ShowFileName" >> "$DuplicatesFile"
   RunJob
   #TODO: When refactoring main, consider allowing forced move with auto name incrementing when move-to file already exists.
   #If file exists then make a new name for it

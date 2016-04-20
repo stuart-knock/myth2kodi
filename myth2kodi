@@ -320,7 +320,7 @@ LogFile='output.log'
 LogType='both'
 ########################## END USER SETTINGS ###################################
 
-mythicalVersion="myth2kodi Version 0.8.6; mythicalLibrarian 953ish+"
+m2kVersion="myth2kodi Version 0.8.7; mythicalLibrarian 953ish+"
 
 #The full path version of the file to which logging output will be sent:
 LogFile="$m2kdir/output.log"
@@ -328,6 +328,8 @@ LogFile="$m2kdir/output.log"
 declare -r DiagnosticsFile="$m2kdir/diagnostics.log"
 #A file containing a list of possible duplicate recordings:
 declare -r DuplicatesFile="$m2kdir/duplicates.log"
+#A file containing a list of possible duplicate recordings:
+declare -r UnrecognizedSeriesFile="$m2kdir/unrecognizedseries.log"
 
 if [ -f "$binpath"/bashlogging ] ; then
   source "$binpath"/bashlogging "$LogType"
@@ -2200,10 +2202,6 @@ MakeShowDir(){
 #If TargetPathIsInputPath is set, then this changes MoveDir to original dir.
 setTargetFolderAsInputPathFolder(){
   Debug "ENTERING: ${FUNCNAME}()"
-  #Set originaldir name if none was supplied
-  test "$originaldirname" = "./" && originaldirname="$(pwd)"
-  test "$originaldirname" = "." && originaldirname="$(pwd)"
-  test "$originaldirname" = "" && originaldirname="$(pwd)"
   #For directory names: No trailing / is accepted eg. "~/videos" not "~/videos/"
   #MoveDir is the folder which myth2kodi will move the file.
   MoveDir="$originaldirname/Episodes"
@@ -2603,7 +2601,7 @@ mythicalDiagnostics(){
     Err "Installed packages check ***FAILED***"
     ErrCont "Missing packages are: $checkc $checkd $checke $checkf $checka $checkb"
     ErrCont "If packages are already installed, check your path settings."
-    if [ "$mythicalPlatform" != "Darwin" ] ; then
+    if [ "$m2kPlatform" != "Darwin" ] ; then
       ErrCont "Please run 'apt-get install $checkc $checkd $checke $checkf $checka $checkb' or equivalent."
     else
       ErrCont "Please obtain MacPorts and install $checkb $checkc $checkd $checke"
@@ -2615,7 +2613,7 @@ mythicalDiagnostics(){
   fi
 
   #If we're not on Mac OS X, check that user notification is working.
-  if [ "$mythicalPlatform" != "Darwin" ]; then
+  if [ "$m2kPlatform" != "Darwin" ]; then
     read -n1 -p "Press any key to perform Desktop Message test..."
     printf '\n'
     Inform "Performing m2k_notify test"
@@ -2703,6 +2701,11 @@ mythicalDiagnostics(){
 
   if [ "$TargetPathIsInputPath" = "Enabled" ]; then
     Inform "TargetPathIsInputPath is selected. Testing with current folder"
+    #Set originaldir name if none was supplied
+    #[["$originaldirname" = "./" || "$originaldirname" = "." || "$originaldirname" = "" ]] && originaldirname="$(pwd)"
+    test "$originaldirname" = "./" && originaldirname="$(pwd)"
+    test "$originaldirname" = "." && originaldirname="$(pwd)"
+    test "$originaldirname" = "" && originaldirname="$(pwd)"
     setTargetFolderAsInputPathFolder
   fi
 
@@ -3243,6 +3246,7 @@ MythTVUserJobString="%DIR%/%FILE%"
 case "$InputPath" in
 
   --scan|-s)
+    #TODO: Add ability to scan only specific files, eg those for a specific ShowName
     mythicalScan
     exit $?
   ;;
@@ -3277,6 +3281,7 @@ case "$InputPath" in
     exit $?
   ;;
   --undo)
+    #TODO: Enable undo for a specific file, eg: myth2kodi --undo '/path/to/recordings/1070_20160331073100.mpg'
     executeUndo
     exit 0
   ;;
@@ -3308,7 +3313,7 @@ case "$InputPath" in
     exit 0
   ;;
   --version|-v|-ver|-V)
-    echo $mythicalVersion
+    echo $m2kVersion
     exit 0
   ;;
 esac
@@ -3317,9 +3322,9 @@ test "${InputTitle:0:1}" = "-" && mythicalHelp
 #####ENVIRONMENTAL VARIABLES CONTINUED#####
 
 #Initial log entry
-mythicalPlatform="$(uname)"
+m2kPlatform="$(uname)"
 printf '%s\n' "@@@@@@@@ NEW SEARCH INITIATED $Today AT $Time @@@@@@@@" >> "$LogFile"
-printf '%s\n' "$mythicalVersion on $mythicalPlatform" >> "$LogFile"
+printf '%s\n' "$m2kVersion on $m2kPlatform" >> "$LogFile"
 
 InputFileBasename="$(basename "$InputPath")"
 
@@ -3373,6 +3378,11 @@ EpisodeSubtitle="$(echo $InputSubtitle | sed 's/;.*//' | tr -d '’@%^`~!#$|\?*<
 ExtensionPrep="$(basename "$InputPath")"
 OriginalExt="${ExtensionPrep#*.}"
 originaldirname="$(dirname "$InputPath")"
+#Set originaldir name if none was supplied
+#[["$originaldirname" = "./" || "$originaldirname" = "." || "$originaldirname" = "" ]] && originaldirname="$(pwd)"
+test "$originaldirname" = "./" && originaldirname="$(pwd)"
+test "$originaldirname" = "." && originaldirname="$(pwd)"
+test "$originaldirname" = "" && originaldirname="$(pwd)"
 FileBaseName="${InputPath##*/}"
 FileName="$InputPath"
 
@@ -3467,6 +3477,7 @@ if [[ -n "$SeriesID" ]]; then
 elif [ -z "$SeriesID" ] && [ "$m2kProgramIDCheck" != "SH" ] && [ "$m2kProgramIDCheck" != "MV" ]; then
   ConfidenceReasoning="$ConfidenceReasoning Failed; "
   Warn "SERIES ID WAS NOT FOUND. TheTVDB MAY BE DOWN. IF NOT TRY USING A showTranslations FILE."
+  printf '%s\n' "$InputTitle" >> "$UnrecognizedSeriesFile"
   if [ "$Database" = "Enabled" ]; then
     WarnCont "RECSTART:$ShowStartTime-"
     WarnCont "Movie Air Date:$MovieAirDate-"
@@ -3719,7 +3730,7 @@ loglevelbeforethispointincode="$LogLevel"
 LogLevel=3
 Debug "################ DEBUG SUMMARY ################"
 DebugCont "JOB: myth2kodi '$1' '$2' '$3' '$4'"
-DebugCont "mythicalVersion=$mythicalVersion-"
+DebugCont "m2kVersion=$m2kVersion-"
 DebugCont "MyUserName=$MyUserName-"
 DebugCont "InputPath=$InputPath-"
 DebugCont "InputTitle=$InputTitle-"
@@ -3858,7 +3869,8 @@ if [ -f "$MoveDir/$ShowFileName.$OriginalExt" ]; then
   jobtype='FileAlreadyExists'
   #Write an entry in the duplicates file, for easy check/removal of duplicates.
   printf '%s\n' "$InputPath" >> "$DuplicatesFile"
-  printf '#Identified as: %s\n' "$ShowFileName" >> "$DuplicatesFile"
+  #find -L "$originaldirname/" -samefile  "$MoveDir/$ShowFileName.$OriginalExt"
+  printf '#Identified as: %s  RecStart:%s\n' "$ShowFileName" "$ShowStartTime" >> "$DuplicatesFile"
   RunJob
   #TODO: When refactoring main, consider allowing forced move with auto name incrementing when move-to file already exists.
   #If file exists then make a new name for it

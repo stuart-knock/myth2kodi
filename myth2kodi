@@ -34,7 +34,7 @@
 #  if they were rewritten as "if ; then else" blocks.
 
 #TODO: Clean up the name space by using "local" for variable declarations
-#  within functions.
+#  that are only used within functions.
 
 #TODO: Go through and check for variables that aren't initialised before
 #  first use -- prefer initialising everything as it avoids cruft from
@@ -285,14 +285,14 @@ Notify="Disabled"
 #If notifications are enabled, NotifyUserName should be the same as the user logged into the GNOME Session. (your username)
 NotifyUserName="librarian" #<------THIS VALUE MUST BE SET-------
 #Send a notification to KODI to Update library upon Successful move job Enabled|Disabled
-KODIUpdate="Disabled"
+KODIUpdate="Enabled"
 #Send a notification to KODI to cleanup the library upon Successful move job Enabled|Disabled
 #TODO:#NOTE:Don't fully trust the automated call of clean, and currently it doesn't even
 #  seem to be invoked at the times that would make sense, so for now I'm disabling it. See
 #  the TODO in KODIAutomate().
 KODIClean="Disabled"
 #Send Notifications to KODI UI when library is updated Enabled|Disabled
-KODINotify="Disabled"
+KODINotify="Enabled"
 #Ip Address and port for KODI Notifications Eg.KODIIPs=( "192.168.1.110:8080" "192.168.1.111:8080" "XBOX:8080" )
 #NOTE: If you've set username and password for remote access to kodi then you'll need to prepend user:password@ to the ip addresses
 KODIIPs=( "192.168.1.42:8080" ) #<------THIS VALUE MUST BE SET-------
@@ -672,21 +672,24 @@ KODIAutomate(){
   #Send notification to KODI, Update Library, Clean Library
   if [[ "$KODINotify" = "Enabled" || "$KODIUpdate" = "Enabled" || "$KODIClean" = "Enabled" ]]; then
     Inform 'COMMUNICATING WITH KODI INSTANCES...'
-    local curlPOST='curl -L -s -m3 --connect-timeout 5 -X POST -H "Content-Type: application/json" -d'
+    #local curlPOST='curl -L -s -m3 --connect-timeout 5 -X POST -H "Content-Type: application/json" -d'
+    #SEE: http://kodi.wiki/view/HOW-TO:Remotely_update_library and 'man curl'
+    #TODO: May need to reintroduce --silent to curlPOST
+    local curlPOST='curl --max-time 8 --connect-timeout 5 -H "Content-Type: application/json" --data-binary'
     for KODIIP in ${KODIIPs[@]} ; do
       Inform "SENDING REQUESTED COMMANDS TO: $KODIIP"
       #Request Kodi update its library
       if [ "$KODIUpdate" = "Enabled" ] ; then
-        data=\''{"jsonrpc":"2.0", "method":"VideoLibrary.Scan", "id":1}'\'
+        data=\''{"jsonrpc": "2.0", "method": "VideoLibrary.Scan", "id": "myth2kodi"}'\'
         $curlPOST $data http://$KODIIP/jsonrpc > /dev/null 2>&1
         Inform 'SENT: VideoLibrary.Scan request.'
       fi
       #Send a message to Kodi that a new show has been added
       if [ "$KODINotify" = "Enabled" ] ; then
-        data=\''{"jsonrpc":"2.0",
-                 "method":"GUI.ShowNotification",
-                 "params":{"title":"myth2kodi added","message":"'$tvdbshowname'"},
-                 "id":1}'\'
+        data=\''{"jsonrpc": "2.0",
+                 "method": "GUI.ShowNotification",
+                 "params": {"title": "myth2kodi added", "message": "'$tvdbshowname'"},
+                 "id": "myth2kodi"}'\'
         $curlPOST $data http://$KODIIP/jsonrpc > /dev/null 2>&1
         Inform "SENT: GUI.ShowNotification for $tvdbshowname"
       fi
@@ -700,7 +703,7 @@ KODIAutomate(){
       #  split KODIAutomate() into KodiNewShow() and KodiCleanup()...
       #Request Kodi remove any no-longer reachable files from its library. 
       if [ "$KODIClean" = "Enabled" ] ; then
-        data=\''{"jsonrpc":"2.0", "method":"VideoLibrary.Clean", "id":1}'\'
+        data=\''{"jsonrpc": "2.0", "method": "VideoLibrary.Clean", "id": "myth2kodi"}'\'
         $curlPOST $data http://$KODIIP/jsonrpc > /dev/null 2>&1
         Inform 'SENT: VideoLibrary.Clean request.'
       fi
@@ -2669,12 +2672,13 @@ mythicalDiagnostics(){
   Inform "Performing KODI Notifications test"
   for KODIIP in ${KODIIPs[@]} ; do
     Inform "SENDING REQUESTED COMMANDS TO: $KODIIP"
-    #SAK: REPLACED BELOW, SEE http://forum.kodi.tv/showthread.php?tid=65644&page=65&highlight=json
-    local curlPOST='curl -L -s -m3 --connect-timeout 5 -X POST -H "Content-Type: application/json" -d'
-    local data=\''{"jsonrpc":"2.0",
-                   "method":"GUI.ShowNotification",
-                   "params":{"title":"mythical Librarian Test","message":"'$PythonBindingsCheck'"},
-                   "id":1}'\'
+    #SEE: http://kodi.wiki/view/HOW-TO:Remotely_update_library and 'man curl'
+    #TODO: May need to reintroduce --silent to curlPOST
+    local curlPOST='curl --max-time 8 --connect-timeout 5 -H "Content-Type: application/json" --data-binary'
+    local data=\''{"jsonrpc": "2.0",
+                   "method": "GUI.ShowNotification",
+                   "params": {"title": "mythical Librarian Test", "message": "'$PythonBindingsCheck'"},
+                   "id": "myth2kodi"}'\'
     local KODIresp="$($curlPOST $data http://$KODIIP/jsonrpc | tr -d "</html>i^")"
     if [[ -n "$KODIresp" ]]; then
       InformCont "TESTING: $KODIresp"
@@ -2682,15 +2686,13 @@ mythicalDiagnostics(){
       Err "COMMUNICATIONS NOT ESTABLISHED: $KODIIP"
     fi
   done
-  #SAK: REPLACED BELOW, SEE http://forum.kodi.tv/showthread.php?tid=65644&page=65&highlight=json
-  #TODO: The evaluation of echo below seems redundant, but check before replacing.
-  if [ "$(printf '%s' $KODIresp)" = "{d:1,jsonrpc:2.0,resu:OK}" ] ; then
+  if [ "$(printf '%s' $KODIresp)" = '{"id":"myth2kodi","jsonrpc":"2.0","result":"OK"}' ] ; then
     KODIcomm="***PASSED***"
     Inform "KODI Communications $KODIcomm"
   else
     KODIcomm="***FAILED***"
     Err "KODI Communications $KODIcomm"
-    ErrCont "Expected response: '{d:1,jsonrpc:2.0,resu:OK}'"
+    ErrCont 'Expected response: {"id":"myth2kodi","jsonrpc":"2.0","result":"OK"}'
     ErrCont "Got response: '$KODIresp'"
   fi
 

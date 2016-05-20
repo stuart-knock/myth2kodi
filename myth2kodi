@@ -322,6 +322,8 @@ LogType='both'
 
 m2kVersion="myth2kodi Version 0.8.8; mythicalLibrarian 953ish+"
 
+#TODO: Add ability to compress LogFile (either time(eg. Monthly) or size(~4MB)) and start a fresh one.
+
 #The full path version of the file to which logging output will be sent:
 LogFile="$m2kdir/output.log"
 #When running diagnostics mode, output will instead be sent to this file:
@@ -667,6 +669,7 @@ GenComSkip(){
 #####KODI COMMUNICATIONS#####
 #This function Automates communication with KODI
 KODIAutomate(){
+  #TODO: there must be a better way to do this neatly than using eval...
   Debug "ENTERING: ${FUNCNAME}()"
   local data=""
   #Send notification to KODI, Update Library, Clean Library
@@ -675,22 +678,22 @@ KODIAutomate(){
     #local curlPOST='curl -L -s -m3 --connect-timeout 5 -X POST -H "Content-Type: application/json" -d'
     #SEE: http://kodi.wiki/view/HOW-TO:Remotely_update_library and 'man curl'
     #TODO: May need to reintroduce --silent to curlPOST
-    local curlPOST='curl --max-time 8 --connect-timeout 5 -H "Content-Type: application/json" --data-binary'
+    local curlPOST='curl --silent --max-time 8 --connect-timeout 5 -H "Content-Type: application/json;" --data-binary'
     for KODIIP in ${KODIIPs[@]} ; do
       Inform "SENDING REQUESTED COMMANDS TO: $KODIIP"
       #Request Kodi update its library
       if [ "$KODIUpdate" = "Enabled" ] ; then
         data=\''{"jsonrpc": "2.0", "method": "VideoLibrary.Scan", "id": "myth2kodi"}'\'
-        $curlPOST $data http://$KODIIP/jsonrpc > /dev/null 2>&1
+        eval "$curlPOST $data http://$KODIIP/jsonrpc" > /dev/null 2>&1
         Inform 'SENT: VideoLibrary.Scan request.'
       fi
       #Send a message to Kodi that a new show has been added
       if [ "$KODINotify" = "Enabled" ] ; then
-        data=\''{"jsonrpc": "2.0",
+        data=\''{"jsonrpc": "2.0", 
                  "method": "GUI.ShowNotification",
                  "params": {"title": "myth2kodi added", "message": "'$tvdbshowname'"},
                  "id": "myth2kodi"}'\'
-        $curlPOST $data http://$KODIIP/jsonrpc > /dev/null 2>&1
+        eval "$curlPOST $data http://$KODIIP/jsonrpc" > /dev/null 2>&1
         Inform "SENT: GUI.ShowNotification for $tvdbshowname"
       fi
       #TODO: Requesting Kodi to Clean its Library doesn't seem to make sense in the same
@@ -704,7 +707,7 @@ KODIAutomate(){
       #Request Kodi remove any no-longer reachable files from its library. 
       if [ "$KODIClean" = "Enabled" ] ; then
         data=\''{"jsonrpc": "2.0", "method": "VideoLibrary.Clean", "id": "myth2kodi"}'\'
-        $curlPOST $data http://$KODIIP/jsonrpc > /dev/null 2>&1
+        eval "$curlPOST $data http://$KODIIP/jsonrpc" > /dev/null 2>&1
         Inform 'SENT: VideoLibrary.Clean request.'
       fi
     done
@@ -934,11 +937,11 @@ GetMythTVDatabase(){
   Inform "Accessing MythTV DataBase Using mysql Commands:"
   Inform "Attempting to pull database information on $InputPath"
   #NOTE: Previously the info retrieved from the MythTV-DB was also passed through additional sed commands
-  #  where "/", the thing being selected (eg "title") and occasionally spaces were stripped. At least for 
+  #  where "/", the thing being selected (eg "title") and occasionally spaces were stripped. At least for
   #  mythtv 0.27.5 and "mysql  Ver 15.1 Distrib 10.0.22-MariaDB, for Linux (x86_64) using readline 5.2",
   #  these seem to be redundant. In case there was an old DB schema or older mysql version that required
-  #  this additional processing, if the below isn't working for you try adding back in the additional
-  #  sed commands, something like: 
+  #  this additional processing, if the below isn't working for you try adding the additional sed commands
+  #  back in, something like: 
   #    | sed s/"\/"/""/g | sed -n "2p" | sed s/"chanid"/""/g | sed s/" "/""/g
   #  to replace the 
   #    | sed -n "2p"
@@ -2674,12 +2677,12 @@ mythicalDiagnostics(){
     Inform "SENDING REQUESTED COMMANDS TO: $KODIIP"
     #SEE: http://kodi.wiki/view/HOW-TO:Remotely_update_library and 'man curl'
     #TODO: May need to reintroduce --silent to curlPOST
-    local curlPOST='curl --max-time 8 --connect-timeout 5 -H "Content-Type: application/json" --data-binary'
+    local curlPOST='curl --silent --max-time 8 --connect-timeout 5 -H "Content-Type:application/json;" --data-binary'
     local data=\''{"jsonrpc": "2.0",
                    "method": "GUI.ShowNotification",
                    "params": {"title": "mythical Librarian Test", "message": "'$PythonBindingsCheck'"},
                    "id": "myth2kodi"}'\'
-    local KODIresp="$($curlPOST $data http://$KODIIP/jsonrpc | tr -d "</html>i^")"
+    local KODIresp=$( eval "$curlPOST $data http://$KODIIP/jsonrpc" 2>&1 )
     if [[ -n "$KODIresp" ]]; then
       InformCont "TESTING: $KODIresp"
     else

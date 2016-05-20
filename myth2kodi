@@ -320,7 +320,7 @@ LogFile='output.log'
 LogType='both'
 ########################## END USER SETTINGS ###################################
 
-m2kVersion="myth2kodi Version 0.8.8; mythicalLibrarian 953ish+"
+m2kVersion="myth2kodi Version 0.8.9; mythicalLibrarian 953ish+"
 
 #TODO: Add ability to compress LogFile (either time(eg. Monthly) or size(~4MB)) and start a fresh one.
 

@@ -250,7 +250,8 @@ DatabaseType="MythTVPythonBindings"
 #Options: SchedulesDirect|NoLookup|SydFTA
 GuideDataType="SydFTA"
 #The IP address or name of the server for MythTV Database (used in python bindings only)
-DBHostName="192.168.1.42"
+#TODO: This doesn't seem to be being used, at least, having it set incorrectly (192.168.1.42 while testing on borg (.78)) doesn't seem to cause a problem...
+DBHostName="192.168.1.78"
 #MySQL User name: Default="mythtv"
 MySQLuser="mythtv"
 #MySQL Password: Default="mythtv"
@@ -286,6 +287,7 @@ Notify="Disabled"
 NotifyUserName="librarian" #<------THIS VALUE MUST BE SET-------
 #Send a notification to KODI to Update library upon Successful move job Enabled|Disabled
 KODIUpdate="Enabled"
+#PREVENT CLOBBERING ON RECURSIVE CALLS#[[ -z "$KODIUpdate" ]] && KODIUpdate="Enabled"
 #Send a notification to KODI to cleanup the library upon Successful move job Enabled|Disabled
 #TODO:#NOTE:Don't fully trust the automated call of clean, and currently it doesn't even
 #  seem to be invoked at the times that would make sense, so for now I'm disabling it. See
@@ -295,7 +297,7 @@ KODIClean="Disabled"
 KODINotify="Enabled"
 #Ip Address and port for KODI Notifications Eg.KODIIPs=( "192.168.1.110:8080" "192.168.1.111:8080" "XBOX:8080" )
 #NOTE: If you've set username and password for remote access to kodi then you'll need to prepend user:password@ to the ip addresses
-KODIIPs=( "192.168.1.42:8080" ) #<------THIS VALUE MUST BE SET-------
+KODIIPs=( "kodi:supersecurekodi@192.168.1.78:8080" ) #<------THIS VALUE MUST BE SET-------
 #RSSmaxItems controls the number of items in the RSS. RSS Can be activated by creating a folder in /var/www/mythical-rss.
 #NOTE: setting this to 0 will essentially be ignored as generateRSS() considers it unset and uses the default of 8
 declare -i RSSmaxItems=8
@@ -320,7 +322,7 @@ LogFile='output.log'
 LogType='both'
 ########################## END USER SETTINGS ###################################
 
-m2kVersion="myth2kodi Version 0.8.9; mythicalLibrarian 953ish+"
+m2kVersion="myth2kodi Version 0.8.10; mythicalLibrarian 953ish+"
 
 #TODO: Add ability to compress LogFile (either time(eg. Monthly) or size(~4MB)) and start a fresh one.
 
@@ -682,7 +684,7 @@ KODIAutomate(){
     for KODIIP in ${KODIIPs[@]} ; do
       Inform "SENDING REQUESTED COMMANDS TO: $KODIIP"
       #Request Kodi update its library
-      if [ "$KODIUpdate" = "Enabled" ] ; then
+      if [[ "$KODIUpdate" = "Enabled" && "$m2kScanMode" != "True" ]] ; then
         data=\''{"jsonrpc": "2.0", "method": "VideoLibrary.Scan", "id": "myth2kodi"}'\'
         eval "$curlPOST $data http://$KODIIP/jsonrpc" > /dev/null 2>&1
         Inform 'SENT: VideoLibrary.Scan request.'
@@ -705,7 +707,7 @@ KODIAutomate(){
       #  other means of removing or renaming a file of which Kodi is aware... Perhaps
       #  split KODIAutomate() into KodiNewShow() and KodiCleanup()...
       #Request Kodi remove any no-longer reachable files from its library. 
-      if [ "$KODIClean" = "Enabled" ] ; then
+      if [[ "$KODIClean" = "Enabled" && "$m2kScanMode" != "True" ]] ; then
         data=\''{"jsonrpc": "2.0", "method": "VideoLibrary.Clean", "id": "myth2kodi"}'\'
         eval "$curlPOST $data http://$KODIIP/jsonrpc" > /dev/null 2>&1
         Inform 'SENT: VideoLibrary.Clean request.'
@@ -1187,6 +1189,7 @@ ExtractSubtitleFromPlot(){
   #' -' or ':'. This is often the case for FTA guide data from SBS Australia, and occasionally
   #for other Australian stations as well.
   Debug "ENTERING: ${FUNCNAME}()"
+  #TODO: Allowing for a colon as well as the hyphen here causes problems for the various "NCIS: some other place"
   #TODO: Probably should do things conditionally based on whether or not we actually managed
   #  to extract a Subtitle. And maybe return failure state.
   InputSubtitle="$(grep -E --only-matching '^((((\w+)(.?\s*))|(\&\s*)){1,7})( -|\:)' <<< "$Plot")"
@@ -1447,11 +1450,14 @@ determineIfDatabaseIsUpToDate(){
   #if episode information is out of date or not created
   if ((CurrentTimeTVDB > NextUpdate)); then
     curl -L -s -m"$Timeout" "http://www.thetvdb.com/api/Updates.php?type=all&time=$LastUpdatedTVDB" >> "$m2kdir/$NewShowName/UpdatesList.txt"
+    #TODO: SeriesID isn't being found in UpdatesList for Grey's Anatomy, Marvel's Agents of S.H.I.E.L.D., and possibly others, so the the local data isn't being updated
     if grep -q "$SeriesID" "$m2kdir/$NewShowName/UpdatesList.txt" ; then
       Inform "DATABASE IS OUT OF DATE. NEXT UPDATE $NextUpdate Current $CurrentTimeTVDB"
       return 1
     else
-      return 0
+      Inform "DATABASE DOESN'T APPEAR TO BE OUT OF DATE. BUT UNFORTUNATELY WE CURRENTLY HAVE A BUG HERE SO ARE FORCING UPDATE ANYWAY..."
+      #return 0
+      return 1
     fi
   #Send report to the log if database was not updated.
   elif ((CurrentTimeTVDB <= NextUpdate)); then
@@ -1462,6 +1468,20 @@ determineIfDatabaseIsUpToDate(){
   return 1
 }
 
+#TODO: Add http://api.tvmaze.com to show/episode information sources... First:
+#          local -i tvmaze_id=$(curl -L -s -m"$Timeout" http://api.tvmaze.com/lookup/shows?thetvdb="$SeriesID" | jq '.id')
+#          local tvmazeJsonFile="$m2kdir/$NewShowName/$NewShowName_tvmaze.json"
+#      to get the matching tvmaze id, then
+#          tvmazeShowJson="http://api.tvmaze.com/shows/$tvmaze_id/episodes"
+#          curl -L -s -m"$Timeout" "$tvmazeShowJson" > "$tvmazeJsonFile"
+#      to get the the full info... followed by something like
+#          jq -r '.[] | .name' tvmaze.json > tvmaze_name.txt
+#      or
+#          jq -r '.[] | .name' "$tvmazeJsonFile" >> "$m2kdir/$NewShowName/$NewShowName.Ename.txt"
+#          jq -r '.[] | .season' "$tvmazeJsonFile" >> "$m2kdir/$NewShowName/$NewShowName.S.txt"
+#          jq -r '.[] | .number' "$tvmazeJsonFile" >> "$m2kdir/$NewShowName/$NewShowName.E.txt"
+#          jq -r '.[] | .summary' "$tvmazeJsonFile" | sed s/"<p>"/""/g | tr -d "\n"| sed  s/"<\/p>"/"\n"/g >> "$m2kdir/$NewShowName/$NewShowName.Plot.txt"
+#TODO: Add jq to requirements and check for it in Diagnostics
 #####GET EPISODE INFORMATION#####
 downloadInfoAboutMatchedTitleAndCreateTxtFileTables(){
   Debug "ENTERING: ${FUNCNAME}()"
@@ -1473,6 +1493,15 @@ downloadInfoAboutMatchedTitleAndCreateTxtFileTables(){
   local FieldsWeWant="(</?Series>|</?seriesid>|</?Status>|</?lastupdated>|</?Episode>|</?SeasonNumber>|</?EpisodeNumber>|</?EpisodeName>|</?Overview>|</?FirstAired>)"
   curl -L -s -m"$Timeout" "$TheTVDBShowXML" | grep -E "$FieldsWeWant" > "$m2kdir/$NewShowName/$NewShowName.xmlTest"
   [[ $? = 0 ]] && echo "$CurrentTimeTVDB" > "$m2kdir/$NewShowName/lastupdated.time" && chmod 666 "$m2kdir/$NewShowName/lastupdated.time"
+
+  local -i tvmaze_id=$(curl -L -s -m"$Timeout" http://api.tvmaze.com/lookup/shows?thetvdb="$SeriesID" | jq '.id')
+  local tvmazeJsonFile="$m2kdir/$NewShowName/${NewShowName}_tvmaze.json"
+# to get the matching tvmaze id, then
+  if [[ -n "$tvmaze_id" ]] ; then
+    local tvmazeShowJson="http://api.tvmaze.com/shows/$tvmaze_id/episodes"
+    [[ -f "$tvmazeJsonFile" ]] && mv "$tvmazeJsonFile" "$m2kdir/$NewShowName/${Today}_${NewShowName}_tvmaze.json"
+    curl -L -s -m"$Timeout" "$tvmazeShowJson" > "$tvmazeJsonFile"
+  fi
 
   #Validate that the show has at least one EpisodeName tag and is a valid download before clobbering our old download.
   if grep -q "EpisodeName" "$m2kdir/$NewShowName/$NewShowName.xmlTest"; then
@@ -1567,6 +1596,21 @@ downloadInfoAboutMatchedTitleAndCreateTxtFileTables(){
           EpisodeOverview="$line"
         fi
       done < "$m2kdir/$NewShowName/$NewShowName.xml"
+
+      #If we also have a json file from tvmaze, then append that info 
+      if [[ -f "$tvmazeJsonFile" ]] ; then
+        # | tr -d "\n" | sed s/"<\/\?p>"/""/g | sed -r s'/[^[:alnum:]|^&,.-]/ /'g | sed -r s'/\s{2,}/ /'g
+        jq -r '.[] | .name' "$tvmazeJsonFile" >> "$m2kdir/$NewShowName/$NewShowName.actualEname.txt"
+        jq -r '.[] | .name' "$tvmazeJsonFile" >> "$m2kdir/$NewShowName/$NewShowName.Ename.txt"
+        jq -r '.[] | .season' "$tvmazeJsonFile" >> "$m2kdir/$NewShowName/$NewShowName.S.txt"
+        jq -r '.[] | .number' "$tvmazeJsonFile" >> "$m2kdir/$NewShowName/$NewShowName.E.txt"
+        local -i EpisodeCount=$(jq -r '.[] | .name' "$tvmazeJsonFile" | wc -l)
+        for i in `seq 0 $((EpisodeCount-1))` ; do
+          jq -r ".[$i] | .summary" "$tvmazeJsonFile" |  tr -d "\n" | sed s/"<\/\?p>"/""/g | sed -r s'/[^[:alnum:]|^&,.-]/ /'g | sed -r s'/\s{2,}/ /'g >> "$m2kdir/$NewShowName/$NewShowName.Plot.txt"
+          printf '\n' >> "$m2kdir/$NewShowName/$NewShowName.Plot.txt"
+        done
+        #jq -r '.[] | .summary' "$tvmazeJsonFile" | sed s/"<p>"/""/g | tr -d "\n" | sed  s/"<\/p>"/"\n"/g >> "$m2kdir/$NewShowName/$NewShowName.Plot.txt"
+      fi
 
       chmod 666 "$m2kdir/$NewShowName/$NewShowName".actualEname.txt
       chmod 666 "$m2kdir/$NewShowName/$NewShowName".Ename.txt
@@ -1962,6 +2006,7 @@ DoMythTVPermissionsCheck(){
   #  check of $MyUserName and bailing with an ERROR message if != $Librarian,
   #  this should avoid most/all permission issues.
   if [[ "$InputOption" != "--BypassPermissionsCheck" || -z "$InputOption" && -z "$InputSubtitle" && "$InputTitle" != "--BypassPermissionsCheck" ]]; then
+    #TODO: during --scan the ls here gets $InputPath "--scan" which obviously doesn't work...
     if  [ "`ls -l \"$InputPath\"| awk '{ print $3 }'`" = "mythtv" ] && [ "$MyUserName" != "mythtv" ] && [ "$SYMLINK" = "MOVE" ]; then
       UserName=$USER
       Err ""
@@ -2195,6 +2240,7 @@ MakeShowDir(){
     SYMLINK=LINK
     MoveDir="$FailSafeDir"
     FailSafeState=1
+    Warn "Recordings processed in FAILSAFE MODE will be added to the doover queue."
     RequiresDoover=1
     Inform "FailSafe MOVE DIRECTORY SET AS: $MoveDir"
     return 1
@@ -2433,6 +2479,16 @@ ScanUsageMsg(){
 #This function will scan a folder and process the entire library
 mythicalScan(){
   Debug "ENTERING: ${FUNCNAME}()"
+  #TODO: KODIUpdate when operating on many files, such as in scan mode, is problematic... the basic
+  #      attempted solution commented below fails because during the scan myth2kodi is called on each
+  #      file... Need to figure out a way to disable KODIUpdate for subsequent myth2kodi calls when in 
+  #      scan mode or similar. Just run once at the end of scan...
+  #      TEMPORARY WORK AROUND IS TO MODIFY KODIUpdate TO "Disabled" in the script before running scan.
+  ##Override setting of KODIUpdate during scan, otherwise we'll end up running update thousands of times...
+  #prescanstatusKODIUpdate="$KODIUpdate"
+  #KODIUpdate="Disabled"
+  #KODIUpdate="$prescanstatusKODIUpdate"
+  #TODO: Also need to skip DoMaintenance when in scan mode... Put a call to DoMaintenance() in the start of Scan() once subsequent calls are bypassed...
   local yesorno=""
   DoMythTVPermissionsCheck
   #Map myth2kodi input variables to local variables for our current purpose.
@@ -2493,6 +2549,8 @@ mythicalScan(){
   #Default to safety, ie do nothing.
   [[ -z "$yesorno" ]] && yesorno="n"
   if [ "$yesorno" = "y" ]; then
+    #Explicitly call DoMaintenance() here as it's blocked in subsequent calls to myth2kodi from scan mode.
+    DoMaintenance
     myth2kodi --doover
     Debug "Creating a temporary scan file: $m2kdir/scan.temp"
     ls -1 "$scanpath"/*."$checkext" > "$m2kdir/scan.temp"
@@ -3252,8 +3310,11 @@ case "$InputPath" in
 
   --scan|-s)
     #TODO: Add ability to scan only specific files, eg those for a specific ShowName
+    export m2kScanMode="True"
     mythicalScan
-    exit $?
+    declare -i scanreturnstatus="$?"
+    unset m2kScanMode
+    exit $scanreturnstatus
   ;;
   --mythicalDiagnostics|-m)
     PreCallLogFile="$LogFile"
@@ -3403,7 +3464,11 @@ test "$TargetPathIsInputPath" = "Enabled" && setTargetFolderAsInputPathFolder
 
 #####MAINTENANCE#####
 #Loop through the list of created comskip files from dir.tracking, created.tracking and remove orphans.
-DoMaintenance
+if [ "$m2kScanMode" != "True" ] ; then
+  DoMaintenance
+else
+  Debug "Skipping DoMaintenance() as m2kScanMode has been set to 'True'"
+fi
 
 #####SEARCH FOR SHOW AND BUILD INFORMATION#####
 
@@ -3434,6 +3499,7 @@ if [ "$m2kProgramIDCheck" != "SH" ] && [ "$m2kProgramIDCheck" != "MV" ]; then
     if [ $? = 0 ]; then
       ConfidenceReasoning="$ConfidenceReasoning Successful;"
     else
+      Warn "FAILED to get series line number from table with standard logic, requiring doover."
       RequiresDoover=1
       ((--SeriesConfidenceRating))
       ConfidenceReasoning="$ConfidenceReasoning Failed; Attempted Title match on Fuzzy Logic:"
@@ -3474,7 +3540,7 @@ if [[ -n "$SeriesID" ]]; then
   if [[ $? != 0 ]]; then
     downloadInfoAboutMatchedTitleAndCreateTxtFileTables
     if [[ $? != 0 ]]; then
-      Warn "COULD NOT DOWNLOAD UP-TO-DATE INFORMATION FROM TheTVDB!"
+      Warn "COULD NOT DOWNLOAD UP-TO-DATE INFORMATION FROM TheTVDB! requiring doover."
       RequiresDoover=1
     fi
   fi
@@ -3523,7 +3589,7 @@ if [[ -n "$SeriesID" ]]; then
     if [ "$?" = "0" ]; then
       ConfidenceReasoning="$ConfidenceReasoning Successful; "
     else
-      Warn "AIRDATE/STANDARD LOGIC FAILED. FUZZY LOGIC ABSOLUTE: $AbsoluteEpisodeNumber"
+      Warn "AIRDATE/STANDARD LOGIC FAILED. FUZZY LOGIC ABSOLUTE: $AbsoluteEpisodeNumber. Requiring doover."
       RequiresDoover=1
       ((--EpisodeConfidenceRating))
       ConfidenceReasoning="$ConfidenceReasoning Failed; Attempted SubTitle match on Fuzzy logic:"
@@ -3660,6 +3726,7 @@ fi
 if [ "$m2kProgramIDCheck" = "EP" ] && [[ "$Exx" = "E" || -z "$Exx" ]]; then
   ConfidenceReasoning="$ConfidenceReasoning Guide Data did not match a specific Episode;"
   MythicalEpiShow=1
+  Warn "Identified recording as episode but failed to determine episode number, requiring doover."
   RequiresDoover=1
   #TODO come up with a way to have a variable like DataWasNotObtainable to check and make it a SH later
 
@@ -3671,7 +3738,7 @@ elif [ "$m2kProgramIDCheck" = "MV" ] || [ "$m2kProgramIDCheck" = "SH" ] ; then
 fi
 
 #if the confidence was low, then show requires a doover
-((ConfidenceRating <= -4)) && RequiresDoover=1
+((ConfidenceRating <= -4)) && RequiresDoover=1 && Warn "ConfidenceRating low. Requiring doover."
 
 #If file is a link then activate link mode so the original link is not screwed up.
 if [ -L "$InputPath" ]; then
@@ -3686,7 +3753,7 @@ fi
 #If file to be moved does not exist, then report
 if [ ! -f "$InputPath" ] && [ "$InputPath" != "testfile.ext" ]; then
   InvalidFileErrorMessage
-  if [ $Notify = Enabled ]; then
+  if [ "$Notify" = "Enabled" ]; then
     sudo -u "$NotifyUserName" "$binpath"/m2k_notify "myth2kodi Error" "Invalid File supplied" error
   fi
   jobtype='InvalidFileNameSupplied'
@@ -3942,7 +4009,7 @@ if [ "$SYMLINK" != "LINK" ]; then
       fi
 
       #Send notification of completion
-      test $Notify = "Enabled" && sudo -u "$NotifyUserName" "$binpath"/m2k_notify "myth2kodi Success" "$ShowFileName moved to $MoveDir" info
+      test "$Notify" = "Enabled" && sudo -u "$NotifyUserName" "$binpath"/m2k_notify "myth2kodi Success" "$ShowFileName moved to $MoveDir" info
 
       #Additional features, notifications, rss, daily report.
       test  "$RequiresNFO" = "1" && GenerateTVShowNFO

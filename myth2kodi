@@ -322,7 +322,7 @@ LogFile='output.log'
 LogType='both'
 ########################## END USER SETTINGS ###################################
 
-m2kVersion="myth2kodi Version 0.8.10; mythicalLibrarian 953ish+"
+m2kVersion="myth2kodi Version 0.8.11; mythicalLibrarian 953ish+"
 
 #TODO: Add ability to compress LogFile (either time(eg. Monthly) or size(~4MB)) and start a fresh one.
 
@@ -693,10 +693,10 @@ KODIAutomate(){
       if [ "$KODINotify" = "Enabled" ] ; then
         data=\''{"jsonrpc": "2.0", 
                  "method": "GUI.ShowNotification",
-                 "params": {"title": "myth2kodi added", "message": "'$tvdbshowname'"},
+                 "params": {"title": "myth2kodi added", "message": "'$ShowName'"},
                  "id": "myth2kodi"}'\'
         eval "$curlPOST $data http://$KODIIP/jsonrpc" > /dev/null 2>&1
-        Inform "SENT: GUI.ShowNotification for $tvdbshowname"
+        Inform "SENT: GUI.ShowNotification for $ShowName"
       fi
       #TODO: Requesting Kodi to Clean its Library doesn't seem to make sense in the same
       #  context as Update & Notify, that is, cleaning after adding a new show makes
@@ -897,6 +897,7 @@ writeJobToDooverQue(){
   DebugCont "m2kdir: $m2kdir"
   DebugCont "InputPath: $InputPath"
   Inform "Writing job to doover queue: $m2kdir/doover.sh"
+  [[ ! -f "$m2kdir/doover.sh" ]] && printf '%s\n' "rm -f \"$m2kdir/doover.sh\"" >> "$m2kdir/doover.sh" && chmod 666 "$m2kdir/doover.sh"
   [[ -n "$InputPath" ]] && echo "myth2kodi '$1' '$2' '$3'" >> "$m2kdir"/doover.sh
 }
 
@@ -1468,19 +1469,7 @@ determineIfDatabaseIsUpToDate(){
   return 1
 }
 
-#TODO: Add http://api.tvmaze.com to show/episode information sources... First:
-#          local -i tvmaze_id=$(curl -L -s -m"$Timeout" http://api.tvmaze.com/lookup/shows?thetvdb="$SeriesID" | jq '.id')
-#          local tvmazeJsonFile="$m2kdir/$NewShowName/$NewShowName_tvmaze.json"
-#      to get the matching tvmaze id, then
-#          tvmazeShowJson="http://api.tvmaze.com/shows/$tvmaze_id/episodes"
-#          curl -L -s -m"$Timeout" "$tvmazeShowJson" > "$tvmazeJsonFile"
-#      to get the the full info... followed by something like
-#          jq -r '.[] | .name' tvmaze.json > tvmaze_name.txt
-#      or
-#          jq -r '.[] | .name' "$tvmazeJsonFile" >> "$m2kdir/$NewShowName/$NewShowName.Ename.txt"
-#          jq -r '.[] | .season' "$tvmazeJsonFile" >> "$m2kdir/$NewShowName/$NewShowName.S.txt"
-#          jq -r '.[] | .number' "$tvmazeJsonFile" >> "$m2kdir/$NewShowName/$NewShowName.E.txt"
-#          jq -r '.[] | .summary' "$tvmazeJsonFile" | sed s/"<p>"/""/g | tr -d "\n"| sed  s/"<\/p>"/"\n"/g >> "$m2kdir/$NewShowName/$NewShowName.Plot.txt"
+
 #TODO: Add jq to requirements and check for it in Diagnostics
 #####GET EPISODE INFORMATION#####
 downloadInfoAboutMatchedTitleAndCreateTxtFileTables(){
@@ -1667,6 +1656,7 @@ GetSeriesLineNumberFromTableWithZap2itID(){
 #This function provides fuzzy logic matching of a show name and returns a seriesid
 GetSeriesLineNumberFromTableWithFuzzyLogic(){
   Debug "ENTERING: ${FUNCNAME}()"
+  #TODO: Why the restriction to the first 27 characters for matching here???
   serieslinenumber=$(agrep -Byn "${ShowName:0:27}" "$m2kdir/shn.txt" | sed 's/:.*//' | grep -m1 ^)
   #Correct for serieslinenumber = ""
   [[ -z "$serieslinenumber" ]] && serieslinenumber=0
@@ -2736,9 +2726,10 @@ mythicalDiagnostics(){
     #SEE: http://kodi.wiki/view/HOW-TO:Remotely_update_library and 'man curl'
     #TODO: May need to reintroduce --silent to curlPOST
     local curlPOST='curl --silent --max-time 8 --connect-timeout 5 -H "Content-Type:application/json;" --data-binary'
+    local KODINotifyTestMessage="KODI Notification test..."
     local data=\''{"jsonrpc": "2.0",
                    "method": "GUI.ShowNotification",
-                   "params": {"title": "mythical Librarian Test", "message": "'$PythonBindingsCheck'"},
+                   "params": {"title": "myth2kodi Test", "message": "'$KODINotifyTestMessage'"},
                    "id": "myth2kodi"}'\'
     local KODIresp=$( eval "$curlPOST $data http://$KODIIP/jsonrpc" 2>&1 )
     if [[ -n "$KODIresp" ]]; then

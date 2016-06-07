@@ -313,7 +313,7 @@ declare -i RSSmaxItems=8
 #Recommend 2 to start with or if you want to keep track of what myth2kodi is doing.
 #Recommend 1 for usual operation, once you're confident that everything is working fine.
 #Only use 3 if you have a particular problem that you're trying to track down, it significantly increases the output.
-LogLevel=2
+LogLevel=3
 #LogFile is the name of the log file, this will be placed in myth2kodi's working directory, $m2kdir set above.
 #DEFAULT: 'output.log' #NOTE: LogFile is overridden in special contexts, such as running Diagnostics.
 LogFile='output.log'
@@ -322,7 +322,7 @@ LogFile='output.log'
 LogType='both'
 ########################## END USER SETTINGS ###################################
 
-m2kVersion="myth2kodi Version 0.8.13; mythicalLibrarian 953ish+"
+m2kVersion="myth2kodi Version 0.8.14; mythicalLibrarian 953ish+"
 
 #TODO: Add ability to compress LogFile (either time(eg. Monthly) or size(~4MB)) and start a fresh one.
 
@@ -1798,6 +1798,8 @@ getAbsoluteEpisodeNumberWithSxxExx(){
   return 1
 }
 
+#TODO: Need to check that additional data source doesn't lead to multiple AEN matches that are then interpreted as faulty due to non-singular identification...
+#TODO: Need to clean up redundancy or otherwise refactor this function to make it cleaner...
 getAbsoluteEpisodeNumberWithFuzzyPlotMatch(){
   Debug "ENTERING: ${FUNCNAME}()"
   DebugCont "AbsoluteEpisodeNumber: $AbsoluteEpisodeNumber"
@@ -1814,14 +1816,26 @@ getAbsoluteEpisodeNumberWithFuzzyPlotMatch(){
   #Fuzzy guess at plot, prepended with: "AbsoluteEpisodeNumber:cost:"
   local FuzzyPlot=($(agrep -ikByns "$Plot" "$m2kdir/$NewShowName/$NewShowName.Plot.txt"))
   #TODO: Need to check for and deal with multiple results...
+  #local -a AENguess=($(cut -f1 -d":" <<< "$(printf '%s\n' "${FuzzyPlot[@]}")"))
+  #local -a cost=($(cut -f2 -d":" <<< "$(printf '%s\n' "${FuzzyPlot[@]}")"))
+  #local -a MatchedPlot=()
+  #for (( i = 0; i < ${#AENguess[@]}; i++ )) ; do
+  #  MatchedPlot[i]="$(sed -n ${AENguess[i]}'p' "$m2kdir"/"$NewShowName"/"$NewShowName".Plot.txt)"
+  #done
   [[ -z "${FuzzyPlot[0]}" ]] && Warn "${FUNCNAME}() - No fuzzy match on Plot" && return 1
   #Extract our guessed AbsoluteEpisodeNumber
-  local -i AENguess=$(cut -f1 -d":" <<< "${FuzzyPlot[0]}")
-  DebugCont "AbsoluteEpisodeNumber guess: $AENguess"
-  local -i cost=$(cut -f2 -d":" <<< "${FuzzyPlot[0]}")
-  DebugCont "Cost: $cost"
-  local MatchedPlot="$(sed -n $AENguess'p' "$m2kdir"/"$NewShowName"/"$NewShowName".Plot.txt)"
-  DebugCont "MatchedPlot: $MatchedPlot"
+  #local -i AENguess=$(cut -f1 -d":" <<< "${FuzzyPlot[0]}")
+  local -a AENguess=($(cut -f1 -d":" <<< "$(printf '%s\n' "${FuzzyPlot[@]}")"))
+  DebugCont "AbsoluteEpisodeNumber guess: ${AENguess[@]}"
+  #local -i cost=$(cut -f2 -d":" <<< "${FuzzyPlot[0]}")
+  local -a cost=($(cut -f2 -d":" <<< "$(printf '%s\n' "${FuzzyPlot[@]}")"))
+  DebugCont "Cost: ${cost[@]}"
+  #local MatchedPlot="$(sed -n $AENguess'p' "$m2kdir"/"$NewShowName"/"$NewShowName".Plot.txt)"
+  local -a MatchedPlot=()
+  for (( i = 0; i < ${#AENguess[@]}; i++ )) ; do
+    MatchedPlot[i]="$(sed -n ${AENguess[i]}'p' "$m2kdir"/"$NewShowName"/"$NewShowName".Plot.txt)"
+  done
+  DebugCont "MatchedPlot: ${MatchedPlot[@]}"
   # local -i MatchedPlotLength=$(wc --chars <<< "$MatchedPlot")
   # DebugCont "MatchedPlotLength: $MatchedPlotLength"
   # #Get (unsigned) difference in number of characters between $Plot & fuzzy guessed plot.
@@ -1831,7 +1845,8 @@ getAbsoluteEpisodeNumberWithFuzzyPlotMatch(){
   # DebugCont "Normalised Cost: $normcost"
   #TODO: Should check that MatchedPlot is longer than PlotLength, which is essentially what we're assuming below.
   #If the cost is greater than a 1/3 of characters in the plot we're trying to match #TODO: figure out the critical ratio here.
-  if (( cost > (PlotLength / 3) )) ; then
+  #TODO: Should have this compare across all costs... No, multiple results from agrep only occur for equal costs...
+  if (( ${cost[0]} > (PlotLength / 3) )) ; then
     Warn "${FUNCNAME}() - AbsoluteEpisodeNumber guess from full Plot too fuzzy, trying chunked match."
     #Some Plots miss on match simply because the text is reordered or the middle is chopped out,
     #something as simple as chopping up the Plot into 8 word blocks, overlapping by 2-4, and testing
@@ -1875,18 +1890,63 @@ getAbsoluteEpisodeNumberWithFuzzyPlotMatch(){
       cost="${ChunkCosts[i]}"
       ((cost < len10per)) && GoodChunkGuesses[Counter]=${ChunkGuesses[i]} && ((++Counter))
     done
+    #TODO: This needs to be changed to actually check that they refer to the same episode, 
+    #      with multiple data sources the current test is still sufficient but not necessary...
     #If all ChunkGuess with ChunkCost < 10% are the same Absolute Episode Number
     AENguess=($(printf '%s\n' "${GoodChunkGuesses[@]}" | sort -u))
     if (( ${#AENguess[@]} == 1 )) ; then
       AbsoluteEpisodeNumber="${AENguess[0]}"
       Inform "${FUNCNAME}() - Identified AbsoluteEpisodeNumber: $AbsoluteEpisodeNumber using chunked Plot."
       return 0
+    elif (( ${#AENguess[@]} > 1 )); then
+      #If we've identified multiple AbsoluteEpisodeNumbers make sure they refer to the same episode.
+      local -a SxxGuesses=()
+      local -a ExxGuesses=()
+      for (( i = 0; i < ${#AENguess[@]}; i++ )) ; do
+        #gather series and episode numbers for each AENguess.
+        ExxGuesses[i]="$(sed -n ${AENguess[i]}'p' "$m2kdir"/"$NewShowName"/"$NewShowName".E.txt)"
+        SxxGuesses[i]="$(sed -n ${AENguess[i]}'p' "$m2kdir"/"$NewShowName"/"$NewShowName".S.txt)"
+      done
+      local -i uniqExxcount=$(printf '%s\n' "${ExxGuesses[@]}" | uniq | wc -l)
+      local -i uniqSxxcount=$(printf '%s\n' "${SxxGuesses[@]}" | uniq | wc -l)
+      if (( uniqSxxcount == 1 )) && (( uniqExxcount == 1 )); then
+        #With multiple data sources we can get multiple AENs for the same episode, just take the first:
+        AbsoluteEpisodeNumber=$(cut -f1 -d" " <<< ${AENguess[0]})
+        Inform "${FUNCNAME}() - Identified AbsoluteEpisodeNumber: $AbsoluteEpisodeNumber using chunked Plot."
+        Debug "${FUNCNAME}() - The following AENguesses were identified as the same episode: ${AENguess[@]}."
+        return 0
+      fi
     fi
 
     Warn "${FUNCNAME}() - Chunked Plot match is still too fuzzy, failed to guess AbsoluteEpisodeNumber."
     return 1
   fi
-  #Guess at fuzzy Plot match is probably ok, we'll use it
+
+  #Guess at fuzzy Plot match is probably ok, we'll use it, but first need to confirm multiple results
+  if (( ${#AENguess[@]} > 1 )); then
+    #If we've identified multiple AbsoluteEpisodeNumbers make sure they refer to the same episode.
+    local -a SxxGuesses=()
+    local -a ExxGuesses=()
+    for (( i = 0; i < ${#AENguess[@]}; i++ )) ; do
+      #gather series and episode numbers for each AENguess.
+      ExxGuesses[i]="$(sed -n ${AENguess[i]}'p' "$m2kdir"/"$NewShowName"/"$NewShowName".E.txt)"
+      SxxGuesses[i]="$(sed -n ${AENguess[i]}'p' "$m2kdir"/"$NewShowName"/"$NewShowName".S.txt)"
+    done
+    local -i uniqExxcount=$(printf '%s\n' "${ExxGuesses[@]}" | uniq | wc -l)
+    local -i uniqSxxcount=$(printf '%s\n' "${SxxGuesses[@]}" | uniq | wc -l)
+    if (( uniqSxxcount == 1 )) && (( uniqExxcount == 1 )); then
+      #With multiple data sources we can get multiple AENs for the same episode, just take the first:
+      AbsoluteEpisodeNumber=$(cut -f1 -d" " <<< ${AENguess[0]})
+      Inform "${FUNCNAME}() - Identified AbsoluteEpisodeNumber: $AbsoluteEpisodeNumber using full Plot."
+      Debug "${FUNCNAME}() - The following AENguesses were identified as the same episode: ${AENguess[@]}."
+      return 0
+    else
+      Warn "${FUNCNAME}() - Fuzzy Plot match is too fuzzy, as we matched two or more different episodes."
+      Err "${FUNCNAME}() - This function needs refactoring as bad match on full plot should lead to chunked plot attempt."
+      Debug "${FUNCNAME}() - The following AENguesses were identified: ${AENguess[@]}."
+      return 1
+    fi
+  fi
   AbsoluteEpisodeNumber="$AENguess"
   Inform "${FUNCNAME}() - Identified AbsoluteEpisodeNumber: $AbsoluteEpisodeNumber using full Plot."
   return 0
@@ -3645,6 +3705,9 @@ if [[ -n "$SeriesID" ]]; then
   Inform "TOTAL FUZZY LOGIC MATCHES:$FuzzyLogicMatches"
   Inform "TOTAL VERIFIED FUZZY ERRORS:$(test -f "$m2kdir"/FuzzyLogicError.log && cat "$m2kdir"/FuzzyLogicError.log || echo "0")"
 fi
+
+#TODO: The following few blocks will run even if we haven't properly identified the series, which doesn't make
+#      sense for the things trying to set SxxExx...
 
 #If we already have Sxx and Exx from MythTV DB, use them. If we also had a Subtitle, then do some verification.
 if [[ "$Sxx" != "S" && -n "$Sxx" && "$Sxx" != "S00" && "$Exx" != "E" && -n "$Exx" && "$Exx" != "E00" ]] ; then

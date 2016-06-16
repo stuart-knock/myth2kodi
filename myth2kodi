@@ -47,7 +47,7 @@
 #  it's apparently preferred for compatibility/portability reasons. See,
 #    http://wiki.bash-hackers.org/commands/builtin/printf
 
-#TODO: Add more Debug statements throughout...
+#TODO: Review logging statements throughout...
 
 #Intention:
 #  This program is designed to be a user job in MythTV. It can be called by
@@ -322,7 +322,7 @@ LogFile='output.log'
 LogType='both'
 ########################## END USER SETTINGS ###################################
 
-m2kVersion="myth2kodi Version 0.8.14; mythicalLibrarian 953ish+"
+m2kVersion="myth2kodi Version 0.8.15; mythicalLibrarian 953ish+"
 
 #TODO: Add ability to compress LogFile (either time(eg. Monthly) or size(~4MB)) and start a fresh one.
 
@@ -679,7 +679,6 @@ KODIAutomate(){
     Inform 'COMMUNICATING WITH KODI INSTANCES...'
     #local curlPOST='curl -L -s -m3 --connect-timeout 5 -X POST -H "Content-Type: application/json" -d'
     #SEE: http://kodi.wiki/view/HOW-TO:Remotely_update_library and 'man curl'
-    #TODO: May need to reintroduce --silent to curlPOST
     local curlPOST='curl --silent --max-time 8 --connect-timeout 5 -H "Content-Type: application/json;" --data-binary'
     for KODIIP in ${KODIIPs[@]} ; do
       Inform "SENDING REQUESTED COMMANDS TO: $KODIIP"
@@ -1829,7 +1828,7 @@ getAbsoluteEpisodeNumberWithFuzzyPlotMatch(){
   DebugCont "$( IFS=','; printf '%s' "AbsoluteEpisodeNumber guess: ${AENguess[*]}" )"
   #local -i cost=$(cut -f2 -d":" <<< "${FuzzyPlot[0]}")
   local -a cost=($(cut -f2 -d":" <<< "$(printf '%s\n' "${FuzzyPlot[@]}")"))
-  DebugCont "Cost: ${cost[*]}"
+  DebugCont "$( IFS=','; printf '%s' "Cost: ${cost[*]}" )"
   #local MatchedPlot="$(sed -n $AENguess'p' "$m2kdir"/"$NewShowName"/"$NewShowName".Plot.txt)"
   local -a MatchedPlot=()
   for (( i = 0; i < ${#AENguess[@]}; i++ )) ; do
@@ -2788,7 +2787,6 @@ mythicalDiagnostics(){
   for KODIIP in ${KODIIPs[@]} ; do
     Inform "SENDING REQUESTED COMMANDS TO: $KODIIP"
     #SEE: http://kodi.wiki/view/HOW-TO:Remotely_update_library and 'man curl'
-    #TODO: May need to reintroduce --silent to curlPOST
     local curlPOST='curl --silent --max-time 8 --connect-timeout 5 -H "Content-Type:application/json;" --data-binary'
     local KODINotifyTestMessage="KODI Notification test..."
     local data=\''{"jsonrpc": "2.0",
@@ -3998,11 +3996,11 @@ if [ -f "$MoveDir/$ShowFileName.$OriginalExt" ]; then
   ErrCont "EITHER WAY, ABORTING."
   jobtype='FileAlreadyExists'
   #Write an entry in the duplicates file, for easy check/removal of duplicates.
-  printf '%s\n' "$InputPath" >> "$DuplicatesFile"
+  #printf '%s\n' "$InputPath" >> "$DuplicatesFile"
   #TODO: reformat the duplicates.log file for it's primary purpose, identifying and deleting genuine duplicates.
-  #printf "'%s' '%s' '%s' '%s'\n" "InputPath" "$ShowFileName" "$ShowStartTime" "$InputTitle" >> "$DuplicatesFile"
+  printf "'%s' '%s' '%s' '%s'\n" "$InputTitle" "$ShowStartTime" "$InputPath" "$ShowFileName" >> "$DuplicatesFile"
   #find -L "$originaldirname/" -samefile  "$MoveDir/$ShowFileName.$OriginalExt"
-  printf '#Identified as: %s  RecStart:%s\n' "$ShowFileName" "$ShowStartTime" >> "$DuplicatesFile"
+  #printf '#Identified as: %s  RecStart:%s\n' "$ShowFileName" "$ShowStartTime" >> "$DuplicatesFile"
   RunJob
   #TODO: When refactoring main, consider allowing forced move with auto name incrementing when move-to file already exists.
   #If file exists then make a new name for it

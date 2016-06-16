@@ -1826,16 +1826,17 @@ getAbsoluteEpisodeNumberWithFuzzyPlotMatch(){
   #Extract our guessed AbsoluteEpisodeNumber
   #local -i AENguess=$(cut -f1 -d":" <<< "${FuzzyPlot[0]}")
   local -a AENguess=($(cut -f1 -d":" <<< "$(printf '%s\n' "${FuzzyPlot[@]}")"))
-  DebugCont "AbsoluteEpisodeNumber guess: ${AENguess[@]}"
+  DebugCont "AbsoluteEpisodeNumber guess: ${AENguess[*]}"
   #local -i cost=$(cut -f2 -d":" <<< "${FuzzyPlot[0]}")
   local -a cost=($(cut -f2 -d":" <<< "$(printf '%s\n' "${FuzzyPlot[@]}")"))
-  DebugCont "Cost: ${cost[@]}"
+  DebugCont "Cost: ${cost[*]}"
   #local MatchedPlot="$(sed -n $AENguess'p' "$m2kdir"/"$NewShowName"/"$NewShowName".Plot.txt)"
   local -a MatchedPlot=()
   for (( i = 0; i < ${#AENguess[@]}; i++ )) ; do
     MatchedPlot[i]="$(sed -n ${AENguess[i]}'p' "$m2kdir"/"$NewShowName"/"$NewShowName".Plot.txt)"
+    DebugCont "MatchedPlot $i: ${MatchedPlot[i]}"
   done
-  DebugCont "MatchedPlot: ${MatchedPlot[@]}"
+  #DebugCont "MatchedPlot: ${MatchedPlot[@]}"
   # local -i MatchedPlotLength=$(wc --chars <<< "$MatchedPlot")
   # DebugCont "MatchedPlotLength: $MatchedPlotLength"
   # #Get (unsigned) difference in number of characters between $Plot & fuzzy guessed plot.
@@ -1914,7 +1915,7 @@ getAbsoluteEpisodeNumberWithFuzzyPlotMatch(){
         #With multiple data sources we can get multiple AENs for the same episode, just take the first:
         AbsoluteEpisodeNumber=$(cut -f1 -d" " <<< ${AENguess[0]})
         Inform "${FUNCNAME}() - Identified AbsoluteEpisodeNumber: $AbsoluteEpisodeNumber using chunked Plot."
-        Debug "${FUNCNAME}() - The following ${#AENguess[@]} AENguesses were identified as the same episode: ${AENguess[@]}."
+        Debug "${FUNCNAME}() - The following ${#AENguess[@]} AENguesses were identified as the same episode: ${AENguess[*]}."
         return 0
       fi
     fi
@@ -1939,12 +1940,12 @@ getAbsoluteEpisodeNumberWithFuzzyPlotMatch(){
       #With multiple data sources we can get multiple AENs for the same episode, just take the first:
       AbsoluteEpisodeNumber=$(cut -f1 -d" " <<< ${AENguess[0]})
       Inform "${FUNCNAME}() - Identified AbsoluteEpisodeNumber: $AbsoluteEpisodeNumber using full Plot."
-      Debug "${FUNCNAME}() - The following ${#AENguess[@]} AENguesses were identified as the same episode: ${AENguess[@]}."
+      Debug "${FUNCNAME}() - The following ${#AENguess[@]} AENguesses were identified as the same episode: ${AENguess[*]}."
       return 0
     else
       Warn "${FUNCNAME}() - Fuzzy Plot match is too fuzzy, as we matched two or more different episodes."
       Err "${FUNCNAME}() - This function needs refactoring as bad match on full plot should lead to chunked plot attempt."
-      Debug "${FUNCNAME}() - The following ${#AENguess[@]} AENguesses were identified: ${AENguess[@]}."
+      Debug "${FUNCNAME}() - The following ${#AENguess[@]} AENguesses were identified: ${AENguess[*]}."
       return 1
     fi
   fi

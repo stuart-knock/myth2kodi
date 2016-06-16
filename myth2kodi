@@ -1899,6 +1899,7 @@ getAbsoluteEpisodeNumberWithFuzzyPlotMatch(){
       Inform "${FUNCNAME}() - Identified AbsoluteEpisodeNumber: $AbsoluteEpisodeNumber using chunked Plot."
       return 0
     elif (( ${#AENguess[@]} > 1 )); then
+      Debug "Multiple AbsoluteEpisodeNumber guesses matched plot, confirming they're the same episode before using."
       #If we've identified multiple AbsoluteEpisodeNumbers make sure they refer to the same episode.
       local -a SxxGuesses=()
       local -a ExxGuesses=()
@@ -1913,7 +1914,7 @@ getAbsoluteEpisodeNumberWithFuzzyPlotMatch(){
         #With multiple data sources we can get multiple AENs for the same episode, just take the first:
         AbsoluteEpisodeNumber=$(cut -f1 -d" " <<< ${AENguess[0]})
         Inform "${FUNCNAME}() - Identified AbsoluteEpisodeNumber: $AbsoluteEpisodeNumber using chunked Plot."
-        Debug "${FUNCNAME}() - The following AENguesses were identified as the same episode: ${AENguess[@]}."
+        Debug "${FUNCNAME}() - The following ${#AENguess[@]} AENguesses were identified as the same episode: ${AENguess[@]}."
         return 0
       fi
     fi
@@ -1938,12 +1939,12 @@ getAbsoluteEpisodeNumberWithFuzzyPlotMatch(){
       #With multiple data sources we can get multiple AENs for the same episode, just take the first:
       AbsoluteEpisodeNumber=$(cut -f1 -d" " <<< ${AENguess[0]})
       Inform "${FUNCNAME}() - Identified AbsoluteEpisodeNumber: $AbsoluteEpisodeNumber using full Plot."
-      Debug "${FUNCNAME}() - The following AENguesses were identified as the same episode: ${AENguess[@]}."
+      Debug "${FUNCNAME}() - The following ${#AENguess[@]} AENguesses were identified as the same episode: ${AENguess[@]}."
       return 0
     else
       Warn "${FUNCNAME}() - Fuzzy Plot match is too fuzzy, as we matched two or more different episodes."
       Err "${FUNCNAME}() - This function needs refactoring as bad match on full plot should lead to chunked plot attempt."
-      Debug "${FUNCNAME}() - The following AENguesses were identified: ${AENguess[@]}."
+      Debug "${FUNCNAME}() - The following ${#AENguess[@]} AENguesses were identified: ${AENguess[@]}."
       return 1
     fi
   fi
@@ -3997,6 +3998,8 @@ if [ -f "$MoveDir/$ShowFileName.$OriginalExt" ]; then
   jobtype='FileAlreadyExists'
   #Write an entry in the duplicates file, for easy check/removal of duplicates.
   printf '%s\n' "$InputPath" >> "$DuplicatesFile"
+  #TODO: reformat the duplicates.log file for it's primary purpose, identifying and deleting genuine duplicates.
+  #printf "'%s' '%s' '%s' '%s'\n" "InputPath" "$ShowFileName" "$ShowStartTime" "$InputTitle" >> "$DuplicatesFile"
   #find -L "$originaldirname/" -samefile  "$MoveDir/$ShowFileName.$OriginalExt"
   printf '#Identified as: %s  RecStart:%s\n' "$ShowFileName" "$ShowStartTime" >> "$DuplicatesFile"
   RunJob

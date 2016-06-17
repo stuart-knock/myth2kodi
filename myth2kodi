@@ -677,7 +677,6 @@ KODIAutomate(){
   #Send notification to KODI, Update Library, Clean Library
   if [[ "$KODINotify" = "Enabled" || "$KODIUpdate" = "Enabled" || "$KODIClean" = "Enabled" ]]; then
     Inform 'COMMUNICATING WITH KODI INSTANCES...'
-    #local curlPOST='curl -L -s -m3 --connect-timeout 5 -X POST -H "Content-Type: application/json" -d'
     #SEE: http://kodi.wiki/view/HOW-TO:Remotely_update_library and 'man curl'
     local curlPOST='curl --silent --max-time 8 --connect-timeout 5 -H "Content-Type: application/json;" --data-binary'
     for KODIIP in ${KODIIPs[@]} ; do
@@ -728,7 +727,8 @@ KODIAutomate(){
 generaterss(){
   Debug "ENTERING: ${FUNCNAME}()"
   #user settings:
-  rssDir="/var/www/mythical-rss"
+  #TODO: this probably should be a setting at the top of file...
+  local rssDir="/var/www/mythical-rss"
   ((RSSmaxItems == 0)) && RSSmaxItems=8  #maximum number of items to read into the feed
 
   #script settings
@@ -1484,7 +1484,7 @@ downloadInfoAboutMatchedTitleAndCreateTxtFileTables(){
 
   local -i tvmaze_id=$(curl -L -s -m"$Timeout" http://api.tvmaze.com/lookup/shows?thetvdb="$SeriesID" | jq '.id')
   local tvmazeJsonFile="$m2kdir/$NewShowName/${NewShowName}_tvmaze.json"
-# to get the matching tvmaze id, then
+  # to get the matching tvmaze id, then
   if [[ -n "$tvmaze_id" ]] ; then
     local tvmazeShowJson="http://api.tvmaze.com/shows/$tvmaze_id/episodes"
     [[ -f "$tvmazeJsonFile" ]] && mv "$tvmazeJsonFile" "$m2kdir/$NewShowName/${Today}_${NewShowName}_tvmaze.json"
@@ -1587,7 +1587,6 @@ downloadInfoAboutMatchedTitleAndCreateTxtFileTables(){
 
       #If we also have a json file from tvmaze, then append that info 
       if [[ -f "$tvmazeJsonFile" ]] ; then
-        # | tr -d "\n" | sed s/"<\/\?p>"/""/g | sed -r s'/[^[:alnum:]|^&,.-]/ /'g | sed -r s'/\s{2,}/ /'g
         jq -r '.[] | .name' "$tvmazeJsonFile" >> "$m2kdir/$NewShowName/$NewShowName.actualEname.txt"
         jq -r '.[] | .name' "$tvmazeJsonFile" >> "$m2kdir/$NewShowName/$NewShowName.Ename.txt"
         jq -r '.[] | .season' "$tvmazeJsonFile" >> "$m2kdir/$NewShowName/$NewShowName.S.txt"
@@ -1597,7 +1596,6 @@ downloadInfoAboutMatchedTitleAndCreateTxtFileTables(){
           jq -r ".[$i] | .summary" "$tvmazeJsonFile" |  tr -d "\n" | sed s/"<\/\?p>"/""/g | sed -r s'/[^[:alnum:]|^&,.-]/ /'g | sed -r s'/\s{2,}/ /'g >> "$m2kdir/$NewShowName/$NewShowName.Plot.txt"
           printf '\n' >> "$m2kdir/$NewShowName/$NewShowName.Plot.txt"
         done
-        #jq -r '.[] | .summary' "$tvmazeJsonFile" | sed s/"<p>"/""/g | tr -d "\n" | sed  s/"<\/p>"/"\n"/g >> "$m2kdir/$NewShowName/$NewShowName.Plot.txt"
       fi
 
       chmod 666 "$m2kdir/$NewShowName/$NewShowName".actualEname.txt
@@ -1814,35 +1812,17 @@ getAbsoluteEpisodeNumberWithFuzzyPlotMatch(){
   ((PlotLength<42)) && Warn "${FUNCNAME}() - Plot is too short to attempt fuzzy guess." && return 1
   #Fuzzy guess at plot, prepended with: "AbsoluteEpisodeNumber:cost:"
   local FuzzyPlot=($(agrep -ikByns "$Plot" "$m2kdir/$NewShowName/$NewShowName.Plot.txt"))
-  #TODO: Need to check for and deal with multiple results...
-  #local -a AENguess=($(cut -f1 -d":" <<< "$(printf '%s\n' "${FuzzyPlot[@]}")"))
-  #local -a cost=($(cut -f2 -d":" <<< "$(printf '%s\n' "${FuzzyPlot[@]}")"))
-  #local -a MatchedPlot=()
-  #for (( i = 0; i < ${#AENguess[@]}; i++ )) ; do
-  #  MatchedPlot[i]="$(sed -n ${AENguess[i]}'p' "$m2kdir"/"$NewShowName"/"$NewShowName".Plot.txt)"
-  #done
   [[ -z "${FuzzyPlot[0]}" ]] && Warn "${FUNCNAME}() - No fuzzy match on Plot" && return 1
   #Extract our guessed AbsoluteEpisodeNumber
-  #local -i AENguess=$(cut -f1 -d":" <<< "${FuzzyPlot[0]}")
   local -a AENguess=($(cut -f1 -d":" <<< "$(printf '%s\n' "${FuzzyPlot[@]}")"))
   DebugCont "$( IFS=','; printf '%s' "AbsoluteEpisodeNumber guess: ${AENguess[*]}" )"
-  #local -i cost=$(cut -f2 -d":" <<< "${FuzzyPlot[0]}")
   local -a cost=($(cut -f2 -d":" <<< "$(printf '%s\n' "${FuzzyPlot[@]}")"))
   DebugCont "$( IFS=','; printf '%s' "Cost: ${cost[*]}" )"
-  #local MatchedPlot="$(sed -n $AENguess'p' "$m2kdir"/"$NewShowName"/"$NewShowName".Plot.txt)"
   local -a MatchedPlot=()
   for (( i = 0; i < ${#AENguess[@]}; i++ )) ; do
     MatchedPlot[i]="$(sed -n ${AENguess[i]}'p' "$m2kdir"/"$NewShowName"/"$NewShowName".Plot.txt)"
     DebugCont "MatchedPlot $i: ${MatchedPlot[i]}"
   done
-  #DebugCont "MatchedPlot: ${MatchedPlot[@]}"
-  # local -i MatchedPlotLength=$(wc --chars <<< "$MatchedPlot")
-  # DebugCont "MatchedPlotLength: $MatchedPlotLength"
-  # #Get (unsigned) difference in number of characters between $Plot & fuzzy guessed plot.
-  # local -i lendif=PlotLength-MatchedPlotLength ; lendif=${lendif/#-/}
-  # #Normalise the cost, allowing for truncated plots.
-  # local -i normcost=cost-lendif ; normcost=${normcost/#-/}
-  # DebugCont "Normalised Cost: $normcost"
   #TODO: Should check that MatchedPlot is longer than PlotLength, which is essentially what we're assuming below.
   #If the cost is greater than a 1/3 of characters in the plot we're trying to match #TODO: figure out the critical ratio here.
   #TODO: Should have this compare across all costs... No, multiple results from agrep only occur for equal costs...
@@ -2532,16 +2512,6 @@ ScanUsageMsg(){
 #This function will scan a folder and process the entire library
 mythicalScan(){
   Debug "ENTERING: ${FUNCNAME}()"
-  #TODO: KODIUpdate when operating on many files, such as in scan mode, is problematic... the basic
-  #      attempted solution commented below fails because during the scan myth2kodi is called on each
-  #      file... Need to figure out a way to disable KODIUpdate for subsequent myth2kodi calls when in 
-  #      scan mode or similar. Just run once at the end of scan...
-  #      TEMPORARY WORK AROUND IS TO MODIFY KODIUpdate TO "Disabled" in the script before running scan.
-  ##Override setting of KODIUpdate during scan, otherwise we'll end up running update thousands of times...
-  #prescanstatusKODIUpdate="$KODIUpdate"
-  #KODIUpdate="Disabled"
-  #KODIUpdate="$prescanstatusKODIUpdate"
-  #TODO: Also need to skip DoMaintenance when in scan mode... Put a call to DoMaintenance() in the start of Scan() once subsequent calls are bypassed...
   local yesorno=""
   DoMythTVPermissionsCheck
   #Map myth2kodi input variables to local variables for our current purpose.
@@ -2886,7 +2856,7 @@ mythicalDiagnostics(){
     printf '\n'
     Inform "Recordings Database is not used for testing."
     InformCont "Performing fuzzy logic lookup on database file.  Please wait."
-    InformCont "It may take a moment to build mythical librarian database files."
+    InformCont "It may take a moment to build myth2kodi database files."
     InformCont "Executing: myth2kodi testfile.ext 'mister rogers' 'show 1332'"
     InformCont "Testing exit status."
 
@@ -3853,6 +3823,7 @@ WorkingDirWritable=$TMoveDirWritable
 #Report naming decisions
 Inform "CONFIDENCE:$ConfidenceRating LOGIC PATH: $ConfidenceReasoning"
 
+#TODO: Make the following block a function called something like DebugSummary().
 #####DEBUG MODE OUTPUT BLOCK#####
 loglevelbeforethispointincode="$LogLevel"
 LogLevel=3
@@ -3885,7 +3856,7 @@ DebugCont "SYMLINK=$SYMLINK-"
 DebugCont "MoveFileSize=${MoveFileSize}kB"
 DebugCont "ConfidenceRating=$ConfidenceRating-"
 DebugCont "ConfidenceReasoning=$ConfidenceReasoning-"
-#TODO: Move the summary table of writeable directories code in Diagnostics to a function and reuse here
+#TODO: Move the summary table of writeable directories code in Diagnostics to a function and reuse here, maybe dirSummary
 DebugCont "CREATE AND DELETE FLAGS: 0='NOT WRITEABLE' ; 1='WRITEABLE'"
 DebugCont "    OriginalDirWritable=$OriginalDirWritable- FREE:${OriginaldirFreeSpace}kB"
 DebugCont "    WorkingDirWritable=$WorkingDirWritable- FREE:${WorkingDirFreeSpace}kB"
@@ -4128,9 +4099,8 @@ elif [ "$SYMLINK" = "LINK" ]; then
     jobtype='LinkModeSuccessful'
     RunJob
 
-    #If link failure, send notification and fail
+  #If link failure, send notification and fail
   elif [ ! -L "$MoveDir/$ShowFileName.$OriginalExt" ]; then
-    #echo "myth2kodi '$1' '$2' '$3'" >> "$m2kdir"/doover.sh
     SymlinkNotCreated
     writeJobToDooverQue "$1" "$2" "$3"
 

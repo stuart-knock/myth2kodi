@@ -131,6 +131,7 @@
 #
 #Dependencies:
 #  "curl" -- downloads webpages and sends commands to Kodi;
+#  "jq" -- parses json files, used for tvmaze data.
 #  "agrep" -- provides fuzzy logic;
 #  "libnotify-bin" -- allows GNOME desktop notifications;
 #  "mythbackend" -- Access the MythTV database.
@@ -298,7 +299,7 @@ KODINotify="Enabled"
 #Ip Address and port for KODI Notifications Eg.KODIIPs=( "192.168.1.110:8080" "192.168.1.111:8080" "XBOX:8080" )
 #NOTE: If you've set username and password for remote access to kodi then you'll need to prepend user:password@ to the ip addresses
 KODIIPs=( "kodi:supersecurekodi@192.168.1.78:8080" ) #<------THIS VALUE MUST BE SET-------
-#RSSmaxItems controls the number of items in the RSS. RSS Can be activated by creating a folder in /var/www/mythical-rss.
+#RSSmaxItems controls the number of items in the RSS. RSS Can be activated by creating a folder in /var/www/myth2kodi-rss.
 #NOTE: setting this to 0 will essentially be ignored as generateRSS() considers it unset and uses the default of 8
 declare -i RSSmaxItems=8
 
@@ -322,7 +323,7 @@ LogFile='output.log'
 LogType='both'
 ########################## END USER SETTINGS ###################################
 
-m2kVersion="myth2kodi Version 0.8.15; mythicalLibrarian 953ish+"
+m2kVersion="myth2kodi Version 0.9.0; mythicalLibrarian 953ish+"
 
 #TODO: Add ability to compress LogFile (either time(eg. Monthly) or size(~4MB)) and start a fresh one.
 
@@ -721,14 +722,14 @@ KODIAutomate(){
 #This function generates an RSS feed for use on the web server. This can be used
 #in /home/<kodi-user>/.kodi/userdata/RssFeeds.xml, replace or add to the default
 #feeds with:
-#  <feed updateinterval="30">http://[youripaddress]/mythical-rss/rss.xml</feed>
+#  <feed updateinterval="30">http://[youripaddress]/myth2kodi-rss/rss.xml</feed>
 #Big thanks to barney_1!
 #TODO: return codes from this function aren't captured...
 generaterss(){
   Debug "ENTERING: ${FUNCNAME}()"
   #user settings:
   #TODO: this probably should be a setting at the top of file...
-  local rssDir="/var/www/mythical-rss"
+  local rssDir="/var/www/myth2kodi-rss"
   ((RSSmaxItems == 0)) && RSSmaxItems=8  #maximum number of items to read into the feed
 
   #script settings
@@ -2476,7 +2477,7 @@ DoMaintenance(){
     test -f "$m2kdir/dir.tracking2" && mv "$m2kdir/dir.tracking2" "$m2kdir/dir.tracking"
   fi
 
-  #cleanse myth2kodi database folders if in --doMaintenance mode
+  #cleanse myth2kodi database folders if in --maintenance mode
   if [ "$removedead" = "1" ]; then
     test -f "$m2kdir/cleanup" && rm -f "$m2kdir/cleanup"
     ls -A -1 "$m2kdir" > "$m2kdir/cleanup"
@@ -2510,7 +2511,7 @@ ScanUsageMsg(){
 #####SCAN MODE#####
 #TODO: Need to go through this function line-by-line and make sure it can be run without causing damage.
 #This function will scan a folder and process the entire library
-mythicalScan(){
+m2kScan(){
   Debug "ENTERING: ${FUNCNAME}()"
   local yesorno=""
   DoMythTVPermissionsCheck
@@ -2607,7 +2608,7 @@ setGroupPermissions(){
 
 #####MYTHICAL DIAGNOSTICS#####
 #This function provides a functions check on myth2kodi
-mythicalDiagnostics(){
+m2kDiagnostics(){
   Debug "ENTERING: ${FUNCNAME}()"
   #If there is already a diagnostics file, move it to diagnostics_old_<Date&Time that this script was launched>
   test -f "$DiagnosticsFile" && mv "$DiagnosticsFile" "$m2kdir/diagnostics_old_${FileNameNow}.log"
@@ -2979,7 +2980,7 @@ executeDoOver(){
 
   if [ "$yesorno" = "y" ] && [ -f "$m2kdir/doover.sh" ]; then
     Debug "Running doover.sh"
-    #TODO: Maybe doover.sh.run_YYYY-MM-DD would be better, see $Today
+    #TODO: Maybe doover.sh.run_YYYY-MM-DDThhMMSS would be better, see $FileNameNow
     #preserve permissions
     chmod +x "$m2kdir/doover.sh"
     #NOTE: The first command in doover.sh is to delete the file doover.sh.
@@ -3026,7 +3027,7 @@ executeUndo(){
     test -f "$m2kdir/undo.sh" && sudo -u $SUDO_USER cat "$m2kdir/undo.sh" >> "$m2kdir/undo.sh.old"
     test -f "$m2kdir/undo.sh" && sudo -u $SUDO_USER "$m2kdir/undo.sh"
     Debug "If doover.sh file exists, move it to doover.sh.old."
-    #TODO: Change doover.sh.old to doover.sh.old_YYYY-MM-DD would be better, see $Today
+    #TODO: Change doover.sh.old to doover.sh.old_YYYY-MM-DDTHHMMss would be better, see $FileNameNow
     test -f "$m2kdir/doover.sh" && cat "$m2kdir/doover.sh" >> "$m2kdir/doover.sh.old"
     test -f "$m2kdir/doover.sh" && rm -f "$m2kdir/doover.sh"
     Debug "If created.tracking file exists, move it to created.tracking.old."
@@ -3034,7 +3035,7 @@ executeUndo(){
     test -f "$m2kdir/created.tracking" && cat "$m2kdir/created.tracking">>"$m2kdir/created.tracking.old"
     test -f "$m2kdir/created.tracking" && rm -f "$m2kdir/created.tracking"
     rm -f "$m2kdir/undo.lock"
-    sudo -u $SUDO_USER myth2kodi --doMaintenance
+    sudo -u $SUDO_USER myth2kodi --maintenance
     Inform "Done, undo.sh has finished running."
     exit 0
   else
@@ -3046,7 +3047,7 @@ executeUndo(){
 
 #####HELP#####
 #This function provides a helpful message.
-mythicalHelp(){
+m2kHelp(){
   Debug "ENTERING: ${FUNCNAME}()"
   if [ "$InputPath" = "%DIR%/%FILE%" ]; then
     UserJobOutsideMythTV
@@ -3058,28 +3059,29 @@ mythicalHelp(){
   echo "usage: myth2kodi 'path/to/file' ['title'] ['subtitle']"
   echo "usage: myth2kodi --mode [parameter] [parameter]"
   echo "  items in brackets are [context sensitive]"
-  #TODO: Update this, probably remove short versions, especially for potentially dangerous modes, change --mythicalDiagnostics to --diagnostics
+  #TODO: Update this, probably remove short versions, especially for potentially dangerous modes
   if [ "$switchhelp" = "1" ]; then
     echo ""
-    echo "Author: Adam Outler outleradam(at)hotmail.com"
+    echo "mythicalLibrarian Author: Adam Outler outleradam(at)hotmail.com"
+    echo "myth2kodi Author: Stuart Knock"
     echo ""
-    echo "-m|--mythicalDiagnostics"
+    echo "--diagnostics"
     echo "  diagnostics: tests functions of myth2kodi"
-    echo "  eg. myth2kodi --mythicalDiagnostics"
+    echo "  eg. myth2kodi --diagnostics"
     echo ""
-    echo "-s|--scan filetype /path/to/folder"
+    echo "--scan filetype /path/to/folder"
     echo "  scan: creates a library from an entire folder"
     echo "  eg. myth2kodi --scan mpg /home/mythtv/videos"
     echo ""
-    echo "--doMaintenance"
-    echo "  doMaintenance: removes FOLDER DISCONNECTED errors from logs"
-    echo "  eg. myth2kodi --doMaintenance"
+    echo "--maintenance"
+    echo "  maintenance: removes FOLDER DISCONNECTED errors from logs"
+    echo "  eg. myth2kodi --maintenance"
     echo ""
     echo "-u|--update"
     echo "  update: myth2kodi to the current version"
     echo "  eg. sudo myth2kodi --update"
     echo ""
-    echo "-d|--doover"
+    echo "--doover"
     echo "  doover: reruns previously failed jobs sequentially"
     echo "  eg. sudo myth2kodi --doover"
     echo ""
@@ -3087,7 +3089,7 @@ mythicalHelp(){
     echo "  unmanned_doover: Same as --doover but for use without human intervention"
     echo "  eg. sudo myth2kodi --unmanned_doover"
     echo ""
-    echo "-u|--undo"
+    echo "--undo"
     echo "  undo: returns all files to original states"
     echo "  eg. sudo myth2kodi --undo"
     echo ""
@@ -3110,7 +3112,7 @@ mythicalHelp(){
     echo "======================================================="
   fi
   echo " ensure you have set the user settings set properly and run"
-  echo " --mythicalDiagnostics before using myth2kodi"
+  echo " --diagnostics before using myth2kodi"
   echo " in --scan mode or as a UserJob."
   echo " For more information type: myth2kodi --help or --special"
   echo " done."
@@ -3274,9 +3276,7 @@ declare -r MyUserName=$(whoami)
 Debug "Running myth2kodi as $MyUserName"
 #And when, 
 declare -r Today="$(date +%F)"  #Date in IEEE standard format, ie YYYY-mm-dd
-#TODO: Consider renaming Time to ScriptStartTime, as it's fixed at the start of the script.
-declare -r Time="$(date +%H:%M:%S)" #Time in a readable IEEE standard format, ie HH:MM:SS
-#TODO: Consider making FileNameNow and a variable called Now contain the date function, to be evaluated when called rather than fixed at the start of the script.
+declare -r ScriptStartTime="$(date +%H:%M:%S)" #Time in a readable IEEE standard format, ie HH:MM:SS
 declare -r FileNameNow="$(date +%FT%H%M%S)"  #ISO 8601: YYYY-mm-ddThhMMSS
 
 #Set global values for settings, this overrides those set at the top of this file
@@ -3286,10 +3286,10 @@ test -f "/etc/myth2kodi/globalSettings" && source /etc/myth2kodi/globalSettings
 if [ ! -d "$m2kdir" ]; then
   mkdir "$m2kdir"
   touch "$LogFile"
-  #Keep this as a printf so it's created here regardless of LogType & LogLevel. Or maybe convert to a touch
-  printf 'Creating Working Directory: %s\n' "$m2kdir" >> "$LogFile"
-  printf 'Creating Log File: %s\n' "$LogFile"         >> "$LogFile"
-  printf 'Created on %s at %s\n' "$Today" "$Time"     >> "$LogFile"
+  #Keep this as a printf so it's created here regardless of LogType & LogLevel.
+  printf 'Creating Working Directory: %s\n' "$m2kdir"        >> "$LogFile"
+  printf 'Creating Log File: %s\n' "$LogFile"                >> "$LogFile"
+  printf 'Created on %s at %s\n' "$Today" "$ScriptStartTime" >> "$LogFile"
 fi
 
 #Setup defaults for searching Series information
@@ -3309,18 +3309,20 @@ MythicalEpiShow=0
 #Load variables from a file if required
 test -f "$m2kdir"/myth2kodi.conf && source "$m2kdir"/myth2kodi.conf
 
-#TODO: Should allow manual input of season and episode numbers in addition to
-#  Title & Subtitle, with full information all searching should be overridden/bypassed...
-
 #Capture args the script was called with
 InputPath="$1"
 InputTitle="$2"
 InputSubtitle="$3"
+#TODO: Consider removing this "InputOption", it's only used by --BypassPermissionsCheck and removing that option seems like it might be a good idea...
 InputOption="$4"
+#TODO: Should allow manual input of season and episode numbers in addition to
+#  Title & Subtitle, with full information all searching should be overridden/bypassed...
+#InputSxx="$4"
+#InputExx="$5"
 
 #Some basic tests to make sure we were called correctly
-[[ "$InputPath" != "testfile.ext" && ! -f "$InputPath" && -z "$InputTitle" && "${InputPath:0:1}" != "-" ]] && mythicalHelp
-[[ -z "$InputPath" ]] && mythicalHelp
+[[ "$InputPath" != "testfile.ext" && ! -f "$InputPath" && -z "$InputTitle" && "${InputPath:0:1}" != "-" ]] && m2kHelp
+[[ -z "$InputPath" ]] && m2kHelp
 MythTVUserJobString="%DIR%/%FILE%"
 
 #####COMMAND LINE SWITCHES#####
@@ -3331,15 +3333,15 @@ MythTVUserJobString="%DIR%/%FILE%"
 #check for command line switches
 case "$InputPath" in
 
-  --scan|-s)
+  --scan)
     #TODO: Add ability to scan only specific files, eg those for a specific ShowName
     export m2kScanMode="True"
-    mythicalScan
+    m2kScan
     declare -i scanreturnstatus="$?"
     unset m2kScanMode
     exit $scanreturnstatus
   ;;
-  --mythicalDiagnostics|-m)
+  --diagnostics)
     PreCallLogFile="$LogFile"
     PreCallLogLevel="$LogLevel"
     (( LogLevel < 3 )) && LogLevel=3 && Inform "Escalating LogLevel to Debug (3)."
@@ -3349,9 +3351,9 @@ case "$InputPath" in
      Warn "Running diagnostics without any logging to file, consider using LogType 'logfile' or 'both'"
     fi
     LogFile="$DiagnosticsFile"
-    mythicalDiagnostics
+    m2kDiagnostics
     declare -i diagnosticsreturnstatus="$?"
-    #Reset the LogFile & LogLevel to previous state, in case we ever call myth2kodi --mythicalDiagnostics from within myth2kodi
+    #Reset the LogFile & LogLevel to previous state, in case we ever call myth2kodi --diagnostics from within myth2kodi
     LogFile="$PreCallLogFile"
     LogLevel="$PreCallLogLevel"
     exit $diagnosticsreturnstatus
@@ -3360,7 +3362,7 @@ case "$InputPath" in
     improveConfidence
     exit 0
   ;;
-  --doover|-d)
+  --doover)
     executeDoOver
     exit $?
   ;;
@@ -3381,15 +3383,15 @@ case "$InputPath" in
   ;;
   --help|-?|-h)
     switchhelp=1
-    mythicalHelp
+    m2kHelp
     exit 0
   ;;
-  --update|--upgrade|--build|-u)
+  --update|--upgrade|--build)
     #mythicalUpdater
     Err "NOT MAINTAINING THE UPDATER, SO DON'T BOTHER TRYING TO UPDATE..."
     exit 1
   ;;
-  --doMaintenance)
+  --maintenance)
     MaintenanceWarning
     [[ "$?" != 0 ]] && exit $?
     removedead=1
@@ -3397,22 +3399,26 @@ case "$InputPath" in
     echo "done."
     exit 0
   ;;
-  --special|-s)
+  --special)
     special
     exit 0
   ;;
   --version|-v|-ver|-V)
-    echo $m2kVersion
+    printf '%s\n' "$m2kVersion"
     exit 0
   ;;
+  --commskip)
+    Err "The --commskip option is Not Implemented... yet."
+    exit 1
+  ;;
 esac
-test "${InputTitle:0:1}" = "-" && mythicalHelp
+test "${InputTitle:0:1}" = "-" && m2kHelp
 
 #####ENVIRONMENTAL VARIABLES CONTINUED#####
 
 #Initial log entry
 m2kPlatform="$(uname)"
-printf '%s\n' "@@@@@@@@ NEW SEARCH INITIATED $Today AT $Time @@@@@@@@" >> "$LogFile"
+printf '%s\n' "@@@@@@@@ NEW SEARCH INITIATED $Today AT $ScriptStartTime @@@@@@@@" >> "$LogFile"
 printf '%s\n' "$m2kVersion on $m2kPlatform" >> "$LogFile"
 
 InputFileBasename="$(basename "$InputPath")"
@@ -3460,7 +3466,7 @@ InformCont "PROGRAMID:$ProgramID  ShowCategory:$ShowCategory"
 [[ -n "$Exx" ]] && InformCont "Exx:$Exx" || InformCont "Exx: UNKNOWN"
 InformCont "PLOT: $Plot"
 ShowName="$InputTitle"
-[[ -z "$ShowName" ]] && mythicalHelp
+[[ -z "$ShowName" ]] && m2kHelp
 
 #split on semicolon, there will only be one episode looked up.  Remove non-filesystem-compliant chars.
 EpisodeSubtitle="$(echo $InputSubtitle | sed 's/;.*//' | tr -d '’@%^`~!#$|\?*<":>+[]/'"'")"

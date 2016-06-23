@@ -3472,19 +3472,19 @@ case "$InputPath" in
     exit 0
   ;;
   --commskip)
-    Err "The --commskip option is Not Implemented... yet."
+    #Err "The --commskip option is Not Implemented... yet."
     #eg: myth2kodi --commskip '/path/to/recordings/1070_20160331073100.mpg'
-    #InputPath="$2"
-    #[[ ! -f "$InputPath" ]] && m2kHelp
-    #Inform "Regenerating commskip file for $InputPath"
-    #InputFileBasename="$(basename "$InputPath")"
-    #GetMythTvPythonBindings
+    InputPath="$2"
+    [[ ! -f "$InputPath" ]] && m2kHelp
+    Inform "Regenerating commskip file for $InputPath"
+    InputFileBasename="$(basename "$InputPath")"
+    GetMythTvPythonBindings
     #TODO: Find the file that $InputPath points to or is pointed to by and use that for the move location below, otherwise we have to run full identification of Episode/etc.
-    #[[ -L "$InputPath" ]] && movedrecordingname="$(readlink "$InputPath")"
+    [[ -L "$InputPath" ]] && movedrecordingname="$(readlink "$InputPath")"
     #TODO: need to deal with link mode case, something like: movedrecordingname="$(find -L "$MoveDir/" -samefile "$InputPath")" #Actually, this form should work for both cases... with the problem that multiple links can be returned in link mode if there are multiple links...
-    #ShowCommSkip="${movedrecordingname%.*}.txt"
-    #mv "$m2kdir/markupframes.txt" "${ShowCommSkip}"
-    exit 1
+    ShowCommSkip="${movedrecordingname%.*}.txt"
+    mv "$m2kdir/markupframes.txt" "${ShowCommSkip}"
+    exit $?
   ;;
 esac
 test "${InputTitle:0:1}" = "-" && m2kHelp

@@ -651,7 +651,7 @@ checkPermissions(){
 #Function GenComSkip creates a comskip.txt file for use with the show upon moving, created from data from library
 GenComSkip(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  local -i Counter=1
+  local -i Counter=0
   local StartData
   local StopData
   #Set up comskip file

@@ -323,7 +323,7 @@ LogFile='output.log'
 LogType='both'
 ########################## END USER SETTINGS ###################################
 
-m2kVersion="myth2kodi Version 0.9.0; mythicalLibrarian 953ish+"
+m2kVersion="myth2kodi Version 0.9.1; mythicalLibrarian 953ish+"
 
 #TODO: Add ability to compress LogFile (either time(eg. Monthly) or size(~4MB)) and start a fresh one.
 
@@ -3127,7 +3127,7 @@ m2kHelp(){
     echo "myth2kodi Author: Stuart Knock"
     echo ""
     echo "--diagnostics"
-    echo "  diagnostics: tests functions of myth2kodi"
+    echo "  diagnostics: tests the functionality of myth2kodi"
     echo "  eg. myth2kodi --diagnostics"
     echo ""
     echo "--scan filetype /path/to/folder"
@@ -3138,7 +3138,7 @@ m2kHelp(){
     echo "  maintenance: removes FOLDER DISCONNECTED errors from logs"
     echo "  eg. myth2kodi --maintenance"
     echo ""
-    echo "-u|--update"
+    echo "--update"
     echo "  update: myth2kodi to the current version"
     echo "  eg. sudo myth2kodi --update"
     echo ""
@@ -3154,10 +3154,17 @@ m2kHelp(){
     echo "  undo: returns all files to original states"
     echo "  eg. sudo myth2kodi --undo"
     echo ""
-    echo "--getSeriesInfo"
+    echo "--getSeriesInfo 'Series Name'"
     echo "  getSeriesInfo: Update of local tables for a series from TheTVDB,"
     echo "                 ignoring lastupdated.time."
     echo "  eg. myth2kodi --getSeriesInfo 'Black Books'"
+    echo ""
+    echo "--commskip /path/to/folder/or/file"
+    echo "  commskip: Regenerates the commskip file for recordings that have"
+    echo "            already been moved. Argument can be either a single"
+    echo "            recording or a directory containing already moved recordings."
+    echo "  eg. myth2kodi --commskip '/home/mythtv/recordings/1099_20151210093000.mpg'"
+    echo "  eg. myth2kodi --commskip '/home/mythtv/recordings'"
     echo ""
     echo "-?|-h|--help"
     echo "  Help: displays this message"
@@ -3250,7 +3257,7 @@ improveConfidence(){
   echo -e ""
   echo -e "How can I improve my Confidence Rating?"
   echo -e " 1. myth2kodi --special provides information on how"
-  echo -e "    to improve Episode matching confidence by using a "
+  echo -e "    to improve Episode matching confidence by using a"
   echo -e "    showTranslations file to compensate for bad guide data."
   echo -e " 2. Add your favorite show's Zap2it ID to TheTVDB.com."
   echo -e " 3. Add your favorite show's OriginalAirdate to TheTVDB.com."
@@ -3398,6 +3405,7 @@ MythTVUserJobString="%DIR%/%FILE%"
 case "$InputPath" in
 
   --scan)
+    Debug "Recognised command line switch '--scan'"
     #TODO: Add ability to scan only specific files, eg those for a specific ShowName
     export m2kScanMode="True"
     m2kScan
@@ -3406,6 +3414,7 @@ case "$InputPath" in
     exit $scanreturnstatus
   ;;
   --diagnostics)
+    Debug "Recognised command line switch '--diagnostics'"
     PreCallLogFile="$LogFile"
     PreCallLogLevel="$LogLevel"
     (( LogLevel < 3 )) && LogLevel=3 && Inform "Escalating LogLevel to Debug (3)."
@@ -3423,39 +3432,47 @@ case "$InputPath" in
     exit $diagnosticsreturnstatus
   ;;
   --confidence)
+    Debug "Recognised command line switch '--confidence'"
     improveConfidence
     exit 0
   ;;
   --doover)
+    Debug "Recognised command line switch '--doover'"
     executeDoOver
     exit $?
   ;;
   --unmanned_doover)
+    Debug "Recognised command line switch '--unmanned_doover'"
     DoOverBypass=1
     executeDoOver
     exit $?
   ;;
   --undo)
+    Debug "Recognised command line switch '--undo'"
     #TODO: Enable undo for a specific file, eg: myth2kodi --undo '/path/to/recordings/1070_20160331073100.mpg'
     executeUndo
     exit 0
   ;;
   --getSeriesInfo)
+    Debug "Recognised command line switch '--getSeriesInfo'"
     #Example usage: myth2kodi --getSeriesInfo "Black Books"
     getSeriesInfo
     exit $?
   ;;
   --help|-?|-h)
+    Debug "Recognised command line switch '--help|-?|-h'"
     switchhelp=1
     m2kHelp
     exit 0
   ;;
   --update|--upgrade|--build)
+    Debug "Recognised command line switch '--update|--upgrade|--build'"
     #mythicalUpdater
     Err "NOT MAINTAINING THE UPDATER, SO DON'T BOTHER TRYING TO UPDATE..."
     exit 1
   ;;
   --maintenance)
+    Debug "Recognised command line switch '--maintenance'"
     MaintenanceWarning
     [[ "$?" != 0 ]] && exit $?
     removedead=1
@@ -3464,14 +3481,19 @@ case "$InputPath" in
     exit 0
   ;;
   --special)
+    Debug "Recognised command line switch '--special'"
     special
     exit 0
   ;;
   --version|-v|-ver|-V)
+    Debug "Recognised command line switch '--version|-v|-ver|-V'"
     printf '%s\n' "$m2kVersion"
     exit 0
   ;;
   --commskip)
+    #TODO: Move scan file generation to a function, use here and in --scan
+    #TODO: Move the below into a function, clean-up and add more checking and logging.
+    Debug "Recognised command line switch '--commskip'"
     #Err "The --commskip option is Not Implemented... yet."
     #eg: myth2kodi --commskip '/path/to/recordings/1070_20160331073100.mpg'
     InputPath="$2"
@@ -3514,12 +3536,14 @@ case "$InputPath" in
         exit 0
       fi
     else
+      [[ -f "$InputPath" && ! -L "$InputPath" ]] && Err "#TODO: --commskip can't deal with link mode moving yet..."
       Err "The argument '$InputPath' is neither an already moved recording nor a directory to scan for them."
       exit 1
     fi
   ;;
 esac
-[[ "${InputPath:0:1}" = "-" ]]&& m2kHelp
+Debug "No recognised command line switches set."
+[[ "${InputPath:0:1}" = "-" ]] && m2kHelp
 
 #####ENVIRONMENTAL VARIABLES CONTINUED#####
 

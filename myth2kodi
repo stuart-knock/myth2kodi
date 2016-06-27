@@ -195,6 +195,8 @@
 
 ########################### BEGIN USER SETTINGS ################################
 ###Stand-alone mode values###
+#Specify the name of the user running mythtv, myth2kodi should always be run by that user.  Default="mythtv"
+Librarian="librarian"
 #SYMLINK has 3 modes.  MOVE|LINK|Disabled: Default=MOVE
 #Create symlink at InputPath after 'MOVE' | Do not move, just create a sym'LINK' | move the file, symlinking is 'Disabled'
 SYMLINK="MOVE"
@@ -726,6 +728,9 @@ KODIAutomate(){
 #in /home/<kodi-user>/.kodi/userdata/RssFeeds.xml, replace or add to the default
 #feeds with:
 #  <feed updateinterval="30">http://[youripaddress]/myth2kodi-rss/rss.xml</feed>
+#SAK: You'll probably need a webserver enabled for this to work, if it's only on
+#     the local machine then just use:
+#  <feed updateinterval="30">/var/www/myth2kodi-rss/rss.xml</feed>
 #Big thanks to barney_1!
 #TODO: return codes from this function aren't captured...
 generaterss(){
@@ -759,24 +764,10 @@ generaterss(){
     echo -e '<?xml version="1.0" encoding="ISO-8859-1" ?>'
     echo -e '<rss version="2.0">'
     echo -e '<channel>'
-    echo -e '\t<title>myth2kodi</title>'
+    echo -e '\t<title>Recently added by myth2kodi</title>'
     echo -e '\t<link>http://kodi.tv</link>'
     echo -e '\t<description>myth2kodi Daily Report Information</description>'
   } > "$rssDir/$TEMPrssFile"
-
-  #write current recording information to first item.
-  {
-    echo -e "\t\t<item>"
-    echo -e "\t\t\t<title>$NewShowName</title>"
-  } >> "$rssDir/$TEMPrssFile"
-  if [ "$m2kProgramIDCheck" = "EP" ]; then
-    echo -e "\t\t\t<link>http://www.thetvdb.com/?tab=series&amp;id=$SeriesID</link>" >> "$rssDir/$TEMPrssFile"
-  elif [ "$m2kProgramIDCheck" = "MV" ]; then
-    echo -e "\t\t\t<link>http://www.imdb.com/search/title?release_date=,$MovieAirDate&amp;title=$ShowName&amp;title_type=feature</link>" >> "$rssDir/$TEMPrssFile"
-  else
-    tvdotcomshowname="$(sed s/" "/"%20"/g <<< "$ShowName")"
-    echo -e "\t\t\t<link>http://www.tv.com/search.php?type=11&amp;stype=all&amp;tag=search%3Bfrontdoor&amp;qs=$tvdotcomshowname </link>" >> "$rssDir/$TEMPrssFile"
-  fi
 
   #TODO: Need to make the call to ifconfig more portable, maybe just revert to straight call and add /sbin to librarians path.
   #  The below assumed the first inet addr was the correct one, but that can lead to the loopback, using m2 and removing 127.0.0.1 avoids this problem,
@@ -786,6 +777,20 @@ generaterss(){
   rssNewShowName="$(sed s/"&"/"&amp;"/g <<< "$NewShowName")"
   rssPlot="$(sed s/"&"/"&amp;"/g <<< "$Plot")"
   mythicalGUID="$(echo "$MyUserName@$myip""$MoveDir/$ShowFileName.$OriginalExt" | sed s/"("/"%28"/g | sed s/")"/"%29"/g | sed s/"\ "/"%20"/g)" #TODO: Check that "\ " in the final sed is correct and shouldn't just be " "
+
+  #write current recording information to first item.
+  {
+    echo -e "\t\t<item>"
+    echo -e "\t\t\t<title>$rssNewShowName $Sxx$Exx $rssEpisodeSubtitle</title>"
+  } >> "$rssDir/$TEMPrssFile"
+  if [ "$m2kProgramIDCheck" = "EP" ]; then
+    echo -e "\t\t\t<link>http://www.thetvdb.com/?tab=series&amp;id=$SeriesID</link>" >> "$rssDir/$TEMPrssFile"
+  elif [ "$m2kProgramIDCheck" = "MV" ]; then
+    echo -e "\t\t\t<link>http://www.imdb.com/search/title?release_date=,$MovieAirDate&amp;title=$ShowName&amp;title_type=feature</link>" >> "$rssDir/$TEMPrssFile"
+  else
+    tvdotcomshowname="$(sed s/" "/"%20"/g <<< "$ShowName")"
+    echo -e "\t\t\t<link>http://www.tv.com/search.php?type=11&amp;stype=all&amp;tag=search%3Bfrontdoor&amp;qs=$tvdotcomshowname </link>" >> "$rssDir/$TEMPrssFile"
+  fi
   {
     echo -e "\t\t\t<guid>sftp://$mythicalGUID</guid>"
     echo -e "\t\t\t<pubDate>$(date -R -d "$ShowStartTime")</pubDate>"
@@ -835,7 +840,7 @@ generaterss(){
 
   #close the file.
   {
-    echo -e '\t</channel>'
+    echo -e '</channel>'
     echo -e '</rss>'
   } >> "$rssDir/$TEMPrssFile"
 
@@ -2090,18 +2095,18 @@ DoMythTVPermissionsCheck(){
   #  this should avoid most/all permission issues.
   if [[ "$InputOption" != "--BypassPermissionsCheck" || -z "$InputOption" && -z "$InputSubtitle" && "$InputTitle" != "--BypassPermissionsCheck" ]]; then
     #TODO: during --scan the ls here gets $InputPath "--scan" which obviously doesn't work...
-    #     if [ "$(find "$InputPath" -printf %u)" = "$Librarian" ] && [ "$MyUserName" != "$Librarian" ] && [ "$SYMLINK" = "MOVE" ]; then
-    if  [ "$(ls -l \"$InputPath\"| awk '{ print $3 }')" = "mythtv" ] && [ "$MyUserName" != "mythtv" ] && [ "$SYMLINK" = "MOVE" ]; then
+    if [ "$(find "$InputPath" -printf %u)" = "$Librarian" ] && [ "$MyUserName" != "$Librarian" ] && [ "$SYMLINK" = "MOVE" ]; then
+    #     if  [ "$(ls -l "$InputPath" | awk '{ print $3 }')" = "mythtv" ] && [ "$MyUserName" != "mythtv" ] && [ "$SYMLINK" = "MOVE" ]; then
       UserName=$USER
       Err ""
       ErrCont "########################################################################"
       ErrCont "##############################  ERROR  #################################"
       ErrCont "########################################################################"
-      ErrCont "USER NAME:$UserName ATTEMPTED TO RENAME A MYTHTV OWNED FILE."
+      ErrCont "USER NAME:$UserName ATTEMPTED TO RENAME A $Librarian OWNED FILE."
       ErrCont "myth2kodi HAS PREVENTED THIS UNAUTHORIZED FILE ACTION."
       ErrCont "THIS IS A SAFETY FEATURE TO PRESERVE FILE PERMISSIONS."
       ErrCont "PLEASE RUN THE FOLLOWING TO SET PROPER PERMISSIONS WHEN RENAMING FILES:"
-      ErrCont "    sudo su mythtv"
+      ErrCont "    sudo su $Librarian"
       ErrCont "    myth2kodi \"$InputPath\" \"$InputTitle\" \"$InputSubtitle\""
       ErrCont "OR AT YOUR OWN RISK BYPASS THIS CHECK BY ADDING --BypassPermissionsCheck"
       ErrCont "AT THE END OF THE LINE YOU JUST RAN."
@@ -2535,7 +2540,7 @@ DoMaintenance(){
     rm -f "$m2kdir/dir.tracking"
     test -f "$m2kdir/dir.tracking2" && mv "$m2kdir/dir.tracking2" "$m2kdir/dir.tracking"
   fi
-  
+
   #TODO: this need to be rethought given the cleaner way we now deal with myth2kodi database directories.
   #cleanse myth2kodi database folders if in --maintenance mode
   if [ "$removedead" = "1" ]; then
@@ -3868,6 +3873,8 @@ if [ "$StorageGroupFallback" = "Enabled" ] ; then
     fi
   fi
 fi
+
+#TODO: Need to add checks for existence of myth2kodi database files for $NewShowName and/or check that we've identified the series before bothering with the following 
 
 #TODO: If this works reliably, then consider moving it up to directly below fuzzy match on subtitle
 #As a last resort, if we still think it's an episode but have no episode info, try fuzzy match on plot

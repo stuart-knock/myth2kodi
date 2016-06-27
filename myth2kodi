@@ -2094,10 +2094,9 @@ DoMythTVPermissionsCheck(){
   #  check of $MyUserName and bailing with an ERROR message if != $Librarian,
   #  this should avoid most/all permission issues.
   if [[ "$InputOption" != "--BypassPermissionsCheck" || -z "$InputOption" && -z "$InputSubtitle" && "$InputTitle" != "--BypassPermissionsCheck" ]]; then
-    #TODO: during --scan the ls here gets $InputPath "--scan" which obviously doesn't work...
+    #TODO: during --scan the find here gets $InputPath "--scan" which obviously doesn't work...
     if [ "$(find "$InputPath" -printf %u)" = "$Librarian" ] && [ "$MyUserName" != "$Librarian" ] && [ "$SYMLINK" = "MOVE" ]; then
-    #     if  [ "$(ls -l "$InputPath" | awk '{ print $3 }')" = "mythtv" ] && [ "$MyUserName" != "mythtv" ] && [ "$SYMLINK" = "MOVE" ]; then
-      UserName=$USER
+      UserName="$USER"
       Err ""
       ErrCont "########################################################################"
       ErrCont "##############################  ERROR  #################################"
@@ -3351,6 +3350,8 @@ getSeriesInfo(){
 #Who called the script:
 declare -r MyUserName=$(whoami)
 Debug "Running myth2kodi as $MyUserName"
+#TODO: check of $MyUserName and bailing with an ERROR message if != $Librarian
+[[ "$MyUserName" != "$Librarian" ]] && Err "myth2kodi should be run by user '$Librarian'"
 #And when, 
 declare -r Today="$(date +%F)"  #Date in IEEE standard format, ie YYYY-mm-dd
 declare -r ScriptStartTime="$(date +%H:%M:%S)" #Time in a readable IEEE standard format, ie HH:MM:SS
@@ -3406,10 +3407,6 @@ InputOption="$4"
 MythTVUserJobString="%DIR%/%FILE%"
 
 #####COMMAND LINE SWITCHES#####
-#TODO: Add a --commskip option that just re/generates the commskip file for a
-#  given show, assuming/checking that show has already been myth2kodi'd. Useful
-#  if file was moved before commercial flagging or if commercial flagging needed
-#  to be redone
 #check for command line switches
 case "$InputPath" in
 

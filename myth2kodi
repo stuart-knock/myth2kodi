@@ -1813,6 +1813,7 @@ getAbsoluteEpisodeNumberWithSxxExx(){
   DebugCont "Exx: $Exx"
 
   AbsoluteEpisodeNumber=""
+  local -a AENs
   #Strip the leading "S" and any leading "0" from Sxx
   local Snum=${Sxx#S} ; Snum=${Snum#0}
   #Strip the leading "E" and any leading "0" from Exx
@@ -1821,13 +1822,9 @@ getAbsoluteEpisodeNumberWithSxxExx(){
   local ExxAENs
   SxxAENs=$(grep -nix "$Snum" "$m2kdir/$NewShowName/$NewShowName.S.txt" | sed s/:.*//)
   ExxAENs=$(grep -nix "$Enum" "$m2kdir/$NewShowName/$NewShowName.E.txt" | sed s/:.*//)
-  #TODO: Check functionality is maintained and if so double quote $SxxAENs & $ExxAENs
-  #TODO: this needs checking
-  AbsoluteEpisodeNumber=$(comm -12 <(sed s/" "/"\n"/g <<< $SxxAENs | sort) <(sed s/" "/"\n"/g <<< $ExxAENs | sort))
-  #With multiple data sources we can get multiple AENs, just take the first:
-  AbsoluteEpisodeNumber=$(sed s/"\n"/" "/g <<< $AbsoluteEpisodeNumber)
-  AbsoluteEpisodeNumber=$(cut -f1 -d" " <<< "$AbsoluteEpisodeNumber")
-  #AbsoluteEpisodeNumber="${AbsoluteEpisodeNumber[0]}"
+  #With multiple data sources we can get multiple AENs, just take the first data source:
+  AENs=($(sort --numeric-sort <<< "$(comm -12 <(sort <<< "$SxxAENs") <(sort <<< "$ExxAENs"))"))
+  AbsoluteEpisodeNumber="${AENs[0]}"
   if [[ -n "$AbsoluteEpisodeNumber" ]] && ((AbsoluteEpisodeNumber > 0)); then
     Inform "Using SxxExx, determined AbsoluteEpisodeNumber: $AbsoluteEpisodeNumber"
     return 0

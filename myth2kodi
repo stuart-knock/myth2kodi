@@ -314,7 +314,7 @@ declare -i RSSmaxItems=8
 #Recommend 2 to start with or if you want to keep track of what myth2kodi is doing.
 #Recommend 1 for usual operation, once you're confident that everything is working fine.
 #Only use 3 if you have a particular problem that you're trying to track down, it significantly increases the output.
-LogLevel=3
+LogLevel=2
 #LogFile is the name of the log file, this will be placed in myth2kodi's working directory, $m2kdir set above.
 #DEFAULT: 'output.log' #NOTE: LogFile is overridden in special contexts, such as running Diagnostics.
 LogFile='output.log'
@@ -323,7 +323,7 @@ LogFile='output.log'
 LogType='both'
 ########################## END USER SETTINGS ###################################
 
-m2kVersion="myth2kodi Version 0.9.1; mythicalLibrarian 953ish+"
+m2kVersion="myth2kodi Version 0.9.2; mythicalLibrarian 953ish+"
 
 #TODO: Add ability to compress LogFile (either time(eg. Monthly) or size(~4MB)) and start a fresh one.
 
@@ -1822,9 +1822,12 @@ getAbsoluteEpisodeNumberWithSxxExx(){
   SxxAENs=$(grep -nix "$Snum" "$m2kdir/$NewShowName/$NewShowName.S.txt" | sed s/:.*//)
   ExxAENs=$(grep -nix "$Enum" "$m2kdir/$NewShowName/$NewShowName.E.txt" | sed s/:.*//)
   #TODO: Check functionality is maintained and if so double quote $SxxAENs & $ExxAENs
+  #TODO: this needs checking
   AbsoluteEpisodeNumber=$(comm -12 <(sed s/" "/"\n"/g <<< $SxxAENs | sort) <(sed s/" "/"\n"/g <<< $ExxAENs | sort))
   #With multiple data sources we can get multiple AENs, just take the first:
-  AbsoluteEpisodeNumber=$(cut -f1 -d" " <<< "${AbsoluteEpisodeNumber[0]}")
+  AbsoluteEpisodeNumber=$(sed s/"\n"/" "/g <<< $AbsoluteEpisodeNumber)
+  AbsoluteEpisodeNumber=$(cut -f1 -d" " <<< "$AbsoluteEpisodeNumber")
+  #AbsoluteEpisodeNumber="${AbsoluteEpisodeNumber[0]}"
   if [[ -n "$AbsoluteEpisodeNumber" ]] && ((AbsoluteEpisodeNumber > 0)); then
     Inform "Using SxxExx, determined AbsoluteEpisodeNumber: $AbsoluteEpisodeNumber"
     return 0

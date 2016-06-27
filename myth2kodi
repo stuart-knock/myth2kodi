@@ -1844,9 +1844,9 @@ getAbsoluteEpisodeNumberWithFuzzyPlotMatch(){
   #set IFS to use line break as a delineator -- necessary for separating multiple agrep matches below.
   local IFS=$'\n'
   local -i PlotLength
-  local FuzzyPlot
-  local -a AENguess
-  local -a cost
+  local -a FuzzyPlot=()
+  local -a AENguess=()
+  local -a cost=()
   #Length of the plot we're trying to match
   PlotLength=$(wc --chars <<< "$Plot")
   DebugCont "PlotLength: $PlotLength"
@@ -1882,6 +1882,7 @@ getAbsoluteEpisodeNumberWithFuzzyPlotMatch(){
     local -i numchunks
     numchunks=$((PlotWords/(chunck_size-chunk_overlap)))
     local -i len10per=0
+    local -a fuzzychunk=()
     local -a FuzzyChunks=()
     local -a ChunkGuesses=()
     local -a ChunkCosts=()

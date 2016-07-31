@@ -2670,6 +2670,76 @@ setGroupPermissions(){
   #TODO:#NOTE: the above command is slightly inconsistent with the comment as = also implies removal of any unmentioned attributes.
 }
 
+dirSummary(){
+  Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
+  InformCont "A summary table of writeable directories: 0='NOT WRITEABLE' ; 1='WRITEABLE'"
+  InformCont "$(printf '%-18s|%-5s|%-12s|%s\n'    "USER SETTING"      "FLAG"                       "Free Space"                              "Folder name"       )"
+  InformCont "$(printf '%-18s|  %s  | %10s | %s\n' "m2kdir"            "$WorkingDirWritable"        "$((WorkingDirFreeSpace/1024)) MB"        "$m2kdir"           )"
+  InformCont "$(printf '%-18s|  %s  | %10s | %s\n' "MoveDir"           "$MoveDirWritable"           "$((MoveDirFreeSpace/1024)) MB"           "$MoveDir"          )"
+  InformCont "$(printf '%-18s|  %s  | %10s | %s\n' "AlternateMoveDir"  "$AlternateMoveDirWritable"  "$((AlternateMoveDirFreeSpace/1024)) MB"  "$AlternateMoveDir" )"
+  if [ "$Database" = "Enabled" ]; then
+    InformCont "$(printf '%-18s|  %s  | %10s | %s\n' "PrimaryMovieDir"   "$PrimaryMovieDirWritable"   "$((PrimaryMovieDirFreeSpace/1024)) MB"   "$PrimaryMovieDir"  )"
+    InformCont "$(printf '%-18s|  %s  | %10s | %s\n' "AlternateMovieDir" "$AlternateMovieDirWritable" "$((AlternateMovieDirFreeSpace/1024)) MB" "$AlternateMovieDir")"
+    InformCont "$(printf '%-18s|  %s  | %10s | %s\n' "PrimaryShowDir"    "$PrimaryShowDirWritable"    "$((PrimaryShowDirFreeSpace/1024)) MB"    "$PrimaryShowDir"   )"
+    InformCont "$(printf '%-18s|  %s  | %10s | %s\n' "AlternateShowDir"  "$AlternateShowDirWritable"  "$((AlternateShowDirFreeSpace/1024)) MB"  "$AlternateShowDir" )"
+  fi
+}
+
+OperationSummary(){
+  Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
+  Inform "################ OPERATION SUMMARY ################"
+  InformCont "JOB: myth2kodi '$1' '$2' '$3' '$4'"
+  InformCont "m2kVersion=$m2kVersion-"
+  InformCont "MyUserName=$MyUserName-"
+  InformCont "InputPath=$InputPath-"
+  InformCont "InputTitle=$InputTitle-"
+  InformCont "InputSubtitle=$InputSubtitle-"
+  InformCont "Timeout=$Timeout-"
+  InformCont "APIkey=$APIkey-"
+  InformCont "m2kdir=$m2kdir-"
+  InformCont "MoveDir=$MoveDir-"
+  InformCont "FailSafeMode=$FailSafeMode-"
+  InformCont "FailSafeDir=$FailSafeDir-"
+  InformCont "AlternateMoveDir=$AlternateMoveDir-"
+  InformCont "TargetPathIsInputPath=$TargetPathIsInputPath-"
+  InformCont "Notify=$Notify-"
+  InformCont "showtranslation=$showtranslation-"
+  InformCont "ShowName=$ShowName-"
+  InformCont "LastUpdatedTVDB=$LastUpdatedTVDB-"
+  InformCont "CurrentTimeTVDB=$CurrentTimeTVDB-"
+  InformCont "SeriesID=$SeriesID-"
+  InformCont "NewShowName=$NewShowName-"
+  InformCont "AbsoluteEpisodeNumber=$AbsoluteEpisodeNumber-"
+  InformCont "EpisodeSubtitle=$EpisodeSubtitle-"
+  InformCont "Sxx=$Sxx- Exx=$Exx-"
+  InformCont "SYMLINK=$SYMLINK-"
+  InformCont "MoveFileSize=$((MoveFileSize/1024)) MB"
+  InformCont "ConfidenceRating=$ConfidenceRating-"
+  InformCont "ConfidenceReasoning=$ConfidenceReasoning-"
+  #Print a summary table of writeable directories.
+  dirSummary
+  if [ "$Database" = "Enabled" ]; then
+    InformCont "XMLTVGrabber=$XMLTVGrabber-"
+    InformCont "ShowStartTime=$ShowStartTime-"
+    InformCont "MovieAirDate=$MovieAirDate-"
+    InformCont "OriginalAirDate=$OriginalAirDate-"
+    InformCont "ProgramID=$ProgramID-"
+    InformCont "ChanID=$ChanID-"
+    InformCont "StorageGroup=$StorageGroup-"
+    InformCont "ShowCategory=ShowCategory-"
+    InformCont "GoForDoover=$GoForDoover-"
+    InformCont "ProgramIDType=$ProgramIDType-"
+    InformCont "rating=$rating-"
+    InformCont "Zap2itSeriesID=$Zap2itSeriesID-"
+    InformCont "MatchedSeriesID=$MatchedSeriesID-"
+    InformCont "InputSeasonNum=$InputSeasonNum-"
+    InformCont "InputEpisodeNum=$InputEpisodeNum-"
+    InformCont "Plot=$Plot-"
+    [[ -n "$AbsoluteEpisodeNumber" ]] && InformCont "Matched Plot=$(sed -n "$AbsoluteEpisodeNumber"'p' "$m2kdir/$NewShowName/$NewShowName.Plot.txt")-"
+  fi
+  Inform "################ END OF OPERATION SUMMARY ################"
+}
+
 #####MYTHICAL DIAGNOSTICS#####
 #This function provides a functions check on myth2kodi
 m2kDiagnostics(){
@@ -2900,15 +2970,8 @@ m2kDiagnostics(){
   WorkingDirWritable=$TMoveDirWritable
   
   #Print a summary table of writeable directories.
-  Inform "A summary table of writeable directories: 0='NOT WRITEABLE' ; 1='WRITEABLE'"
-  printf '    %-18s|%-5s|%s\n'   "USER SETTING"      "FLAG"                       "Folder name"        | tee -a "$DiagnosticsFile"
-  printf '    %-18s|  %s  |%s\n' "MoveDir"           "$MoveDirWritable"           "$MoveDir"           | tee -a "$DiagnosticsFile"
-  printf '    %-18s|  %s  |%s\n' "AlternateMoveDir"  "$AlternateMoveDirWritable"  "$AlternateMoveDir"  | tee -a "$DiagnosticsFile"
-  printf '    %-18s|  %s  |%s\n' "PrimaryMovieDir"   "$PrimaryMovieDirWritable"   "$PrimaryMovieDir"   | tee -a "$DiagnosticsFile"
-  printf '    %-18s|  %s  |%s\n' "AlternateMovieDir" "$AlternateMovieDirWritable" "$AlternateMovieDir" | tee -a "$DiagnosticsFile"
-  printf '    %-18s|  %s  |%s\n' "PrimaryShowDir"    "$PrimaryShowDirWritable"    "$PrimaryShowDir"    | tee -a "$DiagnosticsFile"
-  printf '    %-18s|  %s  |%s\n' "AlternateShowDir"  "$AlternateShowDirWritable"  "$AlternateShowDir"  | tee -a "$DiagnosticsFile"
-  printf '    %-18s|  %s  |%s\n' "m2kdir"            "$WorkingDirWritable"        "$m2kdir"            | tee -a "$DiagnosticsFile"
+  dirSummary
+
   if [ "$MoveDirWritable" = "1" ] && [ "$AlternateMoveDirWritable" = "1" ] && [ "$WorkingDirWritable" = "1" ] ; then
     folderchecks="***PASSED***"
     Inform "Critical Filesystem checks $folderchecks"
@@ -3969,70 +4032,7 @@ WorkingDirWritable=$TMoveDirWritable
 #Report naming decisions
 Inform "CONFIDENCE:$ConfidenceRating LOGIC PATH: $ConfidenceReasoning"
 
-#TODO: Make the following block a function called something like DebugSummary().
-#####DEBUG MODE OUTPUT BLOCK#####
-loglevelbeforethispointincode="$LogLevel"
-LogLevel=3
-Debug "################ DEBUG SUMMARY ################"
-DebugCont "JOB: myth2kodi '$1' '$2' '$3' '$4'"
-DebugCont "m2kVersion=$m2kVersion-"
-DebugCont "MyUserName=$MyUserName-"
-DebugCont "InputPath=$InputPath-"
-DebugCont "InputTitle=$InputTitle-"
-DebugCont "InputSubtitle=$InputSubtitle-"
-DebugCont "Timeout=$Timeout-"
-DebugCont "APIkey=$APIkey-"
-DebugCont "m2kdir=$m2kdir-"
-DebugCont "MoveDir=$MoveDir-"
-DebugCont "FailSafeMode=$FailSafeMode-"
-DebugCont "FailSafeDir=$FailSafeDir-"
-DebugCont "AlternateMoveDir=$AlternateMoveDir-"
-DebugCont "TargetPathIsInputPath=$TargetPathIsInputPath-"
-DebugCont "Notify=$Notify-"
-DebugCont "showtranslation=$showtranslation-"
-DebugCont "ShowName=$ShowName-"
-DebugCont "LastUpdatedTVDB=$LastUpdatedTVDB-"
-DebugCont "CurrentTimeTVDB=$CurrentTimeTVDB-"
-DebugCont "SeriesID=$SeriesID-"
-DebugCont "NewShowName=$NewShowName-"
-DebugCont "AbsoluteEpisodeNumber=$AbsoluteEpisodeNumber-"
-DebugCont "EpisodeSubtitle=$EpisodeSubtitle-"
-DebugCont "Sxx=$Sxx- Exx=$Exx-"
-DebugCont "SYMLINK=$SYMLINK-"
-DebugCont "MoveFileSize=${MoveFileSize}kB"
-DebugCont "ConfidenceRating=$ConfidenceRating-"
-DebugCont "ConfidenceReasoning=$ConfidenceReasoning-"
-#TODO: Move the summary table of writeable directories code in Diagnostics to a function and reuse here, maybe dirSummary
-DebugCont "CREATE AND DELETE FLAGS: 0='NOT WRITEABLE' ; 1='WRITEABLE'"
-DebugCont "    OriginalDirWritable=$OriginalDirWritable- FREE:${OriginaldirFreeSpace}kB"
-DebugCont "    WorkingDirWritable=$WorkingDirWritable- FREE:${WorkingDirFreeSpace}kB"
-DebugCont "    MoveDirWritable=$MoveDirWritable- FREE:${MoveDirFreeSpace}kB"
-DebugCont "    AlternateMoveDirWritable=$AlternateMoveDirWritable- FREE:${AlternateMoveDirFreeSpace}kB"
-if [ "$Database" = "Enabled" ]; then
-  DebugCont "    PrimaryShowDirWritable=$PrimaryShowDirWritable- FREE:${PrimaryShowDirFreeSpace}kB"
-  DebugCont "    AlternateShowDirWritable=$AlternateShowDirWritable- FREE:${AlternateShowDirFreeSpace}kB"
-  DebugCont "    PrimaryMovieDirWritable=$PrimaryMovieDirWritable- FREE:${PrimaryMovieDirFreeSpace}kB"
-  DebugCont "    AlternateMovieDirWritable=$AlternateMovieDirWritable- FREE:${AlternateMovieDirFreeSpace}kB"
-  DebugCont "XMLTVGrabber=$XMLTVGrabber-"
-  DebugCont "ShowStartTime=$ShowStartTime-"
-  DebugCont "MovieAirDate=$MovieAirDate-"
-  DebugCont "OriginalAirDate=$OriginalAirDate-"
-  DebugCont "ProgramID=$ProgramID-"
-  DebugCont "ChanID=$ChanID-"
-  DebugCont "StorageGroup=$StorageGroup-"
-  DebugCont "ShowCategory=ShowCategory-"
-  DebugCont "GoForDoover=$GoForDoover-"
-  DebugCont "ProgramIDType=$ProgramIDType-"
-  DebugCont "rating=$rating-"
-  DebugCont "Zap2itSeriesID=$Zap2itSeriesID-"
-  DebugCont "MatchedSeriesID=$MatchedSeriesID-"
-  DebugCont "InputSeasonNum=$InputSeasonNum-"
-  DebugCont "InputEpisodeNum=$InputEpisodeNum-"
-  DebugCont "Plot=$Plot-"
-  [[ -n "$AbsoluteEpisodeNumber" ]] && DebugCont "Matched Plot=$(sed -n "$AbsoluteEpisodeNumber"'p' "$m2kdir/$NewShowName/$NewShowName.Plot.txt")-"
-fi
-Debug "################ END OF DEBUG SUMMARY ################"
-LogLevel="$loglevelbeforethispointincode"
+OperationSummary
 
 ######PRE-NAMING CHECKS#####
 #if no episode data and it's not a movie or a test

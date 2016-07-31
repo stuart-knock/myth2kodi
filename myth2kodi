@@ -2688,7 +2688,7 @@ dirSummary(){
 OperationSummary(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   Inform "################ OPERATION SUMMARY ################"
-  InformCont "JOB: myth2kodi '$1' '$2' '$3' '$4'"
+  InformCont "JOB: myth2kodi '$m2karg1' '$m2karg2' '$m2karg3' '$m2karg4'"
   InformCont "m2kVersion=$m2kVersion-"
   InformCont "MyUserName=$MyUserName-"
   InformCont "InputPath=$InputPath-"
@@ -3453,6 +3453,8 @@ MythicalEpiShow=0 #TODO: this is set in multiple places but seems to never be us
 test -f "$m2kdir"/myth2kodi.conf && source "$m2kdir"/myth2kodi.conf
 
 #Capture args the script was called with
+m2karg1="$1" ; m2karg2="$2" ; m2karg3="$3" ; m2karg4="$4"
+#TODO: Set the inputs as fixed (read-only) parameters, then use different variables consistently if we need to modify them...
 InputPath="$1"
 InputTitle="$2"
 InputSubtitle="$3"

@@ -17,6 +17,8 @@
 #mythicalLibrarian Tech Support: http://forum.kodi.tv/showthread.php?pid=470402
 #
 
+#TODO: Clean up header/documentation and user-settings section.
+
 #TODO: Contact original author before moving to a public GitHub repo...
 
 #TODO: If making a tar ball as a "Release", include the following:
@@ -40,14 +42,14 @@
 #  first use -- prefer initialising everything as it avoids cruft from
 #  the environment, though should check interaction with global settings.
 
-#TODO: Consider changing backticks `` used for command substitution to
-#  this form $() -- see, http://wiki.bash-hackers.org/syntax/expansion/cmdsubst
-
 #TODO: Consider replacing all echo statements with corresponding printf, as
 #  it's apparently preferred for compatibility/portability reasons. See,
 #    http://wiki.bash-hackers.org/commands/builtin/printf
 
-#TODO: Review logging statements throughout...
+#TODO: Review logging statements throughout... Add consistent stack-trace
+#      information to all Warn and Err statements (maybe in bash-logging).
+#      Move some of the Inform statements to Debug, to avoid lots of
+#      repetition with Inform (level 2) logging.
 
 #Intention:
 #  This program is designed to be a user job in MythTV. It can be called by
@@ -324,11 +326,21 @@ LogFile='output.log'
 #NOTE: This is made read only within the bashlogging script.
 LogType='both'
 ########################## END USER SETTINGS ###################################
+#TODO: Consider disabling stdout logging, ie LogType='logfile', when run as a mythtv user-job.
 
 m2kVersion="myth2kodi Version 0.9.3; mythicalLibrarian 953ish+"
 
-#TODO: Add ability to compress LogFile (either time(eg. Monthly) or size(~4MB)) and start a fresh one.
+#TODO: Add ability to compress LogFile (either time(eg. Monthly) or size(~8MB)) and start a fresh one.
+#if [ -f $LogFile ]; then
+#  LogFileSize=$(wc --bytes < "$LogFile")
+#  if ((LogFileSize > 8000000)); then
+#    Inform "Moving and compressing LogFile"
+#    mv "$LogFile" "$m2kdir/$LogFileName_${FileNameNow}.log"
+#    gz "$m2kdir/$LogFileName_${FileNameNow}.log"
+#    #createlogfile
+#  if
 
+#TODO: There is redundant setting of LogFile.
 #The full path version of the file to which logging output will be sent:
 LogFile="$m2kdir/output.log"
 #When running diagnostics mode, output will instead be sent to this file:
@@ -373,7 +385,7 @@ RunJob(){
 
   #File system error occurred
     PermissionError0Length|InvalidFileNameSupplied|PermissionErrorWhileMoving|FailSafeModeComplete|LinkModeFailed)
-      Err "FILE SYSTEM ERROR: $jobtype"
+      Err "IN: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}(). FILE SYSTEM ERROR: $jobtype"
       #Insert Custom User Job here
 
       #
@@ -382,7 +394,7 @@ RunJob(){
 
   #File name we're trying to move to already exists
     FileAlreadyExists)
-      Err "NOT MOVING RECORDING: $jobtype"
+      Err "IN: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}(). NOT MOVING RECORDING: $jobtype"
       #Insert Custom User Job here
 
       #
@@ -391,7 +403,7 @@ RunJob(){
 
   #Generic error occurred
     GenericUnspecifiedError)
-      Err "UNKNOWN ERROR OCCOURED: $jobtype"
+      Err "IN: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}(). UNKNOWN ERROR OCCOURED: $jobtype"
       #Insert Custom User Job here
 
       #
@@ -859,35 +871,37 @@ performLoggingForMoveMode(){
   test ! -f "$m2kdir/undo.sh"   && echo "rm -f \"$m2kdir/undo.sh\""   >> "$m2kdir/undo.sh"   && chmod 666 "$m2kdir/undo.sh"
   test ! -f "$m2kdir/doover.sh" && echo "rm -f \"$m2kdir/doover.sh\"" >> "$m2kdir/doover.sh" && chmod 666 "$m2kdir/doover.sh"
 
-  #if [ "$SYMLINK" != "Disabled" ] ; then
-  #  #Write undo.sh line that removes link:
-  #  printf '%s'   "test -L \"$InputPath\" &&"    >> "$m2kdir/undo.sh"
-  #  printf '%s'   " rm -f \"$InputPath\" &&"     >> "$m2kdir/undo.sh"
-  #  printf '%s\n' " echo removed \"$InputPath\"" >> "$m2kdir/undo.sh"
-  #  #Write undo.sh line that moves already-moved-file back to original location:
-  #  printf '%s'   "test -f \"$MoveDir/$ShowFileName.$OriginalExt\" &&"                    >> "$m2kdir/undo.sh"
-  #  printf '%s'   " mv \"$MoveDir/$ShowFileName.$OriginalExt\" \"$InputPath\" &&"         >> "$m2kdir/undo.sh"
-  #  printf '%s\n' " echo moved \"$MoveDir/$ShowFileName.$OriginalExt\" to \"$InputPath\"" >> "$m2kdir/undo.sh"
-  #fi
-  test "$SYMLINK" != "Disabled" && echo "test -L \"$InputPath\" && rm -f \"$InputPath\" && echo removed \"$InputPath\"">>"$m2kdir/undo.sh"
-  test "$SYMLINK" != "Disabled" && echo "test -f \"$MoveDir/$ShowFileName.$OriginalExt\" && mv \"$MoveDir/$ShowFileName.$OriginalExt\" \"$InputPath\" && echo moved \"$MoveDir/$ShowFileName.$OriginalExt\" to \"$InputPath\"">>"$m2kdir/undo.sh"
+  if [ "$SYMLINK" != "Disabled" ] ; then
+    { #Write undo.sh line that removes link:
+      printf '%s'    "test -L \"$InputPath\" &&"
+      printf ' %s'   "rm -f \"$InputPath\" &&"
+      printf ' %s\n' "echo removed \"$InputPath\""
+    } >> "$m2kdir/undo.sh"
+
+    { #Write undo.sh line that moves already-moved-file back to original location:
+      printf '%s'    "test -f \"$MoveDir/$ShowFileName.$OriginalExt\" &&"
+      printf ' %s'   "mv \"$MoveDir/$ShowFileName.$OriginalExt\" \"$InputPath\" &&"
+      printf ' %s\n' "echo moved \"$MoveDir/$ShowFileName.$OriginalExt\" to \"$InputPath\""
+    } >> "$m2kdir/undo.sh"
+  fi
 
   if [ "$SYMLINK" = "MOVE" ]; then
-    # if [ "$RequiresDoover" = "1" ] ; then
-    #  #Write doover.sh line that removes link:
-    #  printf '%s' "test -f \"$MoveDir/$ShowFileName.$OriginalExt\" &&" >> "$m2kdir/doover.sh"
-    #  printf '%s'   " test -L \"$InputPath\" &&"                       >> "$m2kdir/doover.sh"
-    #  printf '%s'   " rm -f \"$InputPath\" &&"                         >> "$m2kdir/doover.sh"
-    #  printf '%s\n' " echo Moving \"$InputPath\" to original location" >> "$m2kdir/doover.sh"
-    #  #Write doover.sh line that moves already-moved-file back to original location:
-    #  printf '%s'   "test -f \"$MoveDir/$ShowFileName.$OriginalExt\" &&"       >> "$m2kdir/doover.sh"
-    #  printf '%s\n' " mv \"$MoveDir/$ShowFileName.$OriginalExt\" '$InputPath'" >> "$m2kdir/doover.sh"
-    #  #Write doover.sh line that recalls myth2kodi:
-    #  printf '%s\n' "myth2kodi \"$InputPath\" \"$InputTitle\" \"$InputSubtitle\"" >> "$m2kdir/doover.sh"
-    # fi
-    test "$RequiresDoover" = "1" && echo "test -f \"$MoveDir/$ShowFileName.$OriginalExt\" && test -L \"$InputPath\" && rm -f \"$InputPath\" && echo Moving \"$InputPath\" to original location">>"$m2kdir/doover.sh"
-    test "$RequiresDoover" = "1" && echo "test -f \"$MoveDir/$ShowFileName.$OriginalExt\" && mv \"$MoveDir/$ShowFileName.$OriginalExt\" '$InputPath'">>"$m2kdir/doover.sh"
-    test "$RequiresDoover" = "1" && echo "myth2kodi \"$InputPath\" \"$InputTitle\" \"$InputSubtitle\"" >>"$m2kdir/doover.sh"
+    if [ "$RequiresDoover" = "1" ] ; then
+      { #Write doover.sh line that removes link:
+        printf '%s'    "test -f \"$MoveDir/$ShowFileName.$OriginalExt\" &&"
+        printf ' %s'   "test -L \"$InputPath\" &&"
+        printf ' %s'   "rm -f \"$InputPath\" &&"
+        printf ' %s\n' "echo Moving \"$InputPath\" to original location"
+      } >> "$m2kdir/doover.sh"
+      
+      { #Write doover.sh line that moves already-moved-file back to original location:
+        printf '%s'    "test -f \"$MoveDir/$ShowFileName.$OriginalExt\" &&"
+        printf ' %s\n' "mv \"$MoveDir/$ShowFileName.$OriginalExt\" '$InputPath'"
+      } >> "$m2kdir/doover.sh"
+
+      #Write doover.sh line that recalls myth2kodi:
+      printf '%s\n' "myth2kodi \"$InputPath\" \"$InputTitle\" \"$InputSubtitle\"" >> "$m2kdir/doover.sh"
+    fi
   fi
 }
 
@@ -1229,10 +1243,16 @@ ExtractSubtitleFromPlot(){
   #TODO: Probably should do things conditionally based on whether or not we actually managed
   #  to extract a Subtitle. And maybe return failure state.
   InputSubtitle="$(grep -E --only-matching '^((((\w+)(.?\s*))|(\&\s*)){1,7})( -|\:)' <<< "$Plot")"
+  #if [[ -n "$InputSubtitle" ]]; then
   #Clean off the trailing " -" or ":" that we're using to identify it
   InputSubtitle="$(grep -E --only-matching '(((\w+)(.?\s*))|(\&\s*)){,7}(\w+)' <<< "$InputSubtitle")"
   Inform "Attempt to extract Subtitle from Plot field gave '$InputSubtitle'"
+  #TODO: consider calling RemoveSubtitleFromPlot() from here, instead of return 1 below.
   return 0
+  #else
+    #Inform "No Subtitle extracted from Plot field.
+    #return 1
+  #fi
 }
 
 #Called after ExtractSubtitleFromPlot(), it uses the same logic to...
@@ -1270,7 +1290,7 @@ ProcessSydFTA(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   Inform "Processing MythTV database info as SydFTA."
   #Check for database permissions
-  [[ -z "$ChanID" ]] && Err "%%%% NO DATABASE INFORMATION. CHECK LOGIN/PASS OR FILE %%%%"
+  [[ -z "$ChanID" ]] && Err "IN: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}(). NO DATABASE INFORMATION. CHECK LOGIN/PASS OR FILE"
   #disqualify invalid movie airdates
   [[ -n "$MovieAirDate" ]] && (( MovieAirDate < 1900 )) && MovieAirDate=''
 
@@ -1290,6 +1310,17 @@ ProcessSydFTA(){
   #Default value for season and episode numbers is 0, not $null or ""
   test "$InputSeasonNum" = 0 && InputSeasonNum=''
   test "$InputEpisodeNum" = 0 && InputEpisodeNum=''
+
+  #Current (2016-08) issue from 7flix: description in Subtitle field, all-caps cast in Plot... (Longest actual subtitle I've seen so far is 84)
+  #TODO: exclude subtitles longer than some number of characters from being considered as Subtitles.
+  #      If we can identify Plot as garbage then replace with long content of Subtitle...
+  # if (( $(wc --chars <<< "$InputSubtitle") > 88 )) ; then
+  #   PossiblePlot="$InputSubtitle"
+  #   Warn "${FUNCNAME[0]}() InputSubtitle field appears to contain Plot information."
+  #   Warn "Resetting  InputSubtitle to ''"
+  #   InputSubtitle=''
+  # fi
+
 
   ###The ProgramID field from FTA EPG data in Sydney?Australia? doesn't specify MV/EP/SH,
   ###the Movie specification is "almost-always" found in the Category field of
@@ -1334,8 +1365,8 @@ ProcessSydFTA(){
   #Some channels, particularly ABC, put cast info in the end of the plot field which can mess up fuzzy Plot matching
   RemoveCastFromPlot
 
-  #Finally strip any troublesome characters that still remain in Plot, this matches what we do with TheTVDB.
-  Plot="$(tr -d '@%^`~!#$|\?*<":>+[]/'"'" <<< "$Plot")"
+  #Only keep Alpha-numeric characters and the four basic punctuation chars & , . -
+  Plot="$(sed -r s'/[^[:alnum:]|^&,.-]/ /'g <<< "$Plot")"
 
   #Strip the Movie: tag that some stations very helpfully put in the title field...
   if [ "$m2kProgramIDCheck" = "MV" ]; then
@@ -1590,9 +1621,12 @@ downloadInfoAboutMatchedTitleAndCreateTxtFileTables(){
           line="${line//&quot;/}"
           line="${line//&amp;/&}"
           line="${line//&ndash;/-}"
-          line="$(tr -d '’@%^`~!#$|\?*<":>+[]/'"'" <<< "$line")"
           actualEname="${line}"
+          #Only keep Alpha-numeric characters and the four basic punctuation chars & , . -
+          actualEname="$(sed -r s'/[^[:alnum:]|^&,.-]/ /'g <<< "$actualEname")"
           Ename="${actualEname/;*/}" #TODO: This strips everything following the first ";" (semi-colon). Is that intentional because there are sometimes multiple EpisodeNames separated by semi-colons???
+          #Only keep Alpha-numeric characters and the four basic punctuation chars & , . -
+          Ename="$(sed -r s'/[^[:alnum:]|^&,.-]/ /'g <<< "$Ename")"
         #Get OriginalAirDate
         elif [[ "$line" == "<FirstAired>"* ]]; then
           line="${line/"</FirstAired>"/}"
@@ -2097,7 +2131,7 @@ DoMythTVPermissionsCheck(){
     #TODO: during --scan the find here gets $InputPath "--scan" which obviously doesn't work...
     if [ "$(find "$InputPath" -printf %u)" = "$Librarian" ] && [ "$MyUserName" != "$Librarian" ] && [ "$SYMLINK" = "MOVE" ]; then
       UserName="$USER"
-      Err ""
+      Err "IN: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
       ErrCont "########################################################################"
       ErrCont "##############################  ERROR  #################################"
       ErrCont "########################################################################"
@@ -2542,6 +2576,9 @@ DoMaintenance(){
 
   #TODO: this need to be rethought given the cleaner way we now deal with myth2kodi database directories.
   #cleanse myth2kodi database folders if in --maintenance mode
+  #TODO: Consider making a m2kCleanse function that removes all but the N most recent local show databases.
+  #      Should also remove all but the M most recent compressed LogFiles
+  #      Also add an associated --cleanse command line switch.
   if [ "$removedead" = "1" ]; then
     test -f "$m2kdir/cleanup" && rm -f "$m2kdir/cleanup"
     ls -A -1 "$m2kdir" > "$m2kdir/cleanup"
@@ -3430,6 +3467,7 @@ if [ ! -d "$m2kdir" ]; then
   #Keep this as a printf so it's created here regardless of LogType & LogLevel.
   {
     printf 'Creating Working Directory: %s\n' "$m2kdir"
+    #TODO: separate out log file creation text into a function so it can be reused in conjunction with Auto-compress of LogFile...
     printf 'Creating Log File: %s\n' "$LogFile"
     printf 'Created on %s at %s\n' "$Today" "$ScriptStartTime"
   } >> "$LogFile"
@@ -3565,7 +3603,6 @@ case "$InputPath" in
     #TODO: Move scan file generation to a function, use here and in --scan
     #TODO: Move the below into a function, clean-up and add more checking and logging.
     Debug "Recognised command line switch '--commskip'"
-    #Err "The --commskip option is Not Implemented... yet."
     #eg: myth2kodi --commskip '/path/to/recordings/1070_20160331073100.mpg'
     InputPath="$2"
     [[ ! -f "$InputPath" && ! -d "$InputPath" ]] && m2kHelp
@@ -3670,16 +3707,16 @@ InformCont "PLOT: $Plot"
 ShowName="$InputTitle"
 [[ -z "$ShowName" ]] && m2kHelp
 
-#split on semicolon, there will only be one episode looked up.  Remove non-filesystem-compliant chars.
-EpisodeSubtitle="$(echo $InputSubtitle | sed 's/;.*//' | tr -d '’@%^`~!#$|\?*<":>+[]/'"'")"
+#TODO: check whether the split on semicolon here and elsewhere should be in ProcessSchedulesDirect
+#split on semicolon, there will only be one episode looked up.
+EpisodeSubtitle="$(echo $InputSubtitle | sed 's/;.*//')"
+#Only keep Alpha-numeric characters and the four basic punctuation chars & , . -
+EpisodeSubtitle="$(sed -r s'/[^[:alnum:]|^&,.-]/ /'g <<< "$EpisodeSubtitle")"
 ExtensionPrep="$(basename "$InputPath")"
 OriginalExt="${ExtensionPrep#*.}"
 originaldirname="$(dirname "$InputPath")"
 #Set originaldir name if none was supplied
-#[["$originaldirname" = "./" || "$originaldirname" = "." || "$originaldirname" = "" ]] && originaldirname="$(pwd)"
-test "$originaldirname" = "./" && originaldirname="$(pwd)"
-test "$originaldirname" = "." && originaldirname="$(pwd)"
-test "$originaldirname" = "" && originaldirname="$(pwd)"
+[["$originaldirname" = "./" || "$originaldirname" = "." || "$originaldirname" = "" ]] && originaldirname="$(pwd)"
 #TODO: check FileBaseName as the below doesn't strip the suffix but the description of this variable implies that it should. 
 FileBaseName="${InputPath##*/}"
 FileName="$InputPath"
@@ -3688,7 +3725,9 @@ FileName="$InputPath"
 ShowTranslations
 #Do not process files in files categoricIgnore or titleIgnore, just exit
 ignoreList
-SafeShowName=$(echo "$ShowName" | sed 's/;.*//' | tr -d '’@%^`~!#$|\?*<":>+[]/'"'")
+SafeShowName=$(echo "$ShowName" | sed 's/;.*//')
+#Only keep Alpha-numeric characters and the four basic punctuation chars & , . -
+SafeShowName="$(sed -r s'/[^[:alnum:]|^&,.-]/ /'g <<< "$SafeShowName")"
 #Format Show name for Sending to www.TheTVDB.com and KODI
 tvdbshowname=$(echo "$ShowName" | sed s/" "/"%20"/g | sed s/"&"/"%26"/g)
 #Setup paths if TargetPathIsInputPath is active.
@@ -3998,8 +4037,8 @@ if [ ! -f "$InputPath" ] && [ "$InputPath" != "testfile.ext" ]; then
 fi
 
 ##TEST FILESYSTEM##
-#Get file size and free space #TODO: The pipe to awk below isn't included in the assignment and the purpose of it isn't even clear...
-test -f "./$InputPath" && MoveFileSize=$(stat "$InputPath" --format=%s) | awk '{print $1}' || MoveFileSize=0
+#Get file size and free space
+[[ -f "$InputPath" ]] && MoveFileSize=$(wc --bytes < "$InputPath") || MoveFileSize=0
 MoveFileSize=$((MoveFileSize/1024))
 MoveDirFreeSpace=$(df -P "$MoveDir" | sed -n 2p | awk '{print $4}') || MoveDirFreeSpace=0
 AlternateMoveDirFreeSpace=$(df -P "$AlternateMoveDir" | sed -n 2p | awk '{print $4}')|| AlternateMoveDirFreeSpace=0
@@ -4070,11 +4109,11 @@ fi
 determinePrimaryOrAlternateFolderUsage
 
 #####OUTPUT FILE NAME FORMATTING#####
-#universally not accepted file system characters:  !#$|\?*<":>+[]/'
 #Format Shows
-EpisodeSubtitle="$(tr -d '’@%^`~!#$|\?*<":>+[]/'"'" <<< "$EpisodeSubtitle")"
-NewShowName="$(tr -d '’@%^`~!#$|\?*<":>+[]/'"'" <<< "$NewShowName")"
-ShowName="$(tr -d '’@%^`~!#$|\?*<":>+[]/'"'" <<< "$ShowName")"
+#Only keep Alpha-numeric characters and the four basic punctuation chars & , . -
+EpisodeSubtitle="$(sed -r s'/[^[:alnum:]|^&,.-]/ /'g <<< "$EpisodeSubtitle")"
+NewShowName="$(sed -r s'/[^[:alnum:]|^&,.-]/ /'g <<< "$NewShowName")"
+ShowName="$(sed -r s'/[^[:alnum:]|^&,.-]/ /'g <<< "$ShowName")"
 
 #Format Episodes showname=show name Sxx=season number Exx=episode number EpisodeSubtitle=episode name
 if [[ -z "$NamingConvention" ]]; then
@@ -4115,11 +4154,7 @@ if [ -f "$MoveDir/$ShowFileName.$OriginalExt" ]; then
   ErrCont "EITHER WAY, ABORTING."
   jobtype='FileAlreadyExists'
   #Write an entry in the duplicates file, for easy check/removal of duplicates.
-  #printf '%s\n' "$InputPath" >> "$DuplicatesFile"
-  #TODO: reformat the duplicates.log file for it's primary purpose, identifying and deleting genuine duplicates.
   printf "'%s' '%s' '%s' '%s'\n" "$InputTitle" "$ShowStartTime" "$InputPath" "$ShowFileName" >> "$DuplicatesFile"
-  #find -L "$originaldirname/" -samefile  "$MoveDir/$ShowFileName.$OriginalExt"
-  #printf '#Identified as: %s  RecStart:%s\n' "$ShowFileName" "$ShowStartTime" >> "$DuplicatesFile"
   RunJob
   #TODO: When refactoring main, consider allowing forced move with auto name incrementing when move-to file already exists.
   #If file exists then make a new name for it

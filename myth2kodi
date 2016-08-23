@@ -3756,7 +3756,7 @@ ExtensionPrep="$(basename "$InputPath")"
 OriginalExt="${ExtensionPrep#*.}"
 originaldirname="$(dirname "$InputPath")"
 #Set originaldir name if none was supplied
-[["$originaldirname" = "./" || "$originaldirname" = "." || "$originaldirname" = "" ]] && originaldirname="$(pwd)"
+[[ "$originaldirname" = "./" || "$originaldirname" = "." || "$originaldirname" = "" ]] && originaldirname="$(pwd)"
 #TODO: check FileBaseName as the below doesn't strip the suffix but the description of this variable implies that it should. 
 FileBaseName="${InputPath##*/}"
 FileName="$InputPath"

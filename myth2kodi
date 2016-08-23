@@ -3775,7 +3775,7 @@ ShowTranslations
 ignoreList
 SafeShowName=$(echo "$ShowName" | sed 's/;.*//')
 #Only keep Alpha-numeric characters and the four basic punctuation chars & , . -
-SafeShowName="$(sed -r s'/[^[:alnum:]|^[:blank:]|^&,.-]//'g <<< "$SafeShowName")"
+SafeShowName="$(sed -r s'/[^[:alnum:]|^[:blank:]|^&,.-)(]//'g <<< "$SafeShowName")"
 #Format Show name for Sending to www.TheTVDB.com and KODI
 tvdbshowname=$(echo "$ShowName" | sed s/" "/"%20"/g | sed s/"&"/"%26"/g)
 #Setup paths if TargetPathIsInputPath is active.
@@ -4158,8 +4158,8 @@ determinePrimaryOrAlternateFolderUsage
 #Format Shows
 #Only keep Alpha-numeric characters and the four basic punctuation chars & , . -
 EpisodeSubtitle="$(sed -r s'/[^[:alnum:]|^[:blank:]|^&,.-]//'g <<< "$EpisodeSubtitle")"
-NewShowName="$(sed -r s'/[^[:alnum:]|^[:blank:]|^&,.-]//'g <<< "$NewShowName")"
-ShowName="$(sed -r s'/[^[:alnum:]|^[:blank:]|^&,.-]//'g <<< "$ShowName")"
+NewShowName="$(sed -r s'/[^[:alnum:]|^[:blank:]|^&,.-)(]//'g <<< "$NewShowName")"
+ShowName="$(sed -r s'/[^[:alnum:]|^[:blank:]|^&,.-)(]//'g <<< "$ShowName")"
 
 #Format Episodes showname=show name Sxx=season number Exx=episode number EpisodeSubtitle=episode name
 if [[ -z "$NamingConvention" ]]; then

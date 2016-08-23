@@ -1096,7 +1096,7 @@ GetMythTvPythonBindings(){
 
   #run the python bindings and output to named pipe
   "$binpath"/MythDataGrabber --filename="$InputFileBasename" \
-                             --DBPin="$DBPin"                \
+                             --SecurityPin="$DBPin"          \
                              --DBHostName="$DBHostName"      \
                              --DBName="$MySQLMythDb"         \
                              --DBUserName="$MySQLuser"       \
@@ -2959,7 +2959,7 @@ m2kDiagnostics(){
                                  --DBName="$MySQLMythDb"    \
                                  --DBUserName="$MySQLuser"  \
                                  --DBPassword="$MySQLpass"  \
-                                 --DBPin="$DBPin"
+                                 --SecurityPin="$DBPin"
       if [[ $? = "0" ]]; then PythonBindingsCheck="OK"; else PythonBindingsCheck="FAILED"; fi
       if [ "$PythonBindingsCheck" = "OK" ]; then
         Inform "MythTV Python Bindings are installed properly."

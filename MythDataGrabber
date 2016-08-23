@@ -1,0 +1,281 @@
+#! /usr/bin/env python
+# requires libmyth-python python-lxml
+import sys, os
+
+
+#########################################
+#Displays author and version information
+def version():
+    print """Written by Mike Szczys and Adam Outler
+ For support, please visit: http://forum.xbmc.org/showthread.php?t=65644
+ This file was written for the mythicalLibrarian project,
+ and is licensed under the Apache License which requires a notification
+ to outleradam (at) hotmail.com as a formality before any derrivative
+ work.  We just want to hear about your project.
+------------------------------------------------------------------
+Beta
+ %s  utilizes mythtv python bindings to obtain information
+about a recording and will print the information to a file.
+""" % os.path.basename(sys.argv[0])
+    return 0 
+
+
+############################
+#Displays usage information
+def help():
+    name = os.path.basename(sys.argv[0])
+    print """ %s is designed to pull data from MythTV python bindings.
+
+Usage:
+%s --filename=file.ext : returns information to a file
+   --DBHostName        : sets the DB Host, default: localhost
+   --DBName            : sets the DB Name, default: mythconverg
+   --DBUserName        : sets the User Name, default: mythtv
+   --DBPassword        : sets the Password, default: mythtv
+   --DBPin             : sets the Pin, default: 0
+   --writeFile         : don't display output, write to ./showdata.txt
+   --output=file.txt   : sets the output, default: ./showData.txt
+   --version|-v|-ver   : displays version information
+example:
+$ %s --filename=1000_20101010101010.mpg --DBHostName=localhost --DBName=mythconverg --DBUserName=mythtv --DBPassword=mythtv --output=/home/myfile.txt
+""" % (name, name, name)
+    return 0
+
+################################
+#Help message for invalid files
+def invalidFile():
+    print """target is not valid.  Please choose a valid target.
+usage: %s --filename=""" % os.path.basename(sys.argv[0])
+    help()
+    return 0
+
+# Setup default database information
+dbInfo = {
+    "DBHostName"  : "localhost",
+    "DBName"      : "mythconverg",
+    "DBUserName"  : "mythtv",
+    "DBPassword"  : "mythtv",
+    "DBPin"       : "0"
+    }
+
+# Setup other default option information
+options = {
+    "ToFile"      : "False",
+    "output"      : "./showData.txt",
+    "filename"    : "",
+    "Diagnostic"  : "False"
+    }  
+
+# A list of valid command line options (anything with an = sign) and flags
+validOptions = ['--DBHostName','--DBName','--DBUserName','--DBPassword', '--filename', '--output', '--DBPin', '--Diagnostic']
+validVersionFlags = ['--version','-v','-ver']
+validHelpFlags = ['--help','-?','-h']
+validNoDisplayFlags = ['--writeFile','-w'] 
+
+
+###############################
+#Handle Command Line Arguments
+# If there were no arguments
+if len(sys.argv) < 2:
+    print "ERROR: Filename must be passed as an argument"
+    print
+    help()
+    print sys.argv[0]
+    print __file__
+    sys.exit(1)
+
+#If the first argument is not a flag, treat it as the filename
+if not sys.argv[1].startswith('-'):
+    options['filename'] = os.path.basename(sys.argv[1])
+    # Make arg list without script name and filename
+    myArgs = sys.argv[2:]
+else:
+    # Make arg list without script name
+    myArgs = sys.argv[1:]  
+
+# Parse through the Arguments
+if len(myArgs) > 0:
+    for arg in myArgs:
+        # Test to see if this is an option flag
+        if '=' in arg and arg.split('=')[0] in validOptions:
+            #This is a valid option, do something with it
+
+            # Testing to see if it's database login info
+            if arg.split('=')[0][2:] in dbInfo:
+                # It's a DB login item, save it in dbInfo
+                dbInfo[arg.split('=')[0][2:]] = arg.split('=')[1].replace('"','')  
+
+            # If it's not, it must be a misc option
+            elif arg.split('=')[0][2:] in options:
+                #It is in the options dictionary, save it
+                options[arg.split('=')[0][2:]] = arg.split('=')[1].replace('"','') 
+
+            # If it wasn't either, then we've got problems
+            else:
+                print "ERROR: Option flag was valid but something went wrong trying to use" + arg
+                sys.exit(1) 
+
+        # Test to see if this is a version flag
+        elif arg in validVersionFlags:
+            version()
+            sys.exit(0) 
+
+        # Test to see if this is a help flag
+        elif arg in validHelpFlags:
+            help()
+            sys.exit(0) 
+
+        # Test to see if this is a write to file flag
+        elif arg in validNoDisplayFlags:
+            options['ToFile'] = 'True'
+
+        else:
+            # this is an unacceptable argument, raise an exception
+            print "ERROR: Invalid command line argument: " + arg
+            help()
+            sys.exit(1)
+
+# Stop execution if no filename has been set yet
+if 'filename' not in options:
+    #No filename has been passed
+    print "ERROR: No filename specified"
+    help()
+    sys.exit(1) 
+
+
+######################################
+#Function: readMysqlTxt
+#Arguments: None
+#Returns: extracted login information
+def readMysqlTxt():
+    #Read database settings from ~/.mythtv/mysql.txt
+    mysqlTXT = os.path.expanduser('~') + "/.mythtv/mysql.txt" 
+
+    dbdata = {}
+    for line in open(mysqlTXT,'r'):
+        if line.startswith('#'):
+            continue
+        if '=' in line:
+            o,v = line.strip().split('=')
+            dbdata[o.strip()] = v.strip()
+    return dbdata
+
+
+#########################
+#Get connect to database
+print 'Establishing database connection'
+from MythTV import MythDB
+try:
+    # Defaults or args
+    db = MythDB(**dbInfo) 
+except: 
+    try:
+        # mythtv preconfigured options
+        print 'Failed: attempting to use system default configuration'
+        db = MythDB(DBPin=dbInfo['DBPin']) 
+    except:
+        try:
+            # read from the mysql.txt
+            print 'Failed: attempting to read from default mythtv file'
+            db = MythDB(readMysqlTxt() , DBPin=dbInfo['DBPin']) 
+        except: 
+            print 'Failed: Please specify database information manually'
+            print 'DB = Null'
+            sys.exit(' See --help for more information.')
+
+
+##########################
+#For Diagnostics purposes
+if options['Diagnostic'] == 'True':
+    try:
+        print "Connected to:", db.gethostname()
+        print "Db Identified as:",  db.ident
+        print "Diagnostics passed..."
+
+    except: 
+        print "Diagnostics failed."
+        sys.exit(1)
+  
+    finally:
+        sys.exit()    
+  
+
+#####################################
+#GatherInformation from the Database
+# search for a recording
+try:
+    rec = db.searchRecorded(basename=options['filename']).next()
+except StopIteration:
+    raise Exception('Recording Not Found')
+
+# set comskip data
+try:
+    markupstart,markupstop = zip(*rec.markup.getskiplist())
+except:
+    print "No comskip information found."
+    markupstart,markupstop='',''
+
+
+#####################
+#Function: writeData
+#Arguments: None
+#Returns: extracted login information
+def writeData():
+    # loop through Recorded items
+    for x in rec.items():
+        #filter out unicode strings:
+        if (type(x[1]) == str): f.write('%s = "%s"\n' % (x[0],x[1].encode('utf-8')))
+        else: f.write('%s = "%s"\n' % x)
+
+    # loop through comm-start points
+    for i,data in enumerate(markupstart):
+        f.write('startdata[%s] = "%s"\n' % (i, data))
+
+    # loop through comm-end points
+    for i,data in enumerate(markupstop):
+        f.write('stopdata[%s] = "%s"\n' % (i, data))
+
+    # grab guide data provider
+    with db as cursor:
+        # set cursor on xmltvgrabber
+        cursor.execute("SELECT xmltvgrabber FROM videosource")
+        # pull the data
+        res = cursor.fetchone()
+        # write the data if any
+        if res is not None:
+            f.write('xmltvgrabber = "%s"\n' % res[0].strip())
+    # verify valid data was written
+    if rec.chanid != '':
+        print "Operation complete"
+
+
+#########################
+# Display data on-screen
+#iterate through each Recorded() data item and write it to the file
+
+f = None
+try:
+    if options['ToFile'] == 'True':
+        # Open file defined in options
+        f = open(options['output'], 'w')
+        # run writeData function
+        writeData()
+    else:
+        # write to screen
+        f = sys.stdout
+        # run writeData function
+        writeData()
+
+#if the file failed to write
+except:
+    print "Write Failed, attempting to display data."
+    # change to stdout
+    f = sys.stdout
+    writeData()    
+
+finally:
+    # close out the file/stdout
+    if f is not None:
+        if f.fileno() != 1:
+            f.close()
+

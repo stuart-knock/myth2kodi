@@ -1,6 +1,5 @@
 #! /bin/bash
 
-
 # ***** WELCOME! Scroll further down to set the user settings. *****
 
 #myth2kodi is a modified version of mythicalLibrarian by Adam Outler
@@ -17,7 +16,8 @@
 #mythicalLibrarian Tech Support: http://forum.kodi.tv/showthread.php?pid=470402
 #
 
-#TODO: Clean up header/documentation and user-settings section.
+#TODO: Review text under: Output Files; Database-external; Database-internal;
+#      Dependencies; .
 
 #TODO: Contact original author before moving to a public GitHub repo...
 
@@ -51,16 +51,42 @@
 #      Move some of the Inform statements to Debug, to avoid lots of
 #      repetition with Inform (level 2) logging.
 
+#TODO: Consider changing default binpath from "/usr/local/bin" to 
+#      "/home/$Librarian/bin". We really want to avoid root/sudo requirements
+#      as much as possible.
+
 #Intention:
-#  This program is designed to be a user job in MythTV. It can be called by
-#  creating a user job. It must have access to your MythTV recordings
-#  This file should be placed in /usr/local/bin
-#  The MythTV user job can then be called as follows:
-#    /usr/local/bin/myth2kodi "%DIR%/%FILE%"
+#  This program automates the mapping of MythTv recordings to a Kodi library.
+#  It is designed to be a user job in MythTV. It can also be run manually from
+#  a command line. It must have access to your MythTV recordings. The program
+#  generates file names compatible with Kodi, then moves or links recordings
+#  based on user settings. Commskip and NFO files are also generated from your
+#  MythTV database, as required, so that Kodi can make use of them.
+#
+#Installation:
+#  The myth2kodi file should be placed in the users path, see the binpath
+#  variable in user settings (Default: /usr/local/bin). Some of the
+#  functionality of this script is provided in other files, these will also
+#  need to be placed in $binpath along with this script. They are:
+#  MythDataGrabber -- Uses MythTV python bindings to access database information.
+#  m2k_notify -- A script for sending notifications to Gnome Desktop.
+#  bashlogging -- A set of bash functions that provide the logging mechanism
+#                 used throughout myth2kodi.
 #
 #Usage:
-#  myth2kodi "Input File" "show name" "episode name"
-#  eg. myth2kodi "/home/myth/recordings/2308320472023429837.mpg" "South Park" "Here Comes the Neighborhood"
+#  The MythTV user job should be called as follows:
+#    $binpath/myth2kodi "%DIR%/%FILE%"
+#  where "$binpath" is replaced by the full explicit path from USER SETTINGS.
+#  At the command line, the script can be called with the following form:
+#    myth2kodi "Input File" "show name" "episode name"
+#  for example:
+#    myth2kodi "/home/myth/recordings/2308320472023429837.mpg" "South Park" "Here Comes the Neighborhood"
+#  for additional functionality type:
+#    myth2kodi --help
+#  To function on your system, some of the variables specified in the
+#  USER SETTINGS section below may need to be modified from their defaults.
+#  For example, to avoid permission issues, myth2kodi should be run as the
+#  same user running MythTV (see USER SETTING, Librarian).
 #
 #Output-target:
 #  If an error occurs and the file cannot be moved, then no change will occur to
@@ -69,8 +95,7 @@
 #  AlternateMoveDir will be used. If both of these dirs fail, the show will be
 #  SymLinked in the FailSafeDir. You may elect to run the user job at a later
 #  time when the issue has been resolved. Output dir and link type will depend
-#  on user settings. The file name however, is preset to the most acceptable
-#  standard:
+#  on user settings. The file name is preset to the most acceptable standard:
 #    Show Title - SxxExx (Episode Title).ext
 #
 #Symlinking:
@@ -78,7 +103,10 @@
 #  operation. In MOVE mode, myth2kodi will create a symlink from the new
 #  file in the same name and location of the old file. In LINK mode,
 #  myth2kodi will not move the file, LINK mode creates a new symlink to
-#  the original file.
+#  the original file. Both approaches enable Kodi to access the recording
+#  while still allowing MythTV to keep track of it. If Symlinking is set
+#  to "Disabled" then, when myth2kodi moves a recording, it will also
+#  delete it from MythTV's database.
 #
 #Output-Files:
 #  myth2kodi will create several files in it's working folder. This is a
@@ -87,9 +115,9 @@
 #      can be deleted in the future if their video file is deleted.
 #    +doover.sh is designed to keep track of failed jobs. It is designed to be
 #      executable. #Commented commands are those which are determined to be
-#      questionable. This file can be made executable and ran after a problem is
+#      questionable. This file can be made executable and run after a problem is
 #      corrected which caused the problem. Questionable commands are those which
-#      will require you to add a episode title and set the myth2kodi
+#      will require you to add an episode title and set the myth2kodi
 #      Database=Disabled setting. Questionable files do not have sufficient
 #      guide data.
 #    +markupstart.txt and markupstop.txt are files which contain information
@@ -102,10 +130,11 @@
 #      been added to your library.
 #
 #Logging:
-#  Log file will show information for troubleshooting. You can find the log file
-#  in the working folder. Log file default location:
-#    /home/<user>/.myth2kodi/output.log
-#  See 'bashlogging' under dependencies and associated script for more information.
+#  Log files can be generated to show information for troubleshooting. You can
+#  find the log file in myth2kodi's working folder (see USER SETTING, m2kdir).
+#  For configuration options, see, the "Logging settings" section of
+#  USER SETTINGS below. The default location of the main log file is:
+#    /home/<Librarian>/.myth2kodi/output.log
 #
 #Database-external:
 #  This program will make 3 calls to TheTVDB for every episode. The first one is
@@ -138,53 +167,44 @@
 #  "libnotify-bin" -- allows GNOME desktop notifications;
 #  "mythbackend" -- Access the MythTV database.
 #
-#  Install curl with:
+#  These should all be available through the package manager for your Linux
+#  distribution. For example:
 #    "apt-get install curl"
-#  Install agrep with:
-#    "apt-get install agrep"
-#  Optionally, install libnotify-bin with:
-#    "apt-get install libnotify-bin"
-#
-#  Some of the functionality of this script is provided in other files, these
-#  will need to be placed in /usr/local/bin/ along with this script. They are:
-#  MythDataGrabber -- Uses MythTV python bindings to access database information.
-#  m2k_notify -- A script for sending notifications to Gnome Desktop.
-#  bashlogging -- A set of bash functions that provide a simple way to produce 
-#                 log messages, with control over the type of messages returned
-#                 and where they are directed, ie stdout, a log file, both. See,
-#                 the ###Logging settings### section of USER SETTINGS below.
+#  or
+#    "zypper install curl"
 #
 #Gnome Notifications:
 #  In order for myth2kodi to send notifications to the GNOME desktop, it
 #  must have no-password sudo access. It uses this access strictly to send
 #  complete, moving and failure status notifications. Because this program is
-#  launched by the user mythtv under normal circumstances, mythtv must
+#  launched by the user $Librarian under normal circumstances, $Librarian must
 #  temporarily become your user name in order to send a notification to your
-#  desktop. This requires the use of a separate script, and for mythtv to have a
-#  sudoers group with no password option. Notifications are an optional feature
-#  and will only work on the MythTV backend computer. The m2k_notify
-#  script should be located in /usr/local/bin. 
+#  desktop. This requires the use of a separate script, and for $Librarian to
+#  have a sudoers group with no password option. Notifications are an optional
+#  feature and will only work on the MythTV backend computer. The m2k_notify
+#  script should be located in $binpath.
 #
 #KODI Notifications:
 #   If options are enabled, myth2kodi will send a http requests to a
 #   specified KODI Server to display library updates, to update the library and
-#   to clean out the library.  In order for this to work KODI you must ensure
+#   to clean out the library. In order for this to work KODI you must ensure
 #   that the setting in KODI under System->Network->Services->Allow control of
 #   KODI via HTTP and Allow programs on other systems to control KODI are
 #   enabled.
 #
-#Show Name Translation: #TODO: include my 'showTranslations' file as 'showTranslations.SydFTA', to function as a show translations template, when I bundle a "Release".
+#Show Name Translation:
 #  The user may elect to create a file in the myth2kodi working folder
 #  which will then translate any recorded show name into the desired show name.
 #  This is useful for adding a year to distinguish between a new series and an
 #  older series and/or typos in your guide data. By default it should be called
-#  "showTranslations" and it will be in your $m2kdir folder.
-#  showTranslations is not needed by most users and the file should only
-#  be created if it is needed. Under most circumstances, the integrated fuzzy
-#  logic will be sufficient to translate the guide name to the TvDb name,
-#  however, showTranslations is available to improve accuracy to 100%. The
-#  format of showTranslations is as follows (NB: no "#" or space at the start of
-#  a line, only one space either side of "=", and no trailing space or any other
+#  "showTranslations" and it will be in your $m2kdir folder. Correct show titles
+#  can be determined by manually searching www.TheTVDB.com. The showTranslations
+#  file is not needed by most SchedulesDirect users and the file should only be
+#  created if it is needed. However, it is almost essential when using digital
+#  free to air guide data, such as SydFTA (See USER SETTING, "GuideDataType").
+#  An example file, "showTranslations.SydFTA", should be bundled with this script.
+#  The format of showTranslations is (NB: no "#" or space at the start of a
+#  line, only one space either side of "=", and no trailing space or any other
 #  characters):
 #    Filename: $m2kdir/showTranslations
 #      My Guide Show Title = www.TheTVDB.com Show Title
@@ -553,7 +573,7 @@ TraditionalNamingConventions(){
     MoveDir="$PrimaryShowDir"
     ShowFileName="$ShowName S0E0 ($EpisodeSubtitle Recorded $datehour on $ChanID)"
     RequiresNFO=1
-    test "$m2kProgramIDCheck" = "EP" && RequiresDoover=1
+    [[ "$m2kProgramIDCheck" = "EP" ]] && RequiresDoover=1
   fi
   Inform "Set file name as: $ShowFileName"
 }
@@ -601,10 +621,10 @@ CategoricNamingConventions(){
 dailyreport(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   if [ "$DailyReport" = "Enabled" ]; then
-    test ! -d "$m2kdir/DailyReport" && mkdir "$m2kdir/DailyReport"
+    [[ ! -d "$m2kdir/DailyReport" ]] && mkdir "$m2kdir/DailyReport"
     local reporttime=$(date +%T)
     Inform "Writing to DailyReport file: ${Today}"
-    printf '%s\n' "$reporttime - $ShowFileName">>"$m2kdir/DailyReport/${Today}"
+    printf '%s\n' "$reporttime - $ShowFileName" >> "$m2kdir/DailyReport/${Today}"
   fi
   return 0
 }
@@ -625,7 +645,7 @@ checkPermissions(){
     if [[ -n "$1" ]]; then
       if [ -d "$3" ]; then
         if (($1 < $2)); then
-          echo "Testing write permission on $3">"$3/arbitraryfile.ext"
+          printf '%s\n' "Testing write permission on $3" > "$3/arbitraryfile.ext"
           if [ -f "$3/arbitraryfile.ext" ] ; then
             if [ -s "$3/arbitraryfile.ext" ]; then
               rm -f "$3/arbitraryfile.ext"
@@ -636,8 +656,8 @@ checkPermissions(){
             fi
           else
             Err "${FUNCNAME[0]}() $MyUserName TRIED TO WRITE TO $3 --FAILED"
-            test ! -r "$3" && Inform "QUICK FIX: sudo chmod a+r \"$3\""
-            test ! -w "$3" && Inform "QUICK FIX: sudo chmod a+w \"$3\""
+            [[ ! -r "$3" ]] && Inform "QUICK FIX: sudo chmod a+r \"$3\""
+            [[ ! -w "$3" ]] && Inform "QUICK FIX: sudo chmod a+w \"$3\""
             Inform "QUICK FIX: sudo chown $MyUserName \"$3\""
           fi
         elif [ -z "$2" ] || (( $1 >= $2 )); then
@@ -662,23 +682,26 @@ checkPermissions(){
 }
 
 #####COMSKIP FILES#####
-#Function GenComSkip creates a comskip.txt file for use with the show upon moving, created from data from library
+#Function GenComSkip creates a comskip.txt file from MythTV database
+#information for use by Kodi.
 GenComSkip(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   local -i Counter=0
   local StartData
   local StopData
   #Set up comskip file
-  test -f "$m2kdir/markupframes.txt" && rm -f "$m2kdir/markupframes.txt"
-  echo "FILE PROCESSING COMPLETE">"$m2kdir"/markupframes.txt
-  echo "------------------------">>"$m2kdir"/markupframes.txt
+  #TODO: can we make the "FILE PROCESSING COMPLETE" line more descriptive???
+  #TODO: the rm is sort of redundant, also consider using the multiple print format: {...} > "$m2kdir/markupframes.txt"
+  [[ -f "$m2kdir/markupframes.txt" ]] && rm -f "$m2kdir/markupframes.txt"
+  printf '%s\n' "FILE PROCESSING COMPLETE" >  "$m2kdir"/markupframes.txt
+  printf '%s\n' "------------------------" >> "$m2kdir"/markupframes.txt
   #TODO: markupstop.txt is being read into line and then subsequently ignored...
   while read -r line ; do
     ((++Counter))
     StartData=$(sed -n "$Counter"p "$m2kdir/markupstart.txt")
     StopData=$(sed -n "$Counter"p "$m2kdir/markupstop.txt")
     if [ ! -z "$StopData" ]; then
-      echo "$StartData $StopData">>"$m2kdir"/markupframes.txt
+      printf '%s\n' "$StartData $StopData" >> "$m2kdir"/markupframes.txt
       CommercialMarkup="Created"
       Debug "COMMERCIAL DATA START:$StartData STOP:$StopData"
     fi
@@ -938,8 +961,11 @@ doFailSafeMode(){
     Warn "ATTEMPTING SYMLINK TO FAILSAFE DIR: $FailSafeDir"
     Inform "FailSafe link name set as: $FailSafeDir/$ShowFileName.$OriginalExt"
     ln -s "$InputPath" "$FailSafeDir/$ShowFileName.$OriginalExt"
-    test -f "$FailSafeDir/$ShowFileName.$OriginalExt" && Inform "FAILSAFE MODE COMPLETE: SYMLINK CREATED"
-    test ! -f "$FailSafeDir/$ShowFileName.$OriginalExt" && Err "FAILSAFE MODE FAILURE CHECK PERMISSIONS AND FREE SPACE IN $FailSafeDir"
+    if [ -f "$FailSafeDir/$ShowFileName.$OriginalExt" ]; then
+      Inform "FAILSAFE MODE COMPLETE: SYMLINK CREATED"
+    else
+      Err "FAILSAFE MODE FAILURE CHECK PERMISSIONS AND FREE SPACE IN $FailSafeDir"
+    fi
   else
     Inform "FailSafeMode Disabled, we won't try and make a link as a fallback."
   fi
@@ -948,6 +974,9 @@ doFailSafeMode(){
 }
 
 dbselect(){
+  Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
+  DebugCont "Called with $# arguments"
+  local -i i=0 ; local var ; for var in "$@"; do ((++i)) ; DebugCont "arg $i = ${var}" ; done
   mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; SELECT $1 FROM recorded WHERE basename LIKE '$InputFileBasename' ; "
 }
 
@@ -3228,7 +3257,9 @@ m2kHelp(){
   echo "usage: myth2kodi 'path/to/file' ['title'] ['subtitle']"
   echo "usage: myth2kodi --mode [parameter] [parameter]"
   echo "  items in brackets are [context sensitive]"
-  #TODO: Update this, probably remove short versions, especially for potentially dangerous modes
+  #TODO: Create more detailed help messages for individual options, so that
+  #      they can be called something like:
+  #      myth2kodi --help maintenance
   if [ "$switchhelp" = "1" ]; then
     echo ""
     echo "mythicalLibrarian Author: Adam Outler outleradam(at)hotmail.com"

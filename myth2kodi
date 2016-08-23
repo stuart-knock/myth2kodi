@@ -2839,6 +2839,7 @@ m2kDiagnostics(){
   local checkd="" #agrep
   local checke="" #libnotify-bin
   local checkf="" #python
+  local checkj="" #jq
   local python_version="" #Python Version information
   local pyver=0 #An integer representing first 2 points of python version, ie 2.6.3 => 26
   local packagecheck=""
@@ -2851,7 +2852,6 @@ m2kDiagnostics(){
   read -r -n1 -p "press any key to verify installed packages..."
   printf '\n'
 
-  #TODO: rename m2k_notify as m2k_notify
   local -i bashlogging_file
   local -i MythDataGrabber_file
   local -i MythDataGrabber_exec
@@ -2877,6 +2877,7 @@ m2kDiagnostics(){
   test $(which curl)>/dev/null  || checkc="curl"
   test $(which agrep)>/dev/null || checkd="agrep or tre-agrep"
   test $(which notify-send)>/dev/null || checke="libnotify-bin"
+  test $(which jq)>/dev/null || checkj="jq"
   if [ "$DatabaseType" = "MythTVPythonBindings" ]; then
     which python &> /dev/null ; test "$?" = "0" || checkf="python"
     if [[ -z "$checkf" ]]; then
@@ -2890,11 +2891,12 @@ m2kDiagnostics(){
   fi
 
   #Provide feedback on package checks
-  packagecheck="$checkc$checkd$checke"
+  packagecheck="$checkc$checkd$checke$checkj"
   printf '\n' | tee -a "$DiagnosticsFile"
   [[ -z "$checkc" ]] && Inform "package 'curl' found."
   [[ -z "$checkd" ]] && Inform "package 'agrep' or 'tre-agrep' found."
   [[ -z "$checke" ]] && Inform "package 'libnotify-bin' found."
+  [[ -z "$checkj" ]] && Inform "package 'jq' found."
   if [ "$DatabaseType" = "MythTVPythonBindings" ]; then
     packagecheck="$packagecheck$checkf$checka$checkb"
     [[ -z "$checkf" ]] && Inform "package 'python' found."
@@ -2907,12 +2909,12 @@ m2kDiagnostics(){
   if [[ -n "$packagecheck" ]] ; then
     packagecheck="***FAILED***"
     Err "Installed packages check ***FAILED***"
-    ErrCont "Missing packages are: $checkc $checkd $checke $checkf $checka $checkb"
+    ErrCont "Missing packages are: $checkc $checkd $checke $checkj $checkf $checka $checkb"
     ErrCont "If packages are already installed, check your path settings."
     if [ "$m2kPlatform" != "Darwin" ] ; then
-      ErrCont "Please run 'apt-get install $checkc $checkd $checke $checkf $checka $checkb' or equivalent."
+      ErrCont "Please run 'apt-get install $checkc $checkd $checke $checkj $checkf $checka $checkb' or equivalent."
     else
-      ErrCont "Please obtain MacPorts and install $checkb $checkc $checkd $checke"
+      ErrCont "Please obtain MacPorts and install $checkc $checkd $checke $checkj $checka $checkb"
       [[ -n "$checkf" ]] && ErrCont "Python is missing, please install Python, or make sure it's in your path."
     fi
   else
@@ -2952,7 +2954,12 @@ m2kDiagnostics(){
     #If checks above found python-lxml & libmyth-python, do a more thorough testing of MythTV python bindings
     if [[ -z "$checkf$checka$checkb" ]]; then
       #Use MythDataGrabber's internal diagnostics function
-      "$binpath"/MythDataGrabber --Diagnostic=True
+      "$binpath"/MythDataGrabber --Diagnostic=True          \
+                                 --DBHostName="$DBHostName" \
+                                 --DBName="$MySQLMythDb"    \
+                                 --DBUserName="$MySQLuser"  \
+                                 --DBPassword="$MySQLpass"  \
+                                 --DBPin="$DBPin"
       if [[ $? = "0" ]]; then PythonBindingsCheck="OK"; else PythonBindingsCheck="FAILED"; fi
       if [ "$PythonBindingsCheck" = "OK" ]; then
         Inform "MythTV Python Bindings are installed properly."
@@ -3094,13 +3101,13 @@ m2kDiagnostics(){
   printf '\n'
   Inform "RESULTS SUMMARY:"
   test "$DatabaseType"="MythTVPythonBindings" && InformCont "MythTV Database Test: $DBTest"
-  InformCont "Installed Packages:  $packagecheck $checka $checkb $checkc $checkd $checke"
-  InformCont "Notifications Test:  $notifytest"
-  InformCont "KODI Communications: $KODIcomm"
-  InformCont "File System Checks:  $folderchecks"
-  InformCont "mythicalTesting:     $mythicaltest"
+  InformCont "Installed Packages:   $packagecheck $checka $checkb $checkc $checkd $checke $checkj"
+  InformCont "Notifications Test:   $notifytest"
+  InformCont "KODI Communications:  $KODIcomm"
+  InformCont "File System Checks:   $folderchecks"
+  InformCont "myth2kodi Testing:    $mythicaltest"
 
-  InformCont "Overall mythicalReadiness: $overallchecks"
+  InformCont "Overall Readiness:    $overallchecks"
   InformCont "-----End of diagnostics-----"
   printf '\n' | tee -a "$DiagnosticsFile"
 

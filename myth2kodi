@@ -1917,6 +1917,14 @@ getAbsoluteEpisodeNumberWithFuzzyPlotMatch(){
   DebugCont "AbsoluteEpisodeNumber: $AbsoluteEpisodeNumber"
   DebugCont "NewShowName: $NewShowName"
   DebugCont "Plot: $Plot"
+
+  if [[ ! -f "$m2kdir/$NewShowName/$NewShowName.Plot.txt" ]]; then
+    Err "Myth2kodi's internal database contains no Plot information for $NewShowName."
+    ErrCont "This probably means we failed to identify a SeriesID. Either you need"
+    ErrCont "to add a showTranslation entry or we've mistaken a Movie for an Episode."
+   return 1
+ fi
+
   AbsoluteEpisodeNumber=""
   #set IFS to use line break as a delineator -- necessary for separating multiple agrep matches below.
   local IFS=$'\n'

@@ -55,6 +55,8 @@
 #      "/home/$Librarian/bin". We really want to avoid root/sudo requirements
 #      as much as possible.
 
+#TODO: really need to review doover and undo usage...
+
 #Intention:
 #  This program automates the mapping of MythTv recordings to a Kodi library.
 #  It is designed to be a user job in MythTV. It can also be run manually from
@@ -339,16 +341,27 @@ declare -i RSSmaxItems=8
 #Recommend 1 for usual operation, once you're confident that everything is working fine.
 #Only use 3 if you have a particular problem that you're trying to track down, it significantly increases the output.
 LogLevel=2
-#LogFile is the name of the log file, this will be placed in myth2kodi's working directory, $m2kdir set above.
-#DEFAULT: 'output.log' #NOTE: LogFile is overridden in special contexts, such as running Diagnostics.
-LogFile='output.log'
+#LogFileName is the name of the log file, this will be placed in myth2kodi's
+#working directory, $m2kdir set above, and have the suffix '.log' appended.
+#DEFAULT: 'output' #NOTE: LogFile is overridden in special contexts, such as running Diagnostics.
+#TODO: Consider changing default to "myth2kodi" => "/home/<Librarian>/.myth2kodi/myth2kodi.log"
+LogFileName='output'
 #LogType defines where to direct logging messages ['stdout|'logfile'|'both'(DEFAULT)]:
 #NOTE: This is made read only within the bashlogging script.
 LogType='both'
 ########################## END USER SETTINGS ###################################
 #TODO: Consider disabling stdout logging, ie LogType='logfile', when run as a mythtv user-job.
 
-m2kVersion="myth2kodi Version 0.9.3; mythicalLibrarian 953ish+"
+m2kVersion="myth2kodi Version 0.9.4; mythicalLibrarian 953ish+"
+
+#The full path version of the file to which logging output will be sent:
+LogFile="$m2kdir/${LogFileName}.log"
+#When running diagnostics mode, output will instead be sent to this file:
+declare -r DiagnosticsFile="$m2kdir/diagnostics.log"
+#A file containing a list of possible duplicate recordings:
+declare -r DuplicatesFile="$m2kdir/duplicates.log"
+#A file containing a list of possible duplicate recordings:
+declare -r UnrecognizedSeriesFile="$m2kdir/unrecognizedseries.log"
 
 #TODO: Add ability to compress LogFile (either time(eg. Monthly) or size(~8MB)) and start a fresh one.
 #if [ -f $LogFile ]; then
@@ -358,17 +371,8 @@ m2kVersion="myth2kodi Version 0.9.3; mythicalLibrarian 953ish+"
 #    mv "$LogFile" "$m2kdir/$LogFileName_${FileNameNow}.log"
 #    gz "$m2kdir/$LogFileName_${FileNameNow}.log"
 #    #createlogfile
-#  if
-
-#TODO: There is redundant setting of LogFile.
-#The full path version of the file to which logging output will be sent:
-LogFile="$m2kdir/output.log"
-#When running diagnostics mode, output will instead be sent to this file:
-declare -r DiagnosticsFile="$m2kdir/diagnostics.log"
-#A file containing a list of possible duplicate recordings:
-declare -r DuplicatesFile="$m2kdir/duplicates.log"
-#A file containing a list of possible duplicate recordings:
-declare -r UnrecognizedSeriesFile="$m2kdir/unrecognizedseries.log"
+#  fi
+#fi
 
 if [ -f "$binpath"/bashlogging ] ; then
   source "$binpath"/bashlogging "$LogType"
@@ -378,12 +382,14 @@ else
 fi
 
 ########################### BEGIN USER JOBS ####################################
-#The RunJob function is a place where you can put your custom script to be run
+#The ExitJob function is a place where you can put your custom script to be run
 #at the end of execution. Though it may be at the top, this is actually the end
 #of the program.
-#TODO: Consider renaming as ExitJobs, seems more descriptive given usage...
-RunJob(){
+ExitJob(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
+  DebugCont "Called with $# arguments"
+  local -i i=0; local var; for var in "$@"; do ((++i)); DebugCont "arg $i = ${var}"; done
+  local jobtype="$1"
   case "$jobtype" in
   #Successful Completion of myth2kodi
     LinkModeSuccessful|MoveModeSuccessful)
@@ -448,9 +454,6 @@ RunJob(){
       exit 0
       ;;
   esac
-  #Custom exit point may be set anywhere in program by typing RunJob on any new line
-  #Insert Custom User Job here
-
   #
   exit 4
 }
@@ -936,10 +939,14 @@ performLoggingForLinkMode(){
   test ! -f "$m2kdir/undo.sh"   && echo "rm -f \"$m2kdir/undo.sh\""   >> "$m2kdir/undo.sh"   && chmod 666 "$m2kdir/undo.sh"
   test ! -f "$m2kdir/doover.sh" && echo "rm -f \"$m2kdir/doover.sh\"" >> "$m2kdir/doover.sh" && chmod 666 "$m2kdir/doover.sh"
 
-  test "$RequiresDoover" = "1" && echo "test -L \"$MoveDir/$ShowFileName.$OriginalExt\" && rm -f \"$MoveDir/$ShowFileName.$OriginalExt\"">>"$m2kdir/doover.sh"
-  test "$RequiresDoover" = "1" && echo "myth2kodi \"$InputPath\" \"$InputTitle\" \"$InputSubtitle\"">>"$m2kdir/doover.sh"
-  echo "test -L \"$MoveDir/$ShowFileName.$OriginalExt\" && rm -f \"$MoveDir/$ShowFileName.$OriginalExt\"">>"$m2kdir/undo.sh"
-  echo "'$MoveDir/$ShowFileName.$OriginalExt'" "'$InputPath'">>"$m2kdir"/created.tracking
+  if [ "$RequiresDoover" = "1" ]; then
+    { #Write doover.sh lines that remove a link to a recording then reruns myth2kodi
+      printf '%s\n' "test -L \"$MoveDir/$ShowFileName.$OriginalExt\" && rm -f \"$MoveDir/$ShowFileName.$OriginalExt\""
+      printf '%s\n' "myth2kodi \"$InputPath\" \"$InputTitle\" \"$InputSubtitle\""
+    } >> "$m2kdir/doover.sh"
+  fi
+  echo "test -L \"$MoveDir/$ShowFileName.$OriginalExt\" && rm -f \"$MoveDir/$ShowFileName.$OriginalExt\"" >> "$m2kdir/undo.sh"
+  echo "'$MoveDir/$ShowFileName.$OriginalExt'" "'$InputPath'" >> "$m2kdir"/created.tracking
 }
 
 writeJobToDooverQue(){
@@ -1443,7 +1450,7 @@ ProcessNoLookup(){
   #Check for database permissions
   test "$ChanID" = "" && Err "%%%% NO DATABASE INFORMATION. CHECK LOGIN/PASS OR FILE %%%%"
   #disqualify invalid movie airdates
-  test ! -z "$MovieAirDate" && test "$MovieAirDate" -lt 1900 && MovieAirDate=''
+  [[ -n "$MovieAirDate" ]] && (( MovieAirDate < 1900 )) && MovieAirDate=''
 
   #Get rating from Stars
   rating=$(printf "%0.f" "$Stars")
@@ -2079,6 +2086,7 @@ getAbsoluteEpisodeNumberWithFuzzyLogic(){
 #####SEARCH TheTVDB AND CREATE DATA FILES#####
 searchTheTVDBAndReturnTxtFileTables(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
+  local -i NextShow=0
   Inform "SEARCHING www.TheTVDB.com FOR $tvdbshowname"
   #TODO: Instance searching rather then global.  Need to create an instance variable based on time and chanid.
   #Search TheTVDB and return an XML file with results
@@ -2102,7 +2110,10 @@ searchTheTVDBAndReturnTxtFileTables(){
   test -f "$m2kdir/zap2it.txt" && rm -f "$m2kdir/zap2it.txt"
   while read -r line ; do
     test "$line" = "<Series>" && NextShow=1
-    test "$line" = "</Series>" && test "$NextShow" = "1" && echo "" >>"$m2kdir/zap2it.txt" && NextShow=0
+    if [[ "$line" = "</Series>" ]] && ((NextShow==1)); then
+      printf '\n' >> "$m2kdir/zap2it.txt"
+      NextShow=0
+    fi
 
     if [[ "$line" =~ '<zap2it_id>'* ]] ; then
       echo "$line" | sed -e s/"<\/\?zap2it_id>"//g \
@@ -2110,7 +2121,7 @@ searchTheTVDBAndReturnTxtFileTables(){
                        -e s/"&amp;"/"\&"/g       \
                        -e s/'&ndash;'/'-'/g      \
                        -e s/"&lt;"/"<"/g         \
-                       -e s/"&gt;"/">"/g >>"$m2kdir/zap2it.txt"
+                       -e s/"&gt;"/">"/g >> "$m2kdir/zap2it.txt"
       NextShow=0
     fi
   done < "$m2kdir/working.xml"
@@ -2127,21 +2138,24 @@ DoTestFileExit(){
 updateRunningFuzzyLogicErrorCount(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   #additional logging for statistical purposes
-  test ! -f "$m2kdir"/FuzzyLogicError.log && echo "0">"$m2kdir"/FuzzyLogicError.log
+  test ! -f "$m2kdir"/FuzzyLogicError.log && echo "0" > "$m2kdir"/FuzzyLogicError.log
+  local -i FuzzyLogicError
   FuzzyLogicError="$(cat "$m2kdir"/FuzzyLogicError.log)"
   (( ++FuzzyLogicError ))
+  #TODO: pretty sure this rm is redundant.
   rm -f "$m2kdir"/FuzzyLogicError.log
-  echo "$FuzzyLogicError">"$m2kdir"/FuzzyLogicError.log
+  echo "$FuzzyLogicError" > "$m2kdir"/FuzzyLogicError.log
 }
 
 updateRunningTotalMatchesCount(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   #additional logging for statistical purposes
-  test ! -f "$m2kdir"/TotalEpisodeMatches.log && echo "0">"$m2kdir"/TotalEpisodeMatches.log
+  test ! -f "$m2kdir"/TotalEpisodeMatches.log && echo "0" > "$m2kdir"/TotalEpisodeMatches.log
   FuzzyLogicMatches="$(cat "$m2kdir"/TotalEpisodeMatches.log)"
   (( ++FuzzyLogicMatches ))
+  #TODO: pretty sure this rm is redundant.
   rm -f "$m2kdir"/TotalEpisodeMatches.log
-  echo "$FuzzyLogicMatches">"$m2kdir"/TotalEpisodeMatches.log
+  echo "$FuzzyLogicMatches" > "$m2kdir"/TotalEpisodeMatches.log
 }
 
 #Function DoMythTVPermissionsCheck will check to see if the file is
@@ -2174,8 +2188,7 @@ DoMythTVPermissionsCheck(){
       ErrCont "AT THE END OF THE LINE YOU JUST RAN."
       ErrCont ""
       ErrCont "Done."
-      jobtype='PermissionErrorWhileMoving'
-      RunJob
+      ExitJob 'PermissionErrorWhileMoving'
     fi
   fi
 }
@@ -2189,8 +2202,7 @@ UserJobOutsideMythTV(){
   ErrCont "--OR when looking up a non database Episode--"
   ErrCont "  myth2kodi /path_to/file.ext \"Title of Show\" \"Subtitle of show\""
   ErrCont "done."
-  jobtype='GenericUnspecifiedError'
-  RunJob
+  ExitJob 'GenericUnspecifiedError'
 }
 
 DisplayShowWarning(){
@@ -2428,6 +2440,7 @@ setTargetFolderAsInputPathFolder(){
 
 #####GENERATE tvshow.nfo#####
 #Generates folder tvshow.nfo file
+#TODO: review this function, specifically, tvshow.nfo Vs $ShowFileName.nfo
 GenerateTVShowNFO(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   test -f "$MoveDir/tvshow.nfo" && rm -f "$MoveDir/tvshow.nfo"
@@ -2471,7 +2484,7 @@ GenerateEpisodeNFO(){
     {
         echo -e "\t<season>$Sxx</season>"
         echo -e "\t<episode>$Exx</episode>"
-    } >>"$MoveDir/$ShowFileName.nfo"
+    } >> "$MoveDir/$ShowFileName.nfo"
   else
     {
       echo -e "\t<season>0</season>"
@@ -2493,16 +2506,14 @@ ignoreList(){
   if [ -f "$m2kdir/titleIgnore" ]; then
     ignoreTest="$(grep "$InputTitle" "$m2kdir/titleIgnore")"
     if [ "$InputTitle" = "$ignoreTest" ]; then
-      jobtype='titleIgnore'
-      RunJob
+      ExitJob 'titleIgnore'
     fi
   fi
   #Test if the Category is in the categoricIgnore file
   if [ -f "$m2kdir/categoricIgnore" ]; then
     ignoreTest="$(grep "$ShowCategory" "$m2kdir/categoricIgnore")"
     if [ "$ShowCategory" = "$ignoreTest" ]; then
-      jobtype='categoricIgnore'
-      RunJob
+      ExitJob 'categoricIgnore'
     fi
   fi
   return 0
@@ -2532,7 +2543,7 @@ DoMaintenance(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   Inform "PERFORMING MAINTENANCE ROUTINE..."
   #check for interrupted undo jobs
-  test -f "$m2kdir/undo.lock" && test ! -f "$m2kdir/undo.sh" && mv "$m2kdir/undo.lock" "$m2kdir/undo.sh"
+  [[ -f "$m2kdir/undo.lock" && ! -f "$m2kdir/undo.sh" ]] && mv "$m2kdir/undo.lock" "$m2kdir/undo.sh"
 
   #Check and make doover.sh and undo.sh if it does not exist
   test ! -f "$m2kdir/doover.sh" && echo "rm -f \"$m2kdir/doover.sh\"" > "$m2kdir/doover.sh" && chmod 666 "$m2kdir/doover.sh"
@@ -2628,6 +2639,8 @@ DoMaintenance(){
     rm -f "$m2kdir/cleanup"
   fi
   test ! -d "$m2kdir/mythicalSetup" && mkdir "$m2kdir/mythicalSetup"
+  Inform "MAINTENANCE ROUTINE COMPLETE."
+  return 0
 }
 
 ScanUsageMsg(){
@@ -2713,10 +2726,9 @@ m2kScan(){
       Debug "Attempting to envoke myth2kodi on $line"
       if [ "$InputOption" = "--BypassPermissionsCheck" ]; then
         Warn "${FUNCNAME[0]}() Running myth2kodi with --BypassPermissionsCheck option."
-        #TODO: [[ ! -L "$line" && ! -S "$line" && ! -d "$line" ]]
-        test ! -L "$line" && test ! -S "$line" && test ! -d "$line" && myth2kodi "$line" "--BypassPermissionsCheck"
+        [[ ! -L "$line" && ! -S "$line" && ! -d "$line" ]] && myth2kodi "$line" "--BypassPermissionsCheck"
       else
-        test ! -L "$line" && test ! -S "$line" && test ! -d "$line" && myth2kodi "$line"
+        [[ ! -L "$line" && ! -S "$line" && ! -d "$line" ]] && myth2kodi "$line"
       fi
     done<"$m2kdir/scan.temp"
     Debug "Removing the temporary scan file: $m2kdir/scan.temp"
@@ -2994,10 +3006,7 @@ m2kDiagnostics(){
   if [ "$TargetPathIsInputPath" = "Enabled" ]; then
     Inform "TargetPathIsInputPath is selected. Testing with current folder"
     #Set originaldir name if none was supplied
-    #[["$originaldirname" = "./" || "$originaldirname" = "." || "$originaldirname" = "" ]] && originaldirname="$(pwd)"
-    test "$originaldirname" = "./" && originaldirname="$(pwd)"
-    test "$originaldirname" = "." && originaldirname="$(pwd)"
-    test "$originaldirname" = "" && originaldirname="$(pwd)"
+    [["$originaldirname" = "./" || "$originaldirname" = "." || "$originaldirname" = "" ]] && originaldirname="$(pwd)"
     setTargetFolderAsInputPathFolder
   fi
 
@@ -3179,6 +3188,7 @@ executeDoOver(){
   if [ "$yesorno" = "y" ] && [ -f "$m2kdir/doover.sh" ]; then
     Debug "Running doover.sh"
     #TODO: Maybe doover.sh.run_YYYY-MM-DDThhMMSS would be better, see $FileNameNow
+    #      cp "$m2kdir/doover.sh" "$m2kdir/doover.sh.old_$FileNameNow"
     #preserve permissions
     chmod +x "$m2kdir/doover.sh"
     #NOTE: The first command in doover.sh is to delete the file doover.sh.
@@ -3206,7 +3216,7 @@ executeUndo(){
     Err "You do not have sufficient privileges to run this script."
     ErrCont "--undo must be executed with the sudo command"
     ErrCont "eg. 'sudo myth2kodi --undo'"
-    exit 1
+    return 1
   fi
   [[ -z "$SUDO_USER" ]] && SUDO_USER=$(whoami)
   Warn "--You have entered undo mode."
@@ -3226,6 +3236,7 @@ executeUndo(){
     test -f "$m2kdir/undo.sh" && sudo -u $SUDO_USER "$m2kdir/undo.sh"
     Debug "If doover.sh file exists, move it to doover.sh.old."
     #TODO: Change doover.sh.old to doover.sh.old_YYYY-MM-DDTHHMMss would be better, see $FileNameNow
+    #      also, then we can simply mv "$m2kdir/doover.sh" "$m2kdir/doover.sh.old_$FileNameNow" instead of two steps below...
     test -f "$m2kdir/doover.sh" && cat "$m2kdir/doover.sh" >> "$m2kdir/doover.sh.old"
     test -f "$m2kdir/doover.sh" && rm -f "$m2kdir/doover.sh"
     Debug "If created.tracking file exists, move it to created.tracking.old."
@@ -3235,12 +3246,12 @@ executeUndo(){
     rm -f "$m2kdir/undo.lock"
     sudo -u $SUDO_USER myth2kodi --maintenance
     Inform "Done, undo.sh has finished running."
-    exit 0
+    return 0
   else
     Inform "You must press y to execute undo"
-    exit 0
+    return 0
   fi
-  exit 1
+  return 1
 }
 
 #####HELP#####
@@ -3249,8 +3260,7 @@ m2kHelp(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   if [ "$InputPath" = "%DIR%/%FILE%" ]; then
     UserJobOutsideMythTV
-    jobtype='GenericUnspecifiedError'
-    RunJob
+    ExitJob 'GenericUnspecifiedError'
   fi
   echo " myth2kodi --:invalid pattern"
   echo ""
@@ -3591,7 +3601,7 @@ case "$InputPath" in
     Debug "Recognised command line switch '--undo'"
     #TODO: Enable undo for a specific file, eg: myth2kodi --undo '/path/to/recordings/1070_20160331073100.mpg'
     executeUndo
-    exit 0
+    exit $?
   ;;
   --getSeriesInfo)
     Debug "Recognised command line switch '--getSeriesInfo'"
@@ -3605,7 +3615,7 @@ case "$InputPath" in
     m2kHelp
     exit 0
   ;;
-  --update|--upgrade|--build)
+  --update|--upgrade|--build) #TODO: delete this if we're not going to use it.
     Debug "Recognised command line switch '--update|--upgrade|--build'"
     #mythicalUpdater
     Err "NOT MAINTAINING THE UPDATER, SO DON'T BOTHER TRYING TO UPDATE..."
@@ -3617,8 +3627,7 @@ case "$InputPath" in
     [[ "$?" != 0 ]] && exit $?
     removedead=1
     DoMaintenance
-    echo "done."
-    exit 0
+    exit $?
   ;;
   --special)
     Debug "Recognised command line switch '--special'"
@@ -3914,7 +3923,7 @@ if [[ -n "$SeriesID" ]]; then
   if ((GotEpisodeNumber == 1)) && [[ -n "$AbsoluteEpisodeNumber" ]]; then
     #####VERIFICATION OF CONFIDENCE RATING#####
     #backup AbsoluteEpisodeNumber for tests
-    AbsoluteEpisodeNumberBackup=$AbsoluteEpisodeNumber
+    AbsoluteEpisodeNumberBackup="$AbsoluteEpisodeNumber"
     if [[ -n "$InputSubtitle" && -n "$OriginalAirDate" ]]; then
       #Verify with Standard logic
       getAbsoluteEpisodeNumberWithStandardLogic
@@ -3946,12 +3955,13 @@ if [[ -n "$SeriesID" ]]; then
       fi
     fi
     #Restore AbsoluteEpisodeNumber after testing
-    AbsoluteEpisodeNumber=$AbsoluteEpisodeNumberBackup
+    AbsoluteEpisodeNumber="$AbsoluteEpisodeNumberBackup"
   fi
 
   #Statistical Fuzzy Logic monitoring
   updateRunningTotalMatchesCount
   Inform "TOTAL FUZZY LOGIC MATCHES:$FuzzyLogicMatches"
+  #TODO: Consider repositioning this Inform, also look into updateRunningFuzzyLogicErrorCount usage... Maybe use $FuzzyLogicError here.
   Inform "TOTAL VERIFIED FUZZY ERRORS:$(test -f "$m2kdir"/FuzzyLogicError.log && cat "$m2kdir"/FuzzyLogicError.log || echo "0")"
 fi
 
@@ -4063,8 +4073,7 @@ if [ ! -f "$InputPath" ] && [ "$InputPath" != "testfile.ext" ]; then
   if [ "$Notify" = "Enabled" ]; then
     sudo -u "$NotifyUserName" "$binpath"/m2k_notify "myth2kodi Error" "Invalid File supplied" error
   fi
-  jobtype='InvalidFileNameSupplied'
-  RunJob
+  ExitJob 'InvalidFileNameSupplied'
 fi
 
 ##TEST FILESYSTEM##
@@ -4111,8 +4120,7 @@ OperationSummary
 if [[ -z "$Exx" && "$InputPath" != "testfile.ext" ]]; then
   if [[ -z "$ChanID" && -n "$InputPath" ]]; then #TODO: check this...
     Warn "This episode could not be matched based on supplied Title and SubTitle."
-    jobtype='NameCouldNotBeAssigned'
-    RunJob
+    ExitJob 'NameCouldNotBeAssigned'
   elif [ "$m2kProgramIDCheck" = "MV" ]; then
     #Ensures the doover value was not set for the movie and use safe show name
     RequiresDoover=0
@@ -4121,8 +4129,7 @@ if [[ -z "$Exx" && "$InputPath" != "testfile.ext" ]]; then
   elif [ "$ShowStopper" = "Enabled" ]; then
     tvDbIsIncomplete
     writeJobToDooverQue "$1" "$2" "$3"
-    jobtype='NameCouldNotBeAssigned'
-    RunJob
+    ExitJob 'NameCouldNotBeAssigned'
   elif [ "$m2kProgramIDCheck" = "SH" ]; then
     #Ensures the doover value was not set for the show and use safe show name
     NewShowName="$SafeShowName"
@@ -4152,7 +4159,6 @@ if [[ -z "$NamingConvention" ]]; then
 else
   [[ -z "$NewShowName" ]] && NewShowName="$ShowName"
   CategoricNamingConventions
-  RequiresNFO=1
 fi
 
 #### MAKE THE DIRECTORY WE'LL MOVE THE RECORDING TO ####
@@ -4161,13 +4167,12 @@ MakeShowDir
 #####FAILSAFE HANDLING#####
 #TODO: Review the "FailSafe" handling throughout the script.
 #If failsafe state is set then create link in FailSafeMode
-if [ $FailSafeState = "1" ]; then
+if [ "$FailSafeState" = "1" ]; then
   #doFailSafeMode activates MoveDir = failsafe dir and link mode is used
   doFailSafeMode
   #--doover will reprocess the show
   writeJobToDooverQue "$1" "$2" "$3"
-  jobtype='FailSafeModeComplete'
-  RunJob
+  ExitJob 'FailSafeModeComplete'
 fi
 
 #####ANTI-CLOBBER#####
@@ -4183,10 +4188,9 @@ if [ -f "$MoveDir/$ShowFileName.$OriginalExt" ]; then
   ErrCont "Plot: $Plot"
   ErrCont "WE'VE EITHER ALREADY PROCESSED THIS RECORDING OR OUR FILE NAME GENERATION IS TOO GENERIC."
   ErrCont "EITHER WAY, ABORTING."
-  jobtype='FileAlreadyExists'
   #Write an entry in the duplicates file, for easy check/removal of duplicates.
   printf "'%s' '%s' '%s' '%s'\n" "$InputTitle" "$ShowStartTime" "$InputPath" "$ShowFileName" >> "$DuplicatesFile"
-  RunJob
+  ExitJob 'FileAlreadyExists'
   #TODO: When refactoring main, consider allowing forced move with auto name incrementing when move-to file already exists.
   #If file exists then make a new name for it
   # myth2kodiCounter=0
@@ -4206,7 +4210,7 @@ if [ -f "$MoveDir/$ShowFileName.$OriginalExt" ]; then
 fi
 
 #If this is a test file, then exit now.
-test "$InputPath" = "testfile.ext" && test "$Exx" != "E07" && Err 'FUZZY FAILURE' && exit 1
+[[ "$InputPath" = "testfile.ext" && "$Exx" != "E07" ]] && Err 'FUZZY FAILURE' && exit 1
 test "$InputPath" = "testfile.ext" && DoTestFileExit
 
 #If the user is not mythtv and the settings are set for mythtv only, then exit, display a clear status message.
@@ -4255,30 +4259,29 @@ if [ "$SYMLINK" != "LINK" ]; then
       test "$Notify" = "Enabled" && sudo -u "$NotifyUserName" "$binpath"/m2k_notify "myth2kodi Success" "$ShowFileName moved to $MoveDir" info
 
       #Additional features, notifications, rss, daily report.
-      test  "$RequiresNFO" = "1" && GenerateTVShowNFO
-      test  "$RequiresNFO" = "1" && GenerateEpisodeNFO
+      if [ "$RequiresNFO" = "1" ]; then
+        GenerateTVShowNFO
+        GenerateEpisodeNFO
+      fi
       KODIAutomate
       performLoggingForMoveMode
       dailyreport
       generaterss
       test "$SYMLINK" = "Disabled" && setGroupPermissions
-      jobtype='MoveModeSuccessful'
-      RunJob
+      ExitJob 'MoveModeSuccessful'
 
     #if file was not moved, then fail
     elif [ ! -s "$MoveDir/$ShowFileName.$OriginalExt" ]; then
       rm -f "$MoveDir/$ShowFileName.$OriginalExt"
       writeJobToDooverQue "$1" "$2" "$3"
       Wrote0LengthFile
-      jobtype='PermissionError0Length'
-      RunJob
+      ExitJob 'PermissionError0Length'
 
     fi
   elif [ ! -f "$MoveDir/$ShowFileName.$OriginalExt" ]; then
     writeJobToDooverQue "$1" "$2" "$3"
     PermissionErrorWhileMoving
-    jobtype='PermissionErrorWhileMoving'
-    RunJob
+    ExitJob 'PermissionErrorWhileMoving'
   fi
 
 #####LINK MODE HANDLING#####
@@ -4303,15 +4306,16 @@ elif [ "$SYMLINK" = "LINK" ]; then
     fi
 
     #Additional features, notifications, rss, daily report.
-    test  "$RequiresNFO" = "1"  && GenerateTVShowNFO
-    test  "$RequiresNFO" = "1"  && GenerateEpisodeNFO
+    if [ "$RequiresNFO" = "1" ]; then
+      GenerateTVShowNFO
+      GenerateEpisodeNFO
+    fi
     KODIAutomate
     performLoggingForLinkMode
     dailyreport
     generaterss
     test "$SYMLINK" = "Disabled" && setGroupPermissions
-    jobtype='LinkModeSuccessful'
-    RunJob
+    ExitJob 'LinkModeSuccessful'
 
   #If link failure, send notification and fail
   elif [ ! -L "$MoveDir/$ShowFileName.$OriginalExt" ]; then
@@ -4319,8 +4323,7 @@ elif [ "$SYMLINK" = "LINK" ]; then
     writeJobToDooverQue "$1" "$2" "$3"
 
   fi
-  jobtype='LinkModeFailed'
-  RunJob
+  ExitJob 'LinkModeFailed'
 
 fi
 
@@ -4333,7 +4336,7 @@ if [ "$Notify" = "Enabled" ] ; then
   sudo -u "$NotifyUserName" "$binpath"/m2k_notify "myth2kodi error" "myth2kodi operation failed See $LogFile for more information" error
 fi
 writeJobToDooverQue "$1" "$2" "$3"
-jobtype='GenericUnspecifiedError'
-RunJob
+ExitJob 'GenericUnspecifiedError'
 
+Err "The ExitJob function must be broken for you to see this message..."
 exit 4

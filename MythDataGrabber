@@ -189,7 +189,7 @@ except:
 if options['Diagnostic'] == 'True':
     try:
         print "Connected to:", db.gethostname()
-        print "Db Identified as:",  db.ident
+        #print "Db Identified as:",  db.ident
         print "Diagnostics passed..."
 
     except: 

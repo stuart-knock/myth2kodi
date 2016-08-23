@@ -1402,7 +1402,7 @@ ProcessSydFTA(){
   RemoveCastFromPlot
 
   #Only keep Alpha-numeric characters and the four basic punctuation chars & , . -
-  Plot="$(sed -r s'/[^[:alnum:]|^&,.-]//'g <<< "$Plot")"
+  Plot="$(sed -r s'/[^[:alnum:]|^[:blank:]|^&,.-]//'g <<< "$Plot")"
 
   #Strip the Movie: tag that some stations very helpfully put in the title field...
   if [ "$m2kProgramIDCheck" = "MV" ]; then
@@ -1659,10 +1659,10 @@ downloadInfoAboutMatchedTitleAndCreateTxtFileTables(){
           line="${line//&ndash;/-}"
           actualEname="${line}"
           #Only keep Alpha-numeric characters and the four basic punctuation chars & , . -
-          actualEname="$(sed -r s'/[^[:alnum:]|^&,.-]//'g <<< "$actualEname")"
+          actualEname="$(sed -r s'/[^[:alnum:]|^[:blank:]|^&,.-]//'g <<< "$actualEname")"
           Ename="${actualEname/;*/}" #TODO: This strips everything following the first ";" (semi-colon). Is that intentional because there are sometimes multiple EpisodeNames separated by semi-colons???
           #Only keep Alpha-numeric characters and the four basic punctuation chars & , . -
-          Ename="$(sed -r s'/[^[:alnum:]|^&,.-]//'g <<< "$Ename")"
+          Ename="$(sed -r s'/[^[:alnum:]|^[:blank:]|^&,.-]//'g <<< "$Ename")"
         #Get OriginalAirDate
         elif [[ "$line" == "<FirstAired>"* ]]; then
           line="${line/"</FirstAired>"/}"
@@ -1705,7 +1705,7 @@ downloadInfoAboutMatchedTitleAndCreateTxtFileTables(){
         local -i EpisodeCount
         EpisodeCount=$(jq -r '.[] | .name' "$tvmazeJsonFile" | wc -l)
         for i in $(seq 0 $((EpisodeCount-1))); do
-          jq -r ".[$i] | .summary" "$tvmazeJsonFile" |  tr -d "\n" | sed s/"<\/\?p>"/""/g | sed -r s'/[^[:alnum:]|^&,.-]//'g | sed -r s'/\s{2,}/ /'g >> "$m2kdir/$NewShowName/$NewShowName.Plot.txt"
+          jq -r ".[$i] | .summary" "$tvmazeJsonFile" |  tr -d "\n" | sed s/"<\/\?p>"/""/g | sed -r s'/[^[:alnum:]|^[:blank:]|^&,.-]//'g | sed -r s'/\s{2,}/ /'g >> "$m2kdir/$NewShowName/$NewShowName.Plot.txt"
           printf '\n' >> "$m2kdir/$NewShowName/$NewShowName.Plot.txt"
         done
       fi
@@ -3751,7 +3751,7 @@ ShowName="$InputTitle"
 #split on semicolon, there will only be one episode looked up.
 EpisodeSubtitle="$(echo $InputSubtitle | sed 's/;.*//')"
 #Only keep Alpha-numeric characters and the four basic punctuation chars & , . -
-EpisodeSubtitle="$(sed -r s'/[^[:alnum:]|^&,.-]//'g <<< "$EpisodeSubtitle")"
+EpisodeSubtitle="$(sed -r s'/[^[:alnum:]|^[:blank:]|^&,.-]//'g <<< "$EpisodeSubtitle")"
 ExtensionPrep="$(basename "$InputPath")"
 OriginalExt="${ExtensionPrep#*.}"
 originaldirname="$(dirname "$InputPath")"
@@ -3767,7 +3767,7 @@ ShowTranslations
 ignoreList
 SafeShowName=$(echo "$ShowName" | sed 's/;.*//')
 #Only keep Alpha-numeric characters and the four basic punctuation chars & , . -
-SafeShowName="$(sed -r s'/[^[:alnum:]|^&,.-]//'g <<< "$SafeShowName")"
+SafeShowName="$(sed -r s'/[^[:alnum:]|^[:blank:]|^&,.-]//'g <<< "$SafeShowName")"
 #Format Show name for Sending to www.TheTVDB.com and KODI
 tvdbshowname=$(echo "$ShowName" | sed s/" "/"%20"/g | sed s/"&"/"%26"/g)
 #Setup paths if TargetPathIsInputPath is active.
@@ -4149,9 +4149,9 @@ determinePrimaryOrAlternateFolderUsage
 #####OUTPUT FILE NAME FORMATTING#####
 #Format Shows
 #Only keep Alpha-numeric characters and the four basic punctuation chars & , . -
-EpisodeSubtitle="$(sed -r s'/[^[:alnum:]|^&,.-]//'g <<< "$EpisodeSubtitle")"
-NewShowName="$(sed -r s'/[^[:alnum:]|^&,.-]//'g <<< "$NewShowName")"
-ShowName="$(sed -r s'/[^[:alnum:]|^&,.-]//'g <<< "$ShowName")"
+EpisodeSubtitle="$(sed -r s'/[^[:alnum:]|^[:blank:]|^&,.-]//'g <<< "$EpisodeSubtitle")"
+NewShowName="$(sed -r s'/[^[:alnum:]|^[:blank:]|^&,.-]//'g <<< "$NewShowName")"
+ShowName="$(sed -r s'/[^[:alnum:]|^[:blank:]|^&,.-]//'g <<< "$ShowName")"
 
 #Format Episodes showname=show name Sxx=season number Exx=episode number EpisodeSubtitle=episode name
 if [[ -z "$NamingConvention" ]]; then

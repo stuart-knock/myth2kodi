@@ -32,7 +32,7 @@ Usage:
    --DBName            : sets the DB Name, default: mythconverg
    --DBUserName        : sets the User Name, default: mythtv
    --DBPassword        : sets the Password, default: mythtv
-   --DBPin             : sets the Pin, default: 0
+   --SecurityPin       : sets the Pin, default: 0
    --writeFile         : don't display output, write to ./showdata.txt
    --output=file.txt   : sets the output, default: ./showData.txt
    --version|-v|-ver   : displays version information
@@ -55,7 +55,7 @@ dbInfo = {
     "DBName"      : "mythconverg",
     "DBUserName"  : "mythtv",
     "DBPassword"  : "mythtv",
-    "DBPin"       : "0"
+    "SecurityPin" : "0"
     }
 
 # Setup other default option information
@@ -67,7 +67,7 @@ options = {
     }  
 
 # A list of valid command line options (anything with an = sign) and flags
-validOptions = ['--DBHostName','--DBName','--DBUserName','--DBPassword', '--filename', '--output', '--DBPin', '--Diagnostic']
+validOptions = ['--DBHostName','--DBName','--DBUserName','--DBPassword', '--filename', '--output', '--SecurityPin', '--Diagnostic']
 validVersionFlags = ['--version','-v','-ver']
 validHelpFlags = ['--help','-?','-h']
 validNoDisplayFlags = ['--writeFile','-w'] 
@@ -172,12 +172,12 @@ except:
     try:
         # mythtv preconfigured options
         print 'Failed: attempting to use system default configuration'
-        db = MythDB(DBPin=dbInfo['DBPin']) 
+        db = MythDB(SecurityPin=dbInfo['SecurityPin'])
     except:
         try:
             # read from the mysql.txt
             print 'Failed: attempting to read from default mythtv file'
-            db = MythDB(readMysqlTxt() , DBPin=dbInfo['DBPin']) 
+            db = MythDB(readMysqlTxt(), SecurityPin=dbInfo['SecurityPin'])
         except: 
             print 'Failed: Please specify database information manually'
             print 'DB = Null'

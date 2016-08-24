@@ -374,7 +374,7 @@ declare -r FileNameNow="$(date +%FT%H%M%S)"  #ISO 8601: YYYY-mm-ddThhMMSS
 #Set global values for settings, this overrides those set at the top of this file
 test -f "/etc/myth2kodi/globalSettings" && source /etc/myth2kodi/globalSettings
 
-createnewlogfile(){
+initialisenewlogfile(){
   touch "$LogFile"
   {
     printf 'Creating Log File: %s\n' "$LogFile"
@@ -385,10 +385,11 @@ createnewlogfile(){
 #Make our working directory if it doesn't already exist
 if [ ! -d "$m2kdir" ]; then
   mkdir --parents "$m2kdir"
-  createnewlogfile
+  initialisenewlogfile
   printf 'Created Working Directory: %s\n' "$m2kdir" >> "$LogFile"
 fi
 
+#Load logging utility
 if [ -f "$binpath"/bashlogging ] ; then
   source "$binpath"/bashlogging "$LogType"
 else
@@ -401,10 +402,10 @@ if [ -f "$LogFile" ]; then
  LogFileSize=$(wc --bytes < "$LogFile")
  if ((LogFileSize > 4000000)); then
    Inform "Moving and compressing LogFile"
-   mv "$LogFile" "$m2kdir/$LogFileName_${FileNameNow}.log"
-   gz "$m2kdir/$LogFileName_${FileNameNow}.log"
-   createnewlogfile
-   Inform "Previous LogFile moved to: $m2kdir/$LogFileName_${FileNameNow}.log"
+   mv "$LogFile" "$m2kdir/${LogFileName}_${FileNameNow}.log"
+   gzip "$m2kdir/${LogFileName}_${FileNameNow}.log"
+   initialisenewlogfile
+   Inform "Previous LogFile moved to: $m2kdir/${LogFileName}_${FileNameNow}.log"
  fi
 fi
 
@@ -2871,8 +2872,8 @@ OperationSummary(){
 #This function provides a functions check on myth2kodi
 m2kDiagnostics(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  #If there is already a diagnostics file, move it to diagnostics_old_<Date&Time that this script was launched>
-  test -f "$DiagnosticsFile" && mv "$DiagnosticsFile" "$m2kdir/diagnostics_old_${FileNameNow}.log"
+  #If there is already a diagnostics file, move it to diagnostics_<Date&Time that this script was launched>.log
+  test -f "$DiagnosticsFile" && mv "$DiagnosticsFile" "$m2kdir/diagnostics_${FileNameNow}.log"
   #TODO: give these checka, checkb etc more meaningful names
   local checka="" #libmyth-python
   local checkb="" #python-lxml

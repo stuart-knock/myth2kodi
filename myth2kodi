@@ -2005,8 +2005,9 @@ getAbsoluteEpisodeNumberWithFuzzyPlotMatch(){
       DebugCont "ChunkGuesses[$i]=${ChunkGuesses[i]}"
       ChunkCosts[i]=$(cut -f2 -d":" <<< "${FuzzyChunks[i]}")
       DebugCont "ChunkCosts[$i]=${ChunkCosts[i]}"
-      ((ChunkCosts[i] < len10per)) && GoodChunkGuesses[Counter]=${ChunkGuesses[i]} && ((++Counter))
+      ((ChunkCosts[i] <= len10per)) && GoodChunkGuesses[Counter]=${ChunkGuesses[i]} && ((++Counter))
     done
+    Debug "$( IFS=','; printf '%s' "${FUNCNAME[0]}() - GoodChunkGuesses ${#GoodChunkGuesses[@]}: ${GoodChunkGuesses[*]}." )"
     #TODO: This needs to be changed to actually check that they refer to the same episode, 
     #      with multiple data sources the current test is still sufficient but not necessary...
     #If all ChunkGuess with ChunkCost < 10% are the same Absolute Episode Number

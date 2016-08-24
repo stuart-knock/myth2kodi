@@ -340,7 +340,7 @@ declare -i RSSmaxItems=8
 #Recommend 2 to start with or if you want to keep track of what myth2kodi is doing.
 #Recommend 1 for usual operation, once you're confident that everything is working fine.
 #Only use 3 if you have a particular problem that you're trying to track down, it significantly increases the output.
-LogLevel=2
+LogLevel=3
 #LogFileName is the name of the log file, this will be placed in myth2kodi's
 #working directory, $m2kdir set above, and have the suffix '.log' appended.
 #DEFAULT: 'output' #NOTE: LogFile is overridden in special contexts, such as running Diagnostics.
@@ -885,7 +885,7 @@ generaterss(){
       itemLimit=$((RssItemCount+1))
     else
       #set tracking variable to $RSSmaxItems
-      itemLimit=$RSSmaxItems
+      itemLimit="$RSSmaxItems"
     fi
 
     #get the line number for the first <item> tag
@@ -1127,7 +1127,8 @@ GetMythTvPythonBindings(){
   # declare mdb_starttime
 
   #run the python bindings and output to named pipe
-  "$binpath"/MythDataGrabber --filename="$InputFileBasename" \
+  "$binpath"/MythDataGrabber --verbosity="$LogLevel"         \
+                             --filename="$InputFileBasename" \
                              --SecurityPin="$DBPin"          \
                              --DBHostName="$DBHostName"      \
                              --DBName="$MySQLMythDb"         \
@@ -1270,7 +1271,7 @@ ExtractSxxExxFromPlot(){
     Sxx="${Sxx#0}"
     Exx="${Exx#0}"
   else
-    Warn "${FUNCNAME[0]}() No Season & Episode number information is available."
+    Inform "${FUNCNAME[0]}() No Season & Episode number information is available."
     return 1
   fi
   #Single digit episode and show names are not allowed Ex and Sx replaced with Sxx Exx
@@ -2996,7 +2997,8 @@ m2kDiagnostics(){
     #If checks above found python-lxml & libmyth-python, do a more thorough testing of MythTV python bindings
     if [[ -z "$checkf$checka$checkb" ]]; then
       #Use MythDataGrabber's internal diagnostics function
-      "$binpath"/MythDataGrabber --Diagnostic=True          \
+      "$binpath"/MythDataGrabber --verbosity="$LogLevel"    \
+                                 --Diagnostic=True          \
                                  --DBHostName="$DBHostName" \
                                  --DBName="$MySQLMythDb"    \
                                  --DBUserName="$MySQLuser"  \

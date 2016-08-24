@@ -352,7 +352,7 @@ LogType='both'
 ########################## END USER SETTINGS ###################################
 #TODO: Consider disabling stdout logging, ie LogType='logfile', when run as a mythtv user-job.
 
-m2kVersion="myth2kodi Version 0.9.4; mythicalLibrarian 953ish+"
+m2kVersion="myth2kodi Version 0.9.5; mythicalLibrarian 953ish+"
 
 #The full path version of the file to which logging output will be sent:
 LogFile="$m2kdir/${LogFileName}.log"

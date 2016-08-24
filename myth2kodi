@@ -352,7 +352,7 @@ LogType='both'
 ########################## END USER SETTINGS ###################################
 #TODO: Consider disabling stdout logging, ie LogType='logfile', when run as a mythtv user-job.
 
-m2kVersion="myth2kodi Version 0.9.5; mythicalLibrarian 953ish+"
+m2kVersion="myth2kodi Version 0.9.6"
 
 #The full path version of the file to which logging output will be sent:
 LogFile="$m2kdir/${LogFileName}.log"
@@ -363,16 +363,31 @@ declare -r DuplicatesFile="$m2kdir/duplicates.log"
 #A file containing a list of possible duplicate recordings:
 declare -r UnrecognizedSeriesFile="$m2kdir/unrecognizedseries.log"
 
-#TODO: Add ability to compress LogFile (either time(eg. Monthly) or size(~8MB)) and start a fresh one.
-#if [ -f $LogFile ]; then
-#  LogFileSize=$(wc --bytes < "$LogFile")
-#  if ((LogFileSize > 8000000)); then
-#    Inform "Moving and compressing LogFile"
-#    mv "$LogFile" "$m2kdir/$LogFileName_${FileNameNow}.log"
-#    gz "$m2kdir/$LogFileName_${FileNameNow}.log"
-#    #createlogfile
-#  fi
-#fi
+#####DEFINE ENVIRONMENT AND VARIABLES#####
+#Who called the script:
+declare -r MyUserName=$(whoami)
+#And when,
+declare -r Today="$(date +%F)"  #Date in IEEE standard format, ie YYYY-mm-dd
+declare -r ScriptStartTime="$(date +%H:%M:%S)" #Time in a readable IEEE standard format, ie HH:MM:SS
+declare -r FileNameNow="$(date +%FT%H%M%S)"  #ISO 8601: YYYY-mm-ddThhMMSS
+
+#Set global values for settings, this overrides those set at the top of this file
+test -f "/etc/myth2kodi/globalSettings" && source /etc/myth2kodi/globalSettings
+
+createnewlogfile(){
+  touch "$LogFile"
+  {
+    printf 'Creating Log File: %s\n' "$LogFile"
+    printf 'Created on %s at %s\n' "$Today" "$ScriptStartTime"
+  } >> "$LogFile"
+}
+
+#Make our working directory if it doesn't already exist
+if [ ! -d "$m2kdir" ]; then
+  mkdir --parents "$m2kdir"
+  createnewlogfile
+  printf 'Created Working Directory: %s\n' "$m2kdir" >> "$LogFile"
+fi
 
 if [ -f "$binpath"/bashlogging ] ; then
   source "$binpath"/bashlogging "$LogType"
@@ -380,6 +395,22 @@ else
   printf 'ERROR: %s\n' "$binpath/bashlogging doesn't exist." | tee -a "$LogFile"
   exit 1
 fi
+
+#When the LogFile exceeds 4MB compress it and start a fresh one.
+if [ -f "$LogFile" ]; then
+ LogFileSize=$(wc --bytes < "$LogFile")
+ if ((LogFileSize > 4000000)); then
+   Inform "Moving and compressing LogFile"
+   mv "$LogFile" "$m2kdir/$LogFileName_${FileNameNow}.log"
+   gz "$m2kdir/$LogFileName_${FileNameNow}.log"
+   createnewlogfile
+   Inform "Previous LogFile moved to: $m2kdir/$LogFileName_${FileNameNow}.log"
+ fi
+fi
+
+Debug "Running myth2kodi as $MyUserName"
+#TODO: check of $MyUserName and bailing with an ERROR message if != $Librarian
+[[ "$MyUserName" != "$Librarian" ]] && Err "myth2kodi should be run by user '$Librarian'"
 
 ########################### BEGIN USER JOBS ####################################
 #The ExitJob function is a place where you can put your custom script to be run
@@ -3512,32 +3543,6 @@ getSeriesInfo(){
 #    #Notify Kodi, RSS, and whoever else wanted to know that we're done and what it is we've done.
 #    #THE END
 
-#####DEFINE ENVIRONMENT AND VARIABLES#####
-#Who called the script:
-declare -r MyUserName=$(whoami)
-Debug "Running myth2kodi as $MyUserName"
-#TODO: check of $MyUserName and bailing with an ERROR message if != $Librarian
-[[ "$MyUserName" != "$Librarian" ]] && Err "myth2kodi should be run by user '$Librarian'"
-#And when, 
-declare -r Today="$(date +%F)"  #Date in IEEE standard format, ie YYYY-mm-dd
-declare -r ScriptStartTime="$(date +%H:%M:%S)" #Time in a readable IEEE standard format, ie HH:MM:SS
-declare -r FileNameNow="$(date +%FT%H%M%S)"  #ISO 8601: YYYY-mm-ddThhMMSS
-
-#Set global values for settings, this overrides those set at the top of this file
-test -f "/etc/myth2kodi/globalSettings" && source /etc/myth2kodi/globalSettings
-
-#Make our working directory if it doesn't already exist
-if [ ! -d "$m2kdir" ]; then
-  mkdir "$m2kdir"
-  touch "$LogFile"
-  #Keep this as a printf so it's created here regardless of LogType & LogLevel.
-  {
-    printf 'Creating Working Directory: %s\n' "$m2kdir"
-    #TODO: separate out log file creation text into a function so it can be reused in conjunction with Auto-compress of LogFile...
-    printf 'Creating Log File: %s\n' "$LogFile"
-    printf 'Created on %s at %s\n' "$Today" "$ScriptStartTime"
-  } >> "$LogFile"
-fi
 
 #Setup defaults for searching Series information
 SeriesID=""

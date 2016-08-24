@@ -1113,7 +1113,7 @@ GetMythTvPythonBindings(){
     value="$(tr -d \" <<< "$value")"
     #[[ "$equals" = "=" ]] && declare -r "mdb_$var=$value" && DebugCont "mdb_$var$equals$value"
     [[ "$equals" = "=" ]] && declare "$var=$value" && DebugCont "$var$equals$value"
-  done < "$m2kdir/mythicalDbOut" > /dev/null 2>&1
+  done < "$m2kdir/mythicalDbOut"
 
   if [ "$CommercialMarkup" = "Enabled" ]; then
     #Output commercial data to initial files

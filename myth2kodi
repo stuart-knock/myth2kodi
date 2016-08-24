@@ -340,7 +340,7 @@ declare -i RSSmaxItems=8
 #Recommend 2 to start with or if you want to keep track of what myth2kodi is doing.
 #Recommend 1 for usual operation, once you're confident that everything is working fine.
 #Only use 3 if you have a particular problem that you're trying to track down, it significantly increases the output.
-LogLevel=3
+LogLevel=2
 #LogFileName is the name of the log file, this will be placed in myth2kodi's
 #working directory, $m2kdir set above, and have the suffix '.log' appended.
 #DEFAULT: 'output' #NOTE: LogFile is overridden in special contexts, such as running Diagnostics.
@@ -2728,6 +2728,7 @@ m2kScan(){
   WarnCont "All myth2kodi operations can be reversed using the following command:"
   WarnCont "  sudo myth2kodi --undo"
   Warn "Data loss can occur if this operation is interrupted."
+  Debug "WARNING WARNING: RUNNING A SCAN WITH DEBUG LEVEL LOGGING. CONSIDER USING Info(2) LEVEL."
   read -r -n1 -p "  Would you like myth2kodi to conduct a scan? y/(n)>" yesorno
   printf '\n'
   #Default to safety, ie do nothing.

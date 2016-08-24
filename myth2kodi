@@ -340,7 +340,7 @@ declare -i RSSmaxItems=8
 #Recommend 2 to start with or if you want to keep track of what myth2kodi is doing.
 #Recommend 1 for usual operation, once you're confident that everything is working fine.
 #Only use 3 if you have a particular problem that you're trying to track down, it significantly increases the output.
-LogLevel=2
+LogLevel=3
 #LogFileName is the name of the log file, this will be placed in myth2kodi's
 #working directory, $m2kdir set above, and have the suffix '.log' appended.
 #DEFAULT: 'output' #NOTE: LogFile is overridden in special contexts, such as running Diagnostics.
@@ -1347,20 +1347,27 @@ ProcessSydFTA(){
   test "$InputSeasonNum" = 0 && InputSeasonNum=''
   test "$InputEpisodeNum" = 0 && InputEpisodeNum=''
 
-  #Current (2016-08) issue from 7flix: description in Subtitle field, all-caps cast in Plot... (Longest actual subtitle I've seen so far is 84)
-  #TODO: exclude subtitles longer than some number of characters from being considered as Subtitles.
-  #      If we can identify Plot as garbage then replace with long content of Subtitle...
-  # if (( $(wc --chars <<< "$InputSubtitle") > 88 )) ; then
-  #   PossiblePlot="$InputSubtitle"
-  #   Warn "${FUNCNAME[0]}() InputSubtitle field appears to contain Plot information."
-  #   Warn "Resetting  InputSubtitle to ''"
-  #   InputSubtitle=''
-  # fi
+  #Current (2016-08) issue from 7flix: description in Subtitle field, all-caps cast in Plot...
+  #Longest actual subtitle I've seen so far is 84 characters. Rather than assuming Plot field
+  #is garbage, we'll append the InputSubtitle field to the Plot -- this will almost certainly
+  #prevent full Plot fuzzy match from succeeding but chunked match should still match effectively.
+  if (( $(wc --chars <<< "$InputSubtitle") > 88 )) ; then #Probably not a subtitle.
+    local PossiblePlot
+    PossiblePlot="$InputSubtitle"
+    Warn "${FUNCNAME[0]}() InputSubtitle field from MytTV DB appears to contain Plot information."
+    Debug "Plot: $Plot"
+    Debug "PossiblePlot: $PossiblePlot"
+    Warn "Resetting  InputSubtitle to ''"
+    InputSubtitle=''
+    Warn "Appending PossiblePlot to Plot."
+    Plot="$Plot $PossiblePlot"
+    Debug "Plot: $Plot"
+    Debug "Full Plot match will almost certainly fail, though chunked match should still work."
+  fi
 
-
-  ###The ProgramID field from FTA EPG data in Sydney?Australia? doesn't specify MV/EP/SH,
-  ###the Movie specification is "almost-always" found in the Category field of
-  ###the MythTV database. So, we'll use that.
+  #The ProgramID field from FTA EPG data in Sydney?Australia? doesn't specify MV/EP/SH,
+  #the Movie specification is "almost-always" found in the Category field of
+  #the MythTV database. So, we'll use that.
   if [ "$ShowCategory" = "Movie" ]; then
     Inform "Guide data for $InputTitle indicates a Movie."
     m2kProgramIDCheck="MV"
@@ -1921,7 +1928,8 @@ getAbsoluteEpisodeNumberWithFuzzyPlotMatch(){
   if [[ ! -f "$m2kdir/$NewShowName/$NewShowName.Plot.txt" ]]; then
     Err "Myth2kodi's internal database contains no Plot information for $NewShowName."
     ErrCont "This probably means we failed to identify a SeriesID. Either you need"
-    ErrCont "to add a showTranslation entry or we've mistaken a Movie for an Episode."
+    ErrCont "to add a showTranslation entry, we've mistaken a Movie for an Episode,."
+    ErrCont "or this is a one off showing like news or a sports event."
    return 1
  fi
 
@@ -1948,11 +1956,11 @@ getAbsoluteEpisodeNumberWithFuzzyPlotMatch(){
   local -a MatchedPlot=()
   for (( i = 0; i < ${#AENguess[@]}; i++ )) ; do
     MatchedPlot[i]="$(sed -n "${AENguess[i]}"'p' "$m2kdir"/"$NewShowName"/"$NewShowName".Plot.txt)"
+    (( $(wc --chars  <<< "${MatchedPlot[i]}") < PlotLength )) && Warn "MatchedPlot $i shorter than Plot."
     DebugCont "MatchedPlot $i: ${MatchedPlot[i]}"
   done
   #TODO: Should check that MatchedPlot is longer than PlotLength, which is essentially what we're assuming below.
   #If the cost is greater than a 1/3 of characters in the plot we're trying to match #TODO: figure out the critical ratio here.
-  #TODO: Should have this compare across all costs... No, multiple results from agrep only occur for equal costs...
   if (( cost[0] > (PlotLength / 3) )) ; then
     Warn "${FUNCNAME[0]}() - AbsoluteEpisodeNumber guess from full Plot too fuzzy, trying chunked match."
     #Some Plots miss on match simply because the text is reordered or the middle is chopped out,

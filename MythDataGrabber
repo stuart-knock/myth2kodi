@@ -271,10 +271,9 @@ if __name__ == "__main__":
             writeData()
 
         except IOError: #the file failed to write
-            LOG.error("Write Failed, attempting to display data.")
-            # change to stdout
-            f = sys.stdout
-            writeData()
+            LOG.error("Write Failed: " + args.output.name)
+            raise IOError
+            sys.exit(1)
 
     else:
         LOG.debug("Writing data to standard out (terminal).")

@@ -270,7 +270,7 @@ PlotMatchFallback="Enabled"
 ###Database settings###
 #MythTV MYSQL access allows addition of movies, comskip data, and improves accuracy of episode recognition.
 #Database access Enabled|Disabled
-Database="Enabled"
+Database="Enabled"  #TODO: Review this: I'm not clear on the purpose/function in the absence of MythTV-DB...
 #Database Type MythTV|MythTVPythonBindings  Default=MythTVPythonBinding
 DatabaseType="MythTVPythonBindings"
 #Guide data type: SchedulesDirect currently covers DataDirect, MC2XML and others.  NoLookup will bypass tvdb scanning
@@ -396,6 +396,8 @@ else
   printf 'ERROR: %s\n' "$binpath/bashlogging doesn't exist." | tee -a "$LogFile"
   exit 1
 fi
+#Redirect a copy of stderr throughout the script to LogFile
+#exec 4>&2 2> >(tee >(xargs --null printf "[$(date +%FT%T)] ERROR: %s\n" >> "$LogFile") >&4)
 
 #When the LogFile exceeds 4MB compress it and start a fresh one.
 if [ -f "$LogFile" ]; then
@@ -443,7 +445,7 @@ ExitJob(){
 
   #File system error occurred
     PermissionError0Length|InvalidFileNameSupplied|PermissionErrorWhileMoving|FailSafeModeComplete|LinkModeFailed)
-      Err "IN: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}(). FILE SYSTEM ERROR: $jobtype"
+      Err "${FUNCNAME[0]}() CALLED FROM: ${FUNCNAME[1]}(). FILE SYSTEM ERROR: $jobtype"
       #Insert Custom User Job here
 
       #
@@ -452,7 +454,7 @@ ExitJob(){
 
   #File name we're trying to move to already exists
     FileAlreadyExists)
-      Err "IN: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}(). NOT MOVING RECORDING: $jobtype"
+      Err "${FUNCNAME[0]}() CALLED FROM: ${FUNCNAME[1]}(). NOT MOVING RECORDING: $jobtype"
       #Insert Custom User Job here
 
       #
@@ -461,7 +463,16 @@ ExitJob(){
 
   #Generic error occurred
     GenericUnspecifiedError)
-      Err "IN: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}(). UNKNOWN ERROR OCCOURED: $jobtype"
+      Err "${FUNCNAME[0]}() CALLED FROM: ${FUNCNAME[1]}(). UNKNOWN ERROR OCCOURED: $jobtype"
+      #Insert Custom User Job here
+
+      #
+      exit 3
+      ;;
+
+  #User elected not to process jobs which can not be properly categorized
+    MythTVdatabaseFailure)
+      Err "${FUNCNAME[0]}() CALLED FROM: ${FUNCNAME[1]}(). COULDN'T EXTRACT RECORDING INFO FROM MythTV-DB: $jobtype"
       #Insert Custom User Job here
 
       #
@@ -1102,8 +1113,11 @@ GetMythTvPythonBindings(){
   DebugCont "InputEpisodeNum: $InputEpisodeNum"
   Inform "Accessing MythTV DataBase Using PythonBindings:"
   Inform "Attempting to pull database information on $InputPath"
+
+  local pythonExitStatus
+
   #make a named pipe for database output
-  test ! -p "$m2kdir/mythicalDbOut" && mkfifo "$m2kdir/mythicalDbOut"
+  #test ! -p "$m2kdir/mythicalDbOut" && mkfifo "$m2kdir/mythicalDbOut"
 
   #NOTE: the declare also makes them local, so we'd need to mark them for export
   #      with -x to access them outside of the function, but not sure we want to push them to the environment just for this...
@@ -1122,19 +1136,27 @@ GetMythTvPythonBindings(){
   # declare mdb_programid
   # declare mdb_chanid
   # declare mdb_starttime
-
+  
+  #TODO: If possible without blocking MythDataGrabber exit status, return $m2kdir/mythicalDbOut to being a named pipe.
   #run the python bindings and output to named pipe
-  "$binpath"/MythDataGrabber --verbosity="$LogLevel"         \
-                             --filename="$InputFileBasename" \
-                             --SecurityPin="$DBPin"          \
-                             --DBHostName="$DBHostName"      \
-                             --DBName="$MySQLMythDb"         \
-                             --DBUserName="$MySQLuser"       \
-                             --DBPassword="$MySQLpass" >"$m2kdir/mythicalDbOut" &
-  pythonExitStatus=$?
+  "$binpath"/MythDataGrabber --verbosity="$LogLevel"          \
+                             --filename="$InputFileBasename"  \
+                             --SecurityPin="$DBPin"           \
+                             --DBHostName="$DBHostName"       \
+                             --DBName="$MySQLMythDb"          \
+                             --DBUserName="$MySQLuser"        \
+                             --DBPassword="$MySQLpass"        \
+                             --output="$m2kdir/mythicalDbOut" \
+                             --writeFile  2> >(tee -a "$LogFile" >&2)
+  #TODO: The  pythonExitStatus isn't being captured properly, I think because of the &, however, the & seems
+  #      to be required as the fifo named pipe isn't clean up until the end of this function...
+  #      Try using the --writeData to file functionality of MythDataGrabber...
+  #      Ideally we'd like to be able to capture the failure of MythDataGrabber here and exit gracefully...
+  pythonExitStatus="$?"
   if [ "$pythonExitStatus" != "0" ] ; then
     Err "${FUNCNAME[0]}() DATABASE ACCESS ERROR: COULD NOT OBTAIN INFORMATION"
     Debug "Check DBInfo in mythicalSetup, verify file is mythtv file"
+    return 1
   fi
 
   #read values from named pipe, remove quotes and declare $Variable=$Value
@@ -1180,7 +1202,7 @@ GetMythTvPythonBindings(){
   ShowStartTime="$starttime"         && InformCont "ShowStartTime=$starttime"
 
   #cleanup, remove the fifo named pipe
-  test -p "$m2kdir/mythicalDbOut" && rm -f "$m2kdir/mythicalDbOut"
+  #test -p "$m2kdir/mythicalDbOut" && rm -f "$m2kdir/mythicalDbOut"
 }
 
 #####PROCESS DATABASE INFORMATION#####
@@ -1601,7 +1623,7 @@ determineIfDatabaseIsUpToDate(){
     else
       Inform "DATABASE DOESN'T APPEAR TO BE OUT OF DATE. BUT UNFORTUNATELY WE CURRENTLY HAVE A BUG HERE SO ARE FORCING UPDATE ANYWAY..."
       #return 0
-      return 1
+      return 1 #TODO: This is a current work around for some Series not being found in the UpdatesList from thetvdb, even though updated data is available...
     fi
   #Send report to the log if database was not updated.
   elif ((CurrentTimeTVDB <= NextUpdate)); then
@@ -2702,6 +2724,7 @@ ScanUsageMsg(){
 #TODO: Need to go through this function line-by-line and make sure it can be run without causing damage.
 #This function will scan a folder and process the entire library
 m2kScan(){
+  [[ "$LogType" = "logfile" ]] && printf '%s\n' "WARNING: Recommend setting LogType='both', before proceeding.."
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   local yesorno=""
   DoMythTVPermissionsCheck
@@ -3006,7 +3029,7 @@ m2kDiagnostics(){
                                  --DBName="$MySQLMythDb"    \
                                  --DBUserName="$MySQLuser"  \
                                  --DBPassword="$MySQLpass"  \
-                                 --SecurityPin="$DBPin"
+                                 --SecurityPin="$DBPin" 2> >(tee -a "$LogFile" >&2)
       if [[ $? = "0" ]]; then PythonBindingsCheck="OK"; else PythonBindingsCheck="FAILED"; fi
       if [ "$PythonBindingsCheck" = "OK" ]; then
         Inform "MythTV Python Bindings are installed properly."
@@ -3686,6 +3709,7 @@ case "$InputPath" in
       Inform "Regenerating commskip file for $InputPath"
       InputFileBasename="$(basename "$InputPath")"
       GetMythTvPythonBindings
+      [[ "$?" != 0 ]] && exit $?
       #TODO: Find the file that $InputPath points to or is pointed to by and use that for the move location below, otherwise we have to run full identification of Episode/etc.
       #[[ -L "$InputPath" ]] && movedrecordingname="$(readlink "$InputPath")"
       movedrecordingname="$(readlink "$InputPath")"
@@ -3731,7 +3755,7 @@ Debug "No recognised command line switches set."
 
 #####ENVIRONMENTAL VARIABLES CONTINUED#####
 
-#Initial log entry
+#Initial log entry for the processing of recording
 m2kPlatform="$(uname)"
 printf '%s\n' "@@@@@@@@ NEW SEARCH INITIATED $Today AT $ScriptStartTime @@@@@@@@" >> "$LogFile"
 printf '%s\n' "$m2kVersion on $m2kPlatform" >> "$LogFile"
@@ -3748,6 +3772,8 @@ if [ "$Database" = "Enabled" ]; then
     ;;
     MythTVPythonBindings)
       test "$InputPath" != 'testfile.ext' && GetMythTvPythonBindings
+      returnstatus="$?"
+      [[ "$returnstatus" != 0 ]] && ExitJob 'MythTVdatabaseFailure'
       #TODO:What's the purpose of resetting the DatabaseType here...???
       DatabaseType=MythTV
     ;;
@@ -3769,7 +3795,10 @@ if [ "$Database" = "Enabled" ]; then
       ProcessSchedulesDirect
     ;;
   esac
-#TODO: Should bail with an error here if Database isn't Enabled and InputTitle is empty...
+  [[ -z "$InputTitle" ]] && Err "Failed to determine InputTitle from MythTV-DB, and none provided via arg." && ExitJob 'NameCouldNotBeAssigned' #TODO: Consider making a specific ExitJob for this issue...
+else
+  [[ -z "$InputTitle" ]] && Err "Database disabled and no InputTitle provided on command line."
+  #TODO: Should bail with an error here if Database isn't Enabled and InputTitle is empty...
 fi
 
 #Report found data

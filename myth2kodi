@@ -2880,6 +2880,12 @@ m2kDiagnostics(){
   local checke="" #libnotify-bin
   local checkf="" #python
   local checkj="" #jq
+  local curlpath=""
+  local agreppath=""
+  local nspath=""
+  local jqpath=""
+  local path=""
+  local pythonpath=""
   local python_version="" #Python Version information
   local pyver=0 #An integer representing first 2 points of python version, ie 2.6.3 => 26
   local packagecheck=""
@@ -2914,16 +2920,12 @@ m2kDiagnostics(){
   ((our_scripts!=0)) && Err "Checks for our own scripts ***FAILED***"
 
   #Test if required packages are installed and accessible to caller.
-  #TODO: which has issues, try something like
-  #      command -v curl >/dev/null 2>&1 || checkc="curl"
-  #    or
-  #      curlpath=$(command -v curl) || checkc="curl"
-  test $(which curl)>/dev/null  || checkc="curl"
-  test $(which agrep)>/dev/null || checkd="agrep or tre-agrep"
-  test $(which notify-send)>/dev/null || checke="libnotify-bin"
-  test $(which jq)>/dev/null || checkj="jq"
+  curlpath=$(command -v curl)      || checkc="curl"
+  agreppath=$(command -v agrep)    || checkd="agrep or tre-agrep"
+  nspath=$(command -v notify-send) || checke="libnotify-bin"
+  jqpath=$(command -v jq)          || checkj="jq"
   if [ "$DatabaseType" = "MythTVPythonBindings" ]; then
-    which python &> /dev/null ; test "$?" = "0" || checkf="python"
+    pythonpath=$(command -v python) || checkf="python"
     if [[ -z "$checkf" ]]; then
       python_version="$(python --version 2>&1)"  #Python returns version info to stderr
       pyver="$(echo "$python_version" | sed s/"python\s*"//I | cut -f1-2 -d"." | tr -d '.')"
@@ -2937,14 +2939,13 @@ m2kDiagnostics(){
   #Provide feedback on package checks
   packagecheck="$checkc$checkd$checke$checkj"
   printf '\n' | tee -a "$DiagnosticsFile"
-  #[[ -z "$curlpath" ]] && Inform "package 'curl' found at: $curlpath"
-  [[ -z "$checkc" ]] && Inform "package 'curl' found."
-  [[ -z "$checkd" ]] && Inform "package 'agrep' or 'tre-agrep' found."
-  [[ -z "$checke" ]] && Inform "package 'libnotify-bin' found."
-  [[ -z "$checkj" ]] && Inform "package 'jq' found."
+  [[ -n "$curlpath" ]]  && Inform "package 'curl' found: $curlpath"
+  [[ -n "$agreppath" ]] && Inform "package 'agrep' or 'tre-agrep' found: $agreppath"
+  [[ -n "$nspath" ]]    && Inform "package 'libnotify-bin' found: $nspath"
+  [[ -n "$jqpath" ]]    && Inform "package 'jq' found: $jqpath"
   if [ "$DatabaseType" = "MythTVPythonBindings" ]; then
     packagecheck="$packagecheck$checkf$checka$checkb"
-    [[ -z "$checkf" ]] && Inform "package 'python' found."
+    [[ -n "$pythonpath" ]] && Inform "package 'python' found: $pythonpath"
     if [[ -z "$checkf" ]] && ((pyver < 26 || pyver >= 30)); then
       Warn "Python 3 and Python older than 2.6 aren't supported."
     fi
@@ -2992,7 +2993,7 @@ m2kDiagnostics(){
     printf '\n'
     Inform "Performing MythTV Python Bindings database test."
     if [[ -z "$checkf" ]]; then
-      Inform "Python: $(which python)"
+      Inform "Python: $pythonpath"
       Inform "Version: $python_version"
     fi
 

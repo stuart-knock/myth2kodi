@@ -127,6 +127,15 @@ def writeData():
 ###########################################################################
 
 
+def closefile():
+    """If we have an ope file, close it."""
+    LOG.info("Closing out the file/stdout")
+    if f is not None:
+        if f.fileno() != 1:
+            f.close()
+###########################################################################
+
+
 if __name__ == "__main__":
 
     import argparse
@@ -198,17 +207,17 @@ if __name__ == "__main__":
     try:
         # Defaults or args
         db = MythDB(**vars(args))  #mythdb_arg_dict, if MythDB doesn't gracefully handle superfluous kwargs
-    except:
+    except Exception:
         try:
             # mythtv preconfigured options
             LOG.error('Failed: attempting to use system default configuration')
             db = MythDB(SecurityPin=args.SecurityPin)
-        except:
+        except Exception:
             try:
                 # read from the mysql.txt
                 LOG.error('Failed: attempting to read from default mythtv file')
                 db = MythDB(readMysqlTxt(), SecurityPin=args.SecurityPin)
-            except:
+            except Exception:
                 LOG.error('Failed: Please specify database information manually')
                 sys.exit(' See --help for more information.')
     #######################################################################
@@ -220,7 +229,7 @@ if __name__ == "__main__":
             LOG.info("Diagnostics passed...")
             #TODO: Consider expanding the diagnostics.
 
-        except:
+        except Exception:
             LOG.error("Diagnostics failed.")
             sys.exit(1)
 
@@ -240,13 +249,15 @@ if __name__ == "__main__":
     try:
         rec = db.searchRecorded(basename=args.filename).next()
     except StopIteration:
+        LOG.error("Failed to find DB record for: " + args.filename)
         raise Exception('Recording Not Found')
+        sys.exit(1)
 
     # set comskip data
     try:
         markupstart, markupstop = zip(*rec.markup.getskiplist())
-    except:
-        LOG.error("No comskip information found.")
+    except Exception:
+        LOG.warning("No comskip information found.")
         markupstart, markupstop = '', ''
     #######################################################################
 
@@ -270,8 +281,5 @@ if __name__ == "__main__":
         f = sys.stdout
         writeData()
 
-    LOG.info("close out the file/stdout")
-    if f is not None:
-        if f.fileno() != 1:
-            f.close()
+    closefile()
 

@@ -3001,7 +3001,7 @@ m2kDiagnostics(){
     if [[ -z "$checkf$checka$checkb" ]]; then
       #Use MythDataGrabber's internal diagnostics function
       "$binpath"/MythDataGrabber --verbosity="$LogLevel"    \
-                                 --Diagnostic=True          \
+                                 --Diagnostic               \
                                  --DBHostName="$DBHostName" \
                                  --DBName="$MySQLMythDb"    \
                                  --DBUserName="$MySQLuser"  \

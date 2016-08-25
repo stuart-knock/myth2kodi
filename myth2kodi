@@ -657,7 +657,7 @@ dailyreport(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   if [ "$DailyReport" = "Enabled" ]; then
     [[ ! -d "$m2kdir/DailyReport" ]] && mkdir "$m2kdir/DailyReport"
-    local reporttime=$(date +%T)
+    local reporttime ; reporttime=$(date +%T)
     Inform "Writing to DailyReport file: ${Today}"
     printf '%s\n' "$reporttime - $ShowFileName" >> "$m2kdir/DailyReport/${Today}"
   fi
@@ -930,13 +930,12 @@ performLoggingForMoveMode(){
   test ! -f "$m2kdir/doover.sh" && echo "rm -f \"$m2kdir/doover.sh\"" >> "$m2kdir/doover.sh" && chmod 666 "$m2kdir/doover.sh"
 
   if [ "$SYMLINK" != "Disabled" ] ; then
-    { #Write undo.sh line that removes link:
+    {
+      #Write undo.sh line that removes link:
       printf '%s'    "test -L \"$InputPath\" &&"
       printf ' %s'   "rm -f \"$InputPath\" &&"
       printf ' %s\n' "echo removed \"$InputPath\""
-    } >> "$m2kdir/undo.sh"
-
-    { #Write undo.sh line that moves already-moved-file back to original location:
+      #Write undo.sh line that moves already-moved-file back to original location:
       printf '%s'    "test -f \"$MoveDir/$ShowFileName.$OriginalExt\" &&"
       printf ' %s'   "mv \"$MoveDir/$ShowFileName.$OriginalExt\" \"$InputPath\" &&"
       printf ' %s\n' "echo moved \"$MoveDir/$ShowFileName.$OriginalExt\" to \"$InputPath\""
@@ -945,20 +944,18 @@ performLoggingForMoveMode(){
 
   if [ "$SYMLINK" = "MOVE" ]; then
     if [ "$RequiresDoover" = "1" ] ; then
-      { #Write doover.sh line that removes link:
+      {
+        #Write doover.sh line that removes link:
         printf '%s'    "test -f \"$MoveDir/$ShowFileName.$OriginalExt\" &&"
         printf ' %s'   "test -L \"$InputPath\" &&"
         printf ' %s'   "rm -f \"$InputPath\" &&"
         printf ' %s\n' "echo Moving \"$InputPath\" to original location"
-      } >> "$m2kdir/doover.sh"
-      
-      { #Write doover.sh line that moves already-moved-file back to original location:
+        #Write doover.sh line that moves already-moved-file back to original location:
         printf '%s'    "test -f \"$MoveDir/$ShowFileName.$OriginalExt\" &&"
         printf ' %s\n' "mv \"$MoveDir/$ShowFileName.$OriginalExt\" '$InputPath'"
+        #Write doover.sh line that recalls myth2kodi:
+        printf '%s\n' "myth2kodi \"$InputPath\" \"$InputTitle\" \"$InputSubtitle\""
       } >> "$m2kdir/doover.sh"
-
-      #Write doover.sh line that recalls myth2kodi:
-      printf '%s\n' "myth2kodi \"$InputPath\" \"$InputTitle\" \"$InputSubtitle\"" >> "$m2kdir/doover.sh"
     fi
   fi
 }
@@ -2860,7 +2857,7 @@ OperationSummary(){
     InformCont "ProgramIDType=$ProgramIDType-"
     InformCont "rating=$rating-"
     InformCont "Zap2itSeriesID=$Zap2itSeriesID-"
-    InformCont "MatchedSeriesID=$MatchedSeriesID-"
+    InformCont "LocalSeriesID=$LocalSeriesID-"
     InformCont "InputSeasonNum=$InputSeasonNum-"
     InformCont "InputEpisodeNum=$InputEpisodeNum-"
     InformCont "Plot=$Plot-"
@@ -2917,6 +2914,10 @@ m2kDiagnostics(){
   ((our_scripts!=0)) && Err "Checks for our own scripts ***FAILED***"
 
   #Test if required packages are installed and accessible to caller.
+  #TODO: which has issues, try something like
+  #      command -v curl >/dev/null 2>&1 || checkc="curl"
+  #    or
+  #      curlpath=$(command -v curl) || checkc="curl"
   test $(which curl)>/dev/null  || checkc="curl"
   test $(which agrep)>/dev/null || checkd="agrep or tre-agrep"
   test $(which notify-send)>/dev/null || checke="libnotify-bin"
@@ -2936,6 +2937,7 @@ m2kDiagnostics(){
   #Provide feedback on package checks
   packagecheck="$checkc$checkd$checke$checkj"
   printf '\n' | tee -a "$DiagnosticsFile"
+  #[[ -z "$curlpath" ]] && Inform "package 'curl' found at: $curlpath"
   [[ -z "$checkc" ]] && Inform "package 'curl' found."
   [[ -z "$checkd" ]] && Inform "package 'agrep' or 'tre-agrep' found."
   [[ -z "$checke" ]] && Inform "package 'libnotify-bin' found."
@@ -3065,7 +3067,7 @@ m2kDiagnostics(){
   if [ "$TargetPathIsInputPath" = "Enabled" ]; then
     Inform "TargetPathIsInputPath is selected. Testing with current folder"
     #Set originaldir name if none was supplied
-    [["$originaldirname" = "./" || "$originaldirname" = "." || "$originaldirname" = "" ]] && originaldirname="$(pwd)"
+    [[ "$originaldirname" = "./" || "$originaldirname" = "." || "$originaldirname" = "" ]] && originaldirname="$(pwd)"
     setTargetFolderAsInputPathFolder
   fi
 
@@ -3782,7 +3784,7 @@ ShowName="$InputTitle"
 
 #TODO: check whether the split on semicolon here and elsewhere should be in ProcessSchedulesDirect
 #split on semicolon, there will only be one episode looked up.
-EpisodeSubtitle="$(echo $InputSubtitle | sed 's/;.*//')"
+EpisodeSubtitle="$(sed 's/;.*//' <<< "$InputSubtitle")"
 #Only keep Alpha-numeric characters and the four basic punctuation chars & , . -
 EpisodeSubtitle="$(sed -r s'/[^[:alnum:]|^[:blank:]|^&,.-]//'g <<< "$EpisodeSubtitle")"
 ExtensionPrep="$(basename "$InputPath")"
@@ -3798,7 +3800,7 @@ FileName="$InputPath"
 ShowTranslations
 #Do not process files in files categoricIgnore or titleIgnore, just exit
 ignoreList
-SafeShowName=$(echo "$ShowName" | sed 's/;.*//')
+SafeShowName=$(sed 's/;.*//' <<< "$ShowName") #TODO: ??? ${ShowName%%;*}
 #Only keep Alpha-numeric characters and the four basic punctuation chars & , . -
 SafeShowName="$(sed -r s'/[^[:alnum:]|^[:blank:]|^&,.-)(]//'g <<< "$SafeShowName")"
 #Format Show name for Sending to www.TheTVDB.com and KODI

@@ -854,10 +854,10 @@ generaterss(){
   #  The below assumed the first inet addr was the correct one, but that can lead to the loopback, using m2 and removing 127.0.0.1 avoids this problem,
   #  though it's probably better to just set myip in the configuration at top of file
   which /sbin/ifconfig >/dev/null && myip="$(/sbin/ifconfig | grep 'inet addr' -m2 | cut -d: -f2 | awk '{ print $1}' | grep -v "127.0.0.1")"
-  rssEpisodeSubtitle="$(sed s/"&"/"&amp;"/g <<< "$EpisodeSubtitle")"
-  rssNewShowName="$(sed s/"&"/"&amp;"/g <<< "$NewShowName")"
-  rssPlot="$(sed s/"&"/"&amp;"/g <<< "$Plot")"
-  mythicalGUID="$(echo "$MyUserName@$myip""$MoveDir/$ShowFileName.$OriginalExt" | sed s/"("/"%28"/g | sed s/")"/"%29"/g | sed s/"\ "/"%20"/g)" #TODO: Check that "\ " in the final sed is correct and shouldn't just be " "
+  rssEpisodeSubtitle="${EpisodeSubtitle//&/&amp;}"
+  rssNewShowName="${NewShowName//&/&amp;}"
+  rssPlot="${Plot//&/&amp;}"
+  mythicalGUID="$(sed 's/(/%28/g' <<< "$MyUserName@$myip$MoveDir/$ShowFileName.$OriginalExt" | sed 's/)/%29/g' | sed 's/ /%20/g')"
 
   #write current recording information to first item.
   {
@@ -869,7 +869,7 @@ generaterss(){
   elif [ "$m2kProgramIDCheck" = "MV" ]; then
     echo -e "\t\t\t<link>http://www.imdb.com/search/title?release_date=,$MovieAirDate&amp;title=$ShowName&amp;title_type=feature</link>" >> "$rssDir/$TEMPrssFile"
   else
-    tvdotcomshowname="$(sed s/" "/"%20"/g <<< "$ShowName")"
+    tvdotcomshowname="${ShowName// /%20}"
     echo -e "\t\t\t<link>http://www.tv.com/search.php?type=11&amp;stype=all&amp;tag=search%3Bfrontdoor&amp;qs=$tvdotcomshowname </link>" >> "$rssDir/$TEMPrssFile"
   fi
   {
@@ -1148,10 +1148,7 @@ GetMythTvPythonBindings(){
                              --DBPassword="$MySQLpass"        \
                              --output="$m2kdir/mythicalDbOut" \
                              --writeFile  2> >(tee -a "$LogFile" >&2)
-  #TODO: The  pythonExitStatus isn't being captured properly, I think because of the &, however, the & seems
-  #      to be required as the fifo named pipe isn't clean up until the end of this function...
-  #      Try using the --writeData to file functionality of MythDataGrabber...
-  #      Ideally we'd like to be able to capture the failure of MythDataGrabber here and exit gracefully...
+
   pythonExitStatus="$?"
   if [ "$pythonExitStatus" != "0" ] ; then
     Err "${FUNCNAME[0]}() DATABASE ACCESS ERROR: COULD NOT OBTAIN INFORMATION"
@@ -1308,7 +1305,7 @@ RemoveSeasonEpisodeFromPlot(){
     SEstring="$(grep -E -i --only-matching '(\(?s\.?[0-9]?[0-9]\,?\s?(e|ep)\.?[0-9][0-9]?\)?)\s*|(\(?[0-9]?[0-9]x[0-9][0-9]?\)?)\s*' <<< "$Plot")"
     if [[ -n "$SEstring" ]]; then
       Warn "${FUNCNAME[0]}() SeasonEpisode was in the leading position of the Plot field, removing it to simplify subsequent processing."
-      Plot="$(sed s/"$SEstring"/""/ <<< "$Plot")"
+      Plot="${Plot/$SEstring/}"
       #Also remove any left over leading hyphen, colon, or space 
       Plot="$(sed s/^"\s*[-|:]\?\s*"/""/ <<< "$Plot")"
       #Remove any trailing space from the Plot
@@ -1352,7 +1349,7 @@ RemoveSubtitleFromPlot(){
     STstring="$(grep -E --only-matching '^((((\w+)(.?\s*))|(\&\s*)){1,7})( -|\:)\s*' <<< "$Plot")"
     if [[ -n "$STstring" ]]; then
       Warn "${FUNCNAME[0]}() Episode subtitle was in the Plot field, removing it to simplify subsequent processing."
-      Plot="$(sed s/"$STstring"/""/ <<< "$Plot")"
+      Plot="${Plot/$STstring/}"
     fi
   else
     Debug "InputSubtitle isn't currently set, so not going to discard it from Plot field."
@@ -1369,7 +1366,7 @@ RemoveCastFromPlot(){
     Warn "${FUNCNAME[0]}() Plot field appears to contain Cast information, removing it to simplify subsequent processing."
     Debug "Removing: '$CastString' from:"
     DebugCont "$Plot"
-    Plot="$(sed s/"$CastString"/"."/ <<< "$Plot")"
+    Plot="${Plot/$CastString/.}"
   fi
 }
 
@@ -1461,7 +1458,7 @@ ProcessSydFTA(){
   RemoveCastFromPlot
 
   #Only keep Alpha-numeric characters and the four basic punctuation chars & , . -
-  Plot="$(sed -r s'/[^[:alnum:]|^[:blank:]|^&,.-]//'g <<< "$Plot")"
+  Plot="$(sed -r 's/[^[:alnum:] &,.-]//g' <<< "$Plot")"
 
   #Strip the Movie: tag that some stations very helpfully put in the title field...
   if [ "$m2kProgramIDCheck" = "MV" ]; then
@@ -1688,7 +1685,7 @@ downloadInfoAboutMatchedTitleAndCreateTxtFileTables(){
       local EpisodeNr=""
       local EpisodeOverview=""
       local -i recordNumber=-1
-      Inform "Parsing Downloaded information: $NewShowName.xml"
+      Inform "Parsing Downloaded information from TheTVDB: $NewShowName.xml"
       while read -r line ; do
         if ((recordNumber < 0)); then
           #TODO:Check for a Status line and if it exists and says Ended then touch
@@ -1718,10 +1715,10 @@ downloadInfoAboutMatchedTitleAndCreateTxtFileTables(){
           line="${line//&ndash;/-}"
           actualEname="${line}"
           #Only keep Alpha-numeric characters and the four basic punctuation chars & , . -
-          actualEname="$(sed -r s'/[^[:alnum:]|^[:blank:]|^&,.-]//'g <<< "$actualEname")"
+          actualEname="$(sed -r 's/[^[:alnum:] &,.-]//g' <<< "$actualEname")"
           Ename="${actualEname/;*/}" #TODO: This strips everything following the first ";" (semi-colon). Is that intentional because there are sometimes multiple EpisodeNames separated by semi-colons???
           #Only keep Alpha-numeric characters and the four basic punctuation chars & , . -
-          Ename="$(sed -r s'/[^[:alnum:]|^[:blank:]|^&,.-]//'g <<< "$Ename")"
+          Ename="$(sed -r 's/[^[:alnum:] &,.-]//g' <<< "$Ename")"
         #Get OriginalAirDate
         elif [[ "$line" == "<FirstAired>"* ]]; then
           line="${line/"</FirstAired>"/}"
@@ -1746,9 +1743,11 @@ downloadInfoAboutMatchedTitleAndCreateTxtFileTables(){
           line="${line//&quot;/}"
           line="${line//&amp;/&}"
           line="${line//&ndash;/-}"
+          #Convert any unprintable (space, tab, newline) to space.
+          line="${line//[[:space:]]/ }"
           #Only keep Alpha-numeric characters and the four basic punctuation chars & , . -
-          line="$(sed -r s'/[^[:alnum:]|^&,.-]/ /'g <<< "$line")"
-          line="$(sed -r s'/\s{2,}/ /'g <<< "$line")"
+          line="$(sed -r 's/[^[:alnum:] &,.-]//g' <<< "$line")"
+          line="$(sed -r 's/\s{2,}/ /g' <<< "$line")"
           #Remove any trailing space
           line="${line%%*([[:space:]])}"
           EpisodeOverview="$line"
@@ -1764,7 +1763,7 @@ downloadInfoAboutMatchedTitleAndCreateTxtFileTables(){
         local -i EpisodeCount
         EpisodeCount=$(jq -r '.[] | .name' "$tvmazeJsonFile" | wc -l)
         for i in $(seq 0 $((EpisodeCount-1))); do
-          jq -r ".[$i] | .summary" "$tvmazeJsonFile" |  tr -d "\n" | sed s/"<\/\?p>"/""/g | sed -r s'/[^[:alnum:]|^[:blank:]|^&,.-]//'g | sed -r s'/\s{2,}/ /'g >> "$m2kdir/$NewShowName/$NewShowName.Plot.txt"
+          jq -r ".[$i] | .summary" "$tvmazeJsonFile" | tr -d "\n" | sed s/"<\/\?p>"/""/g | sed -r 's/[^[:alnum:] &,.-]//g' | sed -r 's/\s{2,}/ /g' >> "$m2kdir/$NewShowName/$NewShowName.Plot.txt"
           printf '\n' >> "$m2kdir/$NewShowName/$NewShowName.Plot.txt"
         done
       fi
@@ -2594,7 +2593,7 @@ ignoreList(){
 ShowTranslations(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   if [[ -f "$m2kdir"/showTranslations && -n "$ShowName" ]]; then
-    showtranslation="$(grep "$ShowName = " "$m2kdir/showTranslations" | sed s/"$ShowName = "/""/g)"
+    showtranslation="$(grep "$ShowName = " "$m2kdir/showTranslations" | sed "s/$ShowName = //g")"
     if [[ -n "$showtranslation" ]]; then
       ShowName="$showtranslation"
       Inform "USER TRANSLATION: $InputTitle = $ShowName"
@@ -2665,8 +2664,8 @@ DoMaintenance(){
         #TODO: the "ls ... | grep"  stuff below seems a bit random, reconsider how to achieve the desired goal here...
         #[[ $(find "$line" -maxdepth 0 -type d -empty 2>/dev/null) ]] && echo "is empty"
         #See also, find option -exec  find "$line" -maxdepth 0 -type d -empty -exec rmdir {} \;
-        DirToCheckCheck=$(ls "$line" | sed s/"tvshow.nfo"/""/g | grep -m1 ^)
-        [[ -z "$DirToCheckCheck" ]] && DirToCheckCheck=$(ls "$line" | sed s/"tvshow.nfo"/""/g | grep -m2 ^)
+        DirToCheckCheck=$(ls "$line" | sed 's/tvshow.nfo//g' | grep -m1 ^)
+        [[ -z "$DirToCheckCheck" ]] && DirToCheckCheck=$(ls "$line" | sed 's/tvshow.nfo//g' | grep -m2 ^)
         if [[ -z "$DirToCheckCheck" ]]; then
           Inform "REMOVING ORPHAN FOLDER: $line"
           test -f "$line/tvshow.nfo" && rm -f "$line/tvshow.nfo"
@@ -2907,7 +2906,6 @@ m2kDiagnostics(){
   local agreppath=""
   local nspath=""
   local jqpath=""
-  local path=""
   local pythonpath=""
   local python_version="" #Python Version information
   local pyver=0 #An integer representing first 2 points of python version, ie 2.6.3 => 26
@@ -3506,7 +3504,8 @@ getSeriesInfo(){
   #Usage example: myth2kodi --getSeriesInfo "Black Books"
   Inform "Searching for series: $InputTitle"
   ShowName="$InputTitle"
-  local tvdbshowname="$(echo "$ShowName" | sed s/" "/"%20"/g | sed s/"&"/"%26"/g)"
+  local tvdbshowname
+  tvdbshowname="$(sed 's/ /%20/g' <<< "$ShowName" | sed 's/&/%26/g')"
   searchTheTVDBAndReturnTxtFileTables
   GetSeriesLineNumberFromTableWithFuzzyLogic
   #if we have a series line number then translate that into a series id
@@ -3624,9 +3623,11 @@ case "$InputPath" in
   ;;
   --diagnostics)
     Debug "Recognised command line switch '--diagnostics'"
+    [[ "$Database" = "Enabled" ]] && Inform "Temporarily disabling access to MythTV-Database -- for diagnostics."
+    export m2kDiagnosticsMode="True"
     PreCallLogFile="$LogFile"
     PreCallLogLevel="$LogLevel"
-    (( LogLevel < 3 )) && LogLevel=3 && Inform "Escalating LogLevel to Debug (3)."
+    (( LogLevel < 2 )) && LogLevel=2 && Inform "Escalating LogLevel to Info (2)."
     if [[ "$LogType" != "stdout" ]] ; then
      Inform "Running diagnostics, so redirecting subsequent messages to $DiagnosticsFile"
     else
@@ -3638,6 +3639,7 @@ case "$InputPath" in
     #Reset the LogFile & LogLevel to previous state, in case we ever call myth2kodi --diagnostics from within myth2kodi
     LogFile="$PreCallLogFile"
     LogLevel="$PreCallLogLevel"
+    unset m2kDiagnosticsMode
     exit $diagnosticsreturnstatus
   ;;
   --confidence)
@@ -3763,6 +3765,7 @@ printf '%s\n' "$m2kVersion on $m2kPlatform" >> "$LogFile"
 InputFileBasename="$(basename "$InputPath")"
 
 #####GATHER INFORMATION FROM MythTV DATABASE#####
+[ "$m2kDiagnosticsMode" = "True" ] && Database="Disabled"
 #Get information if database is enabled
 if [ "$Database" = "Enabled" ]; then
   #determine proper database grabber
@@ -3816,7 +3819,7 @@ ShowName="$InputTitle"
 #split on semicolon, there will only be one episode looked up.
 EpisodeSubtitle="$(sed 's/;.*//' <<< "$InputSubtitle")"
 #Only keep Alpha-numeric characters and the four basic punctuation chars & , . -
-EpisodeSubtitle="$(sed -r s'/[^[:alnum:]|^[:blank:]|^&,.-]//'g <<< "$EpisodeSubtitle")"
+EpisodeSubtitle="$(sed -r 's/[^[:alnum:] &,.-]//g' <<< "$EpisodeSubtitle")"
 ExtensionPrep="$(basename "$InputPath")"
 OriginalExt="${ExtensionPrep#*.}"
 originaldirname="$(dirname "$InputPath")"
@@ -3832,9 +3835,9 @@ ShowTranslations
 ignoreList
 SafeShowName=$(sed 's/;.*//' <<< "$ShowName") #TODO: ??? ${ShowName%%;*}
 #Only keep Alpha-numeric characters and the four basic punctuation chars & , . -
-SafeShowName="$(sed -r s'/[^[:alnum:]|^[:blank:]|^&,.-)(]//'g <<< "$SafeShowName")"
+SafeShowName="$(sed -r 's/[^[:alnum:] &,.)(-]//g' <<< "$SafeShowName")"
 #Format Show name for Sending to www.TheTVDB.com and KODI
-tvdbshowname=$(echo "$ShowName" | sed s/" "/"%20"/g | sed s/"&"/"%26"/g)
+tvdbshowname=$(sed 's/ /%20/g' <<< "$ShowName" | sed 's/&/%26/g')
 #Setup paths if TargetPathIsInputPath is active.
 test "$TargetPathIsInputPath" = "Enabled" && setTargetFolderAsInputPathFolder
 
@@ -4214,9 +4217,9 @@ determinePrimaryOrAlternateFolderUsage
 #####OUTPUT FILE NAME FORMATTING#####
 #Format Shows
 #Only keep Alpha-numeric characters and the four basic punctuation chars & , . -
-EpisodeSubtitle="$(sed -r s'/[^[:alnum:]|^[:blank:]|^&,.-]//'g <<< "$EpisodeSubtitle")"
-NewShowName="$(sed -r s'/[^[:alnum:]|^[:blank:]|^&,.-)(]//'g <<< "$NewShowName")"
-ShowName="$(sed -r s'/[^[:alnum:]|^[:blank:]|^&,.-)(]//'g <<< "$ShowName")"
+EpisodeSubtitle="$(sed -r 's/[^[:alnum:] &,.-]//g' <<< "$EpisodeSubtitle")"
+NewShowName="$(sed -r 's/[^[:alnum:] &,.)(-]//g' <<< "$NewShowName")"
+ShowName="$(sed -r 's/[^[:alnum:] &,.)(-]//g' <<< "$ShowName")"
 
 #Format Episodes showname=show name Sxx=season number Exx=episode number EpisodeSubtitle=episode name
 if [[ -z "$NamingConvention" ]]; then

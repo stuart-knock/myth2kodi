@@ -1,4 +1,4 @@
-#! /bin/bash
+#!/usr/bin/env bash
 
 # ***** WELCOME! Scroll further down to set the user settings. *****
 
@@ -9,7 +9,7 @@
 # mythicalLibrarian Originally Written: 2009ish
 #
 # myth2kodi Author: Stuart A. Knock
-# myth2kodi Originally Written: 2015-11
+# myth2kodi Originally Written: 2015-2016ish
 #
 #Software the way it should be: Free and Open Source
 #
@@ -88,7 +88,9 @@
 #  To function on your system, some of the variables specified in the
 #  USER SETTINGS section below may need to be modified from their defaults.
 #  For example, to avoid permission issues, myth2kodi should be run as the
-#  same user running MythTV (see USER SETTING, Librarian).
+#  same user running MythTV (see USER SETTING, Librarian), or at the very 
+#  least a user permitted to read and write the recording files generated
+#  by MythTV.
 #
 #Output-target:
 #  If an error occurs and the file cannot be moved, then no change will occur to
@@ -219,7 +221,7 @@
 
 ########################### BEGIN USER SETTINGS ################################
 ###Stand-alone mode values###
-#Specify the name of the user running mythtv, myth2kodi should always be run by that user.  Default="mythtv"
+#Specify the name of the user running mythtv, myth2kodi should always be run by that user. Default="mythtv"
 Librarian="librarian"
 #SYMLINK has 3 modes.  MOVE|LINK|Disabled: Default=MOVE
 #Create symlink at InputPath after 'MOVE' | Do not move, just create a sym'LINK' | move the file, symlinking is 'Disabled'
@@ -260,8 +262,8 @@ Language="en"
 #Options: ['Enabled'|'Disabled']
 StorageGroupFallback="Enabled"
 
-#PlotMatchFallback can be used to enable/disable a bit of code that, if a SeriesID has been determined,
-#but no subtitle, nor Season & Episode numbers have been identified, falls back to fuzzy matching the
+#PlotMatchFallback can be used to enable/disable a bit of code that, if a SeriesID has been determined
+#but no subtitle nor Season & Episode numbers have been identified, falls back to fuzzy matching the
 #Plot field from the Guide data in MythTV DB against the Plot data for the series, which we retrieved from
 #TheTVDB.
 #Options: ['Enabled'|'Disabled']
@@ -350,6 +352,10 @@ LogFileName='output'
 #NOTE: This is made read only within the bashlogging script.
 LogType='both'
 ########################## END USER SETTINGS ###################################
+
+################################################################################
+#################### Abandon all hope, ye who enter here. ######################
+################################################################################
 #TODO: Consider disabling stdout logging, ie LogType='logfile', when run as a mythtv user-job.
 
 m2kVersion="myth2kodi Version 0.9.6"
@@ -366,6 +372,12 @@ declare -r UnrecognizedSeriesFile="$m2kdir/unrecognizedseries.log"
 #####DEFINE ENVIRONMENT AND VARIABLES#####
 #Who called the script:
 declare -r MyUserName=$(whoami)
+if [[ "$MyUserName" != "$Librarian" ]]; then
+  printf 'ERROR: %s\n' "myth2kodi should be run by user '$Librarian'"
+  printf '  %s\n' "Check the USER SETTINGS section near the top of the script you just ran."
+  printf '  %s\n' "That is, take a look at the top few hundred lines of: $(command -v myth2kodi)"
+  exit 1
+fi
 #And when,
 declare -r Today="$(date +%F)"  #Date in IEEE standard format, ie YYYY-mm-dd
 declare -r ScriptStartTime="$(date +%H:%M:%S)" #Time in a readable IEEE standard format, ie HH:MM:SS
@@ -385,6 +397,16 @@ initialisenewlogfile(){
 #Make our working directory if it doesn't already exist
 if [ ! -d "$m2kdir" ]; then
   mkdir --parents "$m2kdir"
+  createworkingdirstatus="$?"
+  if [[ "$createworkingdirstatus" != 0 || ! -d "$m2kdir" ]]; then
+    printf 'ERROR: %s\n' "Creation of our working directory failed... This needs to be corrected."
+    printf '  %s\n' "First check that the user settings 'Librarian' and 'm2kdir' are correct."
+    printf '  %s\n' "Then check that $Librarian has a home directory, if not create it, eg:"
+    printf '    %s\n' "sudo mkdir /home/$Librarian"
+    printf '    %s\n' "sudo chown -R $Librarian:users /home/$Librarian"
+    printf '  %s\n' "Finally, be sure to run 'myth2kodi --diagnostics' before first use."
+    exit 1
+  fi
   initialisenewlogfile
   printf 'Created Working Directory: %s\n' "$m2kdir" >> "$LogFile"
 fi
@@ -410,10 +432,7 @@ if [ -f "$LogFile" ]; then
    Inform "Previous LogFile moved to: $m2kdir/${LogFileName}_${FileNameNow}.log"
  fi
 fi
-
 Debug "Running myth2kodi as $MyUserName"
-#TODO: check of $MyUserName and bailing with an ERROR message if != $Librarian
-[[ "$MyUserName" != "$Librarian" ]] && Err "myth2kodi should be run by user '$Librarian'"
 
 ########################### BEGIN USER JOBS ####################################
 #The ExitJob function is a place where you can put your custom script to be run
@@ -2726,6 +2745,7 @@ m2kScan(){
   [[ "$LogType" = "logfile" ]] && printf '%s\n' "WARNING: Recommend setting LogType='both', before proceeding.."
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   local yesorno=""
+  local dooverstatus
   DoMythTVPermissionsCheck
   #Map myth2kodi input variables to local variables for our current purpose.
   local checkext="$InputTitle"
@@ -2780,7 +2800,7 @@ m2kScan(){
   WarnCont "All myth2kodi operations can be reversed using the following command:"
   WarnCont "  sudo myth2kodi --undo"
   Warn "Data loss can occur if this operation is interrupted."
-  Debug "WARNING WARNING: RUNNING A SCAN WITH DEBUG LEVEL LOGGING. CONSIDER USING Info(2) LEVEL."
+  Debug "WARNING: RUNNING A SCAN WITH DEBUG LEVEL LOGGING. CONSIDER USING Info(2) LEVEL."
   read -r -n1 -p "  Would you like myth2kodi to conduct a scan? y/(n)>" yesorno
   printf '\n'
   #Default to safety, ie do nothing.
@@ -2789,16 +2809,25 @@ m2kScan(){
     #Explicitly call DoMaintenance() here as it's blocked in subsequent calls to myth2kodi from scan mode.
     DoMaintenance
     myth2kodi --doover
+    dooverstatus="$?"
+    if [[ "$dooverstatus" != 0 ]]; then
+      Err "Doover failed or was aborted by user, not continuing with scan."
+      return "$dooverstatus"
+    fi
     Debug "Creating a temporary scan file: $m2kdir/scan.temp"
     ls -1 "$scanpath"/*."$checkext" > "$m2kdir/scan.temp"
     Inform "Scanning $scanpath for $checkext files"
     while read -r line ; do
       Debug "Attempting to envoke myth2kodi on $line"
-      if [ "$InputOption" = "--BypassPermissionsCheck" ]; then
-        Warn "${FUNCNAME[0]}() Running myth2kodi with --BypassPermissionsCheck option."
-        [[ ! -L "$line" && ! -S "$line" && ! -d "$line" ]] && myth2kodi "$line" "--BypassPermissionsCheck"
+      if [[ ! -L "$line" && ! -S "$line" && ! -d "$line" ]]; then
+        if [ "$InputOption" = "--BypassPermissionsCheck" ]; then
+          Warn "${FUNCNAME[0]}() Running myth2kodi with --BypassPermissionsCheck option."
+          myth2kodi "$line" "--BypassPermissionsCheck"
+        else
+          myth2kodi "$line"
+        fi
       else
-        [[ ! -L "$line" && ! -S "$line" && ! -d "$line" ]] && myth2kodi "$line"
+        Debug "Either we've already moved that or it's a directory. Either way, moving on."
       fi
     done<"$m2kdir/scan.temp"
     Debug "Removing the temporary scan file: $m2kdir/scan.temp"
@@ -3285,8 +3314,13 @@ executeDoOver(){
     Inform "done."
     return 0
   else
-    if [[ -f "$m2kdir/doover.sh" ]]; then Inform "You must press y to execute Doover."; else Inform "No Doover jobs exist."; fi
-    return 0
+    if [[ -f "$m2kdir/doover.sh" ]]; then
+      Inform "You must press y to execute Doover."
+      return 1
+    else
+      Inform "No Doover jobs exist."
+      return 0
+    fi
   fi
   return 1
 }
@@ -3313,18 +3347,18 @@ executeUndo(){
   if [ "$yesorno" = "y" ]; then
     Warn "Running undo.sh DO NOT INTERRUPT THIS PROCESS OR DATA LOSS MAY OCCUR."
     cp "$m2kdir/undo.sh" "$m2kdir/undo.lock"
-    test -f "$m2kdir/undo.sh" && cat "$m2kdir/undo.sh">>"$m2kdir/undo.sh.old"
+    test -f "$m2kdir/undo.sh" && cat "$m2kdir/undo.sh" >> "$m2kdir/undo.sh.old"
     test -f "$m2kdir/undo.sh" && chmod +x "$m2kdir/undo.sh"
     test -f "$m2kdir/undo.sh" && sudo -u $SUDO_USER cat "$m2kdir/undo.sh" >> "$m2kdir/undo.sh.old"
     test -f "$m2kdir/undo.sh" && sudo -u $SUDO_USER "$m2kdir/undo.sh"
     Debug "If doover.sh file exists, move it to doover.sh.old."
-    #TODO: Change doover.sh.old to doover.sh.old_YYYY-MM-DDTHHMMss would be better, see $FileNameNow
-    #      also, then we can simply mv "$m2kdir/doover.sh" "$m2kdir/doover.sh.old_$FileNameNow" instead of two steps below...
+    #TODO: Change doover.sh.old to doover_YYYY-MM-DDTHHMMss.sh would be better than endlessly appending to doover.sh.old,
+    #      see $FileNameNow. Also, then we can simply mv "$m2kdir/doover.sh" "$m2kdir/doover_${FileNameNow}.sh" instead of two steps below...
     test -f "$m2kdir/doover.sh" && cat "$m2kdir/doover.sh" >> "$m2kdir/doover.sh.old"
     test -f "$m2kdir/doover.sh" && rm -f "$m2kdir/doover.sh"
     Debug "If created.tracking file exists, move it to created.tracking.old."
     removedead=1
-    test -f "$m2kdir/created.tracking" && cat "$m2kdir/created.tracking">>"$m2kdir/created.tracking.old"
+    test -f "$m2kdir/created.tracking" && cat "$m2kdir/created.tracking" >> "$m2kdir/created.tracking.old"
     test -f "$m2kdir/created.tracking" && rm -f "$m2kdir/created.tracking"
     rm -f "$m2kdir/undo.lock"
     sudo -u $SUDO_USER myth2kodi --maintenance
@@ -3605,14 +3639,14 @@ InputOption="$4"
 #Some basic tests to make sure we were called correctly
 [[ "$InputPath" != "testfile.ext" && ! -f "$InputPath" && -z "$InputTitle" && "${InputPath:0:1}" != "-" ]] && m2kHelp
 [[ -z "$InputPath" ]] && m2kHelp
-#TODO: MythTVUserJobString is not used within this script, check whether it's somehow a requirement of calls from mythtv
+#TODO: MythTVUserJobString is not used within this script, check whether it's somehow a requirement of calls from mythtv, though, in an absence of export, I don't see how...
 MythTVUserJobString="%DIR%/%FILE%"
 
 #####COMMAND LINE SWITCHES#####
 #check for command line switches
 case "$InputPath" in
 
-  --scan)
+  --scan) #filetype /path/to/folder
     Debug "Recognised command line switch '--scan'"
     #TODO: Add ability to scan only specific files, eg those for a specific ShowName
     export m2kScanMode="True"
@@ -3664,7 +3698,7 @@ case "$InputPath" in
     executeUndo
     exit $?
   ;;
-  --getSeriesInfo)
+  --getSeriesInfo) #ShowName
     Debug "Recognised command line switch '--getSeriesInfo'"
     #Example usage: myth2kodi --getSeriesInfo "Black Books"
     getSeriesInfo
@@ -3700,7 +3734,7 @@ case "$InputPath" in
     printf '%s\n' "$m2kVersion"
     exit 0
   ;;
-  --commskip)
+  --commskip) #/path/to/recording/filename.mpg | /path/to/recordings
     #TODO: Move scan file generation to a function, use here and in --scan
     #TODO: Move the below into a function, clean-up and add more checking and logging.
     Debug "Recognised command line switch '--commskip'"

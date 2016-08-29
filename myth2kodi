@@ -547,7 +547,7 @@ ExitJob(){
 # #Set the new file extension
 # OriginalExt=mp4
 # #Create tracking entry for the file
-# performLoggingForMoveMode
+# add_undo ; [[ "$RequiresDoover" = "1" ]] && add_doover
 # ####Move the .txt(comskip) and .nfo(Information) files if needed.
 # enable the KODI communications
 # KODIUpdate=Enabled
@@ -958,17 +958,76 @@ generaterss(){
   return 0
 }
 
-#####MOVE MODE LOGGING#####
-#This function provides logging for move mode
-#TODO: This function doesn't really provide logging so much as it creates the undo and doover entries for this recording...
-#TODO: perform_logging_for_move_mode => add_undo ; add_doover  (include checking for Move-mode vs link-mode, see performLoggingForLinkMode)
-performLoggingForMoveMode(){
+#Adds an entry to doover.sh for the current job.
+add_doover(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  #Create undo and doover file if not present, the first command of these scripts is to remove themselves.
-  test ! -f "$m2kdir/undo.sh"   && echo "rm -f \"$m2kdir/undo.sh\""   >> "$m2kdir/undo.sh"   && chmod 666 "$m2kdir/undo.sh"
-  test ! -f "$m2kdir/doover.sh" && echo "rm -f \"$m2kdir/doover.sh\"" >> "$m2kdir/doover.sh" && chmod 666 "$m2kdir/doover.sh"
+  DebugCont "m2karg1: $m2karg1"
+  DebugCont "m2karg2: $m2karg2"
+  DebugCont "m2karg3: $m2karg3"
+  DebugCont "m2karg4: $m2karg4"
+  DebugCont "m2kdir: $m2kdir"
+  DebugCont "InputPath: $InputPath"
+  DebugCont "MoveDir: $MoveDir"
+  DebugCont "ShowFileName: $ShowFileName"
+  DebugCont "OriginalExt: $OriginalExt"
+  DebugCont "RequiresDoover: $RequiresDoover"
+  DebugCont "SYMLINK: $SYMLINK"
 
-  if [ "$SYMLINK" != "Disabled" ] ; then
+  #Create the dooover.sh file if it doesn't already exist.
+  if [[ ! -f "$m2kdir/doover.sh" ]]; then
+    printf '%s\n' "rm -f '$m2kdir/doover.sh'" >> "$m2kdir/doover.sh"
+    chmod 666 "$m2kdir/doover.sh"
+  fi
+
+  if [[ "$RequiresDoover" = "1" ]]; then
+    Inform "Writing job to doover queue: $m2kdir/doover.sh"
+    if [[ "$SYMLINK" = "MOVE" ]]; then
+      {
+        #Write doover.sh line that removes link:
+        printf '%s'    "test -f \"$MoveDir/$ShowFileName.$OriginalExt\" &&"
+        printf ' %s'   "test -L \"$InputPath\" &&"
+        printf ' %s'   "rm -f \"$InputPath\" &&"
+        printf ' %s\n' "echo Moving \"$InputPath\" to original location"
+        #Write doover.sh line that moves already-moved-file back to original location:
+        printf '%s'    "test -f \"$MoveDir/$ShowFileName.$OriginalExt\" &&"
+        printf ' %s\n' "mv \"$MoveDir/$ShowFileName.$OriginalExt\" '$InputPath'"
+      } >> "$m2kdir/doover.sh"
+    elif [[ "$SYMLINK" = "LINK" ]]; then
+      {
+        #Write doover.sh lines that removes a link to a recording:
+        printf '%s'    "test -L \"$MoveDir/$ShowFileName.$OriginalExt\" &&"
+        printf ' %s\n' "rm -f \"$MoveDir/$ShowFileName.$OriginalExt\""
+      } >> "$m2kdir/doover.sh"
+    else
+      Err "${FUNCNAME[0]}(): SYMLINK not equal to 'MOVE' or 'LINK'."
+      return 1
+    fi
+    #Write doover.sh line that recalls myth2kodi in the same way it was originally called:
+    printf '%s\n' "myth2kodi '$m2karg1' '$m2karg2' '$m2karg3' '$m2karg4'" >> "$m2kdir/doover.sh"
+  else
+    Err "${FUNCNAME[0]}() should only be called if job requires doover."
+    ErrCont "RequiresDoover: $RequiresDoover"
+    return 1
+  fi
+}
+
+#Adds an entry to undo.sh for the current job.
+add_undo(){
+  Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
+  DebugCont "m2kdir: $m2kdir"
+  DebugCont "InputPath: $InputPath"
+  DebugCont "MoveDir: $MoveDir"
+  DebugCont "ShowFileName: $ShowFileName"
+  DebugCont "OriginalExt: $OriginalExt"
+  DebugCont "SYMLINK: $SYMLINK"
+
+  #Create the undo.sh file if it doesn't already exist.
+  if [[ ! -f "$m2kdir/undo.sh" ]]; then
+    printf '%s\n' "rm -f '$m2kdir/undo.sh'" >> "$m2kdir/undo.sh"
+    chmod 666 "$m2kdir/undo.sh"
+  fi
+
+  if [[ "$SYMLINK" = "MOVE" ]] ; then
     {
       #Write undo.sh line that removes link:
       printf '%s'    "test -L \"$InputPath\" &&"
@@ -979,54 +1038,17 @@ performLoggingForMoveMode(){
       printf ' %s'   "mv \"$MoveDir/$ShowFileName.$OriginalExt\" \"$InputPath\" &&"
       printf ' %s\n' "echo moved \"$MoveDir/$ShowFileName.$OriginalExt\" to \"$InputPath\""
     } >> "$m2kdir/undo.sh"
+  elif [[ "$SYMLINK" = "LINK" ]]; then
+    {
+      #Write undo.sh line that removes link:
+      printf '%s'    "test -L \"$MoveDir/$ShowFileName.$OriginalExt\" &&"
+      printf ' %s\n' "rm -f \"$MoveDir/$ShowFileName.$OriginalExt\""
+    } >> "$m2kdir/undo.sh"
+  elif [[ "$SYMLINK" = "Disabled" && "$RequiresDoover" != "1" ]]; then
+    Debug "SYMLINK=Disabled and doesn't require doover, so MythTV-DB info has been removed."
+    Inform "No undo.sh entry will be added for this recording:"
+    InformCont "$MoveDir/$ShowFileName.$OriginalExt"
   fi
-
-  if [ "$SYMLINK" = "MOVE" ]; then
-    if [ "$RequiresDoover" = "1" ] ; then
-      {
-        #Write doover.sh line that removes link:
-        printf '%s'    "test -f \"$MoveDir/$ShowFileName.$OriginalExt\" &&"
-        printf ' %s'   "test -L \"$InputPath\" &&"
-        printf ' %s'   "rm -f \"$InputPath\" &&"
-        printf ' %s\n' "echo Moving \"$InputPath\" to original location"
-        #Write doover.sh line that moves already-moved-file back to original location:
-        printf '%s'    "test -f \"$MoveDir/$ShowFileName.$OriginalExt\" &&"
-        printf ' %s\n' "mv \"$MoveDir/$ShowFileName.$OriginalExt\" '$InputPath'"
-        #Write doover.sh line that recalls myth2kodi:
-        printf '%s\n' "myth2kodi \"$InputPath\" \"$InputTitle\" \"$InputSubtitle\""
-      } >> "$m2kdir/doover.sh"
-    fi
-  fi
-}
-
-#####LINK MODE LOGGING#####
-#This function performs logging for link mode
-performLoggingForLinkMode(){
-  Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  #Create undo and doover file if not present, the first command of these scripts is to remove themselves.
-  test ! -f "$m2kdir/undo.sh"   && echo "rm -f \"$m2kdir/undo.sh\""   >> "$m2kdir/undo.sh"   && chmod 666 "$m2kdir/undo.sh"
-  test ! -f "$m2kdir/doover.sh" && echo "rm -f \"$m2kdir/doover.sh\"" >> "$m2kdir/doover.sh" && chmod 666 "$m2kdir/doover.sh"
-
-  if [ "$RequiresDoover" = "1" ]; then
-    { #Write doover.sh lines that remove a link to a recording then reruns myth2kodi
-      printf '%s\n' "test -L \"$MoveDir/$ShowFileName.$OriginalExt\" && rm -f \"$MoveDir/$ShowFileName.$OriginalExt\""
-      printf '%s\n' "myth2kodi \"$InputPath\" \"$InputTitle\" \"$InputSubtitle\""
-    } >> "$m2kdir/doover.sh"
-  fi
-  echo "test -L \"$MoveDir/$ShowFileName.$OriginalExt\" && rm -f \"$MoveDir/$ShowFileName.$OriginalExt\"" >> "$m2kdir/undo.sh"
-  echo "'$MoveDir/$ShowFileName.$OriginalExt'" "'$InputPath'" >> "$m2kdir"/created.tracking
-}
-
-#TODO: As scan will now skip over already moved files and process unprocessed files we only need doover entries for recordings that were moved but we aren't certain are correct.
-writeJobToDooverQue(){
-  Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  DebugCont "Called with $# arguments"
-  local -i i=0 ; local var ; for var in "$@"; do ((++i)) ; DebugCont "arg $i = ${var}" ; done
-  DebugCont "m2kdir: $m2kdir"
-  DebugCont "InputPath: $InputPath"
-  Inform "Writing job to doover queue: $m2kdir/doover.sh"
-  [[ ! -f "$m2kdir/doover.sh" ]] && printf '%s\n' "rm -f \"$m2kdir/doover.sh\"" >> "$m2kdir/doover.sh" && chmod 666 "$m2kdir/doover.sh"
-  [[ -n "$InputPath" ]] && echo "myth2kodi '$1' '$2' '$3'" >> "$m2kdir"/doover.sh
 }
 
 doFailSafeMode(){
@@ -1576,14 +1598,24 @@ ProcessNoLookup(){
 #remove mythtv recording's pictures and database entries.  Thanks to barney_1.
 DeleteRelevantDatabaseFilesAndPictures(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
+  Debug "InputPath: $InputPath"
+  Debug "originaldirname: $originaldirname"
+  Debug "FileBaseName: $FileBaseName"
+  Debug "MySQLuser: $MySQLuser"
+  Debug "MySQLpass: $MySQLpass"
+  Debug "MySQLMythDb: $MySQLMythDb"
   #Make sure we got input arguments and file is valid
   if [ ! -e "$InputPath" ]; then
     #Remove recording entry from mysql database
-    Warn "${FUNCNAME[0]}() REMOVING - $FileBaseName - THUMBNAILS - DATABASE ENTRIES"
+    Inform "${FUNCNAME[0]}() REMOVING - $FileBaseName - THUMBNAILS - DATABASE ENTRIES"
     mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; delete from recorded where basename like '$FileBaseName'; "
-    #TODO: Capture return state of mysql command so we can log success/failure.
+    #TODO: Capture return state of mysql command so we can log success/failure, also make the rm of thumbnails, etc, below conditional.
     #Remove thumbnails
     rm -f "$originaldirname/$FileBaseName".*
+  else
+    Warn "File still exists: $InputPath"
+    WarnCont "Not removing MythTV-DB information."
+    return 1
   fi
   return 0
 }
@@ -2371,7 +2403,7 @@ tvDbIsIncomplete(){
   local errtype="myth2kodi Error"
   local errmsg="Could not obtain information from server about: $InputTitle. TheTVDB is incomplete"
   if [ "$Notify" = "Enabled" ] ; then
-    sudo -u "$NotifyUserName" "$binpath"/m2k_notify "$errtype" "$errmsg" web-browser
+    sudo -u "$NotifyUserName" "$binpath/m2k_notify" "$errtype" "$errmsg" web-browser
   fi
 }
 
@@ -2381,7 +2413,7 @@ Wrote0LengthFile(){
   local errtype="myth2kodi Failure"
   local errmsg="$ShowFileName could not be moved to $MoveDir"
   if [ "$Notify" = "Enabled" ] ; then
-    sudo -u "$NotifyUserName" "$binpath"/m2k_notify "$errtype" "$errmsg" stop
+    sudo -u "$NotifyUserName" "$binpath/m2k_notify" "$errtype" "$errmsg" stop
   fi
 }
 
@@ -2391,7 +2423,7 @@ PermissionErrorWhileMoving(){
   local errtype="myth2kodi Failure"
   local errmsg="$ShowFileName could not be moved to $MoveDir"
   if [ "$Notify" = "Enabled" ] ; then
-    sudo -u "$NotifyUserName" "$binpath"/m2k_notify "$errtype" "$errmsg" stop
+    sudo -u "$NotifyUserName" "$binpath/m2k_notify" "$errtype" "$errmsg" stop
   fi
 }
 
@@ -2402,7 +2434,7 @@ SymlinkNotCreated(){
   local errtype="myth2kodi Error"
   local errmsg="Failure while creating link. Check permissions"
   if [ "$Notify" = "Enabled" ] ; then
-    sudo -u "$NotifyUserName" "$binpath"/m2k_notify "$errtype" "$errmsg" stop
+    sudo -u "$NotifyUserName" "$binpath/m2k_notify" "$errtype" "$errmsg" stop
   fi
 }
 
@@ -2497,7 +2529,7 @@ MakeShowDir(){
     if [ "$Notify" = "Enabled" ]; then
       sudo -u "$NotifyUserName" "$binpath"/m2k_notify "myth2kodi error" "failsafe mode activated."  error
     fi
-    SYMLINK=LINK
+    SYMLINK='LINK'
     MoveDir="$FailSafeDir"
     FailSafeState=1
     Warn "Recordings processed in FAILSAFE MODE will be added to the doover queue."
@@ -2642,6 +2674,7 @@ DoMaintenance(){
   #check for interrupted undo jobs
   [[ -f "$m2kdir/undo.lock" && ! -f "$m2kdir/undo.sh" ]] && mv "$m2kdir/undo.lock" "$m2kdir/undo.sh"
 
+  #TODO: Not sure why these are created here...
   #Check and make doover.sh and undo.sh if it does not exist
   test ! -f "$m2kdir/doover.sh" && echo "rm -f \"$m2kdir/doover.sh\"" > "$m2kdir/doover.sh" && chmod 666 "$m2kdir/doover.sh"
   test ! -f "$m2kdir/undo.sh"   && echo "rm -f \"$m2kdir/undo.sh\""   > "$m2kdir/undo.sh"   && chmod 666 "$m2kdir/undo.sh"
@@ -4185,7 +4218,7 @@ fi
 #If file is a link then activate link mode so the original link is not screwed up.
 if [ -L "$InputPath" ]; then
   Warn "FILE IS A LINK FORCING SYMLINK LINK MODE"
-  SYMLINK=LINK
+  SYMLINK='LINK'
 fi
 
 #If user wants database data deleted, then we will do that if the match was a good confidence level
@@ -4253,7 +4286,6 @@ if [[ -z "$Exx" && "$InputPath" != "testfile.ext" ]]; then
   #If user has determined that they do not want unrecognisable tv shows in their library
   elif [ "$ShowStopper" = "Enabled" ]; then
     tvDbIsIncomplete
-    writeJobToDooverQue "$1" "$2" "$3"
     ExitJob 'NameCouldNotBeAssigned'
   elif [ "$m2kProgramIDCheck" = "SH" ]; then
     #Ensures the doover value was not set for the show and use safe show name
@@ -4295,8 +4327,6 @@ MakeShowDir
 if [ "$FailSafeState" = "1" ]; then
   #doFailSafeMode activates MoveDir = failsafe dir and link mode is used
   doFailSafeMode
-  #--doover will reprocess the show
-  writeJobToDooverQue "$1" "$2" "$3"
   ExitJob 'FailSafeModeComplete'
 fi
 
@@ -4349,7 +4379,7 @@ test  "$m2kProgramIDCheck" = "SH" && DisplayShowWarning
 if [ "$SYMLINK" != "LINK" ]; then
   #Send notifications, Move the file and rename
   Inform "MOVING FILE: '$InputPath' to '$MoveDir/$ShowFileName.$OriginalExt'"
-  test "$Notify" = "Enabled" && sudo -u "$NotifyUserName" "$binpath"/m2k_notify "myth2kodi Moving" "Moving and renaming $ShowFileName" drive-harddisk
+  test "$Notify" = "Enabled" && sudo -u "$NotifyUserName" "$binpath/m2k_notify" "myth2kodi Moving" "Moving and renaming $ShowFileName" drive-harddisk
   mv "$InputPath" "$MoveDir/$ShowFileName.$OriginalExt"
 
   #Check and report if file was moved
@@ -4358,11 +4388,11 @@ if [ "$SYMLINK" != "LINK" ]; then
       #Create Commercial skip data with file
       if [ "$CommercialMarkup" = "Created" ]; then
         mv "$m2kdir/markupframes.txt" "$MoveDir/$ShowFileName.txt"
-        echo "'$MoveDir/$ShowFileName.txt'" "'$MoveDir/$ShowFileName.$OriginalExt'">>"$m2kdir"/created.tracking
+        echo "'$MoveDir/$ShowFileName.txt'" "'$MoveDir/$ShowFileName.$OriginalExt'" >> "$m2kdir/created.tracking"
       fi
       #Make symlink back to original file
       if [ "$SYMLINK" = "MOVE" ]; then
-        Inform "CREATING SYMLINK IN MOVE MODE"
+        Inform "Creating symlink in move mode."
         ln -s  "$MoveDir/$ShowFileName.$OriginalExt" "$InputPath"
         test ! -L "$InputPath" && Err "ERROR CREATING SYMLINK: FILESYSTEM MAY NOT SUPPORT SYMLINKS"
       fi
@@ -4372,16 +4402,23 @@ if [ "$SYMLINK" != "LINK" ]; then
       if [ "$SYMLINK" = "Disabled" ]; then
         chmod 775 "$MoveDir/$ShowFileName.$OriginalExt"
         if [ "$RequiresDoover" != "1" ]; then
+          Debug "SYMLINK=Disabled and doesn't require doover, so MythTV-DB info will be removed."
           DeleteRelevantDatabaseFilesAndPictures
         else
-          Inform "CREATING SYMLINK IN SYMLINK=DISABLED MODE"
+          Warn "Job requires doover, so attempting to create symlink in SYMLINK='Disabled' mode."
           ln -s  "$MoveDir/$ShowFileName.$OriginalExt" "$InputPath"
-          test ! -L "$InputPath" && Err "ERROR CREATING SYMLINK: FILESYSTEM MAY NOT SUPPORT SYMLINKS"
+          if [[ ! -L "$InputPath" ]]; then
+            Err "Failed to Create symlink: FILESYSTEM MAY NOT SUPPORT SYMLINKS"
+          elif [[ -L "$InputPath" ]]; then
+            Debug "Symlink Successfully created."
+            Warn "Setting SYMLINK='MOVE' for subsequent processing."
+            SYMLINK='MOVE'
+          fi
         fi
       fi
 
       #Send notification of completion
-      test "$Notify" = "Enabled" && sudo -u "$NotifyUserName" "$binpath"/m2k_notify "myth2kodi Success" "$ShowFileName moved to $MoveDir" info
+      test "$Notify" = "Enabled" && sudo -u "$NotifyUserName" "$binpath/m2k_notify" "myth2kodi Success" "$ShowFileName moved to $MoveDir" info
 
       #Additional features, notifications, rss, daily report.
       if [ "$RequiresNFO" = "1" ]; then
@@ -4389,22 +4426,21 @@ if [ "$SYMLINK" != "LINK" ]; then
         GenerateEpisodeNFO
       fi
       KODIAutomate
-      performLoggingForMoveMode
+      add_undo
+      [[ "$RequiresDoover" = "1" ]] && add_doover
       dailyreport
       generaterss
       test "$SYMLINK" = "Disabled" && setGroupPermissions
       ExitJob 'MoveModeSuccessful'
 
-    #if file was not moved, then fail
+    #if file was not moved (doesn't exist or has zero size), then fail
     elif [ ! -s "$MoveDir/$ShowFileName.$OriginalExt" ]; then
       rm -f "$MoveDir/$ShowFileName.$OriginalExt"
-      writeJobToDooverQue "$1" "$2" "$3"
       Wrote0LengthFile
       ExitJob 'PermissionError0Length'
 
     fi
   elif [ ! -f "$MoveDir/$ShowFileName.$OriginalExt" ]; then
-    writeJobToDooverQue "$1" "$2" "$3"
     PermissionErrorWhileMoving
     ExitJob 'PermissionErrorWhileMoving'
   fi
@@ -4419,15 +4455,16 @@ elif [ "$SYMLINK" = "LINK" ]; then
   #if file was created
   if [ -L "$MoveDir/$ShowFileName.$OriginalExt" ]; then
     Inform "Symlink created $MoveDir/$ShowFileName.$OriginalExt"
+    printf '%s\n' "'$MoveDir/$ShowFileName.$OriginalExt'" "'$InputPath'" >> "$m2kdir/created.tracking"
     echo "@@@@@@@@ OPERATION COMPLETE $(date) @@@@@@@@" >> "$LogFile"
     if [ "$Notify" = "Enabled" ]; then
-      sudo -u "$NotifyUserName" "$binpath"/m2k_notify "myth2kodi Success" "$ShowFileName linked to $MoveDir" info
+      sudo -u "$NotifyUserName" "$binpath/m2k_notify" "myth2kodi Success" "$ShowFileName linked to $MoveDir" info
     fi
 
     #Move comskip data to proper folder
     if [ "$CommercialMarkup" = "Created" ]; then
-      mv "$m2kdir"/markupframes.txt "$MoveDir/$ShowFileName.txt"
-      echo "$MoveDir/$ShowFileName.txt" >> "$m2kdir"/created.tracking
+      mv "$m2kdir/markupframes.txt" "$MoveDir/$ShowFileName.txt"
+      echo "$MoveDir/$ShowFileName.txt" >> "$m2kdir/created.tracking"
     fi
 
     #Additional features, notifications, rss, daily report.
@@ -4436,7 +4473,8 @@ elif [ "$SYMLINK" = "LINK" ]; then
       GenerateEpisodeNFO
     fi
     KODIAutomate
-    performLoggingForLinkMode
+    add_undo
+    [[ "$RequiresDoover" = "1" ]] && add_doover
     dailyreport
     generaterss
     test "$SYMLINK" = "Disabled" && setGroupPermissions
@@ -4445,8 +4483,6 @@ elif [ "$SYMLINK" = "LINK" ]; then
   #If link failure, send notification and fail
   elif [ ! -L "$MoveDir/$ShowFileName.$OriginalExt" ]; then
     SymlinkNotCreated
-    writeJobToDooverQue "$1" "$2" "$3"
-
   fi
   ExitJob 'LinkModeFailed'
 
@@ -4458,9 +4494,8 @@ fi
 
 #send notification if enabled
 if [ "$Notify" = "Enabled" ] ; then
-  sudo -u "$NotifyUserName" "$binpath"/m2k_notify "myth2kodi error" "myth2kodi operation failed See $LogFile for more information" error
+  sudo -u "$NotifyUserName" "$binpath/m2k_notify" "myth2kodi error" "myth2kodi operation failed See $LogFile for more information" error
 fi
-writeJobToDooverQue "$1" "$2" "$3"
 ExitJob 'GenericUnspecifiedError'
 
 Err "The ExitJob function must be broken for you to see this message..."

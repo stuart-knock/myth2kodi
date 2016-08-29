@@ -56,6 +56,7 @@
 #      as much as possible.
 
 #TODO: really need to review doover and undo usage...
+#TODO: REALLY NEED TO REVIEW sudo USE AND PERMISSIONS EXPECTATIONS WITHIN THE SCRIPT...
 
 #TODO: Consider conforming to this: https://google.github.io/styleguide/shell.xml
 
@@ -973,7 +974,7 @@ add_doover(){
   DebugCont "RequiresDoover: $RequiresDoover"
   DebugCont "SYMLINK: $SYMLINK"
 
-  #Create the dooover.sh file if it doesn't already exist.
+  #Create the doover.sh file if it doesn't already exist.
   if [[ ! -f "$m2kdir/doover.sh" ]]; then
     printf '%s\n' "rm -f '$m2kdir/doover.sh'" >> "$m2kdir/doover.sh"
     chmod 666 "$m2kdir/doover.sh"
@@ -2665,19 +2666,45 @@ ShowTranslations(){
   return 0
 }
 
+
+m2k_cleanse(){
+  Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
+  Err "${FUNCNAME[0]}() Needs a thorough review, aborting."
+  return 1
+  #TODO: this need to be rethought given the cleaner way we now deal with myth2kodi database directories.
+  #cleanse myth2kodi database folders if in --maintenance mode
+  #TODO: Consider making a m2kCleanse function that removes all but the N most recent local show databases.
+  #      Should also remove all but the M most recent compressed LogFiles
+  #      Also add an associated --cleanse command line switch.
+  test -f "$m2kdir/cleanup" && rm -f "$m2kdir/cleanup"
+  ls -A -1 "$m2kdir" > "$m2kdir/cleanup"
+
+  while read -r line ; do
+    (( ++Counter ))
+    Debug "Cleansing myth2kodi Database:$Counter ${folderToCheck}"
+    #echo -ne "Cleansing myth2kodi Database:$Counter ${folderToCheck:0:20}    \n" 1>&2
+    folderToCheck="$m2kdir/$line"
+    if [ -d "$folderToCheck" ]; then
+      #TODO: Check we haven't added new dirs that need protecting...
+      if [ "$folderToCheck" != "$m2kdir/DailyReport" ] &&  [ "$folderToCheck" != "$m2kdir/mythicalSetup" ]; then
+        Inform "Removing myth2kodi database directory: $folderToCheck"
+        rm -Rf "$folderToCheck"
+      fi
+    fi
+  done < "$m2kdir/cleanup"
+  rm -f "$m2kdir/cleanup"
+
+  test ! -d "$m2kdir/mythicalSetup" && mkdir "$m2kdir/mythicalSetup"
+}
+
 #####MAINTENANCE ROUTINE#####
 #TODO: Need to go through this function line-by-line and make sure it behaves as expected in a do-no-harm sort of way...
-#DoMaintenance loops through all logged files and checks if their parent is there.  If no parent, then file is deleted.
+#DoMaintenance loops through all processed recordings and checks if their parent is there. If no parent, then file is deleted.
 DoMaintenance(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   Inform "PERFORMING MAINTENANCE ROUTINE..."
   #check for interrupted undo jobs
   [[ -f "$m2kdir/undo.lock" && ! -f "$m2kdir/undo.sh" ]] && mv "$m2kdir/undo.lock" "$m2kdir/undo.sh"
-
-  #TODO: Not sure why these are created here...
-  #Check and make doover.sh and undo.sh if it does not exist
-  test ! -f "$m2kdir/doover.sh" && echo "rm -f \"$m2kdir/doover.sh\"" > "$m2kdir/doover.sh" && chmod 666 "$m2kdir/doover.sh"
-  test ! -f "$m2kdir/undo.sh"   && echo "rm -f \"$m2kdir/undo.sh\""   > "$m2kdir/undo.sh"   && chmod 666 "$m2kdir/undo.sh"
 
   #Check for commskip (.txt) and .nfo files listed in created.tracking and
   #remove them if their associated "main" file (.mpg) is missing.
@@ -2710,7 +2737,7 @@ DoMaintenance(){
         echo "$line" >> "$m2kdir/created.tracking2"
       fi
     done <"$m2kdir/created.tracking"
-    test -f "$m2kdir/created.tracking" && rm -f "$m2kdir/created.tracking"
+    test -f "$m2kdir/created.tracking" && mv "$m2kdir/created.tracking" "$m2kdir/created.tracking_${FileNameNow}"
     test -f "$m2kdir/created.tracking2" && mv "$m2kdir/created.tracking2" "$m2kdir/created.tracking"
   fi
 
@@ -2739,37 +2766,13 @@ DoMaintenance(){
       elif [ ! -d "$DirToCheck" ]; then
         echo "$DirToCheck" >> "$m2kdir/dir.tracking2"
       fi
-    done < "$m2kdir"/dir.tracking
-    rm -f "$m2kdir/dir.tracking"
-    test -f "$m2kdir/dir.tracking2" && mv "$m2kdir/dir.tracking2" "$m2kdir/dir.tracking"
+    done < "$m2kdir/dir.tracking"
+    test -f "$m2kdir/dir.tracking" && mv "$m2kdir/dir.tracking" "$m2kdir/dir.tracking_${FileNameNow}"
+    [[ -f "$m2kdir/dir.tracking2" ]] && mv "$m2kdir/dir.tracking2" "$m2kdir/dir.tracking"
   fi
-
-  #TODO: this need to be rethought given the cleaner way we now deal with myth2kodi database directories.
-  #cleanse myth2kodi database folders if in --maintenance mode
-  #TODO: Consider making a m2kCleanse function that removes all but the N most recent local show databases.
-  #      Should also remove all but the M most recent compressed LogFiles
-  #      Also add an associated --cleanse command line switch.
-  if [ "$removedead" = "1" ]; then
-    test -f "$m2kdir/cleanup" && rm -f "$m2kdir/cleanup"
-    ls -A -1 "$m2kdir" > "$m2kdir/cleanup"
-
-    while read -r line ; do
-      (( ++Counter ))
-      Debug "Cleansing myth2kodi Database:$Counter ${folderToCheck}"
-      #echo -ne "Cleansing myth2kodi Database:$Counter ${folderToCheck:0:20}    \n" 1>&2
-      folderToCheck="$m2kdir/$line"
-      if [ -d "$folderToCheck" ]; then
-        #TODO: Check we haven't added new dirs that need protecting...
-        if [ "$folderToCheck" != "$m2kdir/DailyReport" ] &&  [ "$folderToCheck" != "$m2kdir/mythicalSetup" ]; then
-          Inform "Removing myth2kodi database directory: $folderToCheck"
-          rm -Rf "$folderToCheck"
-        fi
-      fi
-    done < "$m2kdir/cleanup"
-    rm -f "$m2kdir/cleanup"
-  fi
-  test ! -d "$m2kdir/mythicalSetup" && mkdir "$m2kdir/mythicalSetup"
+  #TODO: decide if we want to run m2k_cleanse() here...
   Inform "MAINTENANCE ROUTINE COMPLETE."
+  Inform "You may want to run myth2kodi --cleanse."
   return 0
 }
 
@@ -2841,7 +2844,7 @@ m2kScan(){
   WarnCont "In scan mode, myth2kodi will first run the doovers to prevent"
   WarnCont "clobbering and creation of unnecessary links."
   WarnCont "All myth2kodi operations can be reversed using the following command:"
-  WarnCont "  sudo myth2kodi --undo"
+  WarnCont "  myth2kodi --undo"
   Warn "Data loss can occur if this operation is interrupted."
   Debug "WARNING: RUNNING A SCAN WITH DEBUG LEVEL LOGGING. CONSIDER USING Info(2) LEVEL."
   read -r -n1 -p "  Would you like myth2kodi to conduct a scan? y/(n)>" yesorno
@@ -2962,7 +2965,7 @@ OperationSummary(){
 
 #####MYTHICAL DIAGNOSTICS#####
 #This function provides a functions check on myth2kodi
-m2kDiagnostics(){
+m2k_diagnostics(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   #If there is already a diagnostics file, move it to diagnostics_<Date&Time that this script was launched>.log
   test -f "$DiagnosticsFile" && mv "$DiagnosticsFile" "$m2kdir/diagnostics_${FileNameNow}.log"
@@ -3278,26 +3281,22 @@ m2kDiagnostics(){
     ErrCont "myth2kodi can not send messages or library update requests."
     printf '\n' | tee -a "$DiagnosticsFile"
   fi
-  #TODO: SUDO_USER is only set in executeDoOver() and executeUndo(), in the original mythicalLibrarian it was also set in the updater.
-  #  So, the $SUDO_USER statements here won't evaluate to anything, and would never have worked outside of the context of the updater.
-  #  REALLY NEED TO REVIEW sudo USE AND PERMISSIONS EXPECTATIONS WITHIN THE SCRIPT...
   if [ "$folderchecks" = "***FAILED***" ]; then
-    Err "Folder checks failed"
-    ErrCont "The filesystem checks failed. Likely causes: "
-    ErrCont "The user named $SUDO_USER does not have permission to use the folder"
-    ErrCont "CORRECTIVE ACTION: sudo chown $SUDO_USER /Name/of/My_failed_folder"
-    ErrCont "The folder belongs to a different group then the user named $SUDO_USER"
-    if [ "$Database" = "Enabled" ] && [ "$DatabaseType" = "MythTV" ] && [ "$SUDO_USER" != "mythtv" ]; then
-      ErrCont "    CORRECTIVE ACTION: sudo adduser mythtv $SUDO_USER"
-      ErrCont "                       sudo adduser $SUDO_USER mythtv"
-      printf '\n' | tee -a "$DiagnosticsFile"
-    else
-      ErrCont "    CORRECTIVE ACTION: sudo adduser RecordingManagerUser $SUDO_USER"
-      ErrCont "                       sudo adduser $SUDO_USER RecordingManagerUser"
-      printf '\n' | tee -a "$DiagnosticsFile"
-    fi
-    ErrCont "The folder does not exist"
-    ErrCont "    CORRECTIVE ACTION: mkdir /Name/of/My_failed_folder"
+    Err "The filesystem checks failed."
+    ErrCont "First check that the Librarian user setting is correct, and that"
+    ErrCont "you're running myth2kodi as that user. Currently Librarian='$Librarian'."
+    ErrCont "The user '$Librarian' will need permission to read and write to all"
+    ErrCont "relevant directories. If Librarian is the same user running MythTV, try:"
+    ErrCont "  sudo chown -R $Librarian /Name/of/My_failed_folder"
+    ErrCont "  chmod -R u+rw /Name/of/My_failed_folder"
+    printf '\n' | tee -a "$DiagnosticsFile"
+    ErrCont "If you've set the myth2kodi Librarian to a different user than the one"
+    ErrCont "running MythTV then, while the above will work for myth2kodi specific"
+    ErrCont "directories, for MythTV recording directories you'll need to add the"
+    ErrCont "appropriate group to your myth2kodi Librarian and enable read/write."
+    printf '\n' | tee -a "$DiagnosticsFile"
+    ErrCont "It's also possible that the directory does not exist, in that case try:"
+    ErrCont "  mkdir /Name/of/My_failed_folder"
     printf '\n' | tee -a "$DiagnosticsFile"
   fi
   if [ "$mythicaltest" != "***PASSED***" ]; then
@@ -3321,18 +3320,11 @@ m2kDiagnostics(){
 
 #####DOOVER PROCESSING#####
 #This function provides an easy way to redo failed jobs.
-executeDoOver(){
+m2k_doover(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
+  [[ "$LogType" = "logfile" ]] && printf '%s\n' "WARNING: Recommend setting LogType='both', before proceeding.."
   local yesorno=""
-  local RunSudo=0
-  if [ "$(id -u)" = "0" ]; then
-    #TODO: So, if id of user is 0, and thus root, test $SUDO_USER is set as
-    #  "root" and if it is assign whoami (which for uid=0 will return root) to
-    #  the variable  SUDO_USER... Something is wrong here.
-    test "$SUDO_USER" = "root" && SUDO_USER=$(whoami)
-    RunSudo=1
-  fi
-  [[ -z "$SUDO_USER" ]] && SUDO_USER=$(whoami)
+
   Warn "--You have entered doover mode."
   WarnCont "In this mode of operation, myth2kodi will rerun myth2kodi against all"
   WarnCont "files which failed on the last run of myth2kodi."
@@ -3342,19 +3334,12 @@ executeDoOver(){
 
   if [ "$yesorno" = "y" ] && [ -f "$m2kdir/doover.sh" ]; then
     Debug "Running doover.sh"
-    #TODO: Maybe doover.sh.run_YYYY-MM-DDThhMMSS would be better, see $FileNameNow
-    #      cp "$m2kdir/doover.sh" "$m2kdir/doover.sh.old_$FileNameNow"
-    #preserve permissions
-    chmod +x "$m2kdir/doover.sh"
     #NOTE: The first command in doover.sh is to delete the file doover.sh.
-    if [ "$RunSudo" = "1" ] ; then
-      sudo -u $SUDO_USER cat "$m2kdir/doover.sh" >> "$m2kdir/doover.sh.old"
-      sudo -u $SUDO_USER "$m2kdir/doover.sh"
-    else
-      cat "$m2kdir/doover.sh" >> "$m2kdir/doover.sh.old"
-      "$m2kdir/doover.sh"
-    fi
-    Inform "done."
+    cp "$m2kdir/doover.sh" "$m2kdir/doover_${FileNameNow}.sh"
+    chmod +x "$m2kdir/doover.sh"
+    "$m2kdir/doover.sh"
+    #TODO: Capture return state here...
+    Inform "Finished running doover.sh."
     return 0
   else
     if [[ -f "$m2kdir/doover.sh" ]]; then
@@ -3370,43 +3355,40 @@ executeDoOver(){
 
 #####UNDO JOBS#####
 #This function provides an easy way to undo all myth2kodi jobs
-#TODO: m2k_undo
-executeUndo(){
+m2k_undo_all(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  if [ "$(id -u)" != "0" ]; then
-    Err "You do not have sufficient privileges to run this script."
-    ErrCont "--undo must be executed with the sudo command"
-    ErrCont "eg. 'sudo myth2kodi --undo'"
-    return 1
-  fi
-  [[ -z "$SUDO_USER" ]] && SUDO_USER=$(whoami)
+  [[ "$LogType" = "logfile" ]] && printf '%s\n' "WARNING: Recommend setting LogType='both', before proceeding.."
+  #TODO: Add permission checking.
   Warn "--You have entered undo mode."
   WarnCont " In this mode of operation, myth2kodi will reverse"
   WarnCont " file changes created by the current user while running."
-  WarnCont " myth2kodi. There will be no indicators while undo"
-  WarnCont " is running. It is important that this process is not "
-  WarnCont " interrupted or data loss may occur"
+  WarnCont " myth2kodi. It is important that this process is not"
+  WarnCont " interrupted or data loss may occur."
+  local yesorno=""
   read -r -n1 -p "  Press 'y' to continue or 'n' to exit..... y/(n):>" yesorno
   printf '\n'
   if [ "$yesorno" = "y" ]; then
     Warn "Running undo.sh DO NOT INTERRUPT THIS PROCESS OR DATA LOSS MAY OCCUR."
     cp "$m2kdir/undo.sh" "$m2kdir/undo.lock"
-    test -f "$m2kdir/undo.sh" && cat "$m2kdir/undo.sh" >> "$m2kdir/undo.sh.old"
-    test -f "$m2kdir/undo.sh" && chmod +x "$m2kdir/undo.sh"
-    test -f "$m2kdir/undo.sh" && sudo -u $SUDO_USER cat "$m2kdir/undo.sh" >> "$m2kdir/undo.sh.old"
-    test -f "$m2kdir/undo.sh" && sudo -u $SUDO_USER "$m2kdir/undo.sh"
-    Debug "If doover.sh file exists, move it to doover.sh.old."
-    #TODO: Change doover.sh.old to doover_YYYY-MM-DDTHHMMss.sh would be better than endlessly appending to doover.sh.old,
-    #      see $FileNameNow. Also, then we can simply mv "$m2kdir/doover.sh" "$m2kdir/doover_${FileNameNow}.sh" instead of two steps below...
-    test -f "$m2kdir/doover.sh" && cat "$m2kdir/doover.sh" >> "$m2kdir/doover.sh.old"
-    test -f "$m2kdir/doover.sh" && rm -f "$m2kdir/doover.sh"
-    Debug "If created.tracking file exists, move it to created.tracking.old."
-    removedead=1
-    test -f "$m2kdir/created.tracking" && cat "$m2kdir/created.tracking" >> "$m2kdir/created.tracking.old"
-    test -f "$m2kdir/created.tracking" && rm -f "$m2kdir/created.tracking"
+    if [[ -f "$m2kdir/undo.sh" ]]; then
+      cp "$m2kdir/undo.sh" "$m2kdir/undo_${FileNameNow}.sh"
+      chmod +x "$m2kdir/undo.sh"
+      "$m2kdir/undo.sh"
+      #TODO: Capture return state here...
+      Inform "Finished running undo.sh."
+    fi
     rm -f "$m2kdir/undo.lock"
-    sudo -u $SUDO_USER myth2kodi --maintenance
-    Inform "Done, undo.sh has finished running."
+
+    #If we've undone everything then our doover.sh is no longer valid.
+    if [[ -f "$m2kdir/doover.sh" ]]; then
+      Debug "Moving doover.sh to doover_${FileNameNow}.sh."
+      mv "$m2kdir/doover.sh" "$m2kdir/doover_${FileNameNow}.sh"
+    fi
+
+    #If all processing was succesfully undone, then calling the maintenance
+    #routine should cleanup all files and dirs we were tracking.
+    myth2kodi --maintenance
+
     return 0
   else
     Inform "You must press y to execute undo"
@@ -3417,7 +3399,7 @@ executeUndo(){
 
 m2k_about(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  printf ' %s\n\n' "myth2kodi $m2kVersion"
+  printf ' %s\n\n' "$m2kVersion"
   printf ' %s\n' "myth2kodi is a modified version of mythicalLibrarian."
   printf ' %s\n\n' "It automates the mapping of MythTV recordings to a Kodi library."
   printf ' %s\n' "mythicalLibrarian Author: Adam Outler outleradam(at)hotmail.com"
@@ -3450,47 +3432,51 @@ m2k_help(){
   #TODO: Consider creating more detailed help messages for individual options,
   #      so that they can be called something like:
   #      myth2kodi --help maintenance
-  printf '\n%s\n' "--diagnostics"
-  printf '%s\n'   "  diagnostics: tests the functionality of myth2kodi"
-  printf '%s\n'   "  eg. myth2kodi --diagnostics"
-  printf '\n%s\n' "--scan filetype /path/to/folder"
-  printf '%s\n'   "  scan: creates a library from an entire folder"
-  printf '%s\n'   "  eg. myth2kodi --scan mpg /home/mythtv/videos"
-  printf '\n%s\n' "--maintenance"
-  printf '%s\n'   "  maintenance: removes FOLDER DISCONNECTED errors from logs"
-  printf '%s\n'   "  eg. myth2kodi --maintenance"
-  printf '\n%s\n' "--update"
-  printf '%s\n'   "  update: myth2kodi to the current version"
-  printf '%s\n'   "  eg. sudo myth2kodi --update"
-  printf '\n%s\n' "--doover"
-  printf '%s\n'   "  doover: reruns previously failed jobs sequentially"
-  printf '%s\n'   "  eg. sudo myth2kodi --doover"
-  printf '\n%s\n' "--unmanned_doover"
-  printf '%s\n'   "  unmanned_doover: Same as --doover but for use without human intervention"
-  printf '%s\n'   "  eg. sudo myth2kodi --unmanned_doover"
-  printf '\n%s\n' "--undo"
-  printf '%s\n'   "  undo: returns all files to original states"
-  printf '%s\n'   "  eg. sudo myth2kodi --undo"
-  printf '\n%s\n' "--getSeriesInfo 'Series Name'"
-  printf '%s\n'   "  getSeriesInfo: Update of local tables for a series from TheTVDB,"
-  printf '%s\n'   "                 ignoring lastupdated.time."
-  printf '%s\n'   "  eg. myth2kodi --getSeriesInfo 'Black Books'"
-  printf '\n%s\n' "--commskip /path/to/folder/or/file"
-  printf '%s\n'   "  commskip: Regenerates the commskip file for recordings that have"
-  printf '%s\n'   "            already been moved. Argument can be either a single"
-  printf '%s\n'   "            recording or a directory containing already moved recordings."
-  printf '%s\n'   "  eg. myth2kodi --commskip '/home/mythtv/recordings/1099_20151210093000.mpg'"
-  printf '%s\n'   "  eg. myth2kodi --commskip '/home/mythtv/recordings'"
-  printf '\n%s\n' "-?|-h|--help"
-  printf '%s\n'   "  Help: displays this message"
-  printf '%s\n'   "  example: myth2kodi --help"
-  printf '\n%s\n' "--special"
-  printf '%s\n'   "  Special Help: displays extended configuration help."
-  printf '%s\n'   "  example: myth2kodi --special"
-  printf '\n%s\n' " --confidence"
-  printf '%s\n'   "  Confidence Help: Displays information on improving confidence"
-  printf '%s\n'   "  example: myth2kodi --confidence"
-  printf '%s\n'   "======================================================="
+  printf '%s\n'   "myth2kodi mode flags:"
+  printf '\n%s\n' "  --diagnostics"
+  printf '%s\n'   "    Tests the functionality of myth2kodi"
+  printf '%s\n'   "    eg. myth2kodi --diagnostics"
+  printf '\n%s\n' "  --scan filetype /path/to/folder"
+  printf '%s\n'   "    Creates a Kodi library from an entire folder"
+  printf '%s\n'   "    eg. myth2kodi --scan mpg /home/mythtv/videos"
+  printf '\n%s\n' "  --maintenance"
+  printf '%s\n'   "    Removes any orphaned support files or empty directories"
+  printf '%s\n'   "    we created for any previously processed recordings."
+  printf '%s\n'   "    Also cleans-up myth2kodi's working directory."
+  printf '%s\n'   "    eg. myth2kodi --maintenance"
+  printf '\n%s\n' "  --doover"
+  printf '%s\n'   "    Reruns previously run jobs for which we successfully moved"
+  printf '%s\n'   "    and/or linked a recording despite a lack of confidence."
+  printf '%s\n'   "    eg. myth2kodi --doover"
+  printf '\n%s\n' "  --unmanned_doover"
+  printf '%s\n'   "    Same as --doover but for use without human intervention"
+  printf '%s\n'   "    eg. myth2kodi --unmanned_doover"
+  printf '\n%s\n' "  --undo"
+  printf '%s\n'   "    Returns all processed recordings to their original state."
+  printf '%s\n'   "    There is an exception for recordings successfully processed"
+  printf '%s\n'   "    with SYMLINK='Disabled', as MythTV-DB info has been deleted,"
+  printf '%s\n'   "    these will not be undone."
+  printf '%s\n'   "    eg. myth2kodi --undo"
+  printf '\n%s\n' "  --getSeriesInfo 'Series Name'"
+  printf '%s\n'   "    Updates our local database tables for a specified series,"
+  printf '%s\n'   "    ignoring lastupdated.time. Information is obtained from"
+  printf '%s\n'   "    TheTVDB and tvmaze."
+  printf '%s\n'   "    eg. myth2kodi --getSeriesInfo 'Black Books'"
+  printf '\n%s\n' "  --commskip /path/to/folder/or/file"
+  printf '%s\n'   "    Regenerates the commskip file for recordings that have"
+  printf '%s\n'   "    already been moved. Argument can be either a single"
+  printf '%s\n'   "    recording or a directory containing already moved recordings."
+  printf '%s\n'   "    eg. myth2kodi --commskip '/home/mythtv/recordings/1099_20151210093000.mpg'"
+  printf '%s\n'   "    eg. myth2kodi --commskip '/home/mythtv/recordings'"
+  printf '\n%s\n' "  -?|-h|--help"
+  printf '%s\n'   "    Displays this message"
+  printf '%s\n'   "    example: myth2kodi --help"
+  printf '\n%s\n' "  --special"
+  printf '%s\n'   "    Special Help, displays extended configuration help."
+  printf '%s\n'   "    example: myth2kodi --special"
+  printf '\n%s\n' "   --confidence"
+  printf '%s\n'   "    Confidence Help, displays information on improving confidence"
+  printf '%s\n\n' "    example: myth2kodi --confidence"
 }
 
 special(){
@@ -3534,10 +3520,8 @@ special(){
   echo " ##############################################################"
   echo ""
   echo "======globalSettings====="
-  echo " If you wish to override any settings in mythicalSetup, use"
-  echo " globalSettings.  globalSettings allows you to take any setting"
-  echo " from the top of the myth2kodi file and make it permanent."
-  echo " mythicalSetup will not change this file.  Your settings will"
+  echo " globalSettings allows you to take any setting from the top of"
+  echo " the myth2kodi file and make it permanent. Your settings will"
   echo " remain static after upgrades."
   echo ""
   echo " globalSettings can be applied by creating a file called:"
@@ -3572,10 +3556,9 @@ improveConfidence(){
   exit 0
 }
 
-getSeriesInfo(){
+#Force an update of the myth2kodi tables for a specified Series
+get_series_info(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  #Force an update of the myth2kodi tables for a specified Series
-  #Usage example: myth2kodi --getSeriesInfo "Black Books"
   Inform "Searching for series: $InputTitle"
   ShowName="$InputTitle"
   local tvdbshowname
@@ -3710,7 +3693,7 @@ case "$InputPath" in
      Warn "Running diagnostics without any logging to file, consider using LogType 'logfile' or 'both'"
     fi
     LogFile="$DiagnosticsFile"
-    m2kDiagnostics
+    m2k_diagnostics
     declare -i diagnosticsreturnstatus="$?"
     #Reset the LogFile & LogLevel to previous state, in case we ever call myth2kodi --diagnostics from within myth2kodi
     LogFile="$PreCallLogFile"
@@ -3725,25 +3708,25 @@ case "$InputPath" in
   ;;
   --doover)
     Debug "Recognised command line switch '--doover'"
-    executeDoOver
+    m2k_doover
     exit $?
   ;;
   --unmanned_doover)
     Debug "Recognised command line switch '--unmanned_doover'"
     DoOverBypass=1
-    executeDoOver
+    m2k_doover
     exit $?
   ;;
   --undo)
     Debug "Recognised command line switch '--undo'"
     #TODO: Enable undo for a specific file, eg: myth2kodi --undo '/path/to/recordings/1070_20160331073100.mpg'
-    executeUndo
+    m2k_undo_all
     exit $?
   ;;
   --getSeriesInfo) #ShowName
     Debug "Recognised command line switch '--getSeriesInfo'"
     #Example usage: myth2kodi --getSeriesInfo "Black Books"
-    getSeriesInfo
+    get_series_info
     exit $?
   ;;
   --about)
@@ -3758,7 +3741,7 @@ case "$InputPath" in
   ;;
   --help|-?|-h)
     Debug "Recognised command line switch '--help|-?|-h'"
-    m2k_usage
+    m2k_about
     m2k_help
     exit 0
   ;;

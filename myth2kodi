@@ -57,6 +57,8 @@
 
 #TODO: really need to review doover and undo usage...
 
+#TODO: Consider conforming to this: https://google.github.io/styleguide/shell.xml
+
 #Intention:
 #  This program automates the mapping of MythTv recordings to a Kodi library.
 #  It is designed to be a user job in MythTV. It can also be run manually from
@@ -76,6 +78,12 @@
 #                 used throughout myth2kodi.
 #
 #Usage:
+#  To function on your system, some of the variables specified in the
+#  USER SETTINGS section below may need to be modified from their defaults.
+#  For example, to avoid permission issues, myth2kodi should be run as the
+#  same user running MythTV (see USER SETTING, Librarian), or at the very
+#  least a user permitted to read and write the recording files generated
+#  by MythTV.
 #  The MythTV user job should be called as follows:
 #    $binpath/myth2kodi "%DIR%/%FILE%"
 #  where "$binpath" is replaced by the full explicit path from USER SETTINGS.
@@ -85,12 +93,6 @@
 #    myth2kodi "/home/myth/recordings/2308320472023429837.mpg" "South Park" "Here Comes the Neighborhood"
 #  for additional functionality type:
 #    myth2kodi --help
-#  To function on your system, some of the variables specified in the
-#  USER SETTINGS section below may need to be modified from their defaults.
-#  For example, to avoid permission issues, myth2kodi should be run as the
-#  same user running MythTV (see USER SETTING, Librarian), or at the very 
-#  least a user permitted to read and write the recording files generated
-#  by MythTV.
 #
 #Output-target:
 #  If an error occurs and the file cannot be moved, then no change will occur to
@@ -234,7 +236,7 @@ AlternateMoveDir="/home/librarian/recordedTV"
 #for multiple recording dirs. TargetPathIsInputPath will separate generic shows
 #from episodes and movies. Enabled|Disabled
 TargetPathIsInputPath="Disabled"
-#Internet access Timeout in seconds: Default Timeout=50 (seconds)
+#Internet access Timeout in seconds, used for TheTVDB, : Default Timeout=50 (seconds)
 Timeout=50
 #Update database time in seconds, Longer duration means faster processing time and less strain on TheTVDB. Default='88920' (1 day + eps)
 UpdateDatabase=88920
@@ -386,7 +388,7 @@ declare -r FileNameNow="$(date +%FT%H%M%S)"  #ISO 8601: YYYY-mm-ddThhMMSS
 #Set global values for settings, this overrides those set at the top of this file
 test -f "/etc/myth2kodi/globalSettings" && source /etc/myth2kodi/globalSettings
 
-initialisenewlogfile(){
+initialise_new_logfile(){
   touch "$LogFile"
   {
     printf 'Creating Log File: %s\n' "$LogFile"
@@ -407,7 +409,7 @@ if [ ! -d "$m2kdir" ]; then
     printf '  %s\n' "Finally, be sure to run 'myth2kodi --diagnostics' before first use."
     exit 1
   fi
-  initialisenewlogfile
+  initialise_new_logfile
   printf 'Created Working Directory: %s\n' "$m2kdir" >> "$LogFile"
 fi
 
@@ -428,7 +430,7 @@ if [ -f "$LogFile" ]; then
    Inform "Moving and compressing LogFile"
    mv "$LogFile" "$m2kdir/${LogFileName}_${FileNameNow}.log"
    gzip "$m2kdir/${LogFileName}_${FileNameNow}.log"
-   initialisenewlogfile
+   initialise_new_logfile
    Inform "Previous LogFile moved to: $m2kdir/${LogFileName}_${FileNameNow}.log"
  fi
 fi
@@ -438,6 +440,7 @@ Debug "Running myth2kodi as $MyUserName"
 #The ExitJob function is a place where you can put your custom script to be run
 #at the end of execution. Though it may be at the top, this is actually the end
 #of the program.
+#TODO: exit_job
 ExitJob(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   DebugCont "Called with $# arguments"
@@ -613,6 +616,7 @@ ExitJob(){
 ################################################################################
 
 ######################### BEGIN FUNCTION DEFINITIONS ###########################
+#TODO: traditional_naming_conventions
 TraditionalNamingConventions(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   #Format Episodes showname=show name Sxx=season number Exx=episode number EpisodeSubtitle=episode name
@@ -643,6 +647,7 @@ TraditionalNamingConventions(){
   Inform "Set file name as: $ShowFileName"
 }
 
+#TODO: categoric_naming_conventions
 CategoricNamingConventions(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   #Method1 - use airdate for season
@@ -700,6 +705,7 @@ dailyreport(){
 #tests. The result will be $TMoveDirWritable as a 1 or a 0 for writable or not.
 #$1=filesize $2=freespace $3=folder to check
 #TODO: Consider making this function return non-zero on error
+#TODO: check_permissions
 checkPermissions(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   DebugCont "Called with $# arguments"
@@ -749,6 +755,7 @@ checkPermissions(){
 #####COMSKIP FILES#####
 #Function GenComSkip creates a comskip.txt file from MythTV database
 #information for use by Kodi.
+#TODO: gen_comskip
 GenComSkip(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   local -i Counter=0
@@ -776,6 +783,7 @@ GenComSkip(){
 
 #####KODI COMMUNICATIONS#####
 #This function Automates communication with KODI
+#TODO: kodi_automate => kodi_newshow + kodi_cleanup
 KODIAutomate(){
   #TODO: there must be a better way to do this neatly than using eval...
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
@@ -953,6 +961,7 @@ generaterss(){
 #####MOVE MODE LOGGING#####
 #This function provides logging for move mode
 #TODO: This function doesn't really provide logging so much as it creates the undo and doover entries for this recording...
+#TODO: perform_logging_for_move_mode => add_undo ; add_doover  (include checking for Move-mode vs link-mode, see performLoggingForLinkMode)
 performLoggingForMoveMode(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   #Create undo and doover file if not present, the first command of these scripts is to remove themselves.
@@ -1008,6 +1017,7 @@ performLoggingForLinkMode(){
   echo "'$MoveDir/$ShowFileName.$OriginalExt'" "'$InputPath'" >> "$m2kdir"/created.tracking
 }
 
+#TODO: As scan will now skip over already moved files and process unprocessed files we only need doover entries for recordings that were moved but we aren't certain are correct.
 writeJobToDooverQue(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   DebugCont "Called with $# arguments"
@@ -3327,6 +3337,7 @@ executeDoOver(){
 
 #####UNDO JOBS#####
 #This function provides an easy way to undo all myth2kodi jobs
+#TODO: m2k_undo
 executeUndo(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   if [ "$(id -u)" != "0" ]; then
@@ -3371,86 +3382,82 @@ executeUndo(){
   return 1
 }
 
-#####HELP#####
-#This function provides a helpful message.
-m2kHelp(){
+m2k_about(){
+  Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
+  printf ' %s\n\n' "myth2kodi $m2kVersion"
+  printf ' %s\n' "myth2kodi is a modified version of mythicalLibrarian."
+  printf ' %s\n\n' "It automates the mapping of MythTV recordings to a Kodi library."
+  printf ' %s\n' "mythicalLibrarian Author: Adam Outler outleradam(at)hotmail.com"
+  printf ' %s\n\n' "myth2kodi Author: Stuart Knock"
+}
+
+#TODO: Review the usage text
+m2k_usage(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   if [ "$InputPath" = "%DIR%/%FILE%" ]; then
     UserJobOutsideMythTV
     ExitJob 'GenericUnspecifiedError'
   fi
-  echo " myth2kodi --:invalid pattern"
-  echo ""
-  echo "usage: myth2kodi 'path/to/file' ['title'] ['subtitle']"
-  echo "usage: myth2kodi --mode [parameter] [parameter]"
-  echo "  items in brackets are [context sensitive]"
-  #TODO: Create more detailed help messages for individual options, so that
-  #      they can be called something like:
+  printf '\n  %s\n' "myth2kodi usage:"
+  printf '    %s\n' "myth2kodi 'path/to/file' ['title'] ['subtitle']"
+  printf '    %s\n' "myth2kodi --mode [parameter] [parameter]"
+  printf '  %s\n\n' "items in brackets are [context sensitive]."
+  printf '  %s\n' "Ensure you have set the user settings set properly and run"
+  printf '    %s\n' "myth2kodi --diagnostics"
+  printf '  %s\n\n' "before running in --scan mode or as a MythTV UserJob."
+  printf '  %s\n' "For more information type:"
+  printf '    %s\n' "myth2kodi --help"
+  printf '    %s\n\n' "myth2kodi --special"
+}
+
+#####HELP#####
+#This function provides a helpful message.
+m2k_help(){
+  Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
+  #TODO: Consider creating more detailed help messages for individual options,
+  #      so that they can be called something like:
   #      myth2kodi --help maintenance
-  if [ "$switchhelp" = "1" ]; then
-    echo ""
-    echo "mythicalLibrarian Author: Adam Outler outleradam(at)hotmail.com"
-    echo "myth2kodi Author: Stuart Knock"
-    echo ""
-    echo "--diagnostics"
-    echo "  diagnostics: tests the functionality of myth2kodi"
-    echo "  eg. myth2kodi --diagnostics"
-    echo ""
-    echo "--scan filetype /path/to/folder"
-    echo "  scan: creates a library from an entire folder"
-    echo "  eg. myth2kodi --scan mpg /home/mythtv/videos"
-    echo ""
-    echo "--maintenance"
-    echo "  maintenance: removes FOLDER DISCONNECTED errors from logs"
-    echo "  eg. myth2kodi --maintenance"
-    echo ""
-    echo "--update"
-    echo "  update: myth2kodi to the current version"
-    echo "  eg. sudo myth2kodi --update"
-    echo ""
-    echo "--doover"
-    echo "  doover: reruns previously failed jobs sequentially"
-    echo "  eg. sudo myth2kodi --doover"
-    echo ""
-    echo "--unmanned_doover"
-    echo "  unmanned_doover: Same as --doover but for use without human intervention"
-    echo "  eg. sudo myth2kodi --unmanned_doover"
-    echo ""
-    echo "--undo"
-    echo "  undo: returns all files to original states"
-    echo "  eg. sudo myth2kodi --undo"
-    echo ""
-    echo "--getSeriesInfo 'Series Name'"
-    echo "  getSeriesInfo: Update of local tables for a series from TheTVDB,"
-    echo "                 ignoring lastupdated.time."
-    echo "  eg. myth2kodi --getSeriesInfo 'Black Books'"
-    echo ""
-    echo "--commskip /path/to/folder/or/file"
-    echo "  commskip: Regenerates the commskip file for recordings that have"
-    echo "            already been moved. Argument can be either a single"
-    echo "            recording or a directory containing already moved recordings."
-    echo "  eg. myth2kodi --commskip '/home/mythtv/recordings/1099_20151210093000.mpg'"
-    echo "  eg. myth2kodi --commskip '/home/mythtv/recordings'"
-    echo ""
-    echo "-?|-h|--help"
-    echo "  Help: displays this message"
-    echo "  example: myth2kodi --help"
-    echo ""
-    echo "--special"
-    echo "  Special Help: displays extended configuration help."
-    echo "  example: myth2kodi --special"
-    echo ""
-    echo " --confidence"
-    echo "  Confidence Help: Displays information on improving confidence"
-    echo "  example: myth2kodi --confidence"
-    echo "======================================================="
-  fi
-  echo " ensure you have set the user settings set properly and run"
-  echo " --diagnostics before using myth2kodi"
-  echo " in --scan mode or as a UserJob."
-  echo " For more information type: myth2kodi --help or --special"
-  echo " done."
-  exit 1
+  printf '\n%s\n' "--diagnostics"
+  printf '%s\n'   "  diagnostics: tests the functionality of myth2kodi"
+  printf '%s\n'   "  eg. myth2kodi --diagnostics"
+  printf '\n%s\n' "--scan filetype /path/to/folder"
+  printf '%s\n'   "  scan: creates a library from an entire folder"
+  printf '%s\n'   "  eg. myth2kodi --scan mpg /home/mythtv/videos"
+  printf '\n%s\n' "--maintenance"
+  printf '%s\n'   "  maintenance: removes FOLDER DISCONNECTED errors from logs"
+  printf '%s\n'   "  eg. myth2kodi --maintenance"
+  printf '\n%s\n' "--update"
+  printf '%s\n'   "  update: myth2kodi to the current version"
+  printf '%s\n'   "  eg. sudo myth2kodi --update"
+  printf '\n%s\n' "--doover"
+  printf '%s\n'   "  doover: reruns previously failed jobs sequentially"
+  printf '%s\n'   "  eg. sudo myth2kodi --doover"
+  printf '\n%s\n' "--unmanned_doover"
+  printf '%s\n'   "  unmanned_doover: Same as --doover but for use without human intervention"
+  printf '%s\n'   "  eg. sudo myth2kodi --unmanned_doover"
+  printf '\n%s\n' "--undo"
+  printf '%s\n'   "  undo: returns all files to original states"
+  printf '%s\n'   "  eg. sudo myth2kodi --undo"
+  printf '\n%s\n' "--getSeriesInfo 'Series Name'"
+  printf '%s\n'   "  getSeriesInfo: Update of local tables for a series from TheTVDB,"
+  printf '%s\n'   "                 ignoring lastupdated.time."
+  printf '%s\n'   "  eg. myth2kodi --getSeriesInfo 'Black Books'"
+  printf '\n%s\n' "--commskip /path/to/folder/or/file"
+  printf '%s\n'   "  commskip: Regenerates the commskip file for recordings that have"
+  printf '%s\n'   "            already been moved. Argument can be either a single"
+  printf '%s\n'   "            recording or a directory containing already moved recordings."
+  printf '%s\n'   "  eg. myth2kodi --commskip '/home/mythtv/recordings/1099_20151210093000.mpg'"
+  printf '%s\n'   "  eg. myth2kodi --commskip '/home/mythtv/recordings'"
+  printf '\n%s\n' "-?|-h|--help"
+  printf '%s\n'   "  Help: displays this message"
+  printf '%s\n'   "  example: myth2kodi --help"
+  printf '\n%s\n' "--special"
+  printf '%s\n'   "  Special Help: displays extended configuration help."
+  printf '%s\n'   "  example: myth2kodi --special"
+  printf '\n%s\n' " --confidence"
+  printf '%s\n'   "  Confidence Help: Displays information on improving confidence"
+  printf '%s\n'   "  example: myth2kodi --confidence"
+  printf '%s\n'   "======================================================="
 }
 
 special(){
@@ -3588,7 +3595,8 @@ getSeriesInfo(){
 #    #Command line switches: Are we doing something other than moving a recording?
 #    #If trying to move a recording, get info from command line
 #    #Command line sanity checks
-#    #Now we have all important settings, and know were not performing some other function, do filesystem checks etc -- no point doing a lot of work if we can't move anything at the end..
+#    #Now we have all important settings, and know we're not performing some other function,
+#     do filesystem checks etc -- no point doing a lot of work if we can't move anything at the end..
 #    #Do we have enough info from the command line to move, if so jump to verify
 #    #If not: Get info from the MythTV-DB
 #    #MythTV-DB Guide data basic/common post processing, then sanity checks.
@@ -3599,12 +3607,12 @@ getSeriesInfo(){
 #      #If SxxExx but no EpisodeTitle, use SxxExx to get EpisodeTitle.
 #      #If EpisodeTitle but no SxxExx, use EpisodeTitle to get SxxExx.
 #      #If No SxxExx and no EpisodeTitle: check against Plot.
-#    #Verify: do checks to make sure what we're moving and where we're moving it too makes sense, and that we have good confidence that the names we're using are correct. 
+#    #Verify: do checks to make sure what we're moving and where we're moving it too makes sense,
+#             and that we have good confidence that the names we're using are correct.
 #    #IF WE'RE NOT CONFIDENT OR ANYTHING ELSE DURING THE ABOVE STEPS IS WRONG, WRITE JOB TO DOOVER, REPORT WHAT WENT WRONG, BUT OTHERWISE DO NOTHING!
 #    #Move file...
 #    #Notify Kodi, RSS, and whoever else wanted to know that we're done and what it is we've done.
 #    #THE END
-
 
 #Setup defaults for searching Series information
 SeriesID=""
@@ -3625,6 +3633,7 @@ test -f "$m2kdir"/myth2kodi.conf && source "$m2kdir"/myth2kodi.conf
 
 #Capture args the script was called with
 m2karg1="$1" ; m2karg2="$2" ; m2karg3="$3" ; m2karg4="$4"
+declare -r m2karg1 m2karg2 m2karg3 m2karg4
 #TODO: Set the inputs as fixed (read-only) parameters, then use different variables consistently if we need to modify them...
 InputPath="$1"
 InputTitle="$2"
@@ -3637,8 +3646,8 @@ InputOption="$4"
 #InputExx="$5"
 
 #Some basic tests to make sure we were called correctly
-[[ "$InputPath" != "testfile.ext" && ! -f "$InputPath" && -z "$InputTitle" && "${InputPath:0:1}" != "-" ]] && m2kHelp
-[[ -z "$InputPath" ]] && m2kHelp
+[[ "$InputPath" != "testfile.ext" && ! -f "$InputPath" && -z "$InputTitle" && "${InputPath:0:1}" != "-" ]] && m2k_usage && ExitJob 'GenericUnspecifiedError'
+[[ -z "$InputPath" ]] && m2k_usage && ExitJob 'GenericUnspecifiedError'
 #TODO: MythTVUserJobString is not used within this script, check whether it's somehow a requirement of calls from mythtv, though, in an absence of export, I don't see how...
 MythTVUserJobString="%DIR%/%FILE%"
 
@@ -3704,10 +3713,20 @@ case "$InputPath" in
     getSeriesInfo
     exit $?
   ;;
+  --about)
+    Debug "Recognised command line switch '--about'"
+    m2k_about
+    exit 0
+  ;;
+  --usage)
+    Debug "Recognised command line switch '--usage'"
+    m2k_usage
+    exit 0
+  ;;
   --help|-?|-h)
     Debug "Recognised command line switch '--help|-?|-h'"
-    switchhelp=1
-    m2kHelp
+    m2k_usage
+    m2k_help
     exit 0
   ;;
   --update|--upgrade|--build) #TODO: delete this if we're not going to use it.
@@ -3740,7 +3759,7 @@ case "$InputPath" in
     Debug "Recognised command line switch '--commskip'"
     #eg: myth2kodi --commskip '/path/to/recordings/1070_20160331073100.mpg'
     InputPath="$2"
-    [[ ! -f "$InputPath" && ! -d "$InputPath" ]] && m2kHelp
+    [[ ! -f "$InputPath" && ! -d "$InputPath" ]] && m2k_usage && ExitJob 'GenericUnspecifiedError'
     if [[ -f "$InputPath" && -L "$InputPath" ]]; then
       Inform "Regenerating commskip file for $InputPath"
       InputFileBasename="$(basename "$InputPath")"
@@ -3787,7 +3806,11 @@ case "$InputPath" in
   ;;
 esac
 Debug "No recognised command line switches set."
-[[ "${InputPath:0:1}" = "-" ]] && m2kHelp
+if [[ "${InputPath:0:1}" = "-" ]]; then
+  Err "Unrecognised command line switch."
+  m2k_usage
+  ExitJob 'GenericUnspecifiedError'
+fi
 
 #####ENVIRONMENTAL VARIABLES CONTINUED#####
 
@@ -3847,7 +3870,7 @@ if [[ -n "$Sxx" ]]; then InformCont "Sxx:$Sxx"; else InformCont "Sxx: UNKNOWN"; 
 if [[ -n "$Exx" ]]; then InformCont "Exx:$Exx"; else InformCont "Exx: UNKNOWN"; fi
 InformCont "PLOT: $Plot"
 ShowName="$InputTitle"
-[[ -z "$ShowName" ]] && m2kHelp
+[[ -z "$ShowName" ]] && m2k_usage && ExitJob 'GenericUnspecifiedError'
 
 #TODO: check whether the split on semicolon here and elsewhere should be in ProcessSchedulesDirect
 #split on semicolon, there will only be one episode looked up.

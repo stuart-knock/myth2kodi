@@ -51,7 +51,7 @@
 #      Move some of the Inform statements to Debug, to avoid lots of
 #      repetition with Inform (level 2) logging.
 
-#TODO: Consider changing default binpath from "/usr/local/bin" to 
+#TODO: Consider changing default binpath from "/usr/local/bin" to
 #      "/home/$Librarian/bin". We really want to avoid root/sudo requirements
 #      as much as possible.
 
@@ -239,10 +239,14 @@ AlternateMoveDir="/home/librarian/recordedTV"
 #for multiple recording dirs. TargetPathIsInputPath will separate generic shows
 #from episodes and movies. Enabled|Disabled
 TargetPathIsInputPath="Disabled"
+#the following line contains the API key from www.TheTVDB.Com. Default project code: 6DF511BB2A64E0E9
+APIkey="6DF511BB2A64E0E9"  #TODO: If I ever put this on GitHub I should register a fresh APIkey - http://thetvdb.com/?tab=apiregister
 #Internet access Timeout in seconds, used for TheTVDB, : Default Timeout=50 (seconds)
 Timeout=50
 #Update database time in seconds, Longer duration means faster processing time and less strain on TheTVDB. Default='88920' (1 day + eps)
 UpdateDatabase=88920
+#How long to persist archived myth2kodi database files in months, DEFAULT=6.
+M2K_DB_LIFE=6
 #The path which contains myth2kodi and associated scripts default=/usr/local/bin
 binpath="/usr/local/bin"
 #myth2kodi working directory: Default=$HOME/.myth2kodi (ie, /home/username/.myth2kodi)
@@ -253,9 +257,6 @@ FailSafeMode="Disabled"
 FailSafeDir="/home/librarian/FailSafe"  #<------THIS VALUE MUST BE SET-------
 #DirTracking will check for and remove the folders created by myth2kodi
 DirTracking="Enabled"
-#the following line contains the API key from www.TheTVDB.Com. Default project code: 6DF511BB2A64E0E9
-APIkey="6DF511BB2A64E0E9"
-#TODO: If I ever put this on GitHub I should register a fresh APIkey - http://thetvdb.com/?tab=apiregister
 #Language setting
 Language="en"
 
@@ -315,6 +316,8 @@ CommercialMarkupCleanup="Enabled"
 ###Reporting/Communications###
 #DailyReport provides a local log of shows added to your library per day. Enabled|Disabled
 DailyReport="Enabled"
+#How long to persist daily report files in months, DEFAULT=12.
+DAILYREPORT_LIFE=12
 #Notify tells myth2kodi to send a notification to GNOME Desktop upon completion. Enabled|Disabled
 Notify="Disabled"
 #If notifications are enabled, NotifyUserName should be the same as the user logged into the GNOME Session. (your username)
@@ -337,6 +340,8 @@ KODIIPs=( "kodi:supersecurekodi@192.168.1.78:8080" ) #<------THIS VALUE MUST BE 
 declare -i RSSmaxItems=8
 
 ###Logging settings###
+#How long to persist archived log files in months, DEFAULT=6.
+LOG_LIFE=6
 #These settings are for the bashlogging script which provides the configurable
 #logging functionality used in myth2kodi.
 #LogLevel provides control over the amount of information myth2kodi reports.
@@ -347,7 +352,7 @@ declare -i RSSmaxItems=8
 #Recommend 2 to start with or if you want to keep track of what myth2kodi is doing.
 #Recommend 1 for usual operation, once you're confident that everything is working fine.
 #Only use 3 if you have a particular problem that you're trying to track down, it significantly increases the output.
-LogLevel=3
+LogLevel=2
 #LogFileName is the name of the log file, this will be placed in myth2kodi's
 #working directory, $m2kdir set above, and have the suffix '.log' appended.
 #DEFAULT: 'output' #NOTE: LogFile is overridden in special contexts, such as running Diagnostics.
@@ -363,7 +368,7 @@ LogType='both'
 ################################################################################
 #TODO: Consider disabling stdout logging, ie LogType='logfile', when run as a mythtv user-job.
 
-m2kVersion="myth2kodi Version 0.9.6"
+m2kVersion="myth2kodi Version 0.9.7"
 
 #The full path version of the file to which logging output will be sent:
 LogFile="$m2kdir/${LogFileName}.log"
@@ -807,7 +812,7 @@ KODIAutomate(){
       fi
       #Send a message to Kodi that a new show has been added
       if [ "$KODINotify" = "Enabled" ] ; then
-        data=\''{"jsonrpc": "2.0", 
+        data=\''{"jsonrpc": "2.0",
                  "method": "GUI.ShowNotification",
                  "params": {"title": "myth2kodi added", "message": "'$ShowName'"},
                  "id": "myth2kodi"}'\'
@@ -822,7 +827,7 @@ KODIAutomate(){
       #  Kodi to run Clean of its Library after myth2kodi runs undo, doover, or any
       #  other means of removing or renaming a file of which Kodi is aware... Perhaps
       #  split KODIAutomate() into KodiNewShow() and KodiCleanup()...
-      #Request Kodi remove any no-longer reachable files from its library. 
+      #Request Kodi remove any no-longer reachable files from its library.
       if [[ "$KODIClean" = "Enabled" && "$m2kScanMode" != "True" ]] ; then
         data=\''{"jsonrpc": "2.0", "method": "VideoLibrary.Clean", "id": "myth2kodi"}'\'
         eval "$curlPOST $data http://$KODIIP/jsonrpc" > /dev/null 2>&1
@@ -1106,9 +1111,9 @@ GetMythTVDatabase(){
   #  mythtv 0.27.5 and "mysql  Ver 15.1 Distrib 10.0.22-MariaDB, for Linux (x86_64) using readline 5.2",
   #  these seem to be redundant. In case there was an old DB schema or older mysql version that required
   #  this additional processing, if the below isn't working for you try adding the additional sed commands
-  #  back in, something like: 
+  #  back in, something like:
   #    | sed s/"\/"/""/g | sed -n "2p" | sed s/"chanid"/""/g | sed s/" "/""/g
-  #  to replace the 
+  #  to replace the
   #    | sed -n "2p"
   #  found below. Finally, if any of the above processing turns out to be SchedulesDirect specific then it
   #  should be moved to ProcessSchedulesDirect().
@@ -1194,7 +1199,7 @@ GetMythTvPythonBindings(){
   # declare mdb_programid
   # declare mdb_chanid
   # declare mdb_starttime
-  
+
   #TODO: If possible without blocking MythDataGrabber exit status, return $m2kdir/mythicalDbOut to being a named pipe.
   #run the python bindings and output to named pipe
   "$binpath"/MythDataGrabber --verbosity="$LogLevel"          \
@@ -1364,7 +1369,7 @@ RemoveSeasonEpisodeFromPlot(){
     if [[ -n "$SEstring" ]]; then
       Warn "${FUNCNAME[0]}() SeasonEpisode was in the leading position of the Plot field, removing it to simplify subsequent processing."
       Plot="${Plot/$SEstring/}"
-      #Also remove any left over leading hyphen, colon, or space 
+      #Also remove any left over leading hyphen, colon, or space
       Plot="$(sed s/^"\s*[-|:]\?\s*"/""/ <<< "$Plot")"
       #Remove any trailing space from the Plot
       Plot="${Plot%%*([[:space:]])}"
@@ -1414,7 +1419,7 @@ RemoveSubtitleFromPlot(){
   fi
 }
 
-#Some Australian channels (ABC, I'm looking at you), put cast info at the end of the Plot. 
+#Some Australian channels (ABC, I'm looking at you), put cast info at the end of the Plot.
 RemoveCastFromPlot(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   #
@@ -1822,7 +1827,7 @@ downloadInfoAboutMatchedTitleAndCreateTxtFileTables(){
         fi
       done < "$m2kdir/$NewShowName/$NewShowName.xml"
 
-      #If we also have a json file from tvmaze, then append that info 
+      #If we also have a json file from tvmaze, then append that info
       if [[ -f "$tvmazeJsonFile" ]] ; then
         jq -r '.[] | .name' "$tvmazeJsonFile" >> "$m2kdir/$NewShowName/$NewShowName.actualEname.txt"
         jq -r '.[] | .name' "$tvmazeJsonFile" >> "$m2kdir/$NewShowName/$NewShowName.Ename.txt"
@@ -2127,7 +2132,7 @@ getAbsoluteEpisodeNumberWithFuzzyPlotMatch(){
       ((ChunkCosts[i] <= len10per)) && GoodChunkGuesses[Counter]=${ChunkGuesses[i]} && ((++Counter))
     done
     Debug "$( IFS=','; printf '%s' "${FUNCNAME[0]}() - GoodChunkGuesses ${#GoodChunkGuesses[@]}: ${GoodChunkGuesses[*]}." )"
-    #TODO: This needs to be changed to actually check that they refer to the same episode, 
+    #TODO: This needs to be changed to actually check that they refer to the same episode,
     #      with multiple data sources the current test is still sufficient but not necessary...
     #If all ChunkGuess with ChunkCost < 10% are the same Absolute Episode Number
     AENguess=($(printf '%s\n' "${GoodChunkGuesses[@]}" | sort -u))
@@ -2462,11 +2467,27 @@ genericUnspecifiedError(){
 MaintenanceWarning(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   local yesorno=""
-  Inform "  --You have entered Maintenance mode."
-  InformCont "  myth2kodi will perform maintenance on it's records."
-  InformCont "  Please ensure that All network attached storage and removable"
-  InformCont "  storage drives are connected and mounted properly before continuing"
+  Warn "  --You have entered Maintenance mode."
+  WarnCont "  myth2kodi will perform maintenance on it's records."
+  WarnCont "  Please ensure that All network attached storage and removable"
+  WarnCont "  storage drives are connected and mounted properly before continuing"
   read -r -n1 -p "Would you like myth2kodi to conduct a scan? y/(n)>" yesorno
+  printf '\n'
+  if [ "$yesorno" != "y" ]; then
+    Inform "You must press 'y' to continue"
+    return 1
+  fi
+  return 0
+}
+
+cleanse_warning(){
+  Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
+  local yesorno=""
+  Inform "  --You have requested myth2kodi's working directory to be cleansed."
+  InformCont "  myth2kodi will PERMANENTLY REMOVE archived log files, myth2kodi"
+  InformCont "  database files, and daily report files older than specified by"
+  InformCont "  the user settings: LOG_LIFE; M2K_DB_LIFE; and DAILYREPORT_LIFE."
+  read -r -n1 -p "Would you like myth2kodi to continue? y/(n)>" yesorno
   printf '\n'
   if [ "$yesorno" != "y" ]; then
     Inform "You must press 'y' to continue"
@@ -2670,35 +2691,50 @@ ShowTranslations(){
   return 0
 }
 
+process_cleanup_file(){
+  Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
+  DebugCont "Called with $# arguments"
+  local -i i=0; local var; for var in "$@"; do ((++i)); DebugCont "arg $i = ${var}"; done
+  local CLEANUP_FILE
+  local -i ARCHIVE_LIFE
+  local ARCHIVE_DATE
+  local -i EXPIRE_OLDER_THAN
+  CLEANUP_FILE="$1"
+  [[ ! -f "$CLEANUP_FILE" ]] && Err "Not a file: $CLEANUP_FILE" && return 1
+  ARCHIVE_LIFE="$2"
+  EXPIRE_OLDER_THAN="$(date -d "-$ARCHIVE_LIFE months" '+%Y%m%d')"
+
+  Inform "Removing files created more than $ARCHIVE_LIFE months ago."
+  while read -r line ; do
+    #Extract the creation date of the archived file
+    ARCHIVE_DATE="$(grep --only-matching '20[0-9][0-9]-[0-1][0-9]-[0-3][0-9]' <<< "$line")"
+    #Convert it to an integer
+    ARCHIVE_DATE="$(date -d "$ARCHIVE_DATE" +"%Y%m%d")"
+    if ((ARCHIVE_DATE < EXPIRE_OLDER_THAN)); then
+      Debug "Removing old archive file: $line"
+      rm -f "$line"
+    fi
+  done < "$CLEANUP_FILE"
+  rm -f "$CLEANUP_FILE"
+}
 
 m2k_cleanse(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  Err "${FUNCNAME[0]}() Needs a thorough review, aborting."
-  return 1
-  #TODO: this need to be rethought given the cleaner way we now deal with myth2kodi database directories.
-  #cleanse myth2kodi database folders if in --maintenance mode
-  #TODO: Consider making a m2kCleanse function that removes all but the N most recent local show databases.
-  #      Should also remove all but the M most recent compressed LogFiles
-  #      Also add an associated --cleanse command line switch.
-  test -f "$m2kdir/cleanup" && rm -f "$m2kdir/cleanup"
-  ls -A -1 "$m2kdir" > "$m2kdir/cleanup"
 
-  while read -r line ; do
-    (( ++Counter ))
-    Debug "Cleansing myth2kodi Database:$Counter ${folderToCheck}"
-    #echo -ne "Cleansing myth2kodi Database:$Counter ${folderToCheck:0:20}    \n" 1>&2
-    folderToCheck="$m2kdir/$line"
-    if [ -d "$folderToCheck" ]; then
-      #TODO: Check we haven't added new dirs that need protecting...
-      if [ "$folderToCheck" != "$m2kdir/DailyReport" ] &&  [ "$folderToCheck" != "$m2kdir/mythicalSetup" ]; then
-        Inform "Removing myth2kodi database directory: $folderToCheck"
-        rm -Rf "$folderToCheck"
-      fi
-    fi
-  done < "$m2kdir/cleanup"
-  rm -f "$m2kdir/cleanup"
+  #Create cleanup files for archived logs, myth2kodi database, and daily report files.
+  find "$m2kdir" -maxdepth 1 -type f -name '*20[0-9][0-9]-[0-1][0-9]-[0-3][0-9]*' > "$m2kdir/cleanup_logs"
+  find "$m2kdir" -mindepth 2 -type f ! -path "*DailyReport*" -name '*20[0-9][0-9]-[0-1][0-9]-[0-3][0-9]*' > "$m2kdir/cleanup_m2k_db"
+  find "$m2kdir/DailyReport" -type f -name '*20[0-9][0-9]-[0-1][0-9]-[0-3][0-9]*' > "$m2kdir/cleanup_dailyreport"
 
-  test ! -d "$m2kdir/mythicalSetup" && mkdir "$m2kdir/mythicalSetup"
+  Inform "Processing log clean-up file: $m2kdir/cleanup_logs"
+  process_cleanup_file "$m2kdir/cleanup_logs" "$LOG_LIFE"
+
+  Inform "Processing myth2kodi database clean-up file: $m2kdir/cleanup_m2k_db"
+  process_cleanup_file "$m2kdir/cleanup_m2k_db" "$M2K_DB_LIFE"
+
+  Inform "Processing daily report clean-up file: $m2kdir/cleanup_dailyreport"
+  process_cleanup_file "$m2kdir/cleanup_dailyreport" "$DAILYREPORT_LIFE"
+
 }
 
 #####MAINTENANCE ROUTINE#####
@@ -2774,9 +2810,9 @@ DoMaintenance(){
     test -f "$m2kdir/dir.tracking" && mv "$m2kdir/dir.tracking" "$m2kdir/dir.tracking_${FileNameNow}"
     [[ -f "$m2kdir/dir.tracking2" ]] && mv "$m2kdir/dir.tracking2" "$m2kdir/dir.tracking"
   fi
-  #TODO: decide if we want to run m2k_cleanse() here...
+  Inform "Cleaning up old archived logs, myth2kodi database files, and daily report files."
+  m2k_cleanse
   Inform "MAINTENANCE ROUTINE COMPLETE."
-  Inform "You may want to run myth2kodi --cleanse."
   return 0
 }
 
@@ -3123,7 +3159,7 @@ m2k_diagnostics(){
       Err "MythTV Database Test $DBTest"
     fi
   fi
-  
+
   #TODO: This currently tests Kodi notification even if Notifications are disabled in settings, is this actually the behaviour we want?
   #Test communication with Kodi
   read -r -n1 -p "Press any key to perform KODI Notification test..."
@@ -3205,7 +3241,7 @@ m2k_diagnostics(){
   WorkingDirFreeSpace="$(df -P "$m2kdir" | sed -n 2p | awk '{print $4}')"
   checkPermissions "5000" "$WorkingDirFreeSpace" "$m2kdir"
   WorkingDirWritable=$TMoveDirWritable
-  
+
   #Print a summary table of writeable directories.
   dirSummary
 
@@ -3605,9 +3641,9 @@ get_series_info(){
 #  removed... Need to check expectations of MythDataGrabber and other auxiliary
 #  functions before making this change.
 
-#TODO: At some point this main needs to be cleaned up, at the moment it's a 
+#TODO: At some point this main needs to be cleaned up, at the moment it's a
 #  little bit too organic, final structure should be something like:
-#    #Basic setup    
+#    #Basic setup
 #      #Basic tests to make sure we were called correctly.
 #      #Who am I, where am I, When am I
 #      #Settings to override those at the top of file
@@ -3902,7 +3938,7 @@ OriginalExt="${ExtensionPrep#*.}"
 originaldirname="$(dirname "$InputPath")"
 #Set originaldir name if none was supplied
 [[ "$originaldirname" = "./" || "$originaldirname" = "." || "$originaldirname" = "" ]] && originaldirname="$(pwd)"
-#TODO: check FileBaseName as the below doesn't strip the suffix but the description of this variable implies that it should. 
+#TODO: check FileBaseName as the below doesn't strip the suffix but the description of this variable implies that it should.
 FileBaseName="${InputPath##*/}"
 FileName="$InputPath"
 
@@ -4159,7 +4195,7 @@ if [ "$StorageGroupFallback" = "Enabled" ] ; then
   fi
 fi
 
-#TODO: Need to add checks for existence of myth2kodi database files for $NewShowName and/or check that we've identified the series before bothering with the following 
+#TODO: Need to add checks for existence of myth2kodi database files for $NewShowName and/or check that we've identified the series before bothering with the following
 
 #TODO: If this works reliably, then consider moving it up to directly below fuzzy match on subtitle
 #As a last resort, if we still think it's an episode but have no episode info, try fuzzy match on plot
@@ -4315,8 +4351,8 @@ fi
 
 #####ANTI-CLOBBER#####
 #TODO: IF WE'RE MAKING THE MISTAKE OF MOVING A RECORDING THAT WE'VE ALREADY MOVED, OR
-#    IF WE'VE IDENTIFIED A DIFFERENT SHOW AS THE SAME SHOW THEN SENSIBLE BEHAVIOUR 
-#    IS TO REPORT A DETAILED ERROR MESSAGE AND DO NOTHING!!! 
+#    IF WE'VE IDENTIFIED A DIFFERENT SHOW AS THE SAME SHOW THEN SENSIBLE BEHAVIOUR
+#    IS TO REPORT A DETAILED ERROR MESSAGE AND DO NOTHING!!!
 if [ -f "$MoveDir/$ShowFileName.$OriginalExt" ]; then
   Err "FILE NAME ALREADY EXISTS:"
   ErrCont "$MoveDir/$ShowFileName.$OriginalExt"

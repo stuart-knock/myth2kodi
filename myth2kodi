@@ -58,6 +58,8 @@
 #TODO: really need to review doover and undo usage...
 #TODO: REALLY NEED TO REVIEW sudo USE AND PERMISSIONS EXPECTATIONS WITHIN THE SCRIPT...
 
+#TODO: Review  RequiresDoover and  EpisodeConfidenceRating usage...
+
 #TODO: Consider conforming to this: https://google.github.io/styleguide/shell.xml
 
 #Intention:
@@ -789,11 +791,12 @@ KODIAutomate(){
   #TODO: there must be a better way to do this neatly than using eval...
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   local data=""
+  local curlPOST=""
   #Send notification to KODI, Update Library, Clean Library
   if [[ "$KODINotify" = "Enabled" || "$KODIUpdate" = "Enabled" || "$KODIClean" = "Enabled" ]]; then
     Inform 'COMMUNICATING WITH KODI INSTANCES...'
     #SEE: http://kodi.wiki/view/HOW-TO:Remotely_update_library and 'man curl'
-    local curlPOST='curl --silent --max-time 8 --connect-timeout 5 -H "Content-Type: application/json;" --data-binary'
+    curlPOST='curl --silent --max-time 8 --connect-timeout 5 -H "Content-Type: application/json;" --data-binary'
     for KODIIP in "${KODIIPs[@]}" ; do
       Inform "SENDING REQUESTED COMMANDS TO: $KODIIP"
       #Request Kodi update its library
@@ -947,7 +950,7 @@ generaterss(){
       #break
   fi
 
-  #close the file.
+  #Write close of entry to the file.
   {
     echo -e '</channel>'
     echo -e '</rss>'
@@ -1052,6 +1055,7 @@ add_undo(){
   fi
 }
 
+#TODO: do_failsafe
 doFailSafeMode(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   Warn "FAILSAFE FLAG WAS SET CHECK PERMISSIONS AND FOLDERS"
@@ -1081,6 +1085,7 @@ dbselect(){
 
 #####MYTHTV DATABASE#####
 #This function gathers information from the MythTV database for use in the program
+#TODO: get_mythtv_database
 GetMythTVDatabase(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   DebugCont "m2kdir: $m2kdir"
@@ -1149,6 +1154,7 @@ GetMythTVDatabase(){
 
 #####UTILIZE PYTHON BINDINGS TO GET MYTHTV DB##### Requires dependency
 #TODO: Check functionality of and if necessary clean-up MythDataGrabber
+#TODO: get_mythtv_pythonbindings
 GetMythTvPythonBindings(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   DebugCont "m2kdir: $m2kdir"
@@ -1509,7 +1515,7 @@ ProcessSydFTA(){
   #Some channels, particularly ABC, put cast info in the end of the plot field which can mess up fuzzy Plot matching
   RemoveCastFromPlot
 
-  #Only keep Alpha-numeric characters and the four basic punctuation chars & , . -
+  #Only keep Alpha-numeric characters, space and the four basic punctuation chars & , . -
   Plot="$(sed -r 's/[^[:alnum:] &,.-]//g' <<< "$Plot")"
 
   #Strip the Movie: tag that some stations very helpfully put in the title field...
@@ -1776,7 +1782,7 @@ downloadInfoAboutMatchedTitleAndCreateTxtFileTables(){
           line="${line//&amp;/&}"
           line="${line//&ndash;/-}"
           actualEname="${line}"
-          #Only keep Alpha-numeric characters and the four basic punctuation chars & , . -
+          #Only keep Alpha-numeric characters, space and the four basic punctuation chars & , . -
           actualEname="$(sed -r 's/[^[:alnum:] &,.-]//g' <<< "$actualEname")"
           Ename="${actualEname/;*/}" #TODO: This strips everything following the first ";" (semi-colon). Is that intentional because there are sometimes multiple EpisodeNames separated by semi-colons???
           #Only keep Alpha-numeric characters and the four basic punctuation chars & , . -
@@ -1807,7 +1813,7 @@ downloadInfoAboutMatchedTitleAndCreateTxtFileTables(){
           line="${line//&ndash;/-}"
           #Convert any unprintable (space, tab, newline) to space.
           line="${line//[[:space:]]/ }"
-          #Only keep Alpha-numeric characters and the four basic punctuation chars & , . -
+          #Only keep Alpha-numeric characters, space and the four basic punctuation chars & , . -
           line="$(sed -r 's/[^[:alnum:] &,.-]//g' <<< "$line")"
           line="$(sed -r 's/\s{2,}/ /g' <<< "$line")"
           #Remove any trailing space
@@ -2030,8 +2036,8 @@ getAbsoluteEpisodeNumberWithSxxExx(){
   return 1
 }
 
-#TODO: Need to check that additional data source doesn't lead to multiple AEN matches that are then interpreted as faulty due to non-singular identification...
 #TODO: Need to clean up redundancy or otherwise refactor this function to make it cleaner...
+#      Maybe fuzzy_plot_match(); chunked_fuzzy_plot_match(); multi_match_check(); then get_absolute_episode_number_fuzzy_plot() uses them...
 getAbsoluteEpisodeNumberWithFuzzyPlotMatch(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   DebugCont "AbsoluteEpisodeNumber: $AbsoluteEpisodeNumber"
@@ -2178,7 +2184,7 @@ getAbsoluteEpisodeNumberWithFuzzyPlotMatch(){
       return 0
     else
       Warn "${FUNCNAME[0]}() - Fuzzy Plot match is too fuzzy, as we matched two or more different episodes."
-      Err "${FUNCNAME[0]}() - This function needs refactoring as bad match on full plot should lead to chunked plot attempt."
+      Err "${FUNCNAME[0]}() - This function needs review as bad match on full plot should lead to chunked plot attempt."
       Debug "$( IFS=','; printf '%s' "${FUNCNAME[0]}() - The following ${#AENguess[@]} AENguesses were identified: ${AENguess[*]}." )"
       return 1
     fi
@@ -2621,8 +2627,6 @@ GenerateEpisodeNFO(){
       echo -e "\t<episode>0</episode>"
     } >> "$MoveDir/$ShowFileName.nfo"
   fi
-  #SAK-REPLACED BELOW, SEE http://forum.kodi.tv/showthread.php?tid=65644&page=65&highlight=json
-  #echo -e "</tvshow>">>"$MoveDir/$ShowFileName.nfo"
   echo -e "</episodedetails>">>"$MoveDir/$ShowFileName.nfo"
   echo "'$MoveDir/$ShowFileName.nfo'" "'$MoveDir/$ShowFileName.$OriginalExt'">>"$m2kdir"/created.tracking
   return 0
@@ -3642,7 +3646,6 @@ Exx=""
 Sxx=""
 GotEpisodeNumber=0
 declare -i EpisodeConfidenceRating=0
-MythicalEpiShow=0 #TODO: this is set in multiple places but seems to never be used..
 
 #Load variables from a file if required
 test -f "$m2kdir"/myth2kodi.conf && source "$m2kdir"/myth2kodi.conf
@@ -3745,18 +3748,19 @@ case "$InputPath" in
     m2k_help
     exit 0
   ;;
-  --update|--upgrade|--build) #TODO: delete this if we're not going to use it.
-    Debug "Recognised command line switch '--update|--upgrade|--build'"
-    #mythicalUpdater
-    Err "NOT MAINTAINING THE UPDATER, SO DON'T BOTHER TRYING TO UPDATE..."
-    exit 1
-  ;;
   --maintenance)
     Debug "Recognised command line switch '--maintenance'"
     MaintenanceWarning
     [[ "$?" != 0 ]] && exit $?
     removedead=1
     DoMaintenance
+    exit $?
+  ;;
+  --cleanse)
+    Debug "Recognised command line switch '--cleanse'"
+    cleanse_warning
+    [[ "$?" != 0 ]] && exit $?
+    m2k_cleanse
     exit $?
   ;;
   --special)
@@ -3891,7 +3895,7 @@ ShowName="$InputTitle"
 #TODO: check whether the split on semicolon here and elsewhere should be in ProcessSchedulesDirect
 #split on semicolon, there will only be one episode looked up.
 EpisodeSubtitle="$(sed 's/;.*//' <<< "$InputSubtitle")"
-#Only keep Alpha-numeric characters and the four basic punctuation chars & , . -
+#Only keep Alpha-numeric characters, space and the four basic punctuation chars & , . -
 EpisodeSubtitle="$(sed -r 's/[^[:alnum:] &,.-]//g' <<< "$EpisodeSubtitle")"
 ExtensionPrep="$(basename "$InputPath")"
 OriginalExt="${ExtensionPrep#*.}"
@@ -3907,7 +3911,7 @@ ShowTranslations
 #Do not process files in files categoricIgnore or titleIgnore, just exit
 ignoreList
 SafeShowName=$(sed 's/;.*//' <<< "$ShowName") #TODO: ??? ${ShowName%%;*}
-#Only keep Alpha-numeric characters and the four basic punctuation chars & , . -
+#Only keep Alpha-numeric characters, space, parenthesis and the four basic punctuation chars & , . -
 SafeShowName="$(sed -r 's/[^[:alnum:] &,.)(-]//g' <<< "$SafeShowName")"
 #Format Show name for Sending to www.TheTVDB.com and KODI
 tvdbshowname=$(sed 's/ /%20/g' <<< "$ShowName" | sed 's/&/%26/g')
@@ -3961,7 +3965,6 @@ if [ "$m2kProgramIDCheck" != "SH" ] && [ "$m2kProgramIDCheck" != "MV" ]; then
       else
         ((--SeriesConfidenceRating))
         ConfidenceReasoning="$ConfidenceReasoning Failed; Information not obtainable;"
-        MythicalEpiShow=1
       fi
     fi
   fi
@@ -4049,7 +4052,6 @@ if [[ -n "$SeriesID" ]]; then
       if [ "$?" = "0" ]; then
         ConfidenceReasoning="$ConfidenceReasoning Successful; "
       else
-        MythicalEpiShow=1
         ((--EpisodeConfidenceRating))
         ConfidenceReasoning="$ConfidenceReasoning Failed;"
       fi
@@ -4183,7 +4185,6 @@ fi
 
 if [ "$m2kProgramIDCheck" = "EP" ] && [[ "$Exx" = "E" || -z "$Exx" ]]; then
   ConfidenceReasoning="$ConfidenceReasoning Guide Data did not match a specific Episode;"
-  MythicalEpiShow=1
   Warn "Identified recording as episode but failed to determine episode number, requiring doover."
   RequiresDoover=1
   #TODO come up with a way to have a variable like DataWasNotObtainable to check and make it a SH later
@@ -4275,8 +4276,6 @@ if [[ -z "$Exx" && "$InputPath" != "testfile.ext" ]]; then
     NewShowName="$SafeShowName"
     DisplayShowWarning
   else
-    #This marks Episodes as shows. AKA EpiShows. Episodes for which no information can currently be obtained.
-    MythicalEpiShow=1
     #change the show to a Generic type
     NewShowName="$SafeShowName"
     DisplayEpiShowMessage
@@ -4288,8 +4287,9 @@ determinePrimaryOrAlternateFolderUsage
 
 #####OUTPUT FILE NAME FORMATTING#####
 #Format Shows
-#Only keep Alpha-numeric characters and the four basic punctuation chars & , . -
+#Only keep Alpha-numeric characters, space and the four basic punctuation chars & , . -
 EpisodeSubtitle="$(sed -r 's/[^[:alnum:] &,.-]//g' <<< "$EpisodeSubtitle")"
+#and parenthesis for show title to allow for year, eg (2042)
 NewShowName="$(sed -r 's/[^[:alnum:] &,.)(-]//g' <<< "$NewShowName")"
 ShowName="$(sed -r 's/[^[:alnum:] &,.)(-]//g' <<< "$ShowName")"
 

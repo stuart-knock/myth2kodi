@@ -125,13 +125,13 @@ def writeData():
             f.write('xmltvgrabber = "%s"\n' % res[0].strip())
     # verify valid data was written
     if rec.chanid != '':
-        LOG.info("Operation complete")
+        LOG.info("Operation complete.")
 ###########################################################################
 
 
 def closefile():
     """If we have an open file, close it."""
-    LOG.info("Closing out the file/stdout")
+    LOG.debug("Closing out the file/stdout")
     if f is not None:
         if f.fileno() != 1:
             f.close()
@@ -200,14 +200,14 @@ if __name__ == "__main__":
     #import pdb; pdb.set_trace()
 
     #Set the logging level
-    loglevelmapping = ["ERROR","WARNING","INFO","DEBUG"]
+    loglevelmapping = ["ERROR", "WARNING", "INFO", "DEBUG"]
     LOG.setLevel(loglevelmapping[args.verbosity])
 
     #Get a connection to the database
     LOG.info("Establishing database connection")
     try:
         # Defaults or args
-        db = MythDB(**vars(args))  #mythdb_arg_dict, if MythDB doesn't gracefully handle superfluous kwargs
+        db = MythDB(**vars(args)) #mythdb_arg_dict, if MythDB doesn't gracefully handle superfluous kwargs
     except Exception:
         try:
             # mythtv preconfigured options
@@ -224,13 +224,12 @@ if __name__ == "__main__":
                 raise Exception
     #######################################################################
 
-    #If requested, run some Diagnostics.
+    #If requested, run some diagnostics.
     if args.Diagnostic == True:
         try:
             LOG.info("Connected to: " + db.gethostname())
             LOG.info("Diagnostics passed...")
             #TODO: Consider expanding the diagnostics.
-
         except Exception:
             LOG.error("Diagnostics failed.")
             raise Exception
@@ -238,15 +237,14 @@ if __name__ == "__main__":
         sys.exit(0)
     #######################################################################
 
-    #GatherInformation from the Database
-    # search for a recording
+    #Gather information from the database for the recording
     try:
         rec = db.searchRecorded(basename=args.filename).next()
     except StopIteration:
         LOG.error("Failed to find DB record for: " + args.filename)
         raise Exception('Recording Not Found')
 
-    # set comskip data
+    #Set comskip data
     try:
         markupstart, markupstop = zip(*rec.markup.getskiplist())
     except Exception:
@@ -262,15 +260,12 @@ if __name__ == "__main__":
             # Write data to file defined by "output" keyword arg.
             f = args.output
             writeData()
-
         except IOError: #the file failed to write
             LOG.error("Write Failed: " + args.output.name)
             raise IOError
-
     else:
         LOG.debug("Writing data to standard out (terminal).")
         f = sys.stdout
         writeData()
 
     closefile()
-

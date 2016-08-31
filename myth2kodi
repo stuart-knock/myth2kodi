@@ -291,8 +291,6 @@ DBHostName="192.168.1.78"
 MySQLuser="mythtv"
 #MySQL Password: Default="mythtv"
 MySQLpass="mythtv" #<------THIS VALUE MUST BE SET-------
-#MythTV Backend server: Default=localhost
-#SAK: NOT USED ###MythTVBackendServer=localhost
 #The Database Pin for the MythTV Database (used in python bindings only)
 DBPin=8446
 #MySQL Myth Database: Default="mythconverg"
@@ -1211,7 +1209,8 @@ GetMythTvPythonBindings(){
                              --DBPassword="$MySQLpass"        \
                              --output="$m2kdir/mythicalDbOut" \
                              --writeFile  2> >(tee -a "$LogFile" >&2)
-
+  #TODO: Need to adapt this based on LogType, current is only correct for 'both'
+  #      'logfile': 2> "$LogFile"  ; and nothing for 'stdout'
   pythonExitStatus="$?"
   if [ "$pythonExitStatus" != "0" ] ; then
     Err "${FUNCNAME[0]}() DATABASE ACCESS ERROR: COULD NOT OBTAIN INFORMATION"
@@ -1260,6 +1259,10 @@ GetMythTvPythonBindings(){
   ProgramID="$programid"             && InformCont "ProgramID=$programid"
   ChanID="$chanid"                   && InformCont "ChanID=$chanid"
   ShowStartTime="$starttime"         && InformCont "ShowStartTime=$starttime"
+
+  #Clean-up the file written by MythDataGrabber
+  [[ -f "$m2kdir/mythicalDbOut" ]] && rm -f "$m2kdir/mythicalDbOut"
+
 
   #cleanup, remove the fifo named pipe
   #test -p "$m2kdir/mythicalDbOut" && rm -f "$m2kdir/mythicalDbOut"
@@ -1686,14 +1689,15 @@ determineIfDatabaseIsUpToDate(){
   #if episode information is out of date or not created
   if ((CurrentTimeTVDB > NextUpdate)); then
     curl -L -s -m"$Timeout" "http://www.thetvdb.com/api/Updates.php?type=all&time=$LastUpdatedTVDB" >> "$m2kdir/$NewShowName/UpdatesList.txt"
-    #TODO: SeriesID isn't being found in UpdatesList for Grey's Anatomy, Marvel's Agents of S.H.I.E.L.D., and possibly others, so the the local data isn't being updated
     if grep -q "$SeriesID" "$m2kdir/$NewShowName/UpdatesList.txt" ; then
       Inform "DATABASE IS OUT OF DATE. NEXT UPDATE $NextUpdate Current $CurrentTimeTVDB"
       return 1
     else
-      Inform "DATABASE DOESN'T APPEAR TO BE OUT OF DATE. BUT UNFORTUNATELY WE CURRENTLY HAVE A BUG HERE SO ARE FORCING UPDATE ANYWAY..."
-      #return 0
-      return 1 #TODO: This is a current work around for some Series not being found in the UpdatesList from thetvdb, even though updated data is available...
+      Debug "TheTVDB doesn't appear to have any updates for $NewShowName."
+      #TODO: SeriesID isn't being found in UpdatesList for Grey's Anatomy, Marvel's Agents of S.H.I.E.L.D., and possibly others, so the the local data isn't being updated
+      #Inform "DATABASE DOESN'T APPEAR TO BE OUT OF DATE. BUT UNFORTUNATELY WE CURRENTLY HAVE A BUG HERE SO ARE FORCING UPDATE ANYWAY..."
+      return 0
+      #return 1 #TODO: This is a current work around for some Series not being found in the UpdatesList from thetvdb, even though updated data is available...
     fi
   #Send report to the log if database was not updated.
   elif ((CurrentTimeTVDB <= NextUpdate)); then
@@ -1787,11 +1791,11 @@ downloadInfoAboutMatchedTitleAndCreateTxtFileTables(){
           line="${line//&amp;/&}"
           line="${line//&ndash;/-}"
           actualEname="${line}"
-          #Only keep Alpha-numeric characters, space and the four basic punctuation chars & , . -
-          actualEname="$(sed -r 's/[^[:alnum:] &,.-]//g' <<< "$actualEname")"
+          #Only keep Alpha-numeric characters, space, parenthesis and the four basic punctuation chars & , . -
+          actualEname="$(sed -r 's/[^[:alnum:] &,.)(-]//g' <<< "$actualEname")"
           Ename="${actualEname/;*/}" #TODO: This strips everything following the first ";" (semi-colon). Is that intentional because there are sometimes multiple EpisodeNames separated by semi-colons???
-          #Only keep Alpha-numeric characters and the four basic punctuation chars & , . -
-          Ename="$(sed -r 's/[^[:alnum:] &,.-]//g' <<< "$Ename")"
+          #Only keep Alpha-numeric characters, space, parenthesis and the four basic punctuation chars & , . -
+          Ename="$(sed -r 's/[^[:alnum:] &,.)(-]//g' <<< "$Ename")"
         #Get OriginalAirDate
         elif [[ "$line" == "<FirstAired>"* ]]; then
           line="${line/"</FirstAired>"/}"
@@ -1882,9 +1886,8 @@ GetSeriesLineNumberFromTableWithZap2itID(){
       Zap2ItTest="$(echo "$line" | tr -d MVSHEP | sed 's/0*//')"
       if [[ -n "$Zap2itSeriesID" && "$Zap2ItTest" = "$Zap2itSeriesID" ]]; then
         return 0
-        break
       fi
-    done < "$m2kdir"/zap2it.txt
+    done < "$m2kdir/zap2it.txt"
     return 1
   else
     Warn "${FUNCNAME[0]}() called, with no Zap2itSeriesID"
@@ -1991,7 +1994,6 @@ setSeriesIDandNewShowNameBasedOnSeriesLineNumber(){
   #Cleanup files to prevent mismatch next time
   test -f "$m2kdir"/sid.txt && rm -f "$m2kdir"/sid.txt
   test -f "$m2kdir"/shn.txt && rm -f "$m2kdir"/shn.txt
-  test -f "$m2kdir"/Zap2it.txt && rm -f "$m2kdir"/Zap2it.txt
 }
 
 #####AIRDATE MATCH#####
@@ -2266,6 +2268,7 @@ searchTheTVDBAndReturnTxtFileTables(){
       NextShow=0
     fi
   done < "$m2kdir/working.xml"
+  rm -f "$m2kdir/working.xml"
 }
 
 DoTestFileExit(){
@@ -2471,7 +2474,7 @@ MaintenanceWarning(){
   WarnCont "  myth2kodi will perform maintenance on it's records."
   WarnCont "  Please ensure that All network attached storage and removable"
   WarnCont "  storage drives are connected and mounted properly before continuing"
-  read -r -n1 -p "Would you like myth2kodi to conduct a scan? y/(n)>" yesorno
+  read -r -n1 -p "Do you want myth2kodi to perform maintenance? y/(n)>" yesorno
   printf '\n'
   if [ "$yesorno" != "y" ]; then
     Inform "You must press 'y' to continue"
@@ -2487,7 +2490,7 @@ cleanse_warning(){
   InformCont "  myth2kodi will PERMANENTLY REMOVE archived log files, myth2kodi"
   InformCont "  database files, and daily report files older than specified by"
   InformCont "  the user settings: LOG_LIFE; M2K_DB_LIFE; and DAILYREPORT_LIFE."
-  read -r -n1 -p "Would you like myth2kodi to continue? y/(n)>" yesorno
+  read -r -n1 -p "Do you want myth2kodi to cleanse it's working directory? y/(n)>" yesorno
   printf '\n'
   if [ "$yesorno" != "y" ]; then
     Inform "You must press 'y' to continue"
@@ -2735,10 +2738,21 @@ m2k_cleanse(){
   Inform "Processing daily report clean-up file: $m2kdir/cleanup_dailyreport"
   process_cleanup_file "$m2kdir/cleanup_dailyreport" "$DAILYREPORT_LIFE"
 
+  #Clean-up some other files we sometimes leave around
+  [[ -f "$m2kdir/markupstart.txt" ]]  && rm -f "$m2kdir/markupstart.txt"
+  [[ -f "$m2kdir/markupstop.txt" ]]   && rm -f "$m2kdir/markupstop.txt"
+  [[ -f "$m2kdir/markupframes.txt" ]] && rm -f "$m2kdir/markupframes.txt"
+  [[ -f "$m2kdir/zap2it.txt" ]]       && rm -f "$m2kdir/zap2it.txt"
+
+  #Archive our duplicates.log.
+  if [[ -f "$DuplicatesFile" ]]; then
+    Debug "Moving $DuplicatesFile to ${DuplicatesFile%.*}_${FileNameNow}.log."
+    mv "$DuplicatesFile" "${DuplicatesFile%.*}_${FileNameNow}.log"
+  fi
+
 }
 
 #####MAINTENANCE ROUTINE#####
-#TODO: Need to go through this function line-by-line and make sure it behaves as expected in a do-no-harm sort of way...
 #DoMaintenance loops through all processed recordings and checks if their parent is there. If no parent, then file is deleted.
 DoMaintenance(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
@@ -2754,12 +2768,11 @@ DoMaintenance(){
     local SupportFile=""
     while read -r line ; do
       (( ++Counter ))
-      #TODO: Figure out the purpose of redirect to stderr and trailing 5 spaces before converting to new messaging mechanism...
-      #echo -ne "File record $Counter: ${SupportFile:0:20}     \n" 1>&2
       SupportFile="$(cut -d"'" -f2 <<< "$line")"
       Debug "File record $Counter: ${SupportFile}"
       MainFile="$(cut -d"'" -f4 <<< "$line")"
       Debug "File record $Counter: ${MainFile}"
+      #TODO: Why the ls rather than [[ ! -f "$MainFile" ]]
       ls "$MainFile" > /dev/null 2>&1
       if [ "$?" != "0" ]; then
         if [ -d "$(dirname "$SupportFile")" ]; then
@@ -2781,6 +2794,7 @@ DoMaintenance(){
     test -f "$m2kdir/created.tracking2" && mv "$m2kdir/created.tracking2" "$m2kdir/created.tracking"
   fi
 
+  #TODO: This is missing some directories on it's first pass, but second call deletes them, maybe order problem... delete depth first.
   #Check if folders are empty and remove dir if needed and it was created by myth2kodi
   if [ "$DirTracking" = "Enabled" ] && [ -f "$m2kdir/dir.tracking" ]; then
     while read -r line ; do
@@ -2810,8 +2824,12 @@ DoMaintenance(){
     test -f "$m2kdir/dir.tracking" && mv "$m2kdir/dir.tracking" "$m2kdir/dir.tracking_${FileNameNow}"
     [[ -f "$m2kdir/dir.tracking2" ]] && mv "$m2kdir/dir.tracking2" "$m2kdir/dir.tracking"
   fi
-  Inform "Cleaning up old archived logs, myth2kodi database files, and daily report files."
-  m2k_cleanse
+
+  #This isn't super fast, so only cleanse the working when called from --maintenance mode.
+  if [[ "$removedead" = "1" ]]; then
+    Inform "Cleaning up old archived logs, myth2kodi database files, and daily report files."
+    m2k_cleanse
+  fi
   Inform "MAINTENANCE ROUTINE COMPLETE."
   return 0
 }
@@ -2902,7 +2920,7 @@ m2kScan(){
     fi
     Debug "Creating a temporary scan file: $m2kdir/scan.temp"
     ls -1 "$scanpath"/*."$checkext" > "$m2kdir/scan.temp"
-    Inform "Scanning $scanpath for $checkext files"
+    Inform "Scanning $scanpath for $checkext files."
     while read -r line ; do
       Debug "Attempting to envoke myth2kodi on $line"
       if [[ ! -L "$line" && ! -S "$line" && ! -d "$line" ]]; then
@@ -2916,6 +2934,7 @@ m2kScan(){
         Debug "Either we've already moved that or it's a directory. Either way, moving on."
       fi
     done<"$m2kdir/scan.temp"
+    Inform "Completed scan of $scanpath for $checkext files."
     Debug "Removing the temporary scan file: $m2kdir/scan.temp"
     rm -f "$m2kdir/scan.temp"
     return 0
@@ -3425,8 +3444,8 @@ m2k_undo_all(){
       mv "$m2kdir/doover.sh" "$m2kdir/doover_${FileNameNow}.sh"
     fi
 
-    #If all processing was succesfully undone, then calling the maintenance
-    #routine should cleanup all files and dirs we were tracking.
+    #If all processing was successfully undone, then calling the maintenance
+    #routine should clean-up all files and dirs we were tracking.
     myth2kodi --maintenance
 
     return 0
@@ -3700,6 +3719,7 @@ InputOption="$4"
 #InputSxx="$4"
 #InputExx="$5"
 
+#TODO: Review the tests of whether we were called correctly, try to give better info of error...
 #Some basic tests to make sure we were called correctly
 [[ "$InputPath" != "testfile.ext" && ! -f "$InputPath" && -z "$InputTitle" && "${InputPath:0:1}" != "-" ]] && m2k_usage && ExitJob 'GenericUnspecifiedError'
 [[ -z "$InputPath" ]] && m2k_usage && ExitJob 'GenericUnspecifiedError'
@@ -3833,7 +3853,7 @@ case "$InputPath" in
       Warn "YOU ARE ABOUT TO SCAN THE DIRECTORY:"
       WarnCont "$InputPath"
       WarnCont "AND REGENERATE COMMSKIP FILES FOR ALL PREVIOUSLY MOVED RECORDINGS."
-      read -r -n1 -p "  Would you like myth2kodi to conduct a scan? y/(n)>" yesorno
+      read -r -n1 -p "  Do you want myth2kodi to regenerate commskip files? y/(n)>" yesorno
       printf '\n'
       #Default to safety, ie do nothing.
       [[ -z "$yesorno" ]] && yesorno="n"
@@ -3931,8 +3951,8 @@ ShowName="$InputTitle"
 #TODO: check whether the split on semicolon here and elsewhere should be in ProcessSchedulesDirect
 #split on semicolon, there will only be one episode looked up.
 EpisodeSubtitle="$(sed 's/;.*//' <<< "$InputSubtitle")"
-#Only keep Alpha-numeric characters, space and the four basic punctuation chars & , . -
-EpisodeSubtitle="$(sed -r 's/[^[:alnum:] &,.-]//g' <<< "$EpisodeSubtitle")"
+#Only keep Alpha-numeric characters, space, parenthesis and the four basic punctuation chars & , . -
+EpisodeSubtitle="$(sed -r 's/[^[:alnum:] &,.)(-]//g' <<< "$EpisodeSubtitle")"
 ExtensionPrep="$(basename "$InputPath")"
 OriginalExt="${ExtensionPrep#*.}"
 originaldirname="$(dirname "$InputPath")"
@@ -4323,9 +4343,8 @@ determinePrimaryOrAlternateFolderUsage
 
 #####OUTPUT FILE NAME FORMATTING#####
 #Format Shows
-#Only keep Alpha-numeric characters, space and the four basic punctuation chars & , . -
-EpisodeSubtitle="$(sed -r 's/[^[:alnum:] &,.-]//g' <<< "$EpisodeSubtitle")"
-#and parenthesis for show title to allow for year, eg (2042)
+#Only keep Alpha-numeric characters, space, parenthesis and the four basic punctuation chars & , . -
+EpisodeSubtitle="$(sed -r 's/[^[:alnum:] &,.)(-]//g' <<< "$EpisodeSubtitle")"
 NewShowName="$(sed -r 's/[^[:alnum:] &,.)(-]//g' <<< "$NewShowName")"
 ShowName="$(sed -r 's/[^[:alnum:] &,.)(-]//g' <<< "$ShowName")"
 

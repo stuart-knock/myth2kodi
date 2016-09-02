@@ -29,7 +29,10 @@
 #    showTranslations.SydFTA
 
 #TODO: Make use of TMDb (https://www.themoviedb.org/) when the recorded
-#  program is identified as being a Movie... Or http://omdbapi.com/, eg
+#  program is identified as being a Movie... eg
+#    "https://api.themoviedb.org/3/search/movie?query=$$tmdbshowname&api_key=%(apikey)s&page=%%s" % (config)
+#    "https://api.themoviedb.org/3/movie/$TMDbID?api_key=$TMDb_key
+#Or http://omdbapi.com/, eg
 #  http://www.omdbapi.com/?t=Casino&y=&plot=short&r=xml
 
 #TODO: A number of the long "test" lines would be much easier to read/debug
@@ -2407,6 +2410,7 @@ InvalidFileErrorMessage(){
   ErrCont "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%"
 }
 
+#msg_tvdb_incomplete
 tvDbIsIncomplete(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   Err     "%% OPERATION FAILED, INFORMATION COULD NOT BE OBTAINED %%"
@@ -2418,9 +2422,29 @@ tvDbIsIncomplete(){
   local errtype="myth2kodi Error"
   local errmsg="Could not obtain information from server about: $InputTitle. TheTVDB is incomplete"
   if [ "$Notify" = "Enabled" ] ; then
-    sudo -u "$NotifyUserName" "$binpath/m2k_notify" "$errtype" "$errmsg" web-browser
+    sudo -u "$NotifyUserName" "$binpath/m2k_notify" "$errtype" "$errmsg" web-browser #"$m2kdir/myth2kodi_failed.png"
   fi
 }
+
+# msg_unable_to_identify_recording(){
+#   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
+#   Err "Operation failed, unable to identify recording: $InputPath"
+#   InformCont "This means that insufficient information was provided to myth2kodi"
+#   InformCont "and the missing information couldn't be determined by other means."
+#   InformCont "If you know the correct information, provide it at the command line,"
+#   InformCont "see myth2kodi --usage"
+#   InformCont "This can mean incomplete information in: your MythTV DB; TheTVDB; or tvmaze."
+#   InformCont "Check that information on www.TheTVDB.com is complete for this series."
+#   InformCont "If not, Please consider helping out and adding to TheTVDB."
+#   [[ -n "$SeriesID" ]] && InformCont "http://www.thetvdb.com/?tab=series&amp;id=$SeriesID"
+#   InformCont "To force processing of unrecognised recordings, disable ShowStopper."
+#   msg_tvdb_incomplete
+#   if [ "$Notify" = "Enabled" ] ; then
+#     local errtype="myth2kodi Error"
+#     local errmsg="Could not fully identify: $InputTitle."
+#     sudo -u "$NotifyUserName" "$binpath/m2k_notify" "$errtype" "$errmsg" "$m2kdir/myth2kodi_failed.png"
+#   fi
+# }
 
 Wrote0LengthFile(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
@@ -2428,7 +2452,7 @@ Wrote0LengthFile(){
   local errtype="myth2kodi Failure"
   local errmsg="$ShowFileName could not be moved to $MoveDir"
   if [ "$Notify" = "Enabled" ] ; then
-    sudo -u "$NotifyUserName" "$binpath/m2k_notify" "$errtype" "$errmsg" stop
+    sudo -u "$NotifyUserName" "$binpath/m2k_notify" "$errtype" "$errmsg" stop #"$m2kdir/myth2kodi_failed.png"
   fi
 }
 
@@ -2438,7 +2462,7 @@ PermissionErrorWhileMoving(){
   local errtype="myth2kodi Failure"
   local errmsg="$ShowFileName could not be moved to $MoveDir"
   if [ "$Notify" = "Enabled" ] ; then
-    sudo -u "$NotifyUserName" "$binpath/m2k_notify" "$errtype" "$errmsg" stop
+    sudo -u "$NotifyUserName" "$binpath/m2k_notify" "$errtype" "$errmsg" stop #"$m2kdir/myth2kodi_failed.png"
   fi
 }
 
@@ -2449,7 +2473,7 @@ SymlinkNotCreated(){
   local errtype="myth2kodi Error"
   local errmsg="Failure while creating link. Check permissions"
   if [ "$Notify" = "Enabled" ] ; then
-    sudo -u "$NotifyUserName" "$binpath/m2k_notify" "$errtype" "$errmsg" stop
+    sudo -u "$NotifyUserName" "$binpath/m2k_notify" "$errtype" "$errmsg" stop #"$m2kdir/myth2kodi_failed.png"
   fi
 }
 
@@ -3383,6 +3407,7 @@ m2k_doover(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   [[ "$LogType" = "logfile" ]] && printf '%s\n' "WARNING: Recommend setting LogType='both', before proceeding.."
   local yesorno=""
+  local dooverstatus
 
   Warn "--You have entered doover mode."
   WarnCont "In this mode of operation, myth2kodi will rerun myth2kodi against all"
@@ -3397,9 +3422,13 @@ m2k_doover(){
     cp "$m2kdir/doover.sh" "$m2kdir/doover_${FileNameNow}.sh"
     chmod +x "$m2kdir/doover.sh"
     "$m2kdir/doover.sh"
-    #TODO: Capture return state here...
-    Inform "Finished running doover.sh."
-    return 0
+    dooverstatus="$?"
+    if [[ "$dooverstatus" != 0 ]]; then
+      Err "Doover failed or was aborted by user."
+    else
+      Inform "Finished running doover.sh."
+    fi
+    return "$dooverstatus"
   else
     if [[ -f "$m2kdir/doover.sh" ]]; then
       Inform "You must press y to execute Doover."
@@ -3417,6 +3446,7 @@ m2k_doover(){
 m2k_undo_all(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   [[ "$LogType" = "logfile" ]] && printf '%s\n' "WARNING: Recommend setting LogType='both', before proceeding.."
+  local undostatus
   #TODO: Add permission checking.
   Warn "--You have entered undo mode."
   WarnCont " In this mode of operation, myth2kodi will reverse"
@@ -3433,8 +3463,13 @@ m2k_undo_all(){
       cp "$m2kdir/undo.sh" "$m2kdir/undo_${FileNameNow}.sh"
       chmod +x "$m2kdir/undo.sh"
       "$m2kdir/undo.sh"
-      #TODO: Capture return state here...
-      Inform "Finished running undo.sh."
+      undostatus="$?"
+      if [[ "$undostatus" != 0 ]]; then
+        Err "undo failed or was aborted by user."
+      else
+        Inform "Finished running undo.sh."
+      fi
+      return "$undostatus"
     fi
     rm -f "$m2kdir/undo.lock"
 
@@ -3465,7 +3500,6 @@ m2k_about(){
   printf ' %s\n\n' "myth2kodi Author: Stuart Knock"
 }
 
-#TODO: Review the usage text
 m2k_usage(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   if [ "$InputPath" = "%DIR%/%FILE%" ]; then
@@ -3476,7 +3510,7 @@ m2k_usage(){
   printf '    %s\n' "myth2kodi 'path/to/file' ['title'] ['subtitle']"
   printf '    %s\n' "myth2kodi --mode [parameter] [parameter]"
   printf '  %s\n\n' "items in brackets are [context sensitive]."
-  printf '  %s\n' "Ensure you have set the user settings set properly and run"
+  printf '  %s\n' "Ensure you have set the user settings properly and run"
   printf '    %s\n' "myth2kodi --diagnostics"
   printf '  %s\n\n' "before running in --scan mode or as a MythTV UserJob."
   printf '  %s\n' "For more information type:"
@@ -3711,17 +3745,18 @@ declare -r m2karg1 m2karg2 m2karg3 m2karg4
 #TODO: Set the inputs as fixed (read-only) parameters, then use different variables consistently if we need to modify them...
 InputPath="$1"
 InputTitle="$2"
+#TODO: Should allow manual input of season and episode numbers in addition to
+#  Title & Subtitle, with full information all searching should be overridden/bypassed...
+#  Issue warnings for any conflicts. but don't override command line arguments...
+#InputSxx="$3"
+#InputExx="$4"
 InputSubtitle="$3"
 #TODO: Consider removing this "InputOption", it's only used by --BypassPermissionsCheck and removing that option seems like it might be a good idea...
 InputOption="$4"
-#TODO: Should allow manual input of season and episode numbers in addition to
-#  Title & Subtitle, with full information all searching should be overridden/bypassed...
-#InputSxx="$4"
-#InputExx="$5"
 
 #TODO: Review the tests of whether we were called correctly, try to give better info of error...
 #Some basic tests to make sure we were called correctly
-[[ "$InputPath" != "testfile.ext" && ! -f "$InputPath" && -z "$InputTitle" && "${InputPath:0:1}" != "-" ]] && m2k_usage && ExitJob 'GenericUnspecifiedError'
+[[ "${InputPath:0:1}" != "-" && "$InputPath" != "testfile.ext" && ! -f "$InputPath" && -z "$InputTitle" ]] && m2k_usage && ExitJob 'GenericUnspecifiedError'
 [[ -z "$InputPath" ]] && m2k_usage && ExitJob 'GenericUnspecifiedError'
 #TODO: MythTVUserJobString is not used within this script, check whether it's somehow a requirement of calls from mythtv, though, in an absence of export, I don't see how...
 MythTVUserJobString="%DIR%/%FILE%"
@@ -3865,7 +3900,13 @@ case "$InputPath" in
         Inform "Scanning $scanpath for already moved $checkext files"
         while read -r line ; do
           Debug "Attempting to regenerate commskip file for $line"
-          [[ -f "$line" && -L "$line" ]] && myth2kodi --commskip "$line"
+          #TODO: This check is too strict, works in move mode but won't process for a recording where we used LINK mode
+          #      just do [[ -f "$line" ]] then check dir exists for move of commskip and error if not, rather than creating a directory for a show that hasn't been processed already...
+          if [[ -f "$line" && -L "$line" ]]; then
+            myth2kodi --commskip "$line"
+          else
+            Debug "Not a File and Link, so not moved with symlinking enabled... Not regenerating commskip. TODO: HANDLE ALL MOVE MODES PROPERLY HERE."
+          fi
         done < "$m2kdir/commskip_scan.temp"
         Debug "Removing the temporary scan file: $m2kdir/commskip_scan.temp"
         rm -f "$m2kdir/commskip_scan.temp"
@@ -4325,6 +4366,7 @@ if [[ -z "$Exx" && "$InputPath" != "testfile.ext" ]]; then
     NewShowName="$SafeShowName"
   #If user has determined that they do not want unrecognisable tv shows in their library
   elif [ "$ShowStopper" = "Enabled" ]; then
+    #msg_unable_to_identify_recording
     tvDbIsIncomplete
     ExitJob 'NameCouldNotBeAssigned'
   elif [ "$m2kProgramIDCheck" = "SH" ]; then
@@ -4456,7 +4498,7 @@ if [ "$SYMLINK" != "LINK" ]; then
       fi
 
       #Send notification of completion
-      test "$Notify" = "Enabled" && sudo -u "$NotifyUserName" "$binpath/m2k_notify" "myth2kodi Success" "$ShowFileName moved to $MoveDir" info
+      test "$Notify" = "Enabled" && sudo -u "$NotifyUserName" "$binpath/m2k_notify" "myth2kodi Success" "$ShowFileName moved to $MoveDir" info #"$m2kdir/myth2kodi.png"
 
       #Additional features, notifications, rss, daily report.
       if [ "$RequiresNFO" = "1" ]; then
@@ -4496,7 +4538,7 @@ elif [ "$SYMLINK" = "LINK" ]; then
     printf '%s\n' "'$MoveDir/$ShowFileName.$OriginalExt'" "'$InputPath'" >> "$m2kdir/created.tracking"
     echo "@@@@@@@@ OPERATION COMPLETE $(date) @@@@@@@@" >> "$LogFile"
     if [ "$Notify" = "Enabled" ]; then
-      sudo -u "$NotifyUserName" "$binpath/m2k_notify" "myth2kodi Success" "$ShowFileName linked to $MoveDir" info
+      sudo -u "$NotifyUserName" "$binpath/m2k_notify" "myth2kodi Success" "$ShowFileName linked to $MoveDir" info #"$m2kdir/myth2kodi.png"
     fi
 
     #Move comskip data to proper folder
@@ -4532,7 +4574,7 @@ fi
 
 #send notification if enabled
 if [ "$Notify" = "Enabled" ] ; then
-  sudo -u "$NotifyUserName" "$binpath/m2k_notify" "myth2kodi error" "myth2kodi operation failed See $LogFile for more information" error
+  sudo -u "$NotifyUserName" "$binpath/m2k_notify" "myth2kodi error" "myth2kodi operation failed See $LogFile for more information" error #"$m2kdir/myth2kodi_failed.png"
 fi
 ExitJob 'GenericUnspecifiedError'
 

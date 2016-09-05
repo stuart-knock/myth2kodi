@@ -65,6 +65,10 @@
 
 #TODO: Consider conforming to this: https://google.github.io/styleguide/shell.xml
 
+#TODO: If we just prepend $binpath to $Librarian's path we could avoid all the
+#      explicit paths in our function calls... Though we may need to clean up before we finished...
+#          SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
+
 #Intention:
 #  This program automates the mapping of MythTv recordings to a Kodi library.
 #  It is designed to be a user job in MythTV. It can also be run manually from
@@ -2433,7 +2437,8 @@ tvDbIsIncomplete(){
 #   InformCont "and the missing information couldn't be determined by other means."
 #   InformCont "If you know the correct information, provide it at the command line,"
 #   InformCont "see myth2kodi --usage"
-#   InformCont "This can mean incomplete information in: your MythTV DB; TheTVDB; or tvmaze."
+#   InformCont "Normally myth2kodi can determine this information from:"
+#   InformCont "    your MythTV DB; TheTVDB; or tvmaze."
 #   InformCont "Check that information on www.TheTVDB.com is complete for this series."
 #   InformCont "If not, Please consider helping out and adding to TheTVDB."
 #   [[ -n "$SeriesID" ]] && InformCont "http://www.thetvdb.com/?tab=series&amp;id=$SeriesID"
@@ -2449,9 +2454,9 @@ tvDbIsIncomplete(){
 Wrote0LengthFile(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   Err "%%%% OPERATION FAILED: WROTE 0 LENGTH FILE %%%%"
-  local errtype="myth2kodi Failure"
-  local errmsg="$ShowFileName could not be moved to $MoveDir"
   if [ "$Notify" = "Enabled" ] ; then
+    local errtype="myth2kodi Failure"
+    local errmsg="$ShowFileName could not be moved to $MoveDir"
     sudo -u "$NotifyUserName" "$binpath/m2k_notify" "$errtype" "$errmsg" stop #"$m2kdir/myth2kodi_failed.png"
   fi
 }
@@ -2459,9 +2464,9 @@ Wrote0LengthFile(){
 PermissionErrorWhileMoving(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   Err "%%%% OPERATION FAILED: PERMISSION ERROR WHILE MOVING $ShowFileName %%%%"
-  local errtype="myth2kodi Failure"
-  local errmsg="$ShowFileName could not be moved to $MoveDir"
   if [ "$Notify" = "Enabled" ] ; then
+    local errtype="myth2kodi Failure"
+    local errmsg="$ShowFileName could not be moved to $MoveDir"
     sudo -u "$NotifyUserName" "$binpath/m2k_notify" "$errtype" "$errmsg" stop #"$m2kdir/myth2kodi_failed.png"
   fi
 }
@@ -2470,9 +2475,9 @@ SymlinkNotCreated(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   Err "%%%% OPERATION FAILED: LINK PERMISSION ERROR: SYMLINK NOT CREATED %%%%"
   ErrCont "PERMISSION ERROR OR FILE SYSTEM DOES NOT SUPPORT SYMLINKS: $MoveDir"
-  local errtype="myth2kodi Error"
-  local errmsg="Failure while creating link. Check permissions"
   if [ "$Notify" = "Enabled" ] ; then
+    local errtype="myth2kodi Error"
+    local errmsg="Failure while creating link. Check permissions"
     sudo -u "$NotifyUserName" "$binpath/m2k_notify" "$errtype" "$errmsg" stop #"$m2kdir/myth2kodi_failed.png"
   fi
 }
@@ -2869,6 +2874,7 @@ ScanUsageMsg(){
 #####SCAN MODE#####
 #TODO: Need to go through this function line-by-line and make sure it can be run without causing damage.
 #This function will scan a folder and process the entire library
+#m2k_scan | scan
 m2kScan(){
   [[ "$LogType" = "logfile" ]] && printf '%s\n' "WARNING: Recommend setting LogType='both', before proceeding.."
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
@@ -2969,6 +2975,7 @@ m2kScan(){
   return 1
 }
 
+#set_group_permission
 setGroupPermissions(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   #Add read and write permissions for the group to the moved recording.
@@ -2976,6 +2983,7 @@ setGroupPermissions(){
   #TODO:#NOTE: the above command is slightly inconsistent with the comment as = also implies removal of any unmentioned attributes.
 }
 
+#msg_dir_summary
 dirSummary(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   InformCont "A summary table of writeable directories: 0='NOT WRITEABLE' ; 1='WRITEABLE'"
@@ -2991,6 +2999,7 @@ dirSummary(){
   fi
 }
 
+#msg_operation_summary
 OperationSummary(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   Inform "################ OPERATION SUMMARY ################"
@@ -3836,6 +3845,7 @@ case "$InputPath" in
   --help|-?|-h)
     Debug "Recognised command line switch '--help|-?|-h'"
     m2k_about
+    m2k_usage
     m2k_help
     exit 0
   ;;

@@ -331,9 +331,6 @@ NotifyUserName="librarian" #<------THIS VALUE MUST BE SET-------
 KODIUpdate="Enabled"
 #PREVENT CLOBBERING ON RECURSIVE CALLS#[[ -z "$KODIUpdate" ]] && KODIUpdate="Enabled"
 #Send a notification to KODI to cleanup the library upon Successful move job Enabled|Disabled
-#TODO:#NOTE:Don't fully trust the automated call of clean, and currently it doesn't even
-#  seem to be invoked at the times that would make sense, so for now I'm disabling it. See
-#  the TODO in KODIAutomate().
 KODIClean="Disabled"
 #Send Notifications to KODI UI when library is updated Enabled|Disabled
 KODINotify="Enabled"
@@ -398,6 +395,7 @@ declare -r Today="$(date +%F)"  #Date in IEEE standard format, ie YYYY-mm-dd
 declare -r ScriptStartTime="$(date +%H:%M:%S)" #Time in a readable IEEE standard format, ie HH:MM:SS
 declare -r FileNameNow="$(date +%FT%H%M%S)"  #ISO 8601: YYYY-mm-ddThhMMSS
 
+#TODO: Consider replacing this with a general settings file, with a default in the user settings section...
 #Set global values for settings, this overrides those set at the top of this file
 test -f "/etc/myth2kodi/globalSettings" && source /etc/myth2kodi/globalSettings
 
@@ -427,8 +425,8 @@ if [ ! -d "$m2kdir" ]; then
 fi
 
 #Load logging utility
-if [ -f "$binpath"/bashlogging ] ; then
-  source "$binpath"/bashlogging "$LogType"
+if [ -f "$binpath/bashlogging" ] ; then
+  source "$binpath/bashlogging" "$LogType"
 else
   printf 'ERROR: %s\n' "$binpath/bashlogging doesn't exist." | tee -a "$LogFile"
   exit 1
@@ -567,7 +565,8 @@ ExitJob(){
 # KODIClean=Enabled
 # KODINotify=Enabled
 # #Tell myth2kodi to do KODI communications
-# KODIAutomate
+# kodi_newshow
+# kodi_cleanup
 
 #Suggested examples are:
 # 1.string together multiple versions of myth2kodi configured for
@@ -795,52 +794,73 @@ GenComSkip(){
 }
 
 #####KODI COMMUNICATIONS#####
-#This function Automates communication with KODI
-#TODO: kodi_automate => kodi_newshow + kodi_cleanup
-KODIAutomate(){
+kodi_cleanup(){ #Request Kodi remove any no-longer reachable files from its library.
+  Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
+  DebugCont "m2kScanMode: $m2kScanMode"
+  DebugCont "KODIClean: $KODIClean"
+  DebugCont "KODIIPs: $KODIIPs"
+  if [[ "$m2kScanMode" != "True" ]] ; then
+    if [[ "$KODIClean" = "Enabled" ]] ; then
+      local data=""
+      local curlPOST=""
+      curlPOST='curl --silent --max-time 8 --connect-timeout 5 -H "Content-Type: application/json;" --data-binary'
+      data=\''{"jsonrpc": "2.0", "method": "VideoLibrary.Clean", "id": "myth2kodi"}'\'
+      #Send VideoLibrary.Clean request to Kodi instances specified in user settings (KODIIPs).
+      for KODIIP in "${KODIIPs[@]}" ; do
+        Inform "Sending VideoLibrary.Clean request to: $KODIIP"
+        eval "$curlPOST $data http://$KODIIP/jsonrpc" > /dev/null 2>&1
+      done
+    else
+      Debug 'VideoLibrary.Clean request to Kodi disabled.'
+    fi
+  else
+    Debug 'Scan Mode: Skipping Kodi VideoLibrary.Clean request.'
+  fi
+  return 0
+}
+
+kodi_newshow(){
   #TODO: there must be a better way to do this neatly than using eval...
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
+  DebugCont "m2kScanMode: $m2kScanMode"
+  DebugCont "KODINotify: $KODINotify"
+  DebugCont "KODIUpdate: $KODIUpdate"
+  DebugCont "KODIIPs: $KODIIPs"
+  DebugCont "ShowName: $ShowName"
   local data=""
   local curlPOST=""
-  #Send notification to KODI, Update Library, Clean Library
-  if [[ "$KODINotify" = "Enabled" || "$KODIUpdate" = "Enabled" || "$KODIClean" = "Enabled" ]]; then
-    Inform 'COMMUNICATING WITH KODI INSTANCES...'
-    #SEE: http://kodi.wiki/view/HOW-TO:Remotely_update_library and 'man curl'
-    curlPOST='curl --silent --max-time 8 --connect-timeout 5 -H "Content-Type: application/json;" --data-binary'
+  #SEE: http://kodi.wiki/view/HOW-TO:Remotely_update_library and 'man curl'
+  curlPOST='curl --silent --max-time 8 --connect-timeout 5 -H "Content-Type: application/json;" --data-binary'
+
+  #Send notification to KODI
+  if [[ "$KODINotify" = "Enabled" ]]; then
+    data=\''{"jsonrpc": "2.0",
+             "method": "GUI.ShowNotification",
+             "params": {"title": "myth2kodi added", "message": "'"$ShowName"'"},
+             "id": "myth2kodi"}'\'
     for KODIIP in "${KODIIPs[@]}" ; do
-      Inform "SENDING REQUESTED COMMANDS TO: $KODIIP"
-      #Request Kodi update its library
-      if [[ "$KODIUpdate" = "Enabled" && "$m2kScanMode" != "True" ]] ; then
-        data=\''{"jsonrpc": "2.0", "method": "VideoLibrary.Scan", "id": "myth2kodi"}'\'
-        eval "$curlPOST $data http://$KODIIP/jsonrpc" > /dev/null 2>&1
-        Inform 'SENT: VideoLibrary.Scan request.'
-      fi
-      #Send a message to Kodi that a new show has been added
-      if [ "$KODINotify" = "Enabled" ] ; then
-        data=\''{"jsonrpc": "2.0",
-                 "method": "GUI.ShowNotification",
-                 "params": {"title": "myth2kodi added", "message": "'$ShowName'"},
-                 "id": "myth2kodi"}'\'
-        eval "$curlPOST $data http://$KODIIP/jsonrpc" > /dev/null 2>&1
-        Inform "SENT: GUI.ShowNotification for $ShowName"
-      fi
-      #TODO: Requesting Kodi to Clean its Library doesn't seem to make sense in the same
-      #  context as Update & Notify, that is, cleaning after adding a new show makes
-      #  little sense and has the potential danger of completely clearing out Kodi's
-      #  Library information if for example a network drive is temporarily unavailable
-      #  due to a network problem. It does, however, seem to make sense to request
-      #  Kodi to run Clean of its Library after myth2kodi runs undo, doover, or any
-      #  other means of removing or renaming a file of which Kodi is aware... Perhaps
-      #  split KODIAutomate() into KodiNewShow() and KodiCleanup()...
-      #Request Kodi remove any no-longer reachable files from its library.
-      if [[ "$KODIClean" = "Enabled" && "$m2kScanMode" != "True" ]] ; then
-        data=\''{"jsonrpc": "2.0", "method": "VideoLibrary.Clean", "id": "myth2kodi"}'\'
-        eval "$curlPOST $data http://$KODIIP/jsonrpc" > /dev/null 2>&1
-        Inform 'SENT: VideoLibrary.Clean request.'
-      fi
+      Inform "Sending GUI.ShowNotification request to: $KODIIP"
+      eval "$curlPOST $data http://$KODIIP/jsonrpc" > /dev/null 2>&1
+      Debug "SENT: GUI.ShowNotification for $ShowName"
     done
   else
-    Debug 'No communication with Kodi requested.'
+    Debug 'Kodi notification is disabled.'
+  fi
+
+  #Send Update Library request to KODI
+  if [[ "$m2kScanMode" != "True" ]] ; then
+    if [[ "$KODIUpdate" = "Enabled" ]]; then
+      data=\''{"jsonrpc": "2.0", "method": "VideoLibrary.Scan", "id": "myth2kodi"}'\'
+      for KODIIP in "${KODIIPs[@]}" ; do
+        Inform "Sending VideoLibrary.Scan request to: $KODIIP"
+        eval "$curlPOST $data http://$KODIIP/jsonrpc" > /dev/null 2>&1
+        Debug 'SENT: VideoLibrary.Scan request.'
+      done
+    else
+      Debug 'Kodi library updates are disabled.'
+    fi
+  else
+    Debug 'Scan Mode: Skipping Kodi VideoLibrary.Scan request.'
   fi
   return 0
 }
@@ -1065,7 +1085,7 @@ add_undo(){
   fi
 }
 
-#TODO: do_failsafe
+#TODO: failsafe
 doFailSafeMode(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   Warn "FAILSAFE FLAG WAS SET CHECK PERMISSIONS AND FOLDERS"
@@ -1083,7 +1103,7 @@ doFailSafeMode(){
     Inform "FailSafeMode Disabled, we won't try and make a link as a fallback."
   fi
 
-  [[ "$Notify" = "Enabled" ]] && sudo -u "$NotifyUserName" "$binpath"/m2k_notify "myth2kodi FAILSAFE" "FAILSAFE mode active See $LogFile for more information" error
+  [[ "$Notify" = "Enabled" ]] && sudo -u "$NotifyUserName" "$binpath/m2k_notify" "myth2kodi FAILSAFE" "FAILSAFE mode active See $LogFile for more information" error
 }
 
 dbselect(){
@@ -1095,7 +1115,7 @@ dbselect(){
 
 #####MYTHTV DATABASE#####
 #This function gathers information from the MythTV database for use in the program
-#TODO: get_mythtv_database
+#TODO: get_mythtvdb_database
 GetMythTVDatabase(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   DebugCont "m2kdir: $m2kdir"
@@ -1164,7 +1184,7 @@ GetMythTVDatabase(){
 
 #####UTILIZE PYTHON BINDINGS TO GET MYTHTV DB##### Requires dependency
 #TODO: Check functionality of and if necessary clean-up MythDataGrabber
-#TODO: get_mythtv_pythonbindings
+#TODO: get_mythtvdb_pythonbindings
 GetMythTvPythonBindings(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   DebugCont "m2kdir: $m2kdir"
@@ -1277,6 +1297,7 @@ GetMythTvPythonBindings(){
 
 #####PROCESS DATABASE INFORMATION#####
 #Function ProcessSchedulesDirect processes Zap2it/SchedulesDirect/Tribune data for use in the program
+#process_mythtvdb_schedulesdirect
 ProcessSchedulesDirect(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   Inform "Processing MythTV database info as SchedulesDirect."
@@ -1329,6 +1350,7 @@ ProcessSchedulesDirect(){
   return 0
 }
 
+#get_sxxexx_from_plot
 ExtractSxxExxFromPlot(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   DebugCont "SeasonEpisode: $SeasonEpisode"
@@ -1370,6 +1392,7 @@ ExtractSxxExxFromPlot(){
   return 0
 }
 
+#remove_sxxexx_from_plot
 RemoveSeasonEpisodeFromPlot(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   if [[ -n "$SeasonEpisode" ]]; then
@@ -1391,6 +1414,7 @@ RemoveSeasonEpisodeFromPlot(){
 }
 
 #Try to extract a subtitle from the plot field (Luv Ya SBS)
+#get_subtitle_from_plot
 ExtractSubtitleFromPlot(){
   #This function works under the assumption that a Subtitle (EpisodeTitle) is prepended to
   #the Plot field of the guide data and that it is separated from the actual plot by either
@@ -1414,6 +1438,7 @@ ExtractSubtitleFromPlot(){
 }
 
 #Called after ExtractSubtitleFromPlot(), it uses the same logic to...
+#remove_subtitle_from_plot
 RemoveSubtitleFromPlot(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   #TODO: If we extracted a subtitle from Plot variable then remove that text from Plot.
@@ -1430,6 +1455,7 @@ RemoveSubtitleFromPlot(){
 }
 
 #Some Australian channels (ABC, I'm looking at you), put cast info at the end of the Plot.
+#remove_cast_from_plot
 RemoveCastFromPlot(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   #
@@ -1444,6 +1470,7 @@ RemoveCastFromPlot(){
 }
 
 #A Process function compatible with Sydney over the air data...
+#process_mythtvdb_sydfta
 ProcessSydFTA(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   Inform "Processing MythTV database info as SydFTA."
@@ -1573,6 +1600,7 @@ ProcessSydFTA(){
 
 #####PROCESS DATABASE INFORMATION#####
 ####NoLookup is an alternate mode where TheTVDB is not used for lookups
+#process_mythtvdb_nolookup
 ProcessNoLookup(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   Inform "Processing MythTV database info as NoLookup."
@@ -1618,6 +1646,7 @@ ProcessNoLookup(){
 
 #####REMOVE ENTRIES FROM LIBRARY#####
 #remove mythtv recording's pictures and database entries.  Thanks to barney_1.
+#delete_mythtv_database_entry
 DeleteRelevantDatabaseFilesAndPictures(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   Debug "InputPath: $InputPath"
@@ -1643,6 +1672,7 @@ DeleteRelevantDatabaseFilesAndPictures(){
 }
 
 #####USE AbsoluteEpisodeNumber TO SET SXX AND EXX#####
+#set_sxxexx_absolute_episode_number
 setSxxAndExxFromAbsoluteEpisodeNumber(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   #if line match is obtained, then gather new episode name, Sxx and Exx
@@ -1659,6 +1689,7 @@ setSxxAndExxFromAbsoluteEpisodeNumber(){
   Inform "EPISODE:$EpisodeSubtitle EPISODE NUMBER:$AbsoluteEpisodeNumber $Sxx$Exx WITH CONFIDENCE: $EpisodeConfidenceRating"
 }
 
+#check_m2k_database_updates
 determineIfDatabaseIsUpToDate(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   #Return state = 1 means the local database should be updated from TheTVDB
@@ -1716,8 +1747,8 @@ determineIfDatabaseIsUpToDate(){
 }
 
 
-#TODO: Add jq to requirements and check for it in Diagnostics
 #####GET EPISODE INFORMATION#####
+#download_episode_info
 downloadInfoAboutMatchedTitleAndCreateTxtFileTables(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   #Download information from server
@@ -1882,6 +1913,7 @@ downloadInfoAboutMatchedTitleAndCreateTxtFileTables(){
 }
 
 #####MATCH ZAP2ITID TO TVDB#####
+#get_serieslinenumber_zap2itid
 GetSeriesLineNumberFromTableWithZap2itID(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   if [ -n "$Zap2itSeriesID" ] ; then
@@ -1904,6 +1936,7 @@ GetSeriesLineNumberFromTableWithZap2itID(){
 
 #####FUZZY LOGIC RECOGNITION OF SERIES#####
 #This function provides fuzzy logic matching of a show name and returns a seriesid
+#get_serieslinenumber_showname_fuzzy
 GetSeriesLineNumberFromTableWithFuzzyLogic(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   #TODO: Why the restriction to the first 27 characters for matching here???
@@ -1921,6 +1954,7 @@ GetSeriesLineNumberFromTableWithFuzzyLogic(){
 }
 
 #####STANDARD TITLE RECOGNITION OF SERIES#####
+#get_serieslinenumber_showname
 GetSeriesLineNumberFromTableWithStandardLogic(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   serieslinenumber="$(grep -nix "$ShowName" "$m2kdir/shn.txt" | sed 's/:.*//' | grep -m1 ^)"
@@ -1937,6 +1971,7 @@ GetSeriesLineNumberFromTableWithStandardLogic(){
 ##### RESOLUTION OF MULTIPLE AIRDATE MATCHES #####
 #ResolveMultipleAirdateMatches is used in the event of multiple matches on the same airdate
 #It resolves a conflict by matching the matched airdate by title.
+#resolve_multiple_matches_airdate
 ResolveMultipleAirdateMatches(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   local NewShowBasename="$m2kdir/$NewShowName/$NewShowName"
@@ -1982,6 +2017,7 @@ ResolveMultipleAirdateMatches(){
 }
 
 #####CREATE SHOW FOLDER#####
+#make_m2k_database_dir
 makeShowDirIfNeeded(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   if [ ! -d "$m2kdir/$NewShowName" ]; then
@@ -1992,6 +2028,7 @@ makeShowDirIfNeeded(){
 }
 
 #####SET THE SERIESID AND SHOW NAME#####
+#set_seriesid_newshowname_from_serieslinenumber
 setSeriesIDandNewShowNameBasedOnSeriesLineNumber(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   #Get the seriesid based on the showname
@@ -2004,6 +2041,7 @@ setSeriesIDandNewShowNameBasedOnSeriesLineNumber(){
 }
 
 #####AIRDATE MATCH#####
+#get_absolute_episode_number_airdate
 getAbsoluteEpisodeNumberWithOriginalAirdate(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   AbsoluteEpisodeNumber=""
@@ -2022,6 +2060,7 @@ getAbsoluteEpisodeNumberWithOriginalAirdate(){
 }
 
 #Get the AbsoluteEpisodeNumber corresponding to Sxx and Exx
+#get_absolute_episode_number_sxxexx
 getAbsoluteEpisodeNumberWithSxxExx(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   DebugCont "AbsoluteEpisodeNumber: $AbsoluteEpisodeNumber"
@@ -2212,6 +2251,7 @@ getAbsoluteEpisodeNumberWithFuzzyPlotMatch(){
 ##TODO we need some sort of regex to account for matches like
 ##'The Office' 'The Delivery, Part 1'   -guide data
 ##'The Office' 'The Delivery (1)'       -TvDb data
+#get_absolute_episode_number_ename
 getAbsoluteEpisodeNumberWithStandardLogic(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   AbsoluteEpisodeNumber=""
@@ -2223,6 +2263,7 @@ getAbsoluteEpisodeNumberWithStandardLogic(){
 }
 
 ######FUZZY LOGIC EPISODE MATCH#####
+#get_absolute_episode_number_ename_fuzzy
 getAbsoluteEpisodeNumberWithFuzzyLogic(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   AbsoluteEpisodeNumber=""
@@ -2234,6 +2275,7 @@ getAbsoluteEpisodeNumberWithFuzzyLogic(){
 }
 
 #####SEARCH TheTVDB AND CREATE DATA FILES#####
+#download_series_info
 searchTheTVDBAndReturnTxtFileTables(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   local -i NextShow=0
@@ -2278,6 +2320,7 @@ searchTheTVDBAndReturnTxtFileTables(){
   rm -f "$m2kdir/working.xml"
 }
 
+#testfile_exit
 DoTestFileExit(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   [[ -d ./Episodes ]] && [[ ! "$(ls -A ./Episodes)" ]] && rmdir ./Episodes
@@ -2286,6 +2329,7 @@ DoTestFileExit(){
   exit 0
 }
 
+#increment_fuzzy_logic_error_count
 updateRunningFuzzyLogicErrorCount(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   #additional logging for statistical purposes
@@ -2298,6 +2342,7 @@ updateRunningFuzzyLogicErrorCount(){
   echo "$FuzzyLogicError" > "$m2kdir"/FuzzyLogicError.log
 }
 
+#increment_total_matches
 updateRunningTotalMatchesCount(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   #additional logging for statistical purposes
@@ -2312,6 +2357,7 @@ updateRunningTotalMatchesCount(){
 #Function DoMythTVPermissionsCheck will check to see if the file is
 #owned by mythtv and cause myth2kodi to exit with a descriptive
 #message if certain criteria are met.
+#msg_mythtv_permission_error
 DoMythTVPermissionsCheck(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   # if no bypass, and file is owned by mythtv, and username is not mythtv
@@ -2344,6 +2390,7 @@ DoMythTVPermissionsCheck(){
   fi
 }
 
+#msg_userjob_outside_mythtv_error
 UserJobOutsideMythTV(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   Err ""
@@ -2356,6 +2403,7 @@ UserJobOutsideMythTV(){
   ExitJob 'GenericUnspecifiedError'
 }
 
+#msg_guide_data_warning
 DisplayShowWarning(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   Inform     "ONLY GENERIC GUIDE DATA WAS SUPPLIED."
@@ -2363,6 +2411,7 @@ DisplayShowWarning(){
   Warn "%%%%%%%% PROGRAM GUIDE DATA IS NOT COMPLETE %%%%%%%%"
 }
 
+#msg_completed_move
 DisplayCompletedMoveMessage(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   Inform "@@@@@@@@ OPERATION COMPLETE $(date) @@@@@@@@"
@@ -2370,6 +2419,7 @@ DisplayCompletedMoveMessage(){
   Inform "TO: $MoveDir/$ShowFileName.$OriginalExt"
 }
 
+#msg_epishow
 DisplayEpiShowMessage(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   Warn     "SHOW WAS CONSIDERED AN EPISODE BUT INFORMAITON WAS NOT OBTAINABLE"
@@ -2377,6 +2427,7 @@ DisplayEpiShowMessage(){
   WarnCont "HANDLING EPISODE AS GENERAL SHOWING & DUMPING INTO --doover USER JOB"
 }
 
+#msg_fuzzy_logic_warning
 FuzzyLogicDoesNotJiveMessage(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   Warn     "%%%% AIRDATE MATCH AND FUZZY LOGIC ARE IN DISAGREEMENT %%%%"
@@ -2392,6 +2443,7 @@ FuzzyLogicDoesNotJiveMessage(){
   LogLevel=3 #Enable debug level logging
 }
 
+#msg_standard_logic_warning
 StandardLogicDoesNotJiveMessage(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   Warn     "%% AIRDATE MATCH AND STANDARD LOGIC ARE IN DISAGREEMENT. %%"
@@ -2407,6 +2459,7 @@ StandardLogicDoesNotJiveMessage(){
   LogLevel=3 #Enable debug level logging
 }
 
+#msg_invalid_file_error
 InvalidFileErrorMessage(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   Err     "%%%%%%%%%%%%%%%%%%%%%%%% OPERATION FAILED %%%%%%%%%%%%%%%%%%%%%%%%%%%%"
@@ -2451,6 +2504,7 @@ tvDbIsIncomplete(){
 #   fi
 # }
 
+#msg_wrote_zero_length_file
 Wrote0LengthFile(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   Err "%%%% OPERATION FAILED: WROTE 0 LENGTH FILE %%%%"
@@ -2461,6 +2515,7 @@ Wrote0LengthFile(){
   fi
 }
 
+#msg_permission_error_while_moving
 PermissionErrorWhileMoving(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   Err "%%%% OPERATION FAILED: PERMISSION ERROR WHILE MOVING $ShowFileName %%%%"
@@ -2471,6 +2526,7 @@ PermissionErrorWhileMoving(){
   fi
 }
 
+#msg_symlink_not_created
 SymlinkNotCreated(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   Err "%%%% OPERATION FAILED: LINK PERMISSION ERROR: SYMLINK NOT CREATED %%%%"
@@ -2485,6 +2541,7 @@ SymlinkNotCreated(){
 #####GENERIC UNSPECIFIED ERROR#####
 #TODO: Use consistent naming for message only functions, eg prepend or append  Msg
 #This function provides an error message on generic errors
+#msg_generic_unspecified_error
 genericUnspecifiedError(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   Err  "%%%% OPERATION FAILED: genericUnspecifiedError %%%%"
@@ -2496,6 +2553,7 @@ genericUnspecifiedError(){
   ErrCont "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%"
 }
 
+#maintenance_warning
 MaintenanceWarning(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   local yesorno=""
@@ -2528,6 +2586,7 @@ cleanse_warning(){
   return 0
 }
 
+#set_move_location
 determinePrimaryOrAlternateFolderUsage(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   #Command line, no database Episodes: Determine where File will fit
@@ -2549,6 +2608,7 @@ determinePrimaryOrAlternateFolderUsage(){
 }
 
 ##### MAKE DIRECTORY TO MOVE RECORDING TO IF NECESSARY #####
+#make_show_dir
 MakeShowDir(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   DebugCont "NewShowName: $NewShowName"
@@ -2587,7 +2647,7 @@ MakeShowDir(){
     ErrCont "######## FAILSAFE MODE HAS BEEN ACTIVATED ########"
     ErrCont "##################################################"
     if [ "$Notify" = "Enabled" ]; then
-      sudo -u "$NotifyUserName" "$binpath"/m2k_notify "myth2kodi error" "failsafe mode activated."  error
+      sudo -u "$NotifyUserName" "$binpath/m2k_notify" "myth2kodi error" "failsafe mode activated."  error
     fi
     SYMLINK='LINK'
     MoveDir="$FailSafeDir"
@@ -2604,6 +2664,7 @@ MakeShowDir(){
 
 #####USE ORIGINAL DIR#####
 #If TargetPathIsInputPath is set, then this changes MoveDir to original dir.
+#set_target_dir_as_input_path_dir
 setTargetFolderAsInputPathFolder(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   #For directory names: No trailing / is accepted eg. "~/videos" not "~/videos/"
@@ -2630,6 +2691,7 @@ setTargetFolderAsInputPathFolder(){
 #####GENERATE tvshow.nfo#####
 #Generates folder tvshow.nfo file
 #TODO: review this function, specifically, tvshow.nfo Vs $ShowFileName.nfo
+#generate_series_nfo
 GenerateTVShowNFO(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   test -f "$MoveDir/tvshow.nfo" && rm -f "$MoveDir/tvshow.nfo"
@@ -2646,6 +2708,7 @@ GenerateTVShowNFO(){
 
 #####GENERATE NFO FILE#####
 #Create an NFO file based upon extracted information
+#generate_episode_nfo
 GenerateEpisodeNFO(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   test -f "$MoveDir/$ShowFileName.nfo" && rm -f "$MoveDir/$ShowFileName.nfo"
@@ -2686,6 +2749,7 @@ GenerateEpisodeNFO(){
 }
 
 ##### IGNORE LIST #####
+#ignore_list
 ignoreList(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   local ignoreTest=""
@@ -2709,6 +2773,7 @@ ignoreList(){
 #####SHOW TRANSLATIONS HANDLING#####
 #Get show translations if the $m2kdir/showTranslations file exists.
 #The show title will be replaced by the one in the user created showTranslations file
+#show_translation
 ShowTranslations(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   if [[ -f "$m2kdir"/showTranslations && -n "$ShowName" ]]; then
@@ -2783,6 +2848,7 @@ m2k_cleanse(){
 
 #####MAINTENANCE ROUTINE#####
 #DoMaintenance loops through all processed recordings and checks if their parent is there. If no parent, then file is deleted.
+#m2k_maintenance
 DoMaintenance(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   Inform "PERFORMING MAINTENANCE ROUTINE..."
@@ -2863,6 +2929,7 @@ DoMaintenance(){
   return 0
 }
 
+#msg_scan_usage
 ScanUsageMsg(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   #Log the input arg ($1) as an ERROR message and append usage for --scan to the log.
@@ -3093,11 +3160,11 @@ m2k_diagnostics(){
   local -i m2k_notify_exec
   local -i our_scripts
   #Test if our own scripts are where they need to be and, if necessary, executable.
-  if [[ -f "$binpath"/bashlogging ]]; then bashlogging_file=0; else bashlogging_file=1; fi
-  if [[ -f "$binpath"/MythDataGrabber ]]; then MythDataGrabber_file=0; else MythDataGrabber_file=1; fi
-  if [[ -x "$binpath"/MythDataGrabber ]]; then MythDataGrabber_exec=0; else MythDataGrabber_exec=1; fi
-  if [[ -f "$binpath"/m2k_notify ]]; then m2k_notify_file=0; else m2k_notify_file=1; fi
-  if [[ -x "$binpath"/m2k_notify ]]; then m2k_notify_exec=0; else m2k_notify_exec=1; fi
+  if [[ -f "$binpath/bashlogging" ]]; then bashlogging_file=0; else bashlogging_file=1; fi
+  if [[ -f "$binpath/MythDataGrabber" ]]; then MythDataGrabber_file=0; else MythDataGrabber_file=1; fi
+  if [[ -x "$binpath/MythDataGrabber" ]]; then MythDataGrabber_exec=0; else MythDataGrabber_exec=1; fi
+  if [[ -f "$binpath/m2k_notify" ]]; then m2k_notify_file=0; else m2k_notify_file=1; fi
+  if [[ -x "$binpath/m2k_notify" ]]; then m2k_notify_exec=0; else m2k_notify_exec=1; fi
   our_scripts=$((bashlogging_file+MythDataGrabber_file+MythDataGrabber_exec+m2k_notify_file+m2k_notify_exec))
   #Provide initial feedback about our scripts.
   if ((bashlogging_file==0)); then Inform "Found: $binpath/bashlogging"; else Err "Can't Find: $binpath/bashlogging"; fi
@@ -3163,7 +3230,7 @@ m2k_diagnostics(){
     Inform "Performing m2k_notify test"
     InformCont "This test verifies that the message was sent to the DBUS."
     InformCont "This test does not verify the user has a valid desktop open."
-    sudo -u "$NotifyUserName" "$binpath"/m2k_notify "myth2kodi test" "Testing Desktop Communications" "info"
+    sudo -u "$NotifyUserName" "$binpath/m2k_notify" "myth2kodi test" "Testing Desktop Communications" "info"
     if [ "$?" = "0" ] ; then
       notifytest="***PASSED***"
       Inform "Desktop Notifications test $notifytest"
@@ -3436,6 +3503,7 @@ m2k_doover(){
       Err "Doover failed or was aborted by user."
     else
       Inform "Finished running doover.sh."
+      kodi_cleanup
     fi
     return "$dooverstatus"
   else
@@ -3492,6 +3560,10 @@ m2k_undo_all(){
     #routine should clean-up all files and dirs we were tracking.
     myth2kodi --maintenance
 
+    #Our Kodi instances will still show entries their video libraries for all
+    #the shows we just 'unmoved', so request them to perform cleanup.
+    kodi_cleanup
+
     return 0
   else
     Inform "You must press y to execute undo"
@@ -3500,6 +3572,7 @@ m2k_undo_all(){
   return 1
 }
 
+#msg_about
 m2k_about(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   printf ' %s\n\n' "$m2kVersion"
@@ -3509,6 +3582,7 @@ m2k_about(){
   printf ' %s\n\n' "myth2kodi Author: Stuart Knock"
 }
 
+#msg_usage
 m2k_usage(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   if [ "$InputPath" = "%DIR%/%FILE%" ]; then
@@ -3529,6 +3603,7 @@ m2k_usage(){
 
 #####HELP#####
 #This function provides a helpful message.
+#msg_option_help
 m2k_help(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   #TODO: Consider creating more detailed help messages for individual options,
@@ -3581,6 +3656,7 @@ m2k_help(){
   printf '%s\n\n' "    example: myth2kodi --confidence"
 }
 
+#msg_config_help
 special(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   echo " ======showTranslations====="
@@ -3638,6 +3714,7 @@ special(){
   echo "Done."
 }
 
+#msg_improve_confidence
 improveConfidence(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   echo -e "About Confidence ratings:"
@@ -3823,6 +3900,7 @@ case "$InputPath" in
   --undo)
     Debug "Recognised command line switch '--undo'"
     #TODO: Enable undo for a specific file, eg: myth2kodi --undo '/path/to/recordings/1070_20160331073100.mpg'
+    #      Ideally we'd alternatively be able to provide the moved file name and it would still work.
     m2k_undo_all
     exit $?
   ;;
@@ -4320,7 +4398,7 @@ fi
 if [ ! -f "$InputPath" ] && [ "$InputPath" != "testfile.ext" ]; then
   InvalidFileErrorMessage
   if [ "$Notify" = "Enabled" ]; then
-    sudo -u "$NotifyUserName" "$binpath"/m2k_notify "myth2kodi Error" "Invalid File supplied" error
+    sudo -u "$NotifyUserName" "$binpath/m2k_notify" "myth2kodi Error" "Invalid File supplied" error
   fi
   ExitJob 'InvalidFileNameSupplied'
 fi
@@ -4515,7 +4593,7 @@ if [ "$SYMLINK" != "LINK" ]; then
         GenerateTVShowNFO
         GenerateEpisodeNFO
       fi
-      KODIAutomate
+      kodi_newshow
       add_undo
       [[ "$RequiresDoover" = "1" ]] && add_doover
       dailyreport
@@ -4562,7 +4640,7 @@ elif [ "$SYMLINK" = "LINK" ]; then
       GenerateTVShowNFO
       GenerateEpisodeNFO
     fi
-    KODIAutomate
+    kodi_newshow
     add_undo
     [[ "$RequiresDoover" = "1" ]] && add_doover
     dailyreport

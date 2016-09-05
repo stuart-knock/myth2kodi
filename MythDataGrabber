@@ -137,6 +137,10 @@ def closefile():
             f.close()
 ###########################################################################
 
+#TODO: Add an option for getting a list of storagegroup directories from MythTV-DB
+#      storage_groups = db.getStorageGroup()
+#      for sg in storage_groups:
+#          sg_dirname = sg['dirname'] #OR  sg.dirname.encode('utf-8')
 
 if __name__ == "__main__":
 

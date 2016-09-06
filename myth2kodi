@@ -342,9 +342,9 @@ KODIIPs=( "kodi:supersecurekodi@192.168.1.78:8080" ) #<------THIS VALUE MUST BE 
 declare -i RSSmaxItems=8
 
 ###Logging settings###
-#How long to persist archived log files in months, DEFAULT=6.
+#How long to persist archived log files in months, DEFAULT=6. Log files older than this will deleted during maintenance.
 LOG_LIFE=6
-#These settings are for the bashlogging script which provides the configurable
+#The settings below are for the bashlogging script which provides the configurable
 #logging functionality used in myth2kodi.
 #LogLevel provides control over the amount of information myth2kodi reports.
 #    0=Only Errors;
@@ -368,7 +368,7 @@ LogType='both'
 ################################################################################
 #################### Abandon all hope, ye who enter here. ######################
 ################################################################################
-#TODO: Consider disabling stdout logging, ie LogType='logfile', when run as a mythtv user-job.
+#TODO: Consider disabling stdout logging, ie, use LogType='logfile', when run as a mythtv user-job.
 
 m2kVersion="myth2kodi Version 0.9.7"
 
@@ -427,6 +427,8 @@ fi
 #Load logging utility
 if [ -f "$binpath/bashlogging" ] ; then
   source "$binpath/bashlogging" "$LogType"
+  bashloggingstatus="$?"
+  [[ "$bashloggingstatus" != "0" ]] && exit "$bashloggingstatus"
 else
   printf 'ERROR: %s\n' "$binpath/bashlogging doesn't exist." | tee -a "$LogFile"
   exit 1
@@ -796,7 +798,7 @@ kodi_cleanup(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   DebugCont "m2kScanMode: $m2kScanMode"
   DebugCont "KODIClean: $KODIClean"
-  DebugCont "KODIIPs: $KODIIPs"
+  DebugCont "$( printf 'KODIIPs: %s' "${KODIIPs[*]/%/ ;}." )"
   if [[ "$m2kScanMode" != "True" ]] ; then
     if [[ "$KODIClean" = "Enabled" ]] ; then
       local data=""
@@ -824,7 +826,7 @@ kodi_newshow(){
   DebugCont "m2kScanMode: $m2kScanMode"
   DebugCont "KODINotify: $KODINotify"
   DebugCont "KODIUpdate: $KODIUpdate"
-  DebugCont "KODIIPs: $KODIIPs"
+  DebugCont "$( printf 'KODIIPs: %s' "${KODIIPs[*]/%/ ;}." )"
   DebugCont "ShowName: $ShowName"
   local data=""
   local curlPOST=""
@@ -2572,6 +2574,7 @@ cleanse_warning(){
   return 0
 }
 
+#TODO: No point setting failsafe state when original dir isn't writeable... add checks. see also, set_target_dir_as_input_path_dir()
 #Set the move location for the current recording, using Alternate directories
 #when main directories unavailable, in worst case set FailSafe flag.
 set_move_location(){
@@ -3030,8 +3033,9 @@ set_group_permission(){
 msg_dir_summary(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   InformCont "A summary table of writeable directories: 0='NOT WRITEABLE' ; 1='WRITEABLE'"
-  InformCont "$(printf '%-18s|%-5s|%-12s|%s\n'    "USER SETTING"      "FLAG"                       "Free Space"                              "Folder name"       )"
+  InformCont "$(printf '%-18s|%-5s|%-12s|%s\n'     "USER SETTING"      "FLAG"                       "Free Space"                              "Folder name"       )"
   InformCont "$(printf '%-18s|  %s  | %10s | %s\n' "m2kdir"            "$WorkingDirWritable"        "$((WorkingDirFreeSpace/1024)) MB"        "$m2kdir"           )"
+  InformCont "$(printf '%-18s|  %s  | %10s | %s\n' "originaldirname"   "$OriginalDirWritable"       "$((OriginalDirFreeSpace/1024)) MB"       "$originaldirname"  )"
   InformCont "$(printf '%-18s|  %s  | %10s | %s\n' "MoveDir"           "$MoveDirWritable"           "$((MoveDirFreeSpace/1024)) MB"           "$MoveDir"          )"
   InformCont "$(printf '%-18s|  %s  | %10s | %s\n' "AlternateMoveDir"  "$AlternateMoveDirWritable"  "$((AlternateMoveDirFreeSpace/1024)) MB"  "$AlternateMoveDir" )"
   if [ "$Database" = "Enabled" ]; then
@@ -3329,8 +3333,8 @@ m2k_diagnostics(){
     AlternateShowDirWritable=$TMoveDirWritable
   fi
   if [ "$TargetPathIsInputPath" = "Enabled" ]; then
-    OriginaldirFreeSpace="$(df -P "$originaldirname" | sed -n 2p | awk '{print $4}')"
-    check_permissions "1" "$OriginaldirFreeSpace" "$originaldirname"
+    OriginalDirFreeSpace="$(df -P "$originaldirname" | sed -n 2p | awk '{print $4}')"
+    check_permissions "1" "$OriginalDirFreeSpace" "$originaldirname"
     OriginalDirWritable=$TMoveDirWritable
   fi
   WorkingDirFreeSpace="$(df -P "$m2kdir" | sed -n 2p | awk '{print $4}')"
@@ -3378,7 +3382,7 @@ m2k_diagnostics(){
   read -r -n1 -p "press any key to continue on to the final results..."
   printf '\n'
   Inform "RESULTS SUMMARY:"
-  test "$DatabaseType"="MythTVPythonBindings" && InformCont "MythTV Database Test: $DBTest"
+  [[ "$DatabaseType" = "MythTVPythonBindings" ]] && InformCont "MythTV Database Test: $DBTest"
   InformCont "Installed Packages:   $packagecheck $checka $checkb $checkc $checkd $checke $checkj"
   InformCont "Notifications Test:   $notifytest"
   InformCont "KODI Communications:  $KODIcomm"
@@ -3988,7 +3992,7 @@ case "$InputPath" in
 esac
 Debug "No recognised command line switches set."
 if [[ "${InputPath:0:1}" = "-" ]]; then
-  Err "Unrecognised command line switch."
+  Err "Unrecognised command line switch: $InputPath"
   m2k_usage
   exit_job 'GenericUnspecifiedError'
 fi
@@ -4065,6 +4069,7 @@ originaldirname="$(dirname "$InputPath")"
 [[ "$originaldirname" = "./" || "$originaldirname" = "." || "$originaldirname" = "" ]] && originaldirname="$(pwd)"
 #TODO: check FileBaseName as the below doesn't strip the suffix but the description of this variable implies that it should.
 FileBaseName="${InputPath##*/}"
+#TODO: FileName doesn't appear to be used anywhere...
 FileName="$InputPath"
 
 #Check for show Title translations relating to the show in question.
@@ -4406,9 +4411,9 @@ if [ "$Database" = "Enabled" ]; then
   check_permissions "$MoveFileSize" "$AlternateShowDirFreeSpace" "$AlternateShowDir"
   AlternateShowDirWritable=$TMoveDirWritable
 fi
-OriginaldirFreeSpace=$(df -P "$originaldirname" | sed -n 2p | awk '{print $4}')
+OriginalDirFreeSpace=$(df -P "$originaldirname" | sed -n 2p | awk '{print $4}')
 WorkingDirFreeSpace=$(df -P "$m2kdir" | sed -n 2p | awk '{print $4}')
-check_permissions "1" "$OriginaldirFreeSpace" "$originaldirname"
+check_permissions "1" "$OriginalDirFreeSpace" "$originaldirname"
 OriginalDirWritable=$TMoveDirWritable
 check_permissions "5000" "$WorkingDirFreeSpace" "$m2kdir"
 WorkingDirWritable=$TMoveDirWritable

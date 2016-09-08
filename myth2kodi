@@ -724,7 +724,7 @@ dailyreport(){
 #Check write permission and free space, return 0 (writeable) or 1 (not).
 #Takes 3 args: $1=filesize ; $2=freespace ; $3=directory
 check_write(){
-  #TODO: Consider making this function return non-zero on error
+  #TODO: Do we really need to write a dummy file here??? Wouldn't file comparisons using -e -d -r -w etc be sufficient...
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   DebugCont "Called with $# arguments"
   local -i i=0 ; local var ; for var in "$@"; do ((++i)) ; DebugCont "arg $i = ${var}" ; done
@@ -1329,7 +1329,7 @@ process_mythtvdb_schedulesdirect(){
   seasonyear="${ShowStartTime:0:4}"
 
   #predefined naming conventions
-  if [[ "$ShowCategory" = "Sports event" || "$ShowCategory" = "News" || "$ShowCategory" = "Newsmagazine" ]]; then
+  if [[ "$ShowCategory" =~ ^('Sports event'|'News'|'Newsmagazine')$ ]]; then
     NamingConvention="$ShowCategory"
   fi
 
@@ -1386,10 +1386,16 @@ remove_sxxexx_from_plot(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   if [[ -n "$SeasonEpisode" ]]; then
     #Check if it's in the leading position and if so, remove it
+
+    # local SEregex
+    # local SEstring
+    # SEregex="'(\(?s\.?[0-9]?[0-9]\,?\s?(e|ep)\.?[0-9][0-9]?\)?)\s*|(\(?[0-9]?[0-9]x[0-9][0-9]?\)?)\s*'"
+    # SEstring="$(grep -E -i --only-matching "$SEregex" <<< "$Plot")"
+
     local SEstring
     SEstring="$(grep -E -i --only-matching '(\(?s\.?[0-9]?[0-9]\,?\s?(e|ep)\.?[0-9][0-9]?\)?)\s*|(\(?[0-9]?[0-9]x[0-9][0-9]?\)?)\s*' <<< "$Plot")"
     if [[ -n "$SEstring" ]]; then
-      Warn "${FUNCNAME[0]}() SeasonEpisode was in the leading position of the Plot field, removing it to simplify subsequent processing."
+      Warn "${FUNCNAME[0]}() SeasonEpisode found in Plot, removing it to simplify processing."
       Plot="${Plot/$SEstring/}"
       #Also remove any left over leading hyphen, colon, or space
       Plot="$(sed s/^"\s*[-|:]\?\s*"/""/ <<< "$Plot")"
@@ -1398,7 +1404,7 @@ remove_sxxexx_from_plot(){
     fi
   else
     Debug "SeasonEpisode isn't currently set:"
-    DebugCont "So, either it's not there or we haven't extracted it yet, either way, not going to discard it from Plot field."
+    DebugCont "So, either it's not there or we haven't extracted it yet, not discarding from Plot field."
   fi
 }
 
@@ -1541,7 +1547,7 @@ process_mythtvdb_sydfta(){
   #Some channels, particularly ABC, put cast info in the end of the plot field which can mess up fuzzy Plot matching
   remove_cast_from_plot
 
-  #Only keep Alpha-numeric characters, space and the four basic punctuation chars & , . -
+  #Only keep Alpha-numeric characters, space and the four chars & , . -
   Plot="$(sed -r 's/[^[:alnum:] &,.-]//g' <<< "$Plot")"
 
   #Strip the Movie: tag that some stations very helpfully put in the title field...
@@ -1674,41 +1680,37 @@ check_m2k_database_up_to_date(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   #Return state = 1 means the local database should be updated from TheTVDB
   #Return state = 0 means the local database is up to date with TheTVDB
-  #Initialise a default CurrentTimeTVDB
-  [[ -z "$CurrentTimeTVDB" ]] && CurrentTimeTVDB=99999999
-  #Clean up any old TheTVDB_current.time file
-  [[ -f "$m2kdir/$NewShowName/TheTVDB_current.time" ]] && rm -f "$m2kdir/$NewShowName/TheTVDB_current.time"
+  local updates_site='http://www.thetvdb.com/api/Updates.php'
+  local dbdir="$m2kdir/$NewShowName"
+
   #Get current server time
-  curl -L -s -m"$Timeout" "http://www.thetvdb.com/api/Updates.php?type=none" > "$m2kdir/$NewShowName/TheTVDB_current.time"
+  curl -L -s -m"$Timeout" "${updates_site}?type=none" > "$dbdir/TheTVDB_current.time"
 
   #Get the time from the file
-  if [[ -f "$m2kdir/$NewShowName/TheTVDB_current.time" ]]; then
-    CurrentTimeTVDB=$(grep '<Time>' "$m2kdir/$NewShowName/TheTVDB_current.time" | sed s/"<\/\?Time>"/""/g)
-  fi
+  CurrentTimeTVDB=$(grep '<Time>' "$dbdir/TheTVDB_current.time" | sed s/"<\/\?Time>"/""/g)
+  #if time server is down, then just update #TODO: If the Updates part of the api isn't working we probably shouldn't expect the rest to...
+  [[ -z "$CurrentTimeTVDB" ]] && Warn "${FUNCNAME[0]}() TheTVDB TIME SERVER WAS DOWN" && return 1
 
   #If file exist for last updated time, then get value
-  if [ -f "$m2kdir/$NewShowName/lastupdated.time" ]; then
-    LastUpdatedTVDB=$(cat "$m2kdir/$NewShowName/lastupdated.time")
+  if [ -f "$dbdir/lastupdated.time" ]; then
+    LastUpdatedTVDB=$(cat "$dbdir/lastupdated.time")
 
   #If no last updated time, then assign a never updated value and update now
-  elif [ ! -f "$m2kdir/$NewShowName/lastupdated.time" ]; then
-    Inform "Seems we've never updated $NewShowName from TheTVDB -- can't find lastupdated.time file."
+  elif [ ! -f "$dbdir/lastupdated.time" ]; then
+    Inform "Seems we've never updated $NewShowName from TheTVDB -- no lastupdated.time file."
     LastUpdatedTVDB=42
     return 1
   fi
 
-  #if time server is down, then just update
-  ((CurrentTimeTVDB == 99999999)) && Warn "${FUNCNAME[0]}() TheTVDB TIME SERVER WAS DOWN" && return 1
-
   #Apply Database Update interval to last update time  LastUpdatedTVDB = NextUpdated
   local -i NextUpdate=0
-  let NextUpdate=$LastUpdatedTVDB+$UpdateDatabase
+  NextUpdate=$((LastUpdatedTVDB + UpdateDatabase))
 
   #if episode information is out of date or not created
   if ((CurrentTimeTVDB > NextUpdate)); then
-    curl -L -s -m"$Timeout" "http://www.thetvdb.com/api/Updates.php?type=all&time=$LastUpdatedTVDB" >> "$m2kdir/$NewShowName/UpdatesList.txt"
-    if grep -q "$SeriesID" "$m2kdir/$NewShowName/UpdatesList.txt" ; then
-      Inform "DATABASE IS OUT OF DATE. NEXT UPDATE $NextUpdate Current $CurrentTimeTVDB"
+    curl -L -s -m"$Timeout" "${updates_site}?type=all&time=$LastUpdatedTVDB" >> "$dbdir/UpdatesList.txt"
+    if grep -q "$SeriesID" "$dbdir/UpdatesList.txt" ; then
+      Inform "DATABASE OUT OF DATE. Next update: $NextUpdate. Current: $CurrentTimeTVDB"
       return 1
     else
       Debug "TheTVDB doesn't appear to have any updates for $NewShowName."
@@ -1719,7 +1721,7 @@ check_m2k_database_up_to_date(){
     fi
   #Send report to the log if database was not updated.
   elif ((CurrentTimeTVDB <= NextUpdate)); then
-    Inform "DATABASE IS MAINTAINED. TIME IS:$CurrentTimeTVDB NEXT UPDATE IS:$NextUpdate"
+    Inform "DATABASE MAINTAINED. Current: $CurrentTimeTVDB. Next update: $NextUpdate."
     return 0
   fi
   #some other condition was present. update anyways.
@@ -1734,26 +1736,28 @@ download_series_info(){
   Inform "Downloading Series: $SeriesID"
   local -i GotNewInformation=0
   local -i ProcessingSuccesful=0
+  local dbdir="$m2kdir/$NewShowName"
   local TheTVDBShowXML="http://www.thetvdb.com/api/$APIkey/series/$SeriesID/all/$Language.xml"
   local FieldsWeWant="(</?Series>|</?seriesid>|</?Status>|</?lastupdated>|</?Episode>|</?SeasonNumber>|</?EpisodeNumber>|</?EpisodeName>|</?Overview>|</?FirstAired>)"
-  curl -L -s -m"$Timeout" "$TheTVDBShowXML" | grep -E "$FieldsWeWant" > "$m2kdir/$NewShowName/$NewShowName.xmlTest"
-  [[ $? = 0 ]] && echo "$CurrentTimeTVDB" > "$m2kdir/$NewShowName/lastupdated.time" && chmod 666 "$m2kdir/$NewShowName/lastupdated.time"
+  curl -L -s -m"$Timeout" "$TheTVDBShowXML" | grep -E "$FieldsWeWant" > "$dbdir/$NewShowName.xmlTest"
+  [[ $? != 0 ]] && Warn "Issue accessing: $TheTVDBShowXML"
 
   local -i tvmaze_id
   tvmaze_id=$(curl -L -s -m"$Timeout" http://api.tvmaze.com/lookup/shows?thetvdb="$SeriesID" | jq '.id')
-  local tvmazeJsonFile="$m2kdir/$NewShowName/${NewShowName}_tvmaze.json"
+  local tvmazeJsonFile="$dbdir/${NewShowName}_tvmaze.json"
   # to get the matching tvmaze id, then
   if [[ -n "$tvmaze_id" ]] ; then
     local tvmazeShowJson="http://api.tvmaze.com/shows/$tvmaze_id/episodes"
-    [[ -f "$tvmazeJsonFile" ]] && mv "$tvmazeJsonFile" "$m2kdir/$NewShowName/${Today}_${NewShowName}_tvmaze.json"
+    [[ -f "$tvmazeJsonFile" ]] && mv "$tvmazeJsonFile" "$dbdir/${Today}_${NewShowName}_tvmaze.json"
     curl -L -s -m"$Timeout" "$tvmazeShowJson" > "$tvmazeJsonFile"
   fi
 
   #Validate that the show has at least one EpisodeName tag and is a valid download before clobbering our old download.
-  if grep -q "EpisodeName" "$m2kdir/$NewShowName/$NewShowName.xmlTest"; then
+  if grep -q "EpisodeName" "$dbdir/$NewShowName.xmlTest"; then
+    printf '%s\n' "$(date %s)" > "$dbdir/lastupdated.time" && chmod 666 "$dbdir/lastupdated.time"
     #Check the new info is actually new, if there was no old info then it must be new.
-    if [ -f "$m2kdir/$NewShowName/$NewShowName.xml" ] ; then
-      diff "$m2kdir/$NewShowName/$NewShowName.xmlTest" "$m2kdir/$NewShowName/$NewShowName.xml" &> /dev/null
+    if [ -f "$dbdir/$NewShowName.xml" ] ; then
+      diff "$dbdir/$NewShowName.xmlTest" "$dbdir/$NewShowName.xml" &> /dev/null
       GotNewInformation=$?  #NOTE: No-diff = 0; diff = 1; error = 2
     else
       GotNewInformation=1
@@ -1762,14 +1766,14 @@ download_series_info(){
       #Clear out the old
       Inform "Downloaded new information for $NewShowName"
       Inform 'Cleaning up old information before processing.'
-      test -f "$m2kdir/$NewShowName/$NewShowName.xml" && mv "$m2kdir/$NewShowName/$NewShowName.xml" "$m2kdir/$NewShowName/${Today}_$NewShowName.xml"
-      mv "$m2kdir/$NewShowName/$NewShowName.xmlTest" "$m2kdir/$NewShowName/$NewShowName.xml"
-      test -f "$m2kdir/$NewShowName/$NewShowName.actualEname.txt" && rm -f "$m2kdir/$NewShowName/$NewShowName.actualEname.txt"
-      test -f "$m2kdir/$NewShowName/$NewShowName.Ename.txt"       && rm -f "$m2kdir/$NewShowName/$NewShowName.Ename.txt"
-      test -f "$m2kdir/$NewShowName/$NewShowName.FAired.txt"      && rm -f "$m2kdir/$NewShowName/$NewShowName.FAired.txt"
-      test -f "$m2kdir/$NewShowName/$NewShowName.S.txt"           && rm -f "$m2kdir/$NewShowName/$NewShowName.S.txt"
-      test -f "$m2kdir/$NewShowName/$NewShowName.E.txt"           && rm -f "$m2kdir/$NewShowName/$NewShowName.E.txt"
-      test -f "$m2kdir/$NewShowName/$NewShowName.Plot.txt"        && rm -f "$m2kdir/$NewShowName/$NewShowName.Plot.txt"
+      test -f "$dbdir/$NewShowName.xml" && mv "$dbdir/$NewShowName.xml" "$dbdir/${Today}_$NewShowName.xml"
+      mv "$dbdir/$NewShowName.xmlTest" "$dbdir/$NewShowName.xml"
+      test -f "$dbdir/$NewShowName.actualEname.txt" && rm -f "$dbdir/$NewShowName.actualEname.txt"
+      test -f "$dbdir/$NewShowName.Ename.txt"       && rm -f "$dbdir/$NewShowName.Ename.txt"
+      test -f "$dbdir/$NewShowName.FAired.txt"      && rm -f "$dbdir/$NewShowName.FAired.txt"
+      test -f "$dbdir/$NewShowName.S.txt"           && rm -f "$dbdir/$NewShowName.S.txt"
+      test -f "$dbdir/$NewShowName.E.txt"           && rm -f "$dbdir/$NewShowName.E.txt"
+      test -f "$dbdir/$NewShowName.Plot.txt"        && rm -f "$dbdir/$NewShowName.Plot.txt"
 
       #create a folder/file "database" Strip XML tags.  Series, Exx and Sxx are separated into different files
       local Ename=""
@@ -1792,12 +1796,12 @@ download_series_info(){
           (( ++recordNumber ))
           #Write Episode info to files
           Debug "Building Record:$recordNumber -${actualEname}-"
-          printf '%s\n' "$actualEname"     >> "$m2kdir/$NewShowName/$NewShowName.actualEname.txt"
-          printf '%s\n' "$Ename"           >> "$m2kdir/$NewShowName/$NewShowName.Ename.txt"
-          printf '%s\n' "$FAired"          >> "$m2kdir/$NewShowName/$NewShowName.FAired.txt"
-          printf '%s\n' "$SeasonNr"        >> "$m2kdir/$NewShowName/$NewShowName.S.txt"
-          printf '%s\n' "$EpisodeNr"       >> "$m2kdir/$NewShowName/$NewShowName.E.txt"
-          printf '%s\n' "$EpisodeOverview" >> "$m2kdir/$NewShowName/$NewShowName.Plot.txt"
+          printf '%s\n' "$actualEname"     >> "$dbdir/$NewShowName.actualEname.txt"
+          printf '%s\n' "$Ename"           >> "$dbdir/$NewShowName.Ename.txt"
+          printf '%s\n' "$FAired"          >> "$dbdir/$NewShowName.FAired.txt"
+          printf '%s\n' "$SeasonNr"        >> "$dbdir/$NewShowName.S.txt"
+          printf '%s\n' "$EpisodeNr"       >> "$dbdir/$NewShowName.E.txt"
+          printf '%s\n' "$EpisodeOverview" >> "$dbdir/$NewShowName.Plot.txt"
         #Get actual show name
         elif [[ "$line" == "<EpisodeName>"* ]]; then
           line="${line/"</EpisodeName>"/}"
@@ -1808,10 +1812,10 @@ download_series_info(){
           line="${line//&amp;/&}"
           line="${line//&ndash;/-}"
           actualEname="${line}"
-          #Only keep Alpha-numeric characters, space, parenthesis and the four basic punctuation chars & , . -
+          #Only keep Alpha-numeric characters, space, parenthesis and the four chars & , . -
           actualEname="$(sed -r 's/[^[:alnum:] &,.)(-]//g' <<< "$actualEname")"
           Ename="${actualEname/;*/}" #TODO: This strips everything following the first ";" (semi-colon). Is that intentional because there are sometimes multiple EpisodeNames separated by semi-colons???
-          #Only keep Alpha-numeric characters, space, parenthesis and the four basic punctuation chars & , . -
+          #Only keep Alpha-numeric characters, space, parenthesis and the four chars & , . -
           Ename="$(sed -r 's/[^[:alnum:] &,.)(-]//g' <<< "$Ename")"
         #Get OriginalAirDate
         elif [[ "$line" == "<FirstAired>"* ]]; then
@@ -1839,35 +1843,39 @@ download_series_info(){
           line="${line//&ndash;/-}"
           #Convert any unprintable (space, tab, newline) to space.
           line="${line//[[:space:]]/ }"
-          #Only keep Alpha-numeric characters, space and the four basic punctuation chars & , . -
+          #Only keep Alpha-numeric characters, space and the four chars & , . -
           line="$(sed -r 's/[^[:alnum:] &,.-]//g' <<< "$line")"
           line="$(sed -r 's/\s{2,}/ /g' <<< "$line")"
           #Remove any trailing space
           line="${line%%*([[:space:]])}"
           EpisodeOverview="$line"
         fi
-      done < "$m2kdir/$NewShowName/$NewShowName.xml"
+      done < "$dbdir/$NewShowName.xml"
 
       #If we also have a json file from tvmaze, then append that info
       if [[ -f "$tvmazeJsonFile" ]] ; then
-        jq -r '.[] | .name' "$tvmazeJsonFile" >> "$m2kdir/$NewShowName/$NewShowName.actualEname.txt"
-        jq -r '.[] | .name' "$tvmazeJsonFile" >> "$m2kdir/$NewShowName/$NewShowName.Ename.txt"
-        jq -r '.[] | .season' "$tvmazeJsonFile" >> "$m2kdir/$NewShowName/$NewShowName.S.txt"
-        jq -r '.[] | .number' "$tvmazeJsonFile" >> "$m2kdir/$NewShowName/$NewShowName.E.txt"
+        jq -r '.[] | .name'   "$tvmazeJsonFile" >> "$dbdir/$NewShowName.actualEname.txt"
+        jq -r '.[] | .name'   "$tvmazeJsonFile" >> "$dbdir/$NewShowName.Ename.txt"
+        jq -r '.[] | .season' "$tvmazeJsonFile" >> "$dbdir/$NewShowName.S.txt"
+        jq -r '.[] | .number' "$tvmazeJsonFile" >> "$dbdir/$NewShowName.E.txt"
         local -i EpisodeCount
         EpisodeCount=$(jq -r '.[] | .name' "$tvmazeJsonFile" | wc -l)
         for i in $(seq 0 $((EpisodeCount-1))); do
-          jq -r ".[$i] | .summary" "$tvmazeJsonFile" | tr -d "\n" | sed s/"<\/\?p>"/""/g | sed -r 's/[^[:alnum:] &,.-]//g' | sed -r 's/\s{2,}/ /g' >> "$m2kdir/$NewShowName/$NewShowName.Plot.txt"
-          printf '\n' >> "$m2kdir/$NewShowName/$NewShowName.Plot.txt"
+          jq -r ".[$i] | .summary" "$tvmazeJsonFile" \
+              | tr -d "\n"                           \
+              | sed s/"<\/\?p>"/""/g                 \
+              | sed -r 's/[^[:alnum:] &,.-]//g'      \
+              | sed -r 's/\s{2,}/ /g' >> "$dbdir/$NewShowName.Plot.txt"
+          printf '\n' >> "$dbdir/$NewShowName.Plot.txt"
         done
       fi
 
-      chmod 666 "$m2kdir/$NewShowName/$NewShowName".actualEname.txt
-      chmod 666 "$m2kdir/$NewShowName/$NewShowName".Ename.txt
-      chmod 666 "$m2kdir/$NewShowName/$NewShowName".FAired.txt
-      chmod 666 "$m2kdir/$NewShowName/$NewShowName".S.txt
-      chmod 666 "$m2kdir/$NewShowName/$NewShowName".E.txt
-      chmod 666 "$m2kdir/$NewShowName/$NewShowName".Plot.txt
+      chmod 666 "$dbdir/$NewShowName".actualEname.txt
+      chmod 666 "$dbdir/$NewShowName".Ename.txt
+      chmod 666 "$dbdir/$NewShowName".FAired.txt
+      chmod 666 "$dbdir/$NewShowName".S.txt
+      chmod 666 "$dbdir/$NewShowName".E.txt
+      chmod 666 "$dbdir/$NewShowName".Plot.txt
       ProcessingSuccesful=1
 
     elif [ "$GotNewInformation" = "2" ]; then
@@ -1882,10 +1890,10 @@ download_series_info(){
   fi
   #check if files were created and generate message
   if ((ProcessingSuccesful == 1)) ; then
-    Inform "LOCAL DATABASE UPDATED: $m2kdir/$NewShowName"
+    Inform "LOCAL DATABASE UPDATED: $dbdir"
     return 0
-  elif [ ! -f "$m2kdir/$NewShowName/$NewShowName.Ename.txt" ]; then
-    Err "${FUNCNAME[0]}() PERMISSION ERROR for $m2kdir/$NewShowName"
+  elif [ ! -f "$dbdir/$NewShowName.Ename.txt" ]; then
+    Err "${FUNCNAME[0]}() PERMISSION ERROR for $dbdir"
     return 1
   fi
   return 1
@@ -3341,7 +3349,7 @@ m2k_diagnostics(){
   if [ "$TargetPathIsInputPath" = "Enabled" ]; then
     Inform "TargetPathIsInputPath is selected. Testing with current folder"
     #Set originaldir name if none was supplied
-    [[ "$originaldirname" = "./" || "$originaldirname" = "." || "$originaldirname" = "" ]] && originaldirname="$(pwd)"
+    [[ "$originaldirname" =~ ^('./'|'.'|'')$ ]] && originaldirname="$(pwd)"
     set_target_dir_as_input_path_dir
   fi
 
@@ -3351,7 +3359,7 @@ m2k_diagnostics(){
   #Print a summary table of writeable directories.
   msg_dir_summary
 
-  if [ "$MoveDirWritable" = "0" ] && [ "$AltMoveDirWritable" = "0" ] && [ "$WorkingDirWritable" = "0" ] ; then
+  if ((MoveDirWritable + AltMoveDirWritable + WorkingDirWritable == 0)) ; then
     folderchecks="***PASSED***"
     Inform "Critical Filesystem checks $folderchecks"
   else
@@ -3749,7 +3757,7 @@ get_series_info(){
   fi
   if [[ -n "$SeriesID" ]]; then
     download_series_info
-    return $?
+    return "$?"
   else
     Err "We had serieslinenumber: $serieslinenumber but couldn't get a SeriesID."
     return 1
@@ -4067,7 +4075,10 @@ if [ "$Database" = "Enabled" ]; then
       process_mythtvdb_schedulesdirect
     ;;
   esac
-  [[ -z "$InputTitle" ]] && Err "Failed to determine InputTitle from MythTV-DB, and none provided via arg." && exit_job 'NameCouldNotBeAssigned' #TODO: Consider making a specific exit_job for this issue...
+  if [[ -z "$InputTitle" ]]; then
+    Err "Failed to determine InputTitle from MythTV-DB, and none provided via arg."
+    exit_job 'NameCouldNotBeAssigned' #TODO: Consider making a specific exit_job for this issue...
+  fi
 else
   [[ -z "$InputTitle" ]] && Err "Database disabled and no InputTitle provided on command line."
   #TODO: Should bail with an error here if Database isn't Enabled and InputTitle is empty...
@@ -4087,13 +4098,13 @@ ShowName="$InputTitle"
 #TODO: check whether the split on semicolon here and elsewhere should be in process_mythtvdb_schedulesdirect
 #split on semicolon, there will only be one episode looked up.
 EpisodeSubtitle="$(sed 's/;.*//' <<< "$InputSubtitle")"
-#Only keep Alpha-numeric characters, space, parenthesis and the four basic punctuation chars & , . -
+#Only keep Alpha-numeric characters, space, parenthesis and the four chars & , . -
 EpisodeSubtitle="$(sed -r 's/[^[:alnum:] &,.)(-]//g' <<< "$EpisodeSubtitle")"
 ExtensionPrep="$(basename "$InputPath")"
 OriginalExt="${ExtensionPrep#*.}"
 originaldirname="$(dirname "$InputPath")"
 #Set originaldir name if none was supplied
-[[ "$originaldirname" = "./" || "$originaldirname" = "." || "$originaldirname" = "" ]] && originaldirname="$(pwd)"
+[[ "$originaldirname" =~ ^('./'|'.'|'')$ ]] && originaldirname="$(pwd)"
 #TODO: check FileBaseName as the below doesn't strip the suffix but the description of this variable implies that it should.
 FileBaseName="${InputPath##*/}"
 #TODO: FileName doesn't appear to be used anywhere...
@@ -4104,7 +4115,7 @@ show_translation
 #Do not process files in files categoricIgnore or titleIgnore, just exit
 ignore_list
 SafeShowName=$(sed 's/;.*//' <<< "$ShowName") #TODO: ??? ${ShowName%%;*}
-#Only keep Alpha-numeric characters, space, parenthesis and the four basic punctuation chars & , . -
+#Only keep Alpha-numeric characters, space, parenthesis and the four chars & , . -
 SafeShowName="$(sed -r 's/[^[:alnum:] &,.)(-]//g' <<< "$SafeShowName")"
 #Format Show name for Sending to www.TheTVDB.com and KODI
 tvdbshowname=$(sed 's/ /%20/g' <<< "$ShowName" | sed 's/&/%26/g')
@@ -4341,6 +4352,7 @@ fi
 if [ "$StorageGroupFallback" = "Enabled" ] ; then
   Debug "StorageGroupFallback is Enabled"
   #TODO: Make a HasSxxExx variable that is set and used consistently, #NOTE: there is already one but it's weirdly used
+  #      if [[ -z "$Sxx" || "$Sxx" =~ ^(S00|S)$ || -z "$Exx" || "$Exx" =~ ^(E00|E)$ ]]; then HasSxxExx=0; else HasSxxExx=1; fi
   if [ "$m2kProgramIDCheck" != "MV" ] && [[ "$Sxx" = "S" || -z "$Sxx" || "$Sxx" = "S00" || "$Exx" = "E" || -z "$Exx" || "$Exx" = "E00" ]] ; then
     if grep -iq '\(Movies*\|Films*\)' <<< "$StorageGroup" ; then
       Inform "GUESSING that this is a Movie based on being in storagegroup: $StorageGroup"
@@ -4357,7 +4369,7 @@ fi
 #TODO: If this works reliably, then consider moving it up to directly below fuzzy match on subtitle
 #As a last resort, if we still think it's an episode but have no episode info, try fuzzy match on plot
 if [ "$PlotMatchFallback" = "Enabled" ] ; then
-  Debug "PlotMatchFallback is Enabled"
+  Debug "PlotMatchFallback is Enabled"  #[[ -z "$Sxx" || "$Sxx" =~ ^(S00|S)$ || -z "$Exx" || "$Exx" =~ ^(E00|E)$ ]]
   if [ "$m2kProgramIDCheck" = "EP" ] && [[ "$Sxx" = "S" || -z "$Sxx" || "$Sxx" = "S00" || "$Exx" = "E" || -z "$Exx" || "$Exx" = "E00" ]] ; then
     getAbsoluteEpisodeNumberWithFuzzyPlotMatch
     if [[ "$?" = "0" && -n "$AbsoluteEpisodeNumber" ]]; then
@@ -4450,7 +4462,7 @@ set_move_location
 
 #####OUTPUT FILE NAME FORMATTING#####
 #Format Shows
-#Only keep Alpha-numeric characters, space, parenthesis and the four basic punctuation chars & , . -
+#Only keep Alpha-numeric characters, space, parenthesis and the four chars & , . -
 EpisodeSubtitle="$(sed -r 's/[^[:alnum:] &,.)(-]//g' <<< "$EpisodeSubtitle")"
 NewShowName="$(sed -r 's/[^[:alnum:] &,.)(-]//g' <<< "$NewShowName")"
 ShowName="$(sed -r 's/[^[:alnum:] &,.)(-]//g' <<< "$ShowName")"

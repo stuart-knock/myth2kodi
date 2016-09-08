@@ -2616,9 +2616,10 @@ make_show_dir(){
     MoveDir="$MoveDir/$NewShowName"
     if [ ! -d "$MoveDir" ]; then
       Inform "CREATING SERIES FOLDER: $MoveDir"
-      echo "$MoveDir">>"$m2kdir"/dir.tracking
+      echo "$MoveDir" >> "$m2kdir/dir.tracking"
       mkdir "$MoveDir"
       chmod 775 "$MoveDir"
+      [[ "$RequiresNFO" = "1" ]] && generate_series_nfo
     fi
 
     #Make the Season folder if it is applicable and does not exist
@@ -2681,57 +2682,69 @@ set_target_dir_as_input_path_dir(){
 
 #Create a series NFO file based on information we have for the current series
 generate_series_nfo(){
-  #TODO: review this function, specifically, tvshow.nfo Vs $ShowFileName.nfo
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  test -f "$MoveDir/tvshow.nfo" && rm -f "$MoveDir/tvshow.nfo"
-  echo -e "<tvshow>">>"$MoveDir"/tvshow.nfo
-  echo -e "\t<title>$NewShowName</title>">>"$MoveDir/tvshow.nfo"
+  {
+    printf '%s\n' '<?xml version="1.0" encoding="UTF-8" standalone="yes" ?>'
+    printf '%s\n' "<tvshow>"
+    printf '%b\n' "\t<title>$NewShowName</title>"
+    printf '%b\n' "\t<episodeguide>"
+  } > "$MoveDir/$tvshow.nfo"
+
   if [[ -n "$SeriesID" ]]; then
-    echo -e "\t<episodeguide>http://www.thetvdb.com/api/$APIkey/series/$SeriesID/all/$Language.xml</episodeguide>">>"$MoveDir/tvshow.nfo"
-  else
-    echo -e "\t<episodeguide></episodeguide>">>"$MoveDir/$ShowFileName.nfo"
+    local web
+    webaddrs="http://www.thetvdb.com/api/$APIkey/series/$SeriesID/all/$Language.zip"
+    printf '%b\n' "\t\t<url cache=\"$SeriesID.xml\">$webaddrs</url>" >> "$MoveDir/tvshow.nfo"
   fi
-  echo -e "</tvshow>">>"$MoveDir/tvshow.nfo"
+
+  {
+    printf '%b\n' "\t</episodeguide>"
+    [[ -n "$SeriesID" ]] && printf '%b\n' "\t <id>$SeriesID</id>"
+    printf '%b\n' "\t<dateadded>$(date --rfc-3339=seconds)</dateadded>"
+    printf '%s\n' "</tvshow>"
+  } >> "$MoveDir/tvshow.nfo"
+  Inform "Generated series NFO file: $MoveDir/tvshow.nfo"
   return 0
 }
 
 #Create an episode NFO file based on information we have for the current episode
 generate_episode_nfo(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  test -f "$MoveDir/$ShowFileName.nfo" && rm -f "$MoveDir/$ShowFileName.nfo"
-  #SAK-REPLACED BELOW, SEE http://forum.kodi.tv/showthread.php?tid=65644&page=65&highlight=json
-  #echo -e "<tvshow>">>"$MoveDir/$ShowFileName.nfo"
-  echo -e "<episodedetails>">>"$MoveDir/$ShowFileName.nfo"
-
+  {
+    printf '%s\n' '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    printf '%s\n' '<episodedetails>'
+  } > "$MoveDir/$ShowFileName.nfo"
+  local basetitle="<title>$EpisodeSubtitle Recorded $datehour"
   if [[ -z "$NamingConvention" ]]; then
     if [ "$GoForDoover" = "1" ]; then
-      echo -e "\t<title>$EpisodeSubtitle Recorded $datehour -Episode in --doover Que</title>">>"$MoveDir/$ShowFileName.nfo"
+      printf '%b\n' "\t$basetitle -Episode in --doover Que</title>">>"$MoveDir/$ShowFileName.nfo"
     else
-      echo -e "\t<title>$EpisodeSubtitle Recorded $datehour -Showing</title>">>"$MoveDir/$ShowFileName.nfo"
+      printf '%b\n' "\t$basetitle -Showing</title>">>"$MoveDir/$ShowFileName.nfo"
     fi
   else
-    echo -e "\t<title>$EpisodeSubtitle Recorded $datehour -Categoric</title>">>"$MoveDir/$ShowFileName.nfo"
+    printf '%b\n' "\t$basetitle -Categoric</title>">>"$MoveDir/$ShowFileName.nfo"
   fi
 
   {
-    echo -e "\t\t<rating>$rating</rating>"
-    echo -e "\t<Plot>$Plot</Plot>"
-    echo -e "\t<genre>$ShowCategory</genre>"
+    printf '%b\n' "\t<rating>$rating</rating>"
+    printf '%b\n' "\t<Plot>$Plot</Plot>"
+    printf '%b\n' "\t<genre>$ShowCategory</genre>"
+    printf '%b\n' "\t<aired>${ShowStartTime%% *}</aired>"
   } >> "$MoveDir/$ShowFileName.nfo"
 
   if [ "$HasSxxExx" = "1" ] ; then
     {
-        echo -e "\t<season>$Sxx</season>"
-        echo -e "\t<episode>$Exx</episode>"
+      printf '%b\n' "\t<season>$Sxx</season>"
+      printf '%b\n' "\t<episode>$Exx</episode>"
     } >> "$MoveDir/$ShowFileName.nfo"
   else
     {
-      echo -e "\t<season>0</season>"
-      echo -e "\t<episode>0</episode>"
+      printf '%b\n' "\t<season>0</season>"
+      printf '%b\n' "\t<episode>0</episode>"
     } >> "$MoveDir/$ShowFileName.nfo"
   fi
-  echo -e "</episodedetails>">>"$MoveDir/$ShowFileName.nfo"
-  echo "'$MoveDir/$ShowFileName.nfo'" "'$MoveDir/$ShowFileName.$OriginalExt'">>"$m2kdir"/created.tracking
+  printf '%s\n' "</episodedetails>" >> "$MoveDir/$ShowFileName.nfo"
+  echo "'$MoveDir/$ShowFileName.nfo'" "'$MoveDir/$ShowFileName.$OriginalExt'" >> "$m2kdir/created.tracking"
+  Inform "Generated episode NFO file: $MoveDir/$ShowFileName.nfo"
   return 0
 }
 
@@ -2880,8 +2893,6 @@ m2k_maintenance(){
   if [ "$DirTracking" = "Enabled" ] && [ -f "$m2kdir/dir.tracking" ]; then
     while read -r line ; do
       (( ++Counter ))
-      #TODO: Figure out the purpose of redirect to stderr and trailing 5 spaces before converting to new messaging mechanism...
-      #echo -ne "Folder record $Counter: ${DirToCheckCheck:0:20}    \n" 1>&2
       DirToCheck="$line"
       Debug "Folder record $Counter: ${DirToCheck}"
       if [ -d "$DirToCheck" ]; then
@@ -3339,6 +3350,7 @@ m2k_diagnostics(){
     Err "KODI Communications $KODIcomm"
     ErrCont 'Expected response: {"id":"myth2kodi","jsonrpc":"2.0","result":"OK"}'
     ErrCont "Got response: '$KODIresp'"
+    [[ -z "$KODIresp" ]] && ErrCont "This may just mean the Kodi instance isn't running."
   fi
 
   #Check filesystem permissions
@@ -4581,10 +4593,7 @@ if [ "$SYMLINK" != "LINK" ]; then
       test "$Notify" = "Enabled" && sudo -u "$NotifyUserName" "$binpath/m2k_notify" "myth2kodi Success" "$ShowFileName moved to $MoveDir" info #"$m2kdir/myth2kodi.png"
 
       #Additional features, notifications, rss, daily report.
-      if [ "$RequiresNFO" = "1" ]; then
-        generate_series_nfo
-        generate_episode_nfo
-      fi
+      [[ "$RequiresNFO" = "1" ]] &&  generate_episode_nfo
       kodi_newshow
       add_undo
       [[ "$RequiresDoover" = "1" ]] && add_doover
@@ -4628,10 +4637,7 @@ elif [ "$SYMLINK" = "LINK" ]; then
     fi
 
     #Additional features, notifications, rss, daily report.
-    if [ "$RequiresNFO" = "1" ]; then
-      generate_series_nfo
-      generate_episode_nfo
-    fi
+    [[ "$RequiresNFO" = "1" ]] && generate_episode_nfo
     kodi_newshow
     add_undo
     [[ "$RequiresDoover" = "1" ]] && add_doover

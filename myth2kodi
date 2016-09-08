@@ -69,6 +69,13 @@
 #      explicit paths in our function calls... Though we may need to clean up before we finished...
 #          SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
 
+#TODO: Make a directory called userjobs in ~/.myth2kodi/
+#      Add a readme.md with the example jobs from lower in this script
+#      Add an entry like:
+#        [[ -f "$m2kdir/userjobs/$jobtype" ]] && source "$m2kdir/userjobs/$jobtype"
+#      to the exit_job
+
+
 #Intention:
 #  This program automates the mapping of MythTv recordings to a Kodi library.
 #  It is designed to be a user job in MythTV. It can also be run manually from
@@ -372,6 +379,8 @@ LogType='both'
 
 m2kVersion="myth2kodi Version 0.9.7"
 
+#TODO: Move the below plus stuff near the start of main into a m2k_init function
+
 #The full path version of the file to which logging output will be sent:
 LogFile="$m2kdir/${LogFileName}.log"
 #When running diagnostics mode, output will instead be sent to this file:
@@ -396,6 +405,7 @@ declare -r ScriptStartTime="$(date +%H:%M:%S)" #Time in a readable IEEE standard
 declare -r FileNameNow="$(date +%FT%H%M%S)"  #ISO 8601: YYYY-mm-ddThhMMSS
 
 #TODO: Consider replacing this with a general settings file, with a default in the user settings section...
+#      See myth2kodi.conf
 #Set global values for settings, this overrides those set at the top of this file
 test -f "/etc/myth2kodi/globalSettings" && source /etc/myth2kodi/globalSettings
 
@@ -629,7 +639,7 @@ exit_job(){
 ################################################################################
 
 ######################### BEGIN FUNCTION DEFINITIONS ###########################
-#Set the name we will give this recording when making it accessible to Kodi
+#Set the name for episode & movie recordings when making them accessible to Kodi
 set_show_file_name(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   #Format Episodes showname=show name Sxx=season number Exx=episode number EpisodeSubtitle=episode name
@@ -660,7 +670,7 @@ set_show_file_name(){
   Inform "Set file name as: $ShowFileName"
 }
 
-#Set a show file name for special recording "Categories": 'NEWS'; 'SPORT'; etc
+#Set the name for special recording "Categories": 'NEWS'; 'SPORT'; etc
 set_show_file_name_categoric(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   #Method1 - use airdate for season
@@ -699,26 +709,22 @@ set_show_file_name_categoric(){
   Inform "Set file name as: $ShowFileName"
 }
 
-######DAILY REPORT#####
-#This function reports all shows processed based on date
+#Appends an entry to today's DailyReport file for the show just processed.
 dailyreport(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   if [ "$DailyReport" = "Enabled" ]; then
     [[ ! -d "$m2kdir/DailyReport" ]] && mkdir "$m2kdir/DailyReport"
-    local reporttime ; reporttime=$(date +%T)
+    local reporttime ; reporttime=$(date +%T) #TODO: This should use a time generated at the same time as $Today otherwise processesing near midnight could cause misleading information.
     Inform "Writing to DailyReport file: ${Today}"
     printf '%s\n' "$reporttime - $ShowFileName" >> "$m2kdir/DailyReport/${Today}"
   fi
   return 0
 }
 
-#####CHECK PERMISSIONS#####
-#CheckPermissions by writing a small file then deleting it, checking along the way.
-#CheckPermissions takes file size, free space on dir, and the dir, then it performs
-#tests. The result will be $TMoveDirWritable as a 1 or a 0 for writable or not.
-#$1=filesize $2=freespace $3=folder to check
-#TODO: Consider making this function return non-zero on error
+#Check write permission and sufficiency of free space, set TMoveDirWritable as
+#1 (writeable) or 0 (not). Takes 3 args: $1=filesize ; $2=freespace ; $3=directory
 check_permissions(){
+  #TODO: Consider making this function return non-zero on error
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   DebugCont "Called with $# arguments"
   local -i i=0 ; local var ; for var in "$@"; do ((++i)) ; DebugCont "arg $i = ${var}" ; done
@@ -764,9 +770,7 @@ check_permissions(){
   return 0
 }
 
-#####COMSKIP FILES#####
-#Function generate_comskip creates a comskip.txt file from MythTV database
-#information for use by Kodi.
+#Create a comskip.txt file from MythTV database information for use by Kodi.
 generate_comskip(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   local -i Counter=0
@@ -866,17 +870,10 @@ kodi_newshow(){
   return 0
 }
 
-#####GENERATE RSS ENTRY#####
-#This function generates an RSS feed for use on the web server. This can be used
-#in /home/<kodi-user>/.kodi/userdata/RssFeeds.xml, replace or add to the default
-#feeds with:
-#  <feed updateinterval="30">http://[youripaddress]/myth2kodi-rss/rss.xml</feed>
-#SAK: You'll probably need a webserver enabled for this to work, if it's only on
-#     the local machine then just use:
-#  <feed updateinterval="30">/var/www/myth2kodi-rss/rss.xml</feed>
-#Big thanks to barney_1!
-#TODO: return codes from this function aren't captured...
+#Generate an RSS feed for processed recordings, Kodi can be set to view this feed.
 generaterss(){
+  #Big thanks to barney_1!
+  #TODO: return codes from this function aren't captured...
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   #user settings:
   #TODO: this probably should be a setting at the top of file...
@@ -914,7 +911,7 @@ generaterss(){
 
   #TODO: Need to make the call to ifconfig more portable, maybe just revert to straight call and add /sbin to librarians path.
   #  The below assumed the first inet addr was the correct one, but that can lead to the loopback, using m2 and removing 127.0.0.1 avoids this problem,
-  #  though it's probably better to just set myip in the configuration at top of file
+  #  though it's probably better to just set myip in the configuration at top of file. #ifconfigpath="$(command -v ifconfig)"
   which /sbin/ifconfig >/dev/null && myip="$(/sbin/ifconfig | grep 'inet addr' -m2 | cut -d: -f2 | awk '{ print $1}' | grep -v "127.0.0.1")"
   rssEpisodeSubtitle="${EpisodeSubtitle//&/&amp;}"
   rssNewShowName="${NewShowName//&/&amp;}"
@@ -1113,7 +1110,7 @@ dbselect(){
 }
 
 #####MYTHTV DATABASE#####
-#This function gathers information from the MythTV database for use in the program
+#Use mysql commands to get MythTV-DB entry for the current recording.
 get_mythtvdb_info_mysql(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   DebugCont "m2kdir: $m2kdir"
@@ -1180,7 +1177,7 @@ get_mythtvdb_info_mysql(){
   return 0
 }
 
-#####UTILIZE PYTHON BINDINGS TO GET MYTHTV DB##### Requires dependency
+#Use python bindings to get MythTV-DB entry for the current recording.
 get_mythtvdb_info_pythonbindings(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   DebugCont "m2kdir: $m2kdir"
@@ -2070,9 +2067,10 @@ set_absolute_episode_number_by_sxxexx(){
   return 1
 }
 
-#TODO: Need to clean up redundancy or otherwise refactor this function to make it cleaner...
-#      Maybe fuzzy_plot_match(); chunked_fuzzy_plot_match(); multi_match_check(); then get_absolute_episode_number_fuzzy_plot() uses them...
+#Identify episode by fuzzy matching MythTV-DB Plot against Plots in myth2kodi-DB.
 getAbsoluteEpisodeNumberWithFuzzyPlotMatch(){
+  #TODO: Need to clean up redundancy or otherwise refactor this function to make it cleaner...
+  #      Maybe fuzzy_plot_match(); chunked_fuzzy_plot_match(); multi_match_check(); then get_absolute_episode_number_fuzzy_plot() uses them...
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   DebugCont "AbsoluteEpisodeNumber: $AbsoluteEpisodeNumber"
   DebugCont "NewShowName: $NewShowName"
@@ -2242,11 +2240,11 @@ set_absolute_episode_number_by_ename(){
 
 #Set the AbsoluteEpisodeNumber by fuzzy matching EpisodeSubtitle
 #against the episode names (Ename) in myth2kodi's local database.
-#TODO: we need some sort of regex to account for matches like
-#    'The Office' 'The Delivery, Part Two' -guide data
-#    'The Office' 'The Delivery (2)'       -TvDb data
-#  currently, the former would be associated with 'The Delivery (1)'
 set_absolute_episode_number_by_ename_fuzzy(){
+  #TODO: we need some sort of regex to account for matches like
+  #    'The Office' 'The Delivery, Part Two' -guide data
+  #    'The Office' 'The Delivery (2)'       -TvDb data
+  #  currently, the former would be associated with 'The Delivery (1)'
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   AbsoluteEpisodeNumber=""
   AbsoluteEpisodeNumber=$(agrep -Byn "${EpisodeSubtitle:0:29}" "$m2kdir/$NewShowName/$NewShowName.Ename.txt" | grep -m1 ^ | sed 's/:.*//')
@@ -2338,8 +2336,8 @@ increment_total_matches(){
 
 #Check to see if the file is owned by $Librarian and cause myth2kodi
 #to exit with a descriptive message if certain criteria are met.
-#TODO: review this...
 msg_myth2kodi_permission_error(){
+  #TODO: review this...
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   # if no bypass, and file is owned by mythtv, and username is not mythtv
   # and system is set to use mythtv database, and symlink is move
@@ -2409,10 +2407,10 @@ msg_epishow(){
   WarnCont "HANDLING EPISODE AS GENERAL SHOWING & DUMPING INTO --doover USER JOB"
 }
 
-#TODO: review this message
 #A warning message for when a fuzzy match on episode name isn't consistent
 #with an airdate match.
 msg_fuzzy_logic_warning(){
+  #TODO: review this message
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   Warn     "%%%% AIRDATE MATCH AND FUZZY LOGIC ARE IN DISAGREEMENT %%%%"
   WarnCont "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%"
@@ -2427,10 +2425,10 @@ msg_fuzzy_logic_warning(){
   LogLevel=3 #Enable debug level logging
 }
 
-#TODO: review this message
 #A warning message for when a match on episode name isn't consistent
 #with an airdate match.
 msg_standard_logic_warning(){
+  #TODO: review this message
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   Warn     "%% AIRDATE MATCH AND STANDARD LOGIC ARE IN DISAGREEMENT. %%"
   WarnCont "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%"
@@ -2453,9 +2451,9 @@ msg_invalid_file_error(){
   ErrCont "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%"
 }
 
-#TODO: review this message, see new msg_unable_to_identify_recording function below.
 #An error message for when information can't be obtained from TheTVDB.
 msg_tvdb_incomplete(){
+  #TODO: review this message, see new msg_unable_to_identify_recording function below.
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   Err     "%% OPERATION FAILED, INFORMATION COULD NOT BE OBTAINED %%"
   ErrCont "%% TheTVDB information is incomplete for $InputTitle, ${InputSubtitle}."
@@ -2503,9 +2501,9 @@ msg_wrote_zero_length_file(){
   fi
 }
 
-#TODO: review this message, see also msg_myth2kodi_permission_error()
 #An error message for when issues are encountered during moving
 msg_permission_error_while_moving(){
+  #TODO: review this message, see also msg_myth2kodi_permission_error()
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   Err "%%%% OPERATION FAILED: PERMISSION ERROR WHILE MOVING $ShowFileName %%%%"
   if [ "$Notify" = "Enabled" ] ; then
@@ -2526,7 +2524,6 @@ msg_symlink_not_created(){
     sudo -u "$NotifyUserName" "$binpath/m2k_notify" "$errtype" "$errmsg" stop #"$m2kdir/myth2kodi_failed.png"
   fi
 }
-
 
 #This function provides an error message on generic errors
 msg_generic_unspecified_error(){
@@ -2574,10 +2571,10 @@ cleanse_warning(){
   return 0
 }
 
-#TODO: No point setting failsafe state when original dir isn't writeable... add checks. see also, set_target_dir_as_input_path_dir()
 #Set the move location for the current recording, using Alternate directories
 #when main directories unavailable, in worst case set FailSafe flag.
 set_move_location(){
+  #TODO: No point setting failsafe state when original dir isn't writeable... add checks. see also, set_target_dir_as_input_path_dir()
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   #Command line, no database Episodes: Determine where File will fit
   FailSafeState=0
@@ -2597,7 +2594,7 @@ set_move_location(){
   [[ "$m2kProgramIDCheck" = "SH" && "$PrimaryShowDirWritable" != "1" && "$AlternateShowDirWritable" != "1" ]] && FailSafeState=1
 }
 
-##### MAKE DIRECTORY TO MOVE RECORDING TO IF NECESSARY #####
+#Make the directory we'll move recording to if it doesn't already exist.
 make_show_dir(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   DebugCont "NewShowName: $NewShowName"
@@ -2675,10 +2672,9 @@ set_target_dir_as_input_path_dir(){
   test ! -d "$AlternateShowDir" && mkdir "$AlternateShowDir"
 }
 
-
 #Create a series NFO file based on information we have for the current series
-#TODO: review this function, specifically, tvshow.nfo Vs $ShowFileName.nfo
 generate_series_nfo(){
+  #TODO: review this function, specifically, tvshow.nfo Vs $ShowFileName.nfo
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   test -f "$MoveDir/tvshow.nfo" && rm -f "$MoveDir/tvshow.nfo"
   echo -e "<tvshow>">>"$MoveDir"/tvshow.nfo
@@ -2769,6 +2765,7 @@ show_translation(){
   return 0
 }
 
+#Process a list of archived files and remove those older than a specified age.
 process_cleanup_file(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   DebugCont "Called with $# arguments"
@@ -2796,8 +2793,12 @@ process_cleanup_file(){
   rm -f "$CLEANUP_FILE"
 }
 
+#Clean-up old files we don't need any more: log files; m2k database files; etc.
 m2k_cleanse(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
+  #TODO: Consider making the cleanup_logs file more modular, so we can set different
+  #      lifetimes for the archived main logs, doover scripts, undo scripts, etc.
+  #      Maybe make an archived_logs directory with sub directories: main; diagnostics; etc. 
 
   #Create cleanup files for archived logs, myth2kodi database, and daily report files.
   find "$m2kdir" -maxdepth 1 -type f -name '*20[0-9][0-9]-[0-1][0-9]-[0-3][0-9]*' > "$m2kdir/cleanup_logs"
@@ -2824,7 +2825,6 @@ m2k_cleanse(){
     Debug "Moving $DuplicatesFile to ${DuplicatesFile%.*}_${FileNameNow}.log."
     mv "$DuplicatesFile" "${DuplicatesFile%.*}_${FileNameNow}.log"
   fi
-
 }
 
 #Loops through all processed recordings and check if their parent is there. If no parent, then file is deleted.
@@ -2918,9 +2918,9 @@ msg_scan_usage(){
   ErrCont '  example: myth2kodi --scan "mpg" "/home/mythtv/videos"'
 }
 
-#TODO: Need to go through this function line-by-line and make sure it can be run without causing damage.
 #This function will scan a folder and process the entire library
 m2k_scan(){
+  #TODO: Need to go through this function line-by-line and make sure it can be run without causing damage.
   [[ "$LogType" = "logfile" ]] && printf '%s\n' "WARNING: Recommend setting LogType='both', before proceeding.."
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   local yesorno=""
@@ -3020,9 +3020,9 @@ m2k_scan(){
   return 1
 }
 
-#TODO: review... Why?
 #Called when SYMLINK is Disabled, adds read and write permission for the group
 set_group_permission(){
+  #TODO: review... Why?
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   #Add read and write permissions for the group to the moved recording.
   chmod g=rw "$MoveDir/$ShowFileName.$OriginalExt"
@@ -3102,7 +3102,6 @@ msg_operation_summary(){
   Inform "################ END OF OPERATION SUMMARY ################"
 }
 
-#####MYTHICAL DIAGNOSTICS#####
 #This function provides a functions check on myth2kodi
 m2k_diagnostics(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
@@ -3457,7 +3456,6 @@ m2k_diagnostics(){
   return 0
 }
 
-#####DOOVER PROCESSING#####
 #This function provides an easy way to redo failed jobs.
 m2k_doover(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
@@ -3498,7 +3496,6 @@ m2k_doover(){
   return 1
 }
 
-#####UNDO JOBS#####
 #This function provides an easy way to undo all myth2kodi jobs
 m2k_undo_all(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
@@ -3552,18 +3549,19 @@ m2k_undo_all(){
   return 1
 }
 
-#msg_about
-m2k_about(){
+##### HELP MESSAGES #####
+#A message about what myth2kodi is, including current version and authors.
+msg_about(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   printf ' %s\n\n' "$m2kVersion"
-  printf ' %s\n' "myth2kodi is a modified version of mythicalLibrarian."
-  printf ' %s\n\n' "It automates the mapping of MythTV recordings to a Kodi library."
+  printf ' %s\n' "myth2kodi automates the mapping of MythTV recordings to a Kodi library."
+  printf ' %s\n\n' "It is a modified version of mythicalLibrarian."
   printf ' %s\n' "mythicalLibrarian Author: Adam Outler outleradam(at)hotmail.com"
   printf ' %s\n\n' "myth2kodi Author: Stuart Knock"
 }
 
-#msg_usage
-m2k_usage(){
+#A message describing the basic call patterns.
+msg_usage(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   if [ "$InputPath" = "%DIR%/%FILE%" ]; then
     msg_userjob_outside_mythtv_error
@@ -3581,10 +3579,8 @@ m2k_usage(){
   printf '    %s\n\n' "myth2kodi --special"
 }
 
-#####HELP#####
-#This function provides a helpful message.
-#msg_option_help
-m2k_help(){
+#A message listing all the --option flags.
+msg_options(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   #TODO: Consider creating more detailed help messages for individual options,
   #      so that they can be called something like:
@@ -3636,8 +3632,8 @@ m2k_help(){
   printf '%s\n\n' "    example: myth2kodi --confidence"
 }
 
-#msg_config_help
-special(){
+#A message about myth2kodi configuration files
+msg_config(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   echo " ======showTranslations====="
   echo " If you are having problems with incorrect guide data such"
@@ -3691,7 +3687,27 @@ special(){
   echo " #KODIIPs=( user:password@192.168.1.110:8080 )                #"
   echo " #Database=Disabled                                           #"
   echo " ##############################################################"
-  echo "Done."
+  echo ""
+}
+
+#A message about enabling Kodi to access the RSS feed generated by myth2kodi
+msg_rss(){
+  echo "======myth2kodi-rss====="
+  echo " myth2kodi generates an RSS file that can be accessed as a feed"
+  echo " from within Kodi. It essentially contains a list of the most"
+  echo " recent successfully completed jobs."
+  echo ""
+  echo " To access myth2kodi's RSS feed, you will need to edit:"
+  echo "   /home/<kodi-user>/.kodi/userdata/RssFeeds.xml"
+  echo " and add myth2kodi's feed. If the Kodi instance is on the same"
+  echo " machine running myth2kodi then just replace or add to Kodi's"
+  echo " default feeds with something like:"
+  echo "   <feed updateinterval="30">/var/www/myth2kodi-rss/rss.xml</feed>"
+  echo " If you want to access it from a different machine than the one"
+  echo " running myth2kodi then you'll need a webserver enabled on the"
+  echo " myth2kodi machine and the entry should look something like:"
+  echo "    <feed updateinterval="30">http://[youripaddress]/myth2kodi-rss/rss.xml</feed>"
+  echo ""
 }
 
 #A message explaining how to improve confidence ratings for you recordings.
@@ -3715,7 +3731,7 @@ msg_improve_confidence(){
   exit 0
 }
 
-#Force an update of the myth2kodi tables for a specified Series
+#Force an update of the myth2kodi database tables for a specified Series.
 get_series_info(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   Inform "Searching for series: $InputTitle"
@@ -3822,12 +3838,24 @@ InputOption="$4"
 
 #TODO: Review the tests of whether we were called correctly, try to give better info of error...
 #Some basic tests to make sure we were called correctly
-[[ "${InputPath:0:1}" != "-" && "$InputPath" != "testfile.ext" && ! -f "$InputPath" && -z "$InputTitle" ]] && m2k_usage && exit_job 'GenericUnspecifiedError'
-[[ -z "$InputPath" ]] && m2k_usage && exit_job 'GenericUnspecifiedError'
+[[ "${InputPath:0:1}" != "-" && "$InputPath" != "testfile.ext" && ! -f "$InputPath" && -z "$InputTitle" ]] && msg_usage && exit_job 'GenericUnspecifiedError'
+[[ -z "$InputPath" ]] && msg_usage && exit_job 'GenericUnspecifiedError'
 #TODO: MythTVUserJobString is not used within this script, check whether it's somehow a requirement of calls from mythtv, though, in an absence of export, I don't see how...
 MythTVUserJobString="%DIR%/%FILE%"
 
 #####COMMAND LINE SWITCHES#####
+#TODO: Add a --delete <filename> option
+#    + It should delete the file, any links to it and the associated database entry.
+#
+#TODO: Add a --disconnect <filename> option
+#    + removes file & links from undo, doover, created.tracking, 
+#    + removes links from mythtv filename to moved filename, or if only 'moved' in LINK mode then actually move
+#    + remove database entry
+#
+#TODO: Add a --log <filename> option
+#    + Identify the first and last log entry for that file when it was processed and display everything in between in a pager.
+#
+
 #check for command line switches
 case "$InputPath" in
 
@@ -3892,19 +3920,19 @@ case "$InputPath" in
   ;;
   --about)
     Debug "Recognised command line switch '--about'"
-    m2k_about
+    msg_about
     exit 0
   ;;
   --usage)
     Debug "Recognised command line switch '--usage'"
-    m2k_usage
+    msg_usage
     exit 0
   ;;
   --help|-?|-h)
     Debug "Recognised command line switch '--help|-?|-h'"
-    m2k_about
-    m2k_usage
-    m2k_help
+    msg_about
+    msg_usage
+    msg_options
     exit 0
   ;;
   --maintenance)
@@ -3924,7 +3952,7 @@ case "$InputPath" in
   ;;
   --special)
     Debug "Recognised command line switch '--special'"
-    special
+    msg_config
     exit 0
   ;;
   --version|-v|-ver|-V)
@@ -3938,7 +3966,7 @@ case "$InputPath" in
     Debug "Recognised command line switch '--commskip'"
     #eg: myth2kodi --commskip '/path/to/recordings/1070_20160331073100.mpg'
     InputPath="$2"
-    [[ ! -f "$InputPath" && ! -d "$InputPath" ]] && m2k_usage && exit_job 'GenericUnspecifiedError'
+    [[ ! -f "$InputPath" && ! -d "$InputPath" ]] && msg_usage && exit_job 'GenericUnspecifiedError'
     if [[ -f "$InputPath" && -L "$InputPath" ]]; then
       Inform "Regenerating commskip file for $InputPath"
       InputFileBasename="$(basename "$InputPath")"
@@ -3993,7 +4021,7 @@ esac
 Debug "No recognised command line switches set."
 if [[ "${InputPath:0:1}" = "-" ]]; then
   Err "Unrecognised command line switch: $InputPath"
-  m2k_usage
+  msg_usage
   exit_job 'GenericUnspecifiedError'
 fi
 
@@ -4055,7 +4083,7 @@ if [[ -n "$Sxx" ]]; then InformCont "Sxx:$Sxx"; else InformCont "Sxx: UNKNOWN"; 
 if [[ -n "$Exx" ]]; then InformCont "Exx:$Exx"; else InformCont "Exx: UNKNOWN"; fi
 InformCont "PLOT: $Plot"
 ShowName="$InputTitle"
-[[ -z "$ShowName" ]] && m2k_usage && exit_job 'GenericUnspecifiedError'
+[[ -z "$ShowName" ]] && msg_usage && exit_job 'GenericUnspecifiedError'
 
 #TODO: check whether the split on semicolon here and elsewhere should be in process_mythtvdb_schedulesdirect
 #split on semicolon, there will only be one episode looked up.

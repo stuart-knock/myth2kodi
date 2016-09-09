@@ -81,7 +81,7 @@
 #  It is designed to be a user job in MythTV. It can also be run manually from
 #  a command line. It must have access to your MythTV recordings. The program
 #  generates file names compatible with Kodi, then moves or links recordings
-#  based on user settings. Commskip and NFO files are also generated from your
+#  based on user settings. Comskip and NFO files are also generated from your
 #  MythTV database, as required, so that Kodi can make use of them.
 #
 #Installation:
@@ -375,91 +375,15 @@ LogType='both'
 ################################################################################
 #################### Abandon all hope, ye who enter here. ######################
 ################################################################################
+################################################################################
+#################### ADEPT PERSONNEL ONLY BEYOND THIS POINT ####################
+################################################################################
 #TODO: Consider disabling stdout logging, ie, use LogType='logfile', when run as a mythtv user-job.
 
-m2kVersion="myth2kodi Version 0.9.7"
-
-#TODO: Move the below plus stuff near the start of main into a m2k_init function
-
-#The full path version of the file to which logging output will be sent:
-LogFile="$m2kdir/${LogFileName}.log"
-#When running diagnostics mode, output will instead be sent to this file:
-declare -r DiagnosticsFile="$m2kdir/diagnostics.log"
-#A file containing a list of possible duplicate recordings:
-declare -r DuplicatesFile="$m2kdir/duplicates.log"
-#A file containing a list of possible duplicate recordings:
-declare -r UnrecognizedSeriesFile="$m2kdir/unrecognizedseries.log"
-
-#####DEFINE ENVIRONMENT AND VARIABLES#####
-#Who called the script:
-declare -r MyUserName=$(whoami)
-if [[ "$MyUserName" != "$Librarian" ]]; then
-  printf 'ERROR: %s\n' "myth2kodi should be run by user '$Librarian'"
-  printf '  %s\n' "Check the USER SETTINGS section near the top of the script you just ran."
-  printf '  %s\n' "That is, take a look at the top few hundred lines of: ${BASH_SOURCE[0]}"
-  exit 1
-fi
-#And when,
-declare -r Today="$(date +%F)"  #Date in IEEE standard format, ie YYYY-mm-dd
-declare -r ScriptStartTime="$(date +%H:%M:%S)" #Time in a readable IEEE standard format, ie HH:MM:SS
-declare -r FileNameNow="$(date +%FT%H%M%S)"  #ISO 8601: YYYY-mm-ddThhMMSS
-
-#TODO: Consider replacing this with a general settings file, with a default in the user settings section...
-#      See myth2kodi.conf
-#Set global values for settings, this overrides those set at the top of this file
-test -f "/etc/myth2kodi/globalSettings" && source /etc/myth2kodi/globalSettings
-
-initialise_new_logfile(){
-  touch "$LogFile"
-  {
-    printf 'Creating Log File: %s\n' "$LogFile"
-    printf 'Created on %s at %s\n' "$Today" "$ScriptStartTime"
-  } >> "$LogFile"
-}
-
-#Make our working directory if it doesn't already exist
-if [ ! -d "$m2kdir" ]; then
-  mkdir --parents "$m2kdir"
-  createworkingdirstatus="$?"
-  if [[ "$createworkingdirstatus" != 0 || ! -d "$m2kdir" ]]; then
-    printf 'ERROR: %s\n' "Creation of our working directory failed... This needs to be corrected."
-    printf '  %s\n' "First check that the user settings 'Librarian' and 'm2kdir' are correct."
-    printf '  %s\n' "Then check that $Librarian has a home directory, if not create it, eg:"
-    printf '    %s\n' "sudo mkdir /home/$Librarian"
-    printf '    %s\n' "sudo chown -R $Librarian:users /home/$Librarian"
-    printf '  %s\n' "Finally, be sure to run 'myth2kodi --diagnostics' before first use."
-    exit 1
-  fi
-  initialise_new_logfile
-  printf 'Created Working Directory: %s\n' "$m2kdir" >> "$LogFile"
-fi
-
-#Load logging utility
-if [ -f "$binpath/bashlogging" ] ; then
-  source "$binpath/bashlogging" "$LogType"
-  bashloggingstatus="$?"
-  [[ "$bashloggingstatus" != "0" ]] && exit "$bashloggingstatus"
-else
-  printf 'ERROR: %s\n' "$binpath/bashlogging doesn't exist." | tee -a "$LogFile"
-  exit 1
-fi
 #Redirect a copy of stderr throughout the script to LogFile
 #exec 4>&2 2> >(tee >(xargs --null printf "[$(date +%FT%T)] ERROR: %s\n" >> "$LogFile") >&4)
 
-#When the LogFile exceeds 4MB compress it and start a fresh one.
-if [ -f "$LogFile" ]; then
- LogFileSize=$(wc --bytes < "$LogFile")
- if ((LogFileSize > 4000000)); then
-   Inform "Moving and compressing LogFile"
-   mv "$LogFile" "$m2kdir/${LogFileName}_${FileNameNow}.log"
-   gzip "$m2kdir/${LogFileName}_${FileNameNow}.log"
-   initialise_new_logfile
-   Inform "Previous LogFile moved to: $m2kdir/${LogFileName}_${FileNameNow}.log"
- fi
-fi
-Debug "Running myth2kodi as $MyUserName"
-
-########################### BEGIN USER JOBS ####################################
+######################### BEGIN FUNCTION DEFINITIONS ###########################
 #The exit_job function is a place where you can put your custom script to be run
 #at the end of execution. Though it may be at the top, this is actually the end
 #of the program.
@@ -468,12 +392,14 @@ exit_job(){
   DebugCont "Called with $# arguments"
   local -i i=0; local var; for var in "$@"; do ((++i)); DebugCont "arg $i = ${var}"; done
   local jobtype="$1"
+  local ERR_HEADER="${FUNCNAME[0]}() CALLED FROM: ${FUNCNAME[1]}()."
+  printf '%s\n' "@@@@ COMPLETE: $(date --rfc-3339=seconds) @@@@" >> "$LogFile"
   case "$jobtype" in
   #Successful Completion of myth2kodi
     LinkModeSuccessful|MoveModeSuccessful)
       Inform "SUCCESSFUL COMPLETION TYPE: $jobtype"
       #Insert Custom User Job here
-
+      [[ -f "$m2kdir/userjobs/$jobtype" ]] && source "$m2kdir/userjobs/$jobtype"
       #
       exit 0
       ;;
@@ -489,7 +415,7 @@ exit_job(){
 
   #File system error occurred
     PermissionError0Length|InvalidFileNameSupplied|PermissionErrorWhileMoving|FailSafeModeComplete|LinkModeFailed)
-      Err "${FUNCNAME[0]}() CALLED FROM: ${FUNCNAME[1]}(). FILE SYSTEM ERROR: $jobtype"
+      Err "$ERR_HEADER FILE SYSTEM ERROR: $jobtype"
       #Insert Custom User Job here
 
       #
@@ -498,7 +424,7 @@ exit_job(){
 
   #File name we're trying to move to already exists
     FileAlreadyExists)
-      Err "${FUNCNAME[0]}() CALLED FROM: ${FUNCNAME[1]}(). NOT MOVING RECORDING: $jobtype"
+      Err "$ERR_HEADER NOT MOVING RECORDING: $jobtype"
       #Insert Custom User Job here
 
       #
@@ -507,7 +433,7 @@ exit_job(){
 
   #Generic error occurred
     GenericUnspecifiedError)
-      Err "${FUNCNAME[0]}() CALLED FROM: ${FUNCNAME[1]}(). UNKNOWN ERROR OCCOURED: $jobtype"
+      Err "$ERR_HEADER UNKNOWN ERROR OCCOURED: $jobtype"
       #Insert Custom User Job here
 
       #
@@ -516,7 +442,7 @@ exit_job(){
 
   #User elected not to process jobs which can not be properly categorized
     MythTVdatabaseFailure)
-      Err "${FUNCNAME[0]}() CALLED FROM: ${FUNCNAME[1]}(). COULDN'T EXTRACT RECORDING INFO FROM MythTV-DB: $jobtype"
+      Err "$ERR_HEADER COULDN'T EXTRACT RECORDING INFO FROM MythTV-DB: $jobtype"
       #Insert Custom User Job here
 
       #
@@ -540,105 +466,275 @@ exit_job(){
       #
       exit 0
       ;;
+
+  #The invocation of myth2kodi had something wrong with it.
+    InvalidCall|InputPathNotFile|UnrecognisedCommand|InsufficientInformationProvided|UserSettingError)
+      Err "$ERR_HEADER myth2kodi called incorrectly: $jobtype"
+      #
+      exit 1
+      ;;
   esac
   #
   exit 4
 }
 
-#TODO: Drop update entirely, however, consider repurposing mythicalSetup as myth2kodi --setup
-# myth2kodi --update (mythicalSetup) will merge user jobs into myth2kodi automagically.
-# Put your desired commands into one of the following files.  You may need to create the folder
-# /etc/myth2kodi/JobSuccessful
-# /etc/myth2kodi/JobInformationNotComplete
-# /etc/myth2kodi/JobGenericError
-# /etc/myth2kodi/JobFilesystemError
-# /etc/myth2kodi/JobInsufficientData
-# /etc/myth2kodi/JobIgnoreList
-# /etc/myth2kodi/JobUnspecified
-# After running mythicalSetup, the user job will be incorporated into the
-# myth2kodi script and  Executed when the job is run.
+#Initialises a new log file with creation information, can be run before
+#the logging system is initialised.
+initialise_new_logfile(){
+  touch "$LogFile"
+  {
+    printf 'Creating Log File: %s\n' "$LogFile"
+    printf 'Created on %s at %s\n' "$Today" "$ScriptStartTime"
+  } >> "$LogFile"
+}
 
-### EXAMPLE JOB (Leading "# " should be removed) ###
-# /etc/myth2kodi/JobSuccessful:
-# #Transcode your file using the myth2kodi variables
-# ffmpeg -i S:"$MoveDir/$ShowFileName.$OriginalExt" -target ntsc-svcds:"$MoveDir/$ShowFileName.mp4"
-# #remove the myth2kodi symlink
-# rm "$InputPath"
-# #make a new symlink
-# ln -s  "$MoveDir/$ShowFileName.mp4" "$InputPath"
-# #Set the new file extension
-# OriginalExt=mp4
-# #Create tracking entry for the file
-# add_undo ; [[ "$RequiresDoover" = "1" ]] && add_doover
-# ####Move the .txt(comskip) and .nfo(Information) files if needed.
-# enable the KODI communications
-# KODIUpdate=Enabled
-# KODIClean=Enabled
-# KODINotify=Enabled
-# #Tell myth2kodi to do KODI communications
-# kodi_newshow
-# kodi_cleanup
+#This is the first command executed after the setting of variables at the top of
+#this file.
+m2k_init(){
+  #Override default settings with anything in myth2kodi.conf
+  [[ -f "$m2kdir/myth2kodi.conf" ]] && source "$m2kdir/myth2kodi.conf"
 
-#Suggested examples are:
-# 1.string together multiple versions of myth2kodi configured for
-#   different languages. Set a different Language for each, then on failure,
-#   call the next job.
-# 2.custom name replacement of certain programming
-# 3.custom file moving of certain programming
-# 4.set custom folders based upon recorded channel
-# 5.set custom user jobs based upon who ran the file
-# 6.make a "new movies" "old movies" folder.
-#The limits are endless.
+  declare -gr m2kVersion="myth2kodi Version 0.9.7"
+  declare -gr m2kPlatform="$(uname)"
 
-#The following is a list of variables which can be used as a part of user jobs
-#at the end of myth2kodi:
-#####ALL RECORDINGS####
-#$MoveDir/$ShowFileName.$OriginalExt = location of moved file.
-#$ShowName = Processed Title
-#$InputTitle = actual database title
-#$MoveDir = the folder to which the file was moved ie. "/home/mythtv/videos/Episode"
-#$ShowFileName = the name of the show moved, not including extension eg. "simpsons S01E02 (foo)" or "MovieTitle(year)"
-#$OriginalExt = original file extension  eg "mpg"
-#$NewShowName = Successfully resolved show name
-#$ChanID = ChannelID
-#$ProgramID= The Program IDentification information found in the MythTV DB
-#$ShowStartTime = begin recording time
-#$ShowCategory = category like children or sports also specifies Movie in SydFTA data
-#$m2kProgramIDCheck = "SH" for SHow or sports - "MV" for MoVie - "EP" for EPisode
-#$Plot = Plot
-#$Stars = Stars
-#$FileBaseName = name of the file to be moved without ext
-#$XMLTVGrabber = your guide data type
-#$ProgramIDType= Generic episode with no data, Movie, or Series With Episode Data
-#$Zap2itSeriesID= Zap2it ID with SH, MV or EP stripped
-#$MyUserName = name of user running myth2kodi
-#$SafeShowName = title of show after showTranslations formatted for filesystem use
+  #Who called the script:
+  declare -gr MyUserName=$(whoami)
+  if [[ "$MyUserName" != "$Librarian" ]]; then
+    printf 'ERROR: %s\n' "myth2kodi should be run by user '$Librarian'"
+    printf '  %s\n' "Check the USER SETTINGS section near the top of the script"
+    printf '  %s\n' "you just ran or the settings file. That is, take a look at"
+    printf '  %s\n' "the top few hundred lines of: ${BASH_SOURCE[0]}"
+    printf '  %s\n' "or: $m2kdir/myth2kodi.conf"
+    exit 1
+  fi
+  #And when,
+  declare -gr Today="$(date +%F)"  #Date in IEEE standard format, ie YYYY-mm-dd
+  declare -gr ScriptStartTime="$(date +%H:%M:%S)" #Time in a readable IEEE standard format, ie HH:MM:SS
+  declare -gr FileNameNow="$(date +%FT%H%M%S)"  #ISO 8601: YYYY-mm-ddThhMMSS
 
-####EPISODES AND GENERIC SHOWS####
-#$OriginalAirDate = original air date  Generic programming will be the first episode ever, for episodes it will be the first aired date
-#$EpisodeSubtitle = Subtitle or EPisode Name
+  #The full path version of the file to which logging output will be sent:
+  LogFile="$m2kdir/${LogFileName}.log"
+  #When running diagnostics mode, output will instead be sent to this file:
+  declare -gr DiagnosticsFile="$m2kdir/diagnostics.log"
+  #A file containing a list of possible duplicate recordings:
+  declare -gr DuplicatesFile="$m2kdir/duplicates.log"
+  #A file containing a list of possible duplicate recordings:
+  declare -gr UnrecognizedSeriesFile="$m2kdir/unrecognizedseries.log"
 
-#####EPISODES####
-#$Exx = Episode Number or "Movie" in case of a movie
-#$Sxx = Season number or blank in case of movie
-#$SeriesID = TheTVDB series ID
-#$TvDbTime = current tvdb time
-#$LastUpdatedTVDB = last updated time from TheTVDB (for Episodes only others will be blank)
-# = tvdb order numbering
+  #Make our working directory if it doesn't already exist
+  if [ ! -d "$m2kdir" ]; then
+    local createworkingdirstatus
+    mkdir --parents "$m2kdir"
+    createworkingdirstatus="$?"
+    if [[ "$createworkingdirstatus" != 0 || ! -d "$m2kdir" ]]; then
+      printf 'ERROR: %s\n' "Creation of our working directory failed... This needs to be corrected."
+      printf '  %s\n' "First check that the user settings 'Librarian' and 'm2kdir' are correct."
+      printf '  %s\n' "Then check that $Librarian has a home directory, if not create it, eg:"
+      printf '    %s\n' "sudo mkdir /home/$Librarian"
+      printf '    %s\n' "sudo chown -R $Librarian:users /home/$Librarian"
+      printf '  %s\n' "Finally, be sure to run 'myth2kodi --diagnostics' before first use."
+      exit 1
+    fi
+    initialise_new_logfile
+    printf 'Created Working Directory: %s\n' "$m2kdir" >> "$LogFile"
+  fi
 
-####MOVIES####
-#$MovieAirDate = the original year the movie aired
+  #Initialise logging system
+  if [ -f "$binpath/bashlogging" ] ; then
+    local bashloggingstatus
+    source "$binpath/bashlogging" "$LogType"
+    bashloggingstatus="$?"
+    [[ "$bashloggingstatus" != "0" ]] && exit "$bashloggingstatus"
+  else
+    printf 'ERROR: %s\n' "$binpath/bashlogging doesn't exist." | tee -a "$LogFile"
+    exit 1
+  fi
 
-############################## END USER JOBS ###################################
+  #When the LogFile exceeds 4MB compress it and start a fresh one.
+  if [ -f "$LogFile" ]; then
+    local LogFileSize
+    LogFileSize=$(wc --bytes < "$LogFile")
+    if ((LogFileSize > 4000000)); then
+      Inform "Moving and compressing LogFile"
+      sleep 0.1 #Don't want to start moving it while we're still writing to it.
+      mv "$LogFile" "$m2kdir/${LogFileName}_${FileNameNow}.log"
+      gzip "$m2kdir/${LogFileName}_${FileNameNow}.log"
+      initialise_new_logfile
+      Inform "Previous LogFile moved to: $m2kdir/${LogFileName}_${FileNameNow}.log"
+    fi
+  fi
 
+  #Set defaults for searching Series information
+  SeriesID=""
+  NewShowName=""
+  RequiresDoover=0
+  ConfidenceRating=0
+  SeriesConfidenceRating=0
+  #Setup defaults for searching Episode information
+  Exx=""
+  Sxx=""
+  GotEpisodeNumber=0
+  EpisodeConfidenceRating=0
 
+  Inform "myth2kodi script initialisation complete."
+  Debug "Running myth2kodi as $MyUserName"
+  #TODO: Debug "$(set)" OR "$(printenv)" OR something like that.
+}
 
+#Do some basic tests to make sure we were called correctly
+validate_args(){
+  Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
+  #TODO: Review/Expand the checks of whether we were called correctly.
+  #We need at least one arg
+  [[ -z "$m2karg1" ]] && { msg_usage ; exit_job 'InvalidCall' ; }
 
-################################################################################
-#################### ADEPT PERSONNEL ONLY BEYOND THIS POINT ####################
-################################################################################
+  #If the first arg isn't a switch or our testfile, then it must be a file.
+  if [[ "${m2karg1:0:1}" != "-" && "$m2karg1" != "testfile.ext" && ! -f "$m2karg1" ]]; then
+    msg_usage
+    exit_job 'InputPathNotFile'
+  fi
 
-######################### BEGIN FUNCTION DEFINITIONS ###########################
+  Debug "Call seems correct: myth2kodi '$m2karg1' '$m2karg2' '$m2karg3' '$m2karg4'"
+  return 0
+}
+
+parse_command_flags(){
+  Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
+  #check for command line switches
+  case "$m2karg1" in
+
+    --scan) #filetype /path/to/folder
+      Debug "Recognised command line switch '--scan'"
+      #TODO: Add ability to scan only specific files, eg those for a specific ShowName
+      export m2kScanMode="True"
+      m2k_scan
+      declare -i scanreturnstatus="$?"
+      unset m2kScanMode
+      exit $scanreturnstatus
+    ;;
+    --diagnostics)
+      Debug "Recognised command line switch '--diagnostics'"
+      [[ "$Database" = "Enabled" ]] && Inform "Temporarily disabling access to MythTV-Database -- for diagnostics."
+      export m2kDiagnosticsMode="True"
+      PreCallLogFile="$LogFile"
+      PreCallLogLevel="$LogLevel"
+      (( LogLevel < 2 )) && LogLevel=2 && Inform "Escalating LogLevel to Info (2)."
+      if [[ "$LogType" != "stdout" ]] ; then
+       Inform "Running diagnostics, so redirecting subsequent messages to $DiagnosticsFile"
+      else
+       Warn "Running diagnostics without any logging to file, consider using LogType 'logfile' or 'both'"
+      fi
+      LogFile="$DiagnosticsFile"
+      m2k_diagnostics
+      declare -i diagnosticsreturnstatus="$?"
+      #Reset the LogFile & LogLevel to previous state, in case we ever call myth2kodi --diagnostics from within myth2kodi
+      LogFile="$PreCallLogFile"
+      LogLevel="$PreCallLogLevel"
+      unset m2kDiagnosticsMode
+      exit $diagnosticsreturnstatus
+    ;;
+    --confidence)
+      Debug "Recognised command line switch '--confidence'"
+      msg_improve_confidence
+      exit 0
+    ;;
+    --doover)
+      Debug "Recognised command line switch '--doover'"
+      m2k_doover
+      exit $?
+    ;;
+    --delete)
+      Debug "Recognised command line switch '--delete'"
+      delete_recording
+      exit $?
+    ;;
+    --disconnect)
+      Debug "Recognised command line switch '--disconnect'"
+      disconnect_recording
+      exit $?
+    ;;
+    --log)
+      Debug "Recognised command line switch '--log'"
+      recording_log
+      exit $?
+    ;;
+    --unmanned_doover)
+      Debug "Recognised command line switch '--unmanned_doover'"
+      DoOverBypass=1
+      m2k_doover
+      exit $?
+    ;;
+    --undo)
+      Debug "Recognised command line switch '--undo'"
+      #TODO: Enable undo for a specific file, eg: myth2kodi --undo '/path/to/recordings/1070_20160331073100.mpg'
+      #      Ideally we'd alternatively be able to provide the moved file name and it would still work.
+      m2k_undo_all
+      exit $?
+    ;;
+    --getSeriesInfo) #ShowName
+      Debug "Recognised command line switch '--getSeriesInfo'"
+      #Example usage: myth2kodi --getSeriesInfo "Black Books"
+      get_series_info
+      exit $?
+    ;;
+    --about)
+      Debug "Recognised command line switch '--about'"
+      msg_about
+      exit 0
+    ;;
+    --usage)
+      Debug "Recognised command line switch '--usage'"
+      msg_usage
+      exit 0
+    ;;
+    --help|-?|-h)
+      Debug "Recognised command line switch '--help|-?|-h'"
+      msg_about
+      msg_usage
+      msg_options
+      exit 0
+    ;;
+    --maintenance)
+      Debug "Recognised command line switch '--maintenance'"
+      maintenance_warning
+      [[ "$?" != 0 ]] && exit $?
+      removedead=1
+      m2k_maintenance
+      exit $?
+    ;;
+    --cleanse)
+      Debug "Recognised command line switch '--cleanse'"
+      cleanse_warning
+      [[ "$?" != 0 ]] && exit $?
+      m2k_cleanse
+      exit $?
+    ;;
+    --config-help)
+      Debug "Recognised command line switch '--config-help'"
+      msg_config
+      msg_rss
+      exit 0
+    ;;
+    --version|-v|-ver|-V)
+      Debug "Recognised command line switch '--version|-v|-ver|-V'"
+      printf '%s\n' "$m2kVersion"
+      exit 0
+    ;;
+    --comskip) #/path/to/recording/filename.mpg | /path/to/recordings
+      Debug "Recognised command line switch '--comskip'"
+      #eg: myth2kodi --comskip '/path/to/recordings/1070_20160331073100.mpg'
+      InputPath="$m2karg2"
+      [[ -f "$InputPath" || -d "$InputPath" ]] || { msg_usage ; exit_job 'GenericUnspecifiedError' ; }
+      recreate_comskip
+      exit $?
+    ;;
+  esac
+
+  Err "Unrecognised command line switch: $m2karg1"
+  msg_usage
+  exit_job 'UnrecognisedCommand'
+}
+
 #Set the name for episode & movie recordings when making them accessible to Kodi
 set_show_file_name(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
@@ -743,26 +839,26 @@ check_write(){
             fi
           else
             Err "${FUNCNAME[0]}() $MyUserName TRIED TO WRITE TO $3 --FAILED"
-            [[ ! -r "$3" ]] && Inform "QUICK FIX: sudo chmod a+r \"$3\""
-            [[ ! -w "$3" ]] && Inform "QUICK FIX: sudo chmod a+w \"$3\""
-            Inform "QUICK FIX: sudo chown $MyUserName \"$3\""
+            [[ ! -r "$3" ]] && Inform "QUICK FIX: sudo chmod a+r '$3'"
+            [[ ! -w "$3" ]] && Inform "QUICK FIX: sudo chmod a+w '$3'"
+            Inform "QUICK FIX: sudo chown $MyUserName '$3'"
           fi
         elif [ -z "$2" ] || (( $1 >= $2 )); then
-          Err "${FUNCNAME[0]}() INSUFFICIENT FREE SPACE ON $3"
+          Err "${FUNCNAME[0]}() INSUFFICIENT FREE SPACE ON '$3'"
           Inform "QUICK FIX: Remove unnecessary files"
           return 1
         fi
       else
-        Err "${FUNCNAME[0]}() FOLDER DOES NOT EXIST: $3"
-        Inform "QUICK FIX: mkdir \"$3\""
+        Err "${FUNCNAME[0]}() FOLDER DOES NOT EXIST: '$3'"
+        Inform "QUICK FIX: mkdir '$3'"
       fi
     else
       Warn "${FUNCNAME[0]}() COULD NOT READ FILESIZE ON $InputPath"
-      Inform "QUICK FIX: chmod -R 775 \"$InputPath\""
+      Inform "QUICK FIX: chmod -R 775 '$InputPath'"
     fi
   else
-    Warn "${FUNCNAME[0]}() COULD NOT READ FREE SPACE on \"$3\""
-    Inform "QUICK FIX: mkdir \"$3\" ; chmod -R 775 \"$3\""
+    Warn "${FUNCNAME[0]}() COULD NOT READ FREE SPACE on '$3'"
+    Inform "QUICK FIX: mkdir '$3' ; chmod -R 775 '$3'"
   fi
 
   return 1
@@ -792,6 +888,63 @@ generate_comskip(){
     fi
   done <"$m2kdir/markupstop.txt"
   return 0
+}
+
+#Creates a comskip file for a recording or all recordings in a directory.
+#Actual file generation is done by generate_comskip()
+recreate_comskip(){
+  Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
+  if [[ -f "$InputPath" && -L "$InputPath" ]]; then
+    Inform "Regenerating comskip file for $InputPath"
+    InputFileBasename="$(basename "$InputPath")"
+    get_mythtvdb_info_pythonbindings
+    [[ "$?" != 0 ]] && return $?
+    #TODO: Find the file that $InputPath points to or is pointed to by and use that for the move location below, otherwise we have to run full identification of Episode/etc.
+    #[[ -L "$InputPath" ]] && movedrecordingname="$(readlink "$InputPath")"
+    local movedrecordingname
+    movedrecordingname="$(readlink "$InputPath")"
+    #TODO: need to deal with link mode case, something like: movedrecordingname="$(find -L "$MoveDir/" -samefile "$InputPath")" #Actually, this form should work for both cases... with the problem that multiple links can be returned in link mode if there are multiple links...
+    local ShowComSkip
+    ShowComSkip="${movedrecordingname%.*}.txt"
+    mv "$m2kdir/markupframes.txt" "${ShowComSkip}"
+    return $?
+  elif [[ -d "$InputPath" ]]; then
+    #TODO: confirm InputPath doesn't end in a /
+    Warn "YOU ARE ABOUT TO SCAN THE DIRECTORY:"
+    WarnCont "$InputPath"
+    WarnCont "AND REGENERATE COMSKIP FILES FOR ALL PREVIOUSLY MOVED RECORDINGS."
+    read -r -n1 -p "  Do you want myth2kodi to regenerate comskip files? y/(n)>" yesorno
+    printf '\n'
+    #Default to safety, ie do nothing.
+    [[ -z "$yesorno" ]] && yesorno="n"
+    if [ "$yesorno" = "y" ]; then
+      checkext="mpg" #TODO: Make this user/caller specifiable
+      scanpath="$InputPath"
+      Debug "Creating a temporary comskip_scan file: $m2kdir/comskip_scan.temp"
+      ls -1 "$scanpath"/*."$checkext" > "$m2kdir/comskip_scan.temp"
+      Inform "Scanning $scanpath for already moved $checkext files"
+      while read -r line ; do
+        Debug "Attempting to regenerate comskip file for $line"
+        #TODO: This check is too strict, works in move mode but won't process for a recording where we used LINK mode
+        #      just do [[ -f "$line" ]] then check dir exists for move of comskip and error if not, rather than creating a directory for a show that hasn't been processed already...
+        if [[ -f "$line" && -L "$line" ]]; then
+          myth2kodi --comskip "$line"
+        else
+          Debug "Not a File and Link, so not moved with symlinking enabled... Not regenerating comskip. TODO: HANDLE ALL MOVE MODES PROPERLY HERE."
+        fi
+      done < "$m2kdir/comskip_scan.temp"
+      Debug "Removing the temporary scan file: $m2kdir/comskip_scan.temp"
+      rm -f "$m2kdir/comskip_scan.temp"
+      return 0
+    else
+      Warn "You must press 'y' to scan, aborting."
+      return 0
+    fi
+  else
+    [[ -f "$InputPath" && ! -L "$InputPath" ]] && Err "#TODO: --comskip can't deal with link mode moving yet..."
+    Err "The argument '$InputPath' is neither an already moved recording nor a directory to scan for them."
+    return 1
+  fi
 }
 
 #####KODI COMMUNICATIONS#####
@@ -1107,7 +1260,7 @@ dbselect(){
   mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; SELECT $1 FROM recorded WHERE basename LIKE '$InputFileBasename' ; "
 }
 
-#####MYTHTV DATABASE#####
+#####ACCESS MythTV DATABASE#####
 #Use mysql commands to get MythTV-DB entry for the current recording.
 get_mythtvdb_info_mysql(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
@@ -1286,6 +1439,56 @@ get_mythtvdb_info_pythonbindings(){
 }
 
 #####PROCESS MythTV DATABASE INFORMATION#####
+
+#Gather information from the MythTV database based on user settings.
+process_mythtvdb(){
+  Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
+
+  if [ "$Database" = "Enabled" ]; then
+    #Access the database entry using the requested grabber
+    case "$DatabaseType" in
+      MythTV)
+        get_mythtvdb_info_mysql
+        ;;
+      MythTVPythonBindings)
+        get_mythtvdb_info_pythonbindings
+        returnstatus="$?"
+        [[ "$returnstatus" != 0 ]] && exit_job 'MythTVdatabaseFailure'
+        ;;
+      *)
+        Err "DatabaseType incorrectly specified."
+        exit_job 'UserSettingError'
+        ;;
+    esac
+
+    #Do appropriate, guide-data specific, processing.
+    case "$GuideDataType" in
+      SchedulesDirect)
+        process_mythtvdb_schedulesdirect
+        ;;
+      NoLookup)
+        process_mythtvdb_nolookup
+        ;;
+      SydFTA)
+        process_mythtvdb_sydfta
+        ;;
+      *)
+        Warn "GuideDataType incorrectly specified, processing MythTV database info assuming SchedulesDirect."
+        process_mythtvdb_schedulesdirect
+        ;;
+    esac
+    if [[ -z "$InputTitle" ]]; then
+      Err "Failed to determine InputTitle from MythTV-DB, and none provided via arg."
+      exit_job 'NameCouldNotBeAssigned'
+    fi
+  else
+    if [[ -z "$InputTitle" ]]; then
+      Err "Database disabled and no InputTitle provided on command line."
+      exit_job 'InsufficientInformationProvided'
+    fi
+  fi
+}
+
 #Processes Zap2it/SchedulesDirect/Tribune data for use in the program
 process_mythtvdb_schedulesdirect(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
@@ -1638,18 +1841,18 @@ delete_mythtv_database_entry(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   Debug "InputPath: $InputPath"
   Debug "originaldirname: $originaldirname"
-  Debug "FileBaseName: $FileBaseName"
+  Debug "InputFileBasename: $InputFileBasename"
   Debug "MySQLuser: $MySQLuser"
   Debug "MySQLpass: $MySQLpass"
   Debug "MySQLMythDb: $MySQLMythDb"
   #Make sure we got input arguments and file is valid
   if [ ! -e "$InputPath" ]; then
     #Remove recording entry from mysql database
-    Inform "${FUNCNAME[0]}() REMOVING - $FileBaseName - THUMBNAILS - DATABASE ENTRIES"
-    mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; delete from recorded where basename like '$FileBaseName'; "
+    Inform "${FUNCNAME[0]}() REMOVING - $InputFileBasename - THUMBNAILS - DATABASE ENTRIES"
+    mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; delete from recorded where basename like '$InputFileBasename'; "
     #TODO: Capture return state of mysql command so we can log success/failure, also make the rm of thumbnails, etc, below conditional.
     #Remove thumbnails
-    rm -f "$originaldirname/$FileBaseName".*
+    rm -f "$originaldirname/$InputFileBasename".*
   else
     Warn "File still exists: $InputPath"
     WarnCont "Not removing MythTV-DB information."
@@ -2308,7 +2511,9 @@ download_series_identification(){
 
 #A special exit point for when we're processing testfile.ext
 testfile_exit(){
+  #TODO: Review this function
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
+  [[ "$Exx" != "E07" ]] && Err 'FUZZY FAILURE' && exit 1
   [[ -d ./Episodes ]] && [[ ! "$(ls -A ./Episodes)" ]] && rmdir ./Episodes
   [[ -d ./Movies ]]   && [[ ! "$(ls -A ./Movies)" ]]   && rmdir ./Movies
   [[ -d ./Showings ]] && [[ ! "$(ls -A ./Showings)" ]] && rmdir ./Showings
@@ -2399,9 +2604,9 @@ msg_show_warning(){
 #A message for when we've successfully moved a recording.
 msg_completed_move(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  Inform "@@@@@@@@ OPERATION COMPLETE $(date) @@@@@@@@"
-  Inform "MOVED: $InputPath"
-  Inform "TO: $MoveDir/$ShowFileName.$OriginalExt"
+  Inform "Move completed."
+  InformCont "MOVED: $InputPath"
+  InformCont "TO: $MoveDir/$ShowFileName.$OriginalExt"
 }
 
 #A warning message for when a recording was thought to be an episode but
@@ -2541,6 +2746,23 @@ msg_generic_unspecified_error(){
   ErrCont "CHECK www.TheTVDB.com  RUN myth2kodi LINK COMMAND PROMPT."
   ErrCont "FOR MORE INFORMATION SEE http://kodi.wiki/index.php?title=mythicalLibrarian" #TODO: If I ever make this public, remember to make a thread.
   ErrCont "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%"
+}
+
+#Report the combination of command line input and MythTV-DB data.
+msg_merged_input_mythtvdb(){
+  Inform "Input and MythTV-DB Guide Data for $InputFileBasename"
+  [[ "$Database" = "Enabled" ]] && InformCont "RECSTART:$ShowStartTime"
+  [[ "$Database" = "Enabled" ]] && InformCont "DATE:$MovieAirDate $OriginalAirDate"
+  [[ "$Database" = "Enabled" ]] && InformCont "PROGRAMID:$ProgramID"
+  [[ "$Database" = "Enabled" ]] && InformCont "ShowCategory:$ShowCategory"
+  if [[ -n "$InputSubtitle" ]]; then
+    InformCont "InputSubtitle:$InputSubtitle"
+  else
+    InformCont "InputSubtitle: UNKNOWN"
+  fi
+  if [[ -n "$Sxx" ]]; then InformCont "Sxx:$Sxx"; else InformCont "Sxx: UNKNOWN"; fi
+  if [[ -n "$Exx" ]]; then InformCont "Exx:$Exx"; else InformCont "Exx: UNKNOWN"; fi
+  [[ "$Database" = "Enabled" ]] && InformCont "PLOT: $Plot"
 }
 
 #A warning message about performing maintenance that waits on user input
@@ -2724,13 +2946,6 @@ generate_episode_nfo(){
     printf '%b\n' "\t$basetitle -Categoric</title>">>"$MoveDir/$ShowFileName.nfo"
   fi
 
-  {
-    printf '%b\n' "\t<rating>$rating</rating>"
-    printf '%b\n' "\t<Plot>$Plot</Plot>"
-    printf '%b\n' "\t<genre>$ShowCategory</genre>"
-    printf '%b\n' "\t<aired>${ShowStartTime%% *}</aired>"
-  } >> "$MoveDir/$ShowFileName.nfo"
-
   if [ "$HasSxxExx" = "1" ] ; then
     {
       printf '%b\n' "\t<season>$Sxx</season>"
@@ -2742,7 +2957,16 @@ generate_episode_nfo(){
       printf '%b\n' "\t<episode>0</episode>"
     } >> "$MoveDir/$ShowFileName.nfo"
   fi
-  printf '%s\n' "</episodedetails>" >> "$MoveDir/$ShowFileName.nfo"
+
+  {
+    printf '%b\n' "\t<rating>$rating</rating>"
+    printf '%b\n' "\t<Plot>$Plot</Plot>"
+    printf '%b\n' "\t<genre>$ShowCategory</genre>"
+    printf '%b\n' "\t<aired>${ShowStartTime%% *}</aired>"
+    printf '%b\n' "\t<dateadded>$(date --rfc-3339=seconds)</dateadded>"
+    printf '%s\n' "</episodedetails>"
+  } >> "$MoveDir/$ShowFileName.nfo"
+
   echo "'$MoveDir/$ShowFileName.nfo'" "'$MoveDir/$ShowFileName.$OriginalExt'" >> "$m2kdir/created.tracking"
   Inform "Generated episode NFO file: $MoveDir/$ShowFileName.nfo"
   return 0
@@ -2818,7 +3042,7 @@ m2k_cleanse(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   #TODO: Consider making the cleanup_logs file more modular, so we can set different
   #      lifetimes for the archived main logs, doover scripts, undo scripts, etc.
-  #      Maybe make an archived_logs directory with sub directories: main; diagnostics; etc. 
+  #      Maybe make an archived_logs directory with sub directories: main; diagnostics; etc.
 
   #Create cleanup files for archived logs, myth2kodi database, and daily report files.
   find "$m2kdir" -maxdepth 1 -type f -name '*20[0-9][0-9]-[0-1][0-9]-[0-3][0-9]*' > "$m2kdir/cleanup_logs"
@@ -2854,12 +3078,13 @@ m2k_maintenance(){
   #check for interrupted undo jobs
   [[ -f "$m2kdir/undo.lock" && ! -f "$m2kdir/undo.sh" ]] && mv "$m2kdir/undo.lock" "$m2kdir/undo.sh"
 
-  #Check for commskip (.txt) and .nfo files listed in created.tracking and
+  #Check for comskip (.txt) and .nfo files listed in created.tracking and
   #remove them if their associated "main" file (.mpg) is missing.
   if [ "$CommercialMarkupCleanup" = "Enabled" ] && [ -f "$m2kdir/created.tracking" ]; then
     local -i Counter=0
     Inform "PERFORMING CLEANUP OF ORPHANED SUPPORT FILES."
     local SupportFile=""
+    local MainFile=""
     while read -r line ; do
       (( ++Counter ))
       SupportFile="$(cut -d"'" -f2 <<< "$line")"
@@ -2945,8 +3170,8 @@ m2k_scan(){
   local dooverstatus
   msg_myth2kodi_permission_error
   #Map myth2kodi input variables to local variables for our current purpose.
-  local checkext="$InputTitle"
-  local scanpath="$InputSubtitle"
+  local checkext="$m2karg2"
+  local scanpath="$m2karg3"
   Debug "Running ${FUNCNAME[0]}() on $checkext files in $scanpath"
   #Do some basic checks before we get started.
   if [ "$UID" = "0" ] || [ "$USER" = "root" ]; then
@@ -3149,15 +3374,22 @@ check_filesystem(){
   AltShowDirFreeSpace="$((AltShowDirFreeSpace/1024))"
 
   #Check write permissions and sufficiency of free space.
-  MoveDirWritable="$(    check_write "$MoveFileSize" "$MoveDirFreeSpace"     "$MoveDir")"
-  AltMoveDirWritable="$( check_write "$MoveFileSize" "$AltMoveDirFreeSpace"  "$AlternateMoveDir")"
-  MovieDirWritable="$(   check_write "$MoveFileSize" "$MovieDirFreeSpace"    "$PrimaryMovieDir")"
-  AltMovieDirWritable="$(check_write "$MoveFileSize" "$AltMovieDirFreeSpace" "$AlternateMovieDir")"
-  ShowDirWritable="$(    check_write "$MoveFileSize" "$ShowDirFreeSpace"     "$PrimaryShowDir")"
-  AltShowDirWritable="$( check_write "$MoveFileSize" "$AltShowDirFreeSpace"  "$AlternateShowDir")"
-  OriginalDirWritable="$(check_write "1"             "$OriginalDirFreeSpace" "$originaldirname")"
-  WorkingDirWritable="$( check_write "5"             "$WorkingDirFreeSpace"  "$m2kdir")"
-  OriginalDirWritable="$(check_write "1"             "$OriginalDirFreeSpace" "$originaldirname")"
+  check_write "$MoveFileSize" "$MoveDirFreeSpace"     "$MoveDir"
+  MoveDirWritable="$?"
+  check_write "$MoveFileSize" "$AltMoveDirFreeSpace"  "$AlternateMoveDir"
+  AltMoveDirWritable="$?"
+  check_write "$MoveFileSize" "$MovieDirFreeSpace"    "$PrimaryMovieDir"
+  MovieDirWritable="$?"
+  check_write "$MoveFileSize" "$AltMovieDirFreeSpace" "$AlternateMovieDir"
+  AltMovieDirWritable="$?"
+  check_write "$MoveFileSize" "$ShowDirFreeSpace"     "$PrimaryShowDir"
+  ShowDirWritable="$?"
+  check_write "$MoveFileSize" "$AltShowDirFreeSpace"  "$AlternateShowDir"
+  AltShowDirWritable="$?"
+  check_write "1"             "$OriginalDirFreeSpace" "$originaldirname"
+  OriginalDirWritable="$?"
+  check_write "5"             "$WorkingDirFreeSpace"  "$m2kdir"
+  WorkingDirWritable="$?"
 }
 
 #This function provides a functions check on myth2kodi
@@ -3358,10 +3590,10 @@ m2k_diagnostics(){
   printf '\n'
   Inform "Testing file system permissions"
 
+  #Set originaldir name if none was supplied
+  [[ "$originaldirname" =~ ^('./'|'.'|'')$ ]] && originaldirname="$(pwd)"
   if [ "$TargetPathIsInputPath" = "Enabled" ]; then
     Inform "TargetPathIsInputPath is selected. Testing with current folder"
-    #Set originaldir name if none was supplied
-    [[ "$originaldirname" =~ ^('./'|'.'|'')$ ]] && originaldirname="$(pwd)"
     set_target_dir_as_input_path_dir
   fi
 
@@ -3603,8 +3835,9 @@ msg_usage(){
   printf '    %s\n' "myth2kodi --diagnostics"
   printf '  %s\n\n' "before running in --scan mode or as a MythTV UserJob."
   printf '  %s\n' "For more information type:"
-  printf '    %s\n' "myth2kodi --help"
-  printf '    %s\n\n' "myth2kodi --config-help"
+  [[ "$m2karg1" =~ ^('-h'|'-?'|'--help')$ ]] || printf '    %s\n' "myth2kodi --help"
+  printf '    %s\n' "myth2kodi --config-help"
+  printf '    %s\n\n' "myth2kodi --confidence"
 }
 
 #A message listing all the --option flags.
@@ -3643,12 +3876,24 @@ msg_options(){
   printf '%s\n'   "    ignoring lastupdated.time. Information is obtained from"
   printf '%s\n'   "    TheTVDB and tvmaze."
   printf '%s\n'   "    eg. myth2kodi --getSeriesInfo 'Black Books'"
-  printf '\n%s\n' "  --commskip /path/to/folder/or/file"
-  printf '%s\n'   "    Regenerates the commskip file for recordings that have"
+  printf '\n%s\n' "  --delete '/path/to/file'"
+  printf '%s\n'   "    Delete the file, any links to it and the associated database entry."
+  printf '%s\n'   "    eg. myth2kodi --delete '/home/mythtv/recordings/1099_20151210093000.mpg'"
+  printf '\n%s\n' "  --disconnect '/path/to/file'"
+  printf '%s\n'   "    removes file & links from undo, doover, created.tracking,"
+  printf '%s\n'   "    removes links from mythtv filename to moved filename, or"
+  printf '%s\n'   "    if only 'moved' in LINK mode then actually move"
+  printf '%s\n'   "    remove database entry"
+  printf '%s\n'   "    eg. myth2kodi --disconnect '/home/mythtv/recordings/1099_20151210093000.mpg'"
+  printf '\n%s\n' "  --log '/path/to/file'"
+  printf '%s\n'   "    Identify and display the log entries for the recording."
+  printf '%s\n'   "    eg. myth2kodi --log '/home/mythtv/recordings/1099_20151210093000.mpg'"
+  printf '\n%s\n' "  --comskip /path/to/folder/or/file"
+  printf '%s\n'   "    Regenerates the comskip file for recordings that have"
   printf '%s\n'   "    already been moved. Argument can be either a single"
   printf '%s\n'   "    recording or a directory containing already moved recordings."
-  printf '%s\n'   "    eg. myth2kodi --commskip '/home/mythtv/recordings/1099_20151210093000.mpg'"
-  printf '%s\n'   "    eg. myth2kodi --commskip '/home/mythtv/recordings'"
+  printf '%s\n'   "    eg. myth2kodi --comskip '/home/mythtv/recordings/1099_20151210093000.mpg'"
+  printf '%s\n'   "    eg. myth2kodi --comskip '/home/mythtv/recordings'"
   printf '\n%s\n' "  -?|-h|--help"
   printf '%s\n'   "    Displays this message"
   printf '%s\n'   "    example: myth2kodi --help"
@@ -3698,13 +3943,13 @@ msg_config(){
   printf '%s\n' " #College Sports                                              #"
   printf '%s\n' " #Comedy                                                      #"
   printf '%s\n\n' " ##############################################################"
-  printf '%s\n' "======globalSettings====="
-  printf '%s\n' " globalSettings allows you to take any setting from the top of"
-  printf '%s\n' " the myth2kodi file and make it permanent. Your settings will"
-  printf '%s\n' " remain static after upgrades."
-  printf '%s\n' ""
-  printf '%s\n' " globalSettings can be applied by creating a file called:"
-  printf '%s\n' " /etc/myth2kodi/globalSettings"
+  printf '%s\n' "======myth2kodi.conf====="
+  printf '%s\n' " myth2kodi.conf allows you to take almost any setting from the"
+  printf '%s\n' " top of the myth2kodi file and override it. Your settings will"
+  printf '%s\n' " remain static when you replace the myth2kodi script with a"
+  printf '%s\n\n' " newer version."
+  printf '%s\n' " myth2kodi.conf can be applied by creating a file called:"
+  printf '%s\n' "   $m2kdir/myth2kodi.conf"
   printf '%s\n' " ##############################################################"
   printf '%s\n' " #SYMLINK=Disabled                                            #"
   printf '%s\n' " #AlternateMoveDir=/media/usbDrive                            #"
@@ -3776,6 +4021,32 @@ get_series_info(){
   fi
 }
 
+delete_recording(){
+  Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
+  #TODO: Add a --delete <filename> option
+  #    + It should delete the file, any links to it and the associated database entry.
+  Err "NotImplemented"
+  return 1
+}
+
+disconnect_recording(){
+  Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
+  #TODO: Add a --disconnect <filename> option
+  #    + removes file & links from undo, doover, created.tracking,
+  #    + removes links from mythtv filename to moved filename, or if only 'moved' in LINK mode then actually move
+  #    + remove database entry
+  Err "NotImplemented"
+  return 1
+}
+
+recording_log(){
+  Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
+  #TODO: Add a --log <filename> option
+  #    + Identify the first and last log entry for that file when it was processed and display everything in between in a pager.
+  Err "NotImplemented"
+  return 1
+}
+
 ########################### END FUNCTION DEFINITIONS ###########################
 
 
@@ -3823,25 +4094,13 @@ get_series_info(){
 #    #Notify Kodi, RSS, and whoever else wanted to know that we're done and what it is we've done.
 #    #THE END
 
-#Setup defaults for searching Series information
-SeriesID=""
-NewShowName=""
-RequiresDoover=0
-declare -i ConfidenceRating=0
-declare -i SeriesConfidenceRating=0
-
-#Setup defaults for searching Episode information
-Exx=""
-Sxx=""
-GotEpisodeNumber=0
-declare -i EpisodeConfidenceRating=0
-
-#Load variables from a file if required
-test -f "$m2kdir"/myth2kodi.conf && source "$m2kdir"/myth2kodi.conf
-
 #Capture args the script was called with
 m2karg1="$1" ; m2karg2="$2" ; m2karg3="$3" ; m2karg4="$4"
 declare -r m2karg1 m2karg2 m2karg3 m2karg4
+
+#Do initial setup: override defaults with myth2kodi.conf; initialise logging system.
+m2k_init
+
 #TODO: Set the inputs as fixed (read-only) parameters, then use different variables consistently if we need to modify them...
 InputPath="$1"
 InputTitle="$2"
@@ -3854,285 +4113,60 @@ InputSubtitle="$3"
 #TODO: Consider removing this "InputOption", it's only used by --BypassPermissionsCheck and removing that option seems like it might be a good idea...
 InputOption="$4"
 
-#TODO: Review the tests of whether we were called correctly, try to give better info of error...
 #Some basic tests to make sure we were called correctly
-[[ "${InputPath:0:1}" != "-" && "$InputPath" != "testfile.ext" && ! -f "$InputPath" && -z "$InputTitle" ]] && msg_usage && exit_job 'GenericUnspecifiedError'
-[[ -z "$InputPath" ]] && msg_usage && exit_job 'GenericUnspecifiedError'
-#TODO: MythTVUserJobString is not used within this script, check whether it's somehow a requirement of calls from mythtv, though, in an absence of export, I don't see how...
-MythTVUserJobString="%DIR%/%FILE%"
+validate_args
 
-#####COMMAND LINE SWITCHES#####
-#TODO: Add a --delete <filename> option
-#    + It should delete the file, any links to it and the associated database entry.
-#
-#TODO: Add a --disconnect <filename> option
-#    + removes file & links from undo, doover, created.tracking, 
-#    + removes links from mythtv filename to moved filename, or if only 'moved' in LINK mode then actually move
-#    + remove database entry
-#
-#TODO: Add a --log <filename> option
-#    + Identify the first and last log entry for that file when it was processed and display everything in between in a pager.
-#
+#If the first arg is a command line switch, figure out what to do.
+[[ "${m2karg1:0:1}" = "-" ]] && parse_command_flags
+Debug "No command flag set. Processing as recording."
 
-#check for command line switches
-case "$InputPath" in
-
-  --scan) #filetype /path/to/folder
-    Debug "Recognised command line switch '--scan'"
-    #TODO: Add ability to scan only specific files, eg those for a specific ShowName
-    export m2kScanMode="True"
-    m2k_scan
-    declare -i scanreturnstatus="$?"
-    unset m2kScanMode
-    exit $scanreturnstatus
-  ;;
-  --diagnostics)
-    Debug "Recognised command line switch '--diagnostics'"
-    [[ "$Database" = "Enabled" ]] && Inform "Temporarily disabling access to MythTV-Database -- for diagnostics."
-    export m2kDiagnosticsMode="True"
-    PreCallLogFile="$LogFile"
-    PreCallLogLevel="$LogLevel"
-    (( LogLevel < 2 )) && LogLevel=2 && Inform "Escalating LogLevel to Info (2)."
-    if [[ "$LogType" != "stdout" ]] ; then
-     Inform "Running diagnostics, so redirecting subsequent messages to $DiagnosticsFile"
-    else
-     Warn "Running diagnostics without any logging to file, consider using LogType 'logfile' or 'both'"
-    fi
-    LogFile="$DiagnosticsFile"
-    m2k_diagnostics
-    declare -i diagnosticsreturnstatus="$?"
-    #Reset the LogFile & LogLevel to previous state, in case we ever call myth2kodi --diagnostics from within myth2kodi
-    LogFile="$PreCallLogFile"
-    LogLevel="$PreCallLogLevel"
-    unset m2kDiagnosticsMode
-    exit $diagnosticsreturnstatus
-  ;;
-  --confidence)
-    Debug "Recognised command line switch '--confidence'"
-    msg_improve_confidence
-    exit 0
-  ;;
-  --doover)
-    Debug "Recognised command line switch '--doover'"
-    m2k_doover
-    exit $?
-  ;;
-  --unmanned_doover)
-    Debug "Recognised command line switch '--unmanned_doover'"
-    DoOverBypass=1
-    m2k_doover
-    exit $?
-  ;;
-  --undo)
-    Debug "Recognised command line switch '--undo'"
-    #TODO: Enable undo for a specific file, eg: myth2kodi --undo '/path/to/recordings/1070_20160331073100.mpg'
-    #      Ideally we'd alternatively be able to provide the moved file name and it would still work.
-    m2k_undo_all
-    exit $?
-  ;;
-  --getSeriesInfo) #ShowName
-    Debug "Recognised command line switch '--getSeriesInfo'"
-    #Example usage: myth2kodi --getSeriesInfo "Black Books"
-    get_series_info
-    exit $?
-  ;;
-  --about)
-    Debug "Recognised command line switch '--about'"
-    msg_about
-    exit 0
-  ;;
-  --usage)
-    Debug "Recognised command line switch '--usage'"
-    msg_usage
-    exit 0
-  ;;
-  --help|-?|-h)
-    Debug "Recognised command line switch '--help|-?|-h'"
-    msg_about
-    msg_usage
-    msg_options
-    exit 0
-  ;;
-  --maintenance)
-    Debug "Recognised command line switch '--maintenance'"
-    maintenance_warning
-    [[ "$?" != 0 ]] && exit $?
-    removedead=1
-    m2k_maintenance
-    exit $?
-  ;;
-  --cleanse)
-    Debug "Recognised command line switch '--cleanse'"
-    cleanse_warning
-    [[ "$?" != 0 ]] && exit $?
-    m2k_cleanse
-    exit $?
-  ;;
-  --config-help)
-    Debug "Recognised command line switch '--config-help'"
-    msg_config
-    msg_rss
-    exit 0
-  ;;
-  --version|-v|-ver|-V)
-    Debug "Recognised command line switch '--version|-v|-ver|-V'"
-    printf '%s\n' "$m2kVersion"
-    exit 0
-  ;;
-  --commskip) #/path/to/recording/filename.mpg | /path/to/recordings
-    #TODO: Move scan file generation to a function, use here and in --scan
-    #TODO: Move the below into a function, clean-up and add more checking and logging.
-    Debug "Recognised command line switch '--commskip'"
-    #eg: myth2kodi --commskip '/path/to/recordings/1070_20160331073100.mpg'
-    InputPath="$2"
-    [[ ! -f "$InputPath" && ! -d "$InputPath" ]] && msg_usage && exit_job 'GenericUnspecifiedError'
-    if [[ -f "$InputPath" && -L "$InputPath" ]]; then
-      Inform "Regenerating commskip file for $InputPath"
-      InputFileBasename="$(basename "$InputPath")"
-      get_mythtvdb_info_pythonbindings
-      [[ "$?" != 0 ]] && exit $?
-      #TODO: Find the file that $InputPath points to or is pointed to by and use that for the move location below, otherwise we have to run full identification of Episode/etc.
-      #[[ -L "$InputPath" ]] && movedrecordingname="$(readlink "$InputPath")"
-      movedrecordingname="$(readlink "$InputPath")"
-      #TODO: need to deal with link mode case, something like: movedrecordingname="$(find -L "$MoveDir/" -samefile "$InputPath")" #Actually, this form should work for both cases... with the problem that multiple links can be returned in link mode if there are multiple links...
-      ShowCommSkip="${movedrecordingname%.*}.txt"
-      mv "$m2kdir/markupframes.txt" "${ShowCommSkip}"
-      exit $?
-    elif [[ -d "$InputPath" ]]; then
-      #TODO: confirm InputPath doesn't end in a /
-      Warn "YOU ARE ABOUT TO SCAN THE DIRECTORY:"
-      WarnCont "$InputPath"
-      WarnCont "AND REGENERATE COMMSKIP FILES FOR ALL PREVIOUSLY MOVED RECORDINGS."
-      read -r -n1 -p "  Do you want myth2kodi to regenerate commskip files? y/(n)>" yesorno
-      printf '\n'
-      #Default to safety, ie do nothing.
-      [[ -z "$yesorno" ]] && yesorno="n"
-      if [ "$yesorno" = "y" ]; then
-        checkext="mpg" #TODO: Make this user/caller specifiable
-        scanpath="$InputPath"
-        Debug "Creating a temporary commskip_scan file: $m2kdir/commskip_scan.temp"
-        ls -1 "$scanpath"/*."$checkext" > "$m2kdir/commskip_scan.temp"
-        Inform "Scanning $scanpath for already moved $checkext files"
-        while read -r line ; do
-          Debug "Attempting to regenerate commskip file for $line"
-          #TODO: This check is too strict, works in move mode but won't process for a recording where we used LINK mode
-          #      just do [[ -f "$line" ]] then check dir exists for move of commskip and error if not, rather than creating a directory for a show that hasn't been processed already...
-          if [[ -f "$line" && -L "$line" ]]; then
-            myth2kodi --commskip "$line"
-          else
-            Debug "Not a File and Link, so not moved with symlinking enabled... Not regenerating commskip. TODO: HANDLE ALL MOVE MODES PROPERLY HERE."
-          fi
-        done < "$m2kdir/commskip_scan.temp"
-        Debug "Removing the temporary scan file: $m2kdir/commskip_scan.temp"
-        rm -f "$m2kdir/commskip_scan.temp"
-        exit 0
-      else
-        Warn "You must press 'y' to scan, aborting."
-        exit 0
-      fi
-    else
-      [[ -f "$InputPath" && ! -L "$InputPath" ]] && Err "#TODO: --commskip can't deal with link mode moving yet..."
-      Err "The argument '$InputPath' is neither an already moved recording nor a directory to scan for them."
-      exit 1
-    fi
-  ;;
-esac
-Debug "No recognised command line switches set."
-if [[ "${InputPath:0:1}" = "-" ]]; then
-  Err "Unrecognised command line switch: $InputPath"
-  msg_usage
-  exit_job 'GenericUnspecifiedError'
-fi
-
-#####ENVIRONMENTAL VARIABLES CONTINUED#####
-
-#Initial log entry for the processing of recording
-m2kPlatform="$(uname)"
-printf '%s\n' "@@@@@@@@ NEW SEARCH INITIATED $Today AT $ScriptStartTime @@@@@@@@" >> "$LogFile"
+#Initial log entry for the processing of recording, regardless of LogLevel.
+printf '%s\n' "@@@@ PROCESSING RECORDING: $(date --rfc-3339=seconds) @@@@" >> "$LogFile"
 printf '%s\n' "$m2kVersion on $m2kPlatform" >> "$LogFile"
+Inform "Processing: $InputPath"
 
-InputFileBasename="$(basename "$InputPath")"
+InputFileBasename="$(basename "$InputPath")" #"${InputPath##*/}"
 
-#####GATHER INFORMATION FROM MythTV DATABASE#####
-[ "$m2kDiagnosticsMode" = "True" ] && Database="Disabled"
-#Get information if database is enabled
-if [ "$Database" = "Enabled" ]; then
-  #determine proper database grabber
-  case "$DatabaseType" in
-    MythTV)
-      get_mythtvdb_info_mysql
-    ;;
-    MythTVPythonBindings)
-      test "$InputPath" != 'testfile.ext' && get_mythtvdb_info_pythonbindings
-      returnstatus="$?"
-      [[ "$returnstatus" != 0 ]] && exit_job 'MythTVdatabaseFailure'
-      #TODO:What's the purpose of resetting the DatabaseType here...???
-      DatabaseType=MythTV
-    ;;
-  esac
-
-  #determine appropriate processing for guide data
-  case "$GuideDataType" in
-    SchedulesDirect)
-      process_mythtvdb_schedulesdirect
-    ;;
-    NoLookup)
-      process_mythtvdb_nolookup
-    ;;
-    SydFTA)
-      process_mythtvdb_sydfta
-    ;;
-    *)
-      Warn "GuideDataType incorrectly specified, processing MythTV database info assuming SchedulesDirect."
-      process_mythtvdb_schedulesdirect
-    ;;
-  esac
-  if [[ -z "$InputTitle" ]]; then
-    Err "Failed to determine InputTitle from MythTV-DB, and none provided via arg."
-    exit_job 'NameCouldNotBeAssigned' #TODO: Consider making a specific exit_job for this issue...
-  fi
+#As long as we're not in diagnostics mode, gather info from MythTV-DB.
+if [[ "$m2kDiagnosticsMode" != "True" ]]; then
+  process_mythtvdb
 else
-  [[ -z "$InputTitle" ]] && Err "Database disabled and no InputTitle provided on command line."
-  #TODO: Should bail with an error here if Database isn't Enabled and InputTitle is empty...
+  Database="Disabled"
 fi
+msg_merged_input_mythtvdb
 
-#Report found data
-Inform "Input and MythTV-DB Guide Data for $InputFileBasename"
-InformCont "RECSTART:$ShowStartTime  DATE:$MovieAirDate $OriginalAirDate"
-InformCont "PROGRAMID:$ProgramID  ShowCategory:$ShowCategory"
-if [[ -n "$InputSubtitle" ]]; then InformCont "InputSubtitle:$InputSubtitle"; else InformCont "InputSubtitle: UNKNOWN"; fi
-if [[ -n "$Sxx" ]]; then InformCont "Sxx:$Sxx"; else InformCont "Sxx: UNKNOWN"; fi
-if [[ -n "$Exx" ]]; then InformCont "Exx:$Exx"; else InformCont "Exx: UNKNOWN"; fi
-InformCont "PLOT: $Plot"
+#At this point we should have an initial show name, if not then abort.
 ShowName="$InputTitle"
-[[ -z "$ShowName" ]] && msg_usage && exit_job 'GenericUnspecifiedError'
+[[ -z "$ShowName" ]] && { msg_usage ; exit_job 'GenericUnspecifiedError' ; }
+
+#Check for show Title translations relating to the show in question.
+show_translation
+
+#Do not process files in files categoricIgnore or titleIgnore, just exit
+ignore_list #TODO: Should the ignorelist be processed against the translated title...
 
 #TODO: check whether the split on semicolon here and elsewhere should be in process_mythtvdb_schedulesdirect
 #split on semicolon, there will only be one episode looked up.
 EpisodeSubtitle="$(sed 's/;.*//' <<< "$InputSubtitle")"
 #Only keep Alpha-numeric characters, space, parenthesis and the four chars & , . -
 EpisodeSubtitle="$(sed -r 's/[^[:alnum:] &,.)(-]//g' <<< "$EpisodeSubtitle")"
-ExtensionPrep="$(basename "$InputPath")"
-OriginalExt="${ExtensionPrep#*.}"
+OriginalExt="${InputFileBasename#*.}"
 originaldirname="$(dirname "$InputPath")"
 #Set originaldir name if none was supplied
 [[ "$originaldirname" =~ ^('./'|'.'|'')$ ]] && originaldirname="$(pwd)"
-#TODO: check FileBaseName as the below doesn't strip the suffix but the description of this variable implies that it should.
-FileBaseName="${InputPath##*/}"
-#TODO: FileName doesn't appear to be used anywhere...
-FileName="$InputPath"
 
-#Check for show Title translations relating to the show in question.
-show_translation
-#Do not process files in files categoricIgnore or titleIgnore, just exit
-ignore_list
+#TODO: Again with the split on semicolon???
 SafeShowName=$(sed 's/;.*//' <<< "$ShowName") #TODO: ??? ${ShowName%%;*}
 #Only keep Alpha-numeric characters, space, parenthesis and the four chars & , . -
 SafeShowName="$(sed -r 's/[^[:alnum:] &,.)(-]//g' <<< "$SafeShowName")"
 #Format Show name for Sending to www.TheTVDB.com and KODI
 tvdbshowname=$(sed 's/ /%20/g' <<< "$ShowName" | sed 's/&/%26/g')
-#Setup paths if TargetPathIsInputPath is active.
-test "$TargetPathIsInputPath" = "Enabled" && set_target_dir_as_input_path_dir
+
+#Reset move paths if TargetPathIsInputPath is active, creating dirs as needed.
+if [[ "$TargetPathIsInputPath" = "Enabled" ]]; then
+  Inform "TargetPathIsInputPath=Enabled. Resetting paths, creating directories."
+  set_target_dir_as_input_path_dir
+fi
 
 #####MAINTENANCE#####
 #Loop through the list of created comskip files from dir.tracking, created.tracking and remove orphans.
@@ -4328,6 +4362,7 @@ fi
 #      sense for the things trying to set SxxExx...
 
 #If we already have Sxx and Exx from MythTV DB, use them. If we also had a Subtitle, then do some verification.
+# Reversed sense of match: [[ -z "$Sxx" || "$Sxx" =~ ^(S00|S)$ || -z "$Exx" || "$Exx" =~ ^(E00|E)$ ]]
 if [[ "$Sxx" != "S" && -n "$Sxx" && "$Sxx" != "S00" && "$Exx" != "E" && -n "$Exx" && "$Exx" != "E00" ]] ; then
   #TODO: If the confidence rating from the above is good, and we have an
   #  AbsoluteEpisodeNumber then use it to validate the Sxx, Exx & Subtitle from
@@ -4537,8 +4572,7 @@ if [ -f "$MoveDir/$ShowFileName.$OriginalExt" ]; then
 fi
 
 #If this is a test file, then exit now.
-[[ "$InputPath" = "testfile.ext" && "$Exx" != "E07" ]] && Err 'FUZZY FAILURE' && exit 1
-test "$InputPath" = "testfile.ext" && testfile_exit
+[[ "$InputPath" = "testfile.ext" ]] && testfile_exit
 
 #If the user is not mythtv and the settings are set for mythtv only, then exit, display a clear status message.
 msg_myth2kodi_permission_error
@@ -4625,7 +4659,6 @@ elif [ "$SYMLINK" = "LINK" ]; then
   if [ -L "$MoveDir/$ShowFileName.$OriginalExt" ]; then
     Inform "Symlink created $MoveDir/$ShowFileName.$OriginalExt"
     printf '%s\n' "'$MoveDir/$ShowFileName.$OriginalExt'" "'$InputPath'" >> "$m2kdir/created.tracking"
-    echo "@@@@@@@@ OPERATION COMPLETE $(date) @@@@@@@@" >> "$LogFile"
     if [ "$Notify" = "Enabled" ]; then
       sudo -u "$NotifyUserName" "$binpath/m2k_notify" "myth2kodi Success" "$ShowFileName linked to $MoveDir" info #"$m2kdir/myth2kodi.png"
     fi

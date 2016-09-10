@@ -494,11 +494,11 @@ m2k_init(){
   #Override default settings with anything in myth2kodi.conf
   [[ -f "$m2kdir/myth2kodi.conf" ]] && source "$m2kdir/myth2kodi.conf"
 
-  declare -gr m2kVersion="myth2kodi Version 0.9.7"
-  declare -gr m2kPlatform="$(uname)"
+  m2kVersion="myth2kodi Version 0.9.7" ; declare -gr m2kVersion
+  m2kPlatform="$(uname)" ; declare -gr m2kPlatform
 
   #Who called the script:
-  declare -gr MyUserName=$(whoami)
+  MyUserName=$(whoami) ; declare -gr MyUserName
   if [[ "$MyUserName" != "$Librarian" ]]; then
     printf 'ERROR: %s\n' "myth2kodi should be run by user '$Librarian'"
     printf '  %s\n' "Check the USER SETTINGS section near the top of the script"
@@ -508,18 +508,21 @@ m2k_init(){
     exit 1
   fi
   #And when,
-  declare -gr Today="$(date +%F)"  #Date in IEEE standard format, ie YYYY-mm-dd
-  declare -gr ScriptStartTime="$(date +%H:%M:%S)" #Time in a readable IEEE standard format, ie HH:MM:SS
-  declare -gr FileNameNow="$(date +%FT%H%M%S)"  #ISO 8601: YYYY-mm-ddThhMMSS
+  Today="$(date +%F)"  #Date in IEEE standard format, ie YYYY-mm-dd
+  ScriptStartTime="$(date +%H:%M:%S)" #Time in a readable IEEE standard format, ie HH:MM:SS
+  FileNameNow="$(date +%FT%H%M%S)"  #ISO 8601: YYYY-mm-ddThhMMSS
+  declare -gr Today
+  declare -gr ScriptStartTime
+  declare -gr FileNameNow
 
   #The full path version of the file to which logging output will be sent:
   LogFile="$m2kdir/${LogFileName}.log"
   #When running diagnostics mode, output will instead be sent to this file:
-  declare -gr DiagnosticsFile="$m2kdir/diagnostics.log"
+  DiagnosticsFile="$m2kdir/diagnostics.log" ; declare -gr DiagnosticsFile
   #A file containing a list of possible duplicate recordings:
-  declare -gr DuplicatesFile="$m2kdir/duplicates.log"
+  DuplicatesFile="$m2kdir/duplicates.log" ; declare -gr DuplicatesFile
   #A file containing a list of possible duplicate recordings:
-  declare -gr UnrecognizedSeriesFile="$m2kdir/unrecognizedseries.log"
+  UnrecognizedSeriesFile="$m2kdir/unrecognizedseries.log" ; declare -gr UnrecognizedSeriesFile
 
   #Make our working directory if it doesn't already exist
   if [ ! -d "$m2kdir" ]; then
@@ -556,7 +559,6 @@ m2k_init(){
     LogFileSize=$(wc --bytes < "$LogFile")
     if ((LogFileSize > 4000000)); then
       Inform "Moving and compressing LogFile"
-      sleep 0.1 #Don't want to start moving it while we're still writing to it.
       mv "$LogFile" "$m2kdir/${LogFileName}_${FileNameNow}.log"
       gzip "$m2kdir/${LogFileName}_${FileNameNow}.log"
       initialise_new_logfile
@@ -2851,7 +2853,7 @@ make_show_dir(){
         Inform "CREATING SEASON FOLDER: $MoveDir"
         mkdir "$MoveDir"
         chmod 775 "$MoveDir"
-        echo "$MoveDir">>"$m2kdir"/dir.tracking
+        echo "$MoveDir" >> "$m2kdir"/dir.tracking
       fi
     fi
   fi
@@ -2910,10 +2912,10 @@ generate_series_nfo(){
     printf '%s\n' "<tvshow>"
     printf '%b\n' "\t<title>$NewShowName</title>"
     printf '%b\n' "\t<episodeguide>"
-  } > "$MoveDir/$tvshow.nfo"
+  } > "$MoveDir/tvshow.nfo"
 
   if [[ -n "$SeriesID" ]]; then
-    local web
+    local webaddrs
     webaddrs="http://www.thetvdb.com/api/$APIkey/series/$SeriesID/all/$Language.zip"
     printf '%b\n' "\t\t<url cache=\"$SeriesID.xml\">$webaddrs</url>" >> "$MoveDir/tvshow.nfo"
   fi
@@ -3097,25 +3099,28 @@ m2k_maintenance(){
         if [ -d "$(dirname "$SupportFile")" ]; then
           Inform "REMOVING ORPHAN FILE: $SupportFile"
           rm -f "$SupportFile"
+          printf '%s\n' "$line" >> "$m2kdir/created.tracking.old"
         else
           Warn "${FUNCNAME[0]}() FOLDER DISCONNECTED: $SupportFile"
           if [ "$removedead" != "1" ] ; then
-            echo "$line" >> "$m2kdir/created.tracking2"
+            printf '%s\n' "$line" >> "$m2kdir/created.tracking2"
           else
             Inform "REMOVING FROM FUTURE SEARCHES: $line"
+            printf '%s\n' "$line" >> "$m2kdir/created.tracking.old"
           fi
         fi
       else
         echo "$line" >> "$m2kdir/created.tracking2"
       fi
     done <"$m2kdir/created.tracking"
-    test -f "$m2kdir/created.tracking" && mv "$m2kdir/created.tracking" "$m2kdir/created.tracking_${FileNameNow}"
-    test -f "$m2kdir/created.tracking2" && mv "$m2kdir/created.tracking2" "$m2kdir/created.tracking"
+    [[ -f "$m2kdir/created.tracking" ]] && rm -f "$m2kdir/created.tracking"
+    [[ -f "$m2kdir/created.tracking2" ]] && mv "$m2kdir/created.tracking2" "$m2kdir/created.tracking"
   fi
 
-  #TODO: This is missing some directories on it's first pass, but second call deletes them, maybe order problem... delete depth first.
   #Check if folders are empty and remove dir if needed and it was created by myth2kodi
   if [ "$DirTracking" = "Enabled" ] && [ -f "$m2kdir/dir.tracking" ]; then
+    #Reverse dictionary sort the tracked dirs, should have the effect of depth first.
+    sort -dr "$m2kdir/dir.tracking" > "$m2kdir/dir.tracking.sorted"
     while read -r line ; do
       (( ++Counter ))
       DirToCheck="$line"
@@ -3128,8 +3133,9 @@ m2k_maintenance(){
         [[ -z "$DirToCheckCheck" ]] && DirToCheckCheck=$(ls "$line" | sed 's/tvshow.nfo//g' | grep -m2 ^)
         if [[ -z "$DirToCheckCheck" ]]; then
           Inform "REMOVING ORPHAN FOLDER: $line"
-          test -f "$line/tvshow.nfo" && rm -f "$line/tvshow.nfo"
+          test -f "$line/tvshow.nfo" && rm -f "$line/tvshow.nfo" #TODO: Why isn't tvshow.nfo part of created.tracking, what about the episodename.nfo files???
           rmdir "$line"
+          printf '%s\n' "$line" >> "$m2kdir/dir.tracking.old"
         elif [[ -n "$DirToCheckCheck" ]]; then
           DebugCont "Continuing to track folder record $Counter, it contains, at least: ${DirToCheckCheck}"
           echo "$DirToCheck" >> "$m2kdir/dir.tracking2"
@@ -3137,9 +3143,34 @@ m2k_maintenance(){
       elif [ ! -d "$DirToCheck" ]; then
         echo "$DirToCheck" >> "$m2kdir/dir.tracking2"
       fi
-    done < "$m2kdir/dir.tracking"
-    test -f "$m2kdir/dir.tracking" && mv "$m2kdir/dir.tracking" "$m2kdir/dir.tracking_${FileNameNow}"
+    done < "$m2kdir/dir.tracking.sorted"
+    [[ -f "$m2kdir/dir.tracking" ]] && rm -f "$m2kdir/dir.tracking"
+    [[ -f "$m2kdir/dir.tracking.sorted" ]] && rm -f "$m2kdir/dir.tracking.sorted"
     [[ -f "$m2kdir/dir.tracking2" ]] && mv "$m2kdir/dir.tracking2" "$m2kdir/dir.tracking"
+  fi
+
+  #TODO: Make a log_rotation function for reuse.
+  local OldTrackingFileSize
+  #When the dir.tracking.old exceeds 512kB compress it and start a fresh one.
+  if [ -f "$m2kdir/dir.tracking.old" ]; then
+    OldTrackingFileSize=$(wc --bytes < "$m2kdir/dir.tracking.old")
+    if (( OldTrackingFileSize > 512000)); then
+      Inform "Moving and compressing dir.tracking.old"
+      mv "$m2kdir/dir.tracking.old" "$m2kdir/dir.tracking.old_${FileNameNow}"
+      gzip "$m2kdir/dir.tracking.old_${FileNameNow}"
+      Inform "Previous dir.tracking.old file moved to: $m2kdir/dir.tracking.old_${FileNameNow}"
+    fi
+  fi
+
+  #When the created.tracking.old exceeds 512kB compress it and start a fresh one.
+  if [ -f "$m2kdir/created.tracking.old" ]; then
+    OldTrackingFileSize=$(wc --bytes < "$m2kdir/created.tracking.old")
+    if (( OldTrackingFileSize > 512000)); then
+      Inform "Moving and compressing created.tracking.old"
+      mv "$m2kdir/created.tracking.old" "$m2kdir/created.tracking.old_${FileNameNow}"
+      gzip "$m2kdir/created.tracking.old_${FileNameNow}"
+      Inform "Previous created.tracking.old file moved to: $m2kdir/created.tracking.old_${FileNameNow}"
+    fi
   fi
 
   #This isn't super fast, so only cleanse the working when called from --maintenance mode.
@@ -3970,11 +4001,11 @@ msg_rss(){
   printf '%s\n' "  and add myth2kodi's feed. If the Kodi instance is on the same"
   printf '%s\n' "  machine running myth2kodi then just replace or add to Kodi's"
   printf '%s\n' "  default feeds with something like:"
-  printf '%s\n' "    <feed updateinterval="30">/var/www/myth2kodi-rss/rss.xml</feed>"
+  printf '%s\n' "    <feed updateinterval=\"30\">/var/www/myth2kodi-rss/rss.xml</feed>"
   printf '%s\n' "  If you want to access it from a different machine than the one"
   printf '%s\n' "  running myth2kodi then you'll need a webserver enabled on the"
   printf '%s\n' "  myth2kodi machine and the entry should look something like:"
-  printf '%s\n\n' "    <feed updateinterval="30">http://[youripaddress]/myth2kodi-rss/rss.xml</feed>"
+  printf '%s\n\n' "    <feed updateinterval=\"30\">http://[youripaddress]/myth2kodi-rss/rss.xml</feed>"
 }
 
 #A message explaining how to improve confidence ratings for you recordings.

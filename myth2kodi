@@ -3811,10 +3811,10 @@ m2k_undo_all(){
       undostatus="$?"
       if [[ "$undostatus" != 0 ]]; then
         Err "undo failed or was aborted by user."
+        return "$undostatus"
       else
         Inform "Finished running undo.sh."
       fi
-      return "$undostatus"
     fi
     rm -f "$m2kdir/undo.lock"
 

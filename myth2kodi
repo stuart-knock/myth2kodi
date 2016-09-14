@@ -78,6 +78,7 @@
 #TODO: Check all deletion or other reference of ' ' and consider whether it
 #      would be better to use the more inclusive [[:blank:]] or [[:space:]]...
 
+#TODO: Only emit one m2k_notify per job processed: success or failure.
 
 #Intention:
 #  This program automates the mapping of MythTv recordings to a Kodi library.
@@ -900,8 +901,7 @@ recreate_comskip(){
     return $?
   elif [[ -d "$InputPath" ]]; then
     #TODO: confirm InputPath doesn't end in a /
-    Warn "YOU ARE ABOUT TO SCAN THE DIRECTORY:"
-    WarnCont "$InputPath"
+    Warn "YOU ARE ABOUT TO SCAN THE DIRECTORY: $InputPath"
     WarnCont "AND REGENERATE COMSKIP FILES FOR ALL PREVIOUSLY MOVED RECORDINGS."
     read -r -n1 -p "  Do you want myth2kodi to regenerate comskip files? y/(n)>" yesorno
     printf '\n'
@@ -1220,7 +1220,7 @@ add_undo(){
   elif [[ "$SYMLINK" = "Disabled" && "$RequiresDoover" != "1" ]]; then
     Debug "SYMLINK=Disabled and doesn't require doover, so MythTV-DB info has been removed."
     Inform "No undo.sh entry will be added for this recording:"
-    InformCont "$MoveDir/$ShowFileName.$OriginalExt"
+    InformCont "File Name: $MoveDir/$ShowFileName.$OriginalExt"
   fi
 }
 
@@ -1402,12 +1402,12 @@ get_mythtvdb_info_pythonbindings(){
   #GuideSeasonNum InputSeasonNum LogicSubtitleSeasonNum FuzzySubtitleSeasonNum FuzzyPlotSeasonNum nlpPlotSeasonNum => EpisodeSeasonNum
   #GuideEpisodeNum InputEpisodeNum LogicSubtitleEpisodeNum FuzzySubtitleEpisodeNum FuzzyPlotEpisodeNum nlpPlotEpisodeNum => EpisodeEpisodeNum
 
-  Inform "Setting the following variables based on MythTV-DB guide data:"
+  Debug "Setting the following variables based on MythTV-DB guide data:"
   #Import mythtv values into myth2kodi values, don't clobber title, subtitle, season-number, or episode-number.
-  [[ -z "$InputTitle" ]]      && InputTitle="$title"        && InformCont "InputTitle=$title"
-  [[ -z "$InputSubtitle" ]]   && InputSubtitle="$subtitle"  && InformCont "InputSubtitle=$subtitle"
-  [[ -z "$InputSeasonNum" ]]  && InputSeasonNum="$season"   && InformCont "InputSeasonNum=$season"
-  [[ -z "$InputEpisodeNum" ]] && InputEpisodeNum="$episode" && InformCont "InputEpisodeNum=$episode"
+  [[ -z "$InputTitle" ]]      && InputTitle="$title"        && DebugCont "InputTitle=$title"
+  [[ -z "$InputSubtitle" ]]   && InputSubtitle="$subtitle"  && DebugCont "InputSubtitle=$subtitle"
+  [[ -z "$InputSeasonNum" ]]  && InputSeasonNum="$season"   && DebugCont "InputSeasonNum=$season"
+  [[ -z "$InputEpisodeNum" ]] && InputEpisodeNum="$episode" && DebugCont "InputEpisodeNum=$episode"
 
   #redefine database var names into myth2kodi var names
   MovieAirDate="$airdate"            && InformCont "MovieAirDate=$airdate"
@@ -1647,9 +1647,10 @@ remove_cast_from_plot(){
   CastString="$(grep -iE --only-matching '\. CAST: ((\w+)(.?\s*)){1,8}$' <<< "$Plot")"
   if [[ -n "$CastString" ]]; then
     Warn "${FUNCNAME[0]}() Plot field appears to contain Cast information, removing it to simplify subsequent processing."
-    Debug "Removing: '$CastString' from:"
-    DebugCont "$Plot"
+    Debug "Removing: '$CastString' from Plot."
+    DebugCont "Plot:$Plot"
     Plot="${Plot/$CastString/.}"
+    DebugCont "New Plot:$Plot"
   fi
 }
 
@@ -1722,7 +1723,7 @@ process_mythtvdb_sydfta(){
   #If the information is already available, set the Sxx & Exx variables
   if [ "$m2kProgramIDCheck" = "EP" ]; then
     Debug "The MythTV Guide data Plot before we messed with it:"
-    DebugCont "$Plot"
+    DebugCont "Plot:$Plot"
     get_sxxexx_from_plot
     remove_sxxexx_from_plot
     #If we haven't set a Subtitle yet, try and get one from $Plot
@@ -1731,6 +1732,8 @@ process_mythtvdb_sydfta(){
       #TODO: Only makes sense to call remove_subtitle_from_plot if get_subtitle_from_plot found one.
       remove_subtitle_from_plot
     fi
+    Debug "The MythTV Guide data Plot after we messed with it:"
+    DebugCont "Plot:$Plot"
   fi
 
   #Remove hashtag reference/s from the Plot field #TODO: Will probably need to check and extend this.
@@ -2301,9 +2304,9 @@ getAbsoluteEpisodeNumberWithFuzzyPlotMatch(){
   [[ -z "${FuzzyPlot[0]}" ]] && Warn "${FUNCNAME[0]}() - No fuzzy match on Plot" && return 1
   #Extract our guessed AbsoluteEpisodeNumber
   AENguess=($(cut -f1 -d":" <<< "$(printf '%s\n' "${FuzzyPlot[@]}")"))
-  DebugCont "$( IFS=','; printf '%s' "AbsoluteEpisodeNumber guess: ${AENguess[*]}" )"
+  DebugCont "$( IFS=','; printf '%s' "AbsoluteEpisodeNumber guess: ${AENguess[*]}." )"
   cost=($(cut -f2 -d":" <<< "$(printf '%s\n' "${FuzzyPlot[@]}")"))
-  DebugCont "$( IFS=','; printf '%s' "Cost: ${cost[*]}" )"
+  DebugCont "$( IFS=','; printf '%s' "Cost: ${cost[*]}." )"
   local -a MatchedPlot=()
   for (( i = 0; i < ${#AENguess[@]}; i++ )) ; do
     MatchedPlot[i]="$(sed -n "${AENguess[i]}"'p' "$m2kdir/$NewShowName/$NewShowName.Plot.txt")"
@@ -2742,11 +2745,16 @@ msg_generic_unspecified_error(){
 
 #Report the combination of command line input and MythTV-DB data.
 msg_merged_input_mythtvdb(){
-  Inform "Input and MythTV-DB Guide Data for $InputFileBasename"
+  Inform "Input and MythTV-DB guide data for $InputFileBasename"
   [[ "$Database" = "Enabled" ]] && InformCont "RECSTART:$ShowStartTime"
   [[ "$Database" = "Enabled" ]] && InformCont "DATE:$MovieAirDate $OriginalAirDate"
   [[ "$Database" = "Enabled" ]] && InformCont "PROGRAMID:$ProgramID"
   [[ "$Database" = "Enabled" ]] && InformCont "ShowCategory:$ShowCategory"
+  if [[ -n "$InputTitle" ]]; then
+    InformCont "InputTitle:$InputTitle"
+  else
+    InformCont "InputTitle: UNKNOWN"
+  fi
   if [[ -n "$InputSubtitle" ]]; then
     InformCont "InputSubtitle:$InputSubtitle"
   else
@@ -3193,7 +3201,7 @@ m2k_maintenance(){
 msg_scan_usage(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   #Log the input arg ($1) as an ERROR message and append usage for --scan to the log.
-  Err "$1"
+  Err "$1."
   ErrCont '  usage: myth2kodi --scan "ext" "/path/to/folder"'
   ErrCont '  example: myth2kodi --scan "mpg" "/home/mythtv/videos"'
 }
@@ -3229,10 +3237,10 @@ m2k_scan(){
     Warn "Continuation forced by $MyUserName, despite possible permission contamination."
   fi
   if [[ -z "$checkext" ]]; then
-    msg_scan_usage 'Cannot process blank file extensions.'
+    msg_scan_usage 'Cannot process blank file extensions'
     return 1
   elif [ "${checkext:0:1}" = "." ]; then
-    msg_scan_usage 'Please do not prepend a "." to the file extension.'
+    msg_scan_usage 'Please do not prepend a "." to the file extension'
     return 1
   elif [[ -z "$scanpath" ]]; then
     msg_scan_usage 'Please supply a path'
@@ -3366,7 +3374,7 @@ msg_operation_summary(){
     InformCont "ProgramID=$ProgramID-"
     InformCont "ChanID=$ChanID-"
     InformCont "StorageGroup=$StorageGroup-"
-    InformCont "ShowCategory=ShowCategory-"
+    InformCont "ShowCategory=$ShowCategory-"
     InformCont "GoForDoover=$GoForDoover-"
     InformCont "ProgramIDType=$ProgramIDType-"
     InformCont "rating=$rating-"
@@ -4587,7 +4595,7 @@ fi
 check_filesystem
 
 #Report naming decisions
-Inform "CONFIDENCE:$ConfidenceRating LOGIC PATH: $ConfidenceReasoning"
+Inform "CONFIDENCE:$ConfidenceRating LOGIC PATH:$ConfidenceReasoning"
 
 msg_operation_summary
 
@@ -4656,7 +4664,7 @@ fi
 #    IS TO REPORT A DETAILED ERROR MESSAGE AND DO NOTHING!!!
 if [ -f "$MoveDir/$ShowFileName.$OriginalExt" ]; then
   Err "FILE NAME ALREADY EXISTS:"
-  ErrCont "$MoveDir/$ShowFileName.$OriginalExt"
+  ErrCont "FILE NAME:$MoveDir/$ShowFileName.$OriginalExt"
   ErrCont "CALLED AS: myth2kodi '$1' '$2' '$3' '$4'"
   ErrCont "InputTitle: $InputTitle"
   ErrCont "InputSubtitle: $InputSubtitle"
@@ -4697,7 +4705,7 @@ test  "$m2kProgramIDCheck" = "SH" && msg_show_warning
 #If symlink is not in LINK mode, Move and rename the file.
 if [ "$SYMLINK" != "LINK" ]; then
   #Send notifications, Move the file and rename
-  Inform "MOVING FILE: '$InputPath' to '$MoveDir/$ShowFileName.$OriginalExt'"
+  Debug "MOVING FILE: '$InputPath' to '$MoveDir/$ShowFileName.$OriginalExt'"
   test "$Notify" = "Enabled" && sudo -u "$NotifyUserName" "$binpath/m2k_notify" "myth2kodi Moving" "Moving and renaming $ShowFileName" drive-harddisk
   mv "$InputPath" "$MoveDir/$ShowFileName.$OriginalExt"
 

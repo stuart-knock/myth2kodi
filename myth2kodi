@@ -247,7 +247,7 @@
 Librarian="librarian"
 #SYMLINK has 3 modes.  MOVE|LINK|Disabled: Default=MOVE
 #Create symlink at InputPath after 'MOVE' | Do not move, just create a sym'LINK' | move the file, symlinking is 'Disabled'
-SYMLINK="LINK"
+SYMLINK="MOVE"
 #MoveDir is the folder which myth2kodi will move the file. No trailing / is accepted eg. "~/videos"
 MoveDir="/media/video/tv"  #<------THIS VALUE MUST BE SET-------
 #AlternateMoveDir will act as a secondary MoveDir if the primary MoveDir fails.  No trailing / is accepted eg. "~/videos"
@@ -269,7 +269,7 @@ binpath="/usr/local/bin"
 #myth2kodi working directory: Default=$HOME/.myth2kodi (ie, /home/username/.myth2kodi)
 m2kdir="$HOME/.myth2kodi"
 #FailSafe mode will enable symlinks to be formed in FailSafeDir if the move or symlink operation fails. Enabled|Disabled
-FailSafeMode="Enabled"
+FailSafeMode="Disabled"
 #FailSafeDir is used when the file cannot be moved to the MoveDir. FailSafe will not create folders. eg. /home/username
 FailSafeDir="/home/librarian/FailSafe"  #<------THIS VALUE MUST BE SET-------
 #DirTracking will check for and remove the folders created by myth2kodi
@@ -364,7 +364,7 @@ LOG_LIFE=6
 #Recommend 2 to start with or if you want to keep track of what myth2kodi is doing.
 #Recommend 1 for usual operation, once you're confident that everything is working fine.
 #Only use 3 if you have a particular problem that you're trying to track down, it significantly increases the output.
-LogLevel=3
+LogLevel=2
 #LogFileName is the name of the log file, this will be placed in myth2kodi's
 #working directory, $m2kdir set above, and have the suffix '.log' appended.
 #DEFAULT: 'output' #NOTE: LogFile is overridden in special contexts, such as running Diagnostics.
@@ -387,102 +387,76 @@ LogType='both'
 #exec 4>&2 2> >(tee >(xargs --null printf "[$(date +%FT%T)] ERROR: %s\n" >> "$LogFile") >&4)
 
 ######################### BEGIN FUNCTION DEFINITIONS ###########################
-#The exit_job function is a place where you can put your custom script to be run
-#at the end of execution. Though it may be at the top, this is actually the end
-#of the program.
+#The exit_job function is a place where your custom scripts can be run at the
+#end of execution. Though it may be at the top, this is actually the end of
+#the program. Place custom scripts in $m2kdir/userjobs/ with filename $jobtype.
 exit_job(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   DebugCont "Called with $# arguments"
   local -i i=0; local var; for var in "$@"; do ((++i)); DebugCont "arg $i = ${var}"; done
   local jobtype="$1"
   local ERR_HEADER="${FUNCNAME[0]}() CALLED FROM: ${FUNCNAME[1]}()."
-  printf '%s\n' "@@@@ COMPLETE: $(date --rfc-3339=seconds) @@@@" >> "$LogFile"
+  local -i exitstatus
   case "$jobtype" in
-  #Successful Completion of myth2kodi
+    #Successful Completion of myth2kodi
     LinkModeSuccessful|MoveModeSuccessful)
       Inform "SUCCESSFUL COMPLETION TYPE: $jobtype"
-      #Insert Custom User Job here
-      [[ -f "$m2kdir/userjobs/$jobtype" ]] && source "$m2kdir/userjobs/$jobtype"
-      #
-      exit 0
+      exitstatus=0
       ;;
-
-  #Information was not obtainable
+    #Information was not obtainable
     TheTVDBIsIncomplete|GenericShow)
       Warn "INSUFFICIENT INFORMATION WAS SUPPLIED: $jobtype"
-      #Insert Custom User Job here
-
-      #
-      exit 0
+      exitstatus=0
       ;;
-
-  #File system error occurred
+    #File system error occurred
     PermissionError0Length|InvalidFileNameSupplied|PermissionErrorWhileMoving|FailSafeModeComplete|LinkModeFailed)
       Err "$ERR_HEADER FILE SYSTEM ERROR: $jobtype"
-      #Insert Custom User Job here
-
-      #
-      exit 1
+      exitstatus=1
       ;;
-
-  #File name we're trying to move to already exists
+    #File name we're trying to move to already exists
     FileAlreadyExists)
       Err "$ERR_HEADER NOT MOVING RECORDING: $jobtype"
-      #Insert Custom User Job here
-
-      #
-      exit 1
+      exitstatus=1
       ;;
-
-  #Generic error occurred
+    #Generic error occurred
     GenericUnspecifiedError)
       Err "$ERR_HEADER UNKNOWN ERROR OCCOURED: $jobtype"
-      #Insert Custom User Job here
-
-      #
-      exit 3
+      exitstatus=3
       ;;
-
-  #User elected not to process jobs which can not be properly categorized
+    #User elected not to process jobs which can not be properly categorized
     MythTVdatabaseFailure)
       Err "$ERR_HEADER COULDN'T EXTRACT RECORDING INFO FROM MythTV-DB: $jobtype"
-      #Insert Custom User Job here
-
-      #
-      exit 3
+      exitstatus=3
       ;;
-
-  #User elected not to process jobs which can not be properly categorized
+    #User elected not to process jobs which can not be properly categorized
     NameCouldNotBeAssigned)
       Warn "NAME COULD NOT BE ASSIGNED BASED UPON DATA SUPPLIED"
-      #Insert Custom User Job here
-
-      #
-      exit 3
+      exitstatus=3
       ;;
-
-  #User elected to use a title/category ignore file
+    #User elected to use a title/category ignore file
     titleIgnore|categoricIgnore)
-      Warn "Show Was ignored based on $jobtype"
-      #Insert Custom User Job Here
-
-      #
-      exit 0
+      Warn "Show was ignored based on $jobtype"
+      exitstatus=0
       ;;
-
-  #The invocation of myth2kodi had something wrong with it.
+    #The invocation of myth2kodi had something wrong with it.
     InvalidCall|InputPathNotFile|UnrecognisedCommand|InsufficientInformationProvided|UserSettingError)
       Err "$ERR_HEADER myth2kodi called incorrectly: $jobtype"
-      #
-      exit 1
+      exitstatus=1
+      ;;
+    #Catch any incorrectly set exit types.
+    *)
+      Warn "Unrecognised exit job type: '$jobtype'"
+      exitstatus=4
       ;;
   esac
-  #
-  Warn "Unrecognised exit job type: '$jobtype'"
-  exit 4
+  #Final myth2kodi log entry when processing a recording, regardless of LogLevel.
+  printf '%s\n' "@@@@ COMPLETE: $(date --rfc-3339=seconds) @@@@" >> "$LogFile"
+  #Run any user job specified for this job type.
+  [[ -f "$m2kdir/userjobs/$jobtype" ]] && source "$m2kdir/userjobs/$jobtype"
+  exit "$exitstatus"
 }
 
-#Initialises a new log file with creation information, can be run before
+#Initialises a new log file with creation information -- can be run before
 #the logging system is initialised.
 initialise_new_logfile(){
   touch "$LogFile"
@@ -492,16 +466,17 @@ initialise_new_logfile(){
   } >> "$LogFile"
 }
 
-#This is the first command executed after the setting of variables at the top of
-#this file.
+#This is the first command executed after the setting of variables at the top
+#of this file. It initialises the state of the script and the logging system.
 m2k_init(){
   #Override default settings with anything in myth2kodi.conf
   [[ -f "$m2kdir/myth2kodi.conf" ]] && source "$m2kdir/myth2kodi.conf"
 
-  m2kVersion="myth2kodi Version 0.9.7" ; declare -gr m2kVersion
+  #What am I...
+  m2kVersion="myth2kodi Version 0.9.8" ; declare -gr m2kVersion
   m2kPlatform="$(uname)" ; declare -gr m2kPlatform
 
-  #Who called the script:
+  #Who called me...
   MyUserName=$(whoami) ; declare -gr MyUserName
   if [[ "$MyUserName" != "$Librarian" ]]; then
     printf 'ERROR: %s\n' "myth2kodi should be run by user '$Librarian'"
@@ -511,7 +486,7 @@ m2k_init(){
     printf '  %s\n' "or: $m2kdir/myth2kodi.conf"
     exit 1
   fi
-  #And when,
+  #And when...
   Today="$(date +%F)"  #Date in IEEE standard format, ie YYYY-mm-dd
   ScriptStartTime="$(date +%H:%M:%S)" #Time in a readable IEEE standard format, ie HH:MM:SS
   FileNameNow="$(date +%FT%H%M%S)"  #ISO 8601: YYYY-mm-ddThhMMSS
@@ -525,7 +500,7 @@ m2k_init(){
   DiagnosticsFile="$m2kdir/diagnostics.log" ; declare -gr DiagnosticsFile
   #A file containing a list of possible duplicate recordings:
   DuplicatesFile="$m2kdir/duplicates.log" ; declare -gr DuplicatesFile
-  #A file containing a list of possible duplicate recordings:
+  #A file containing a list of unrecognised recordings:
   UnrecognizedSeriesFile="$m2kdir/unrecognizedseries.log" ; declare -gr UnrecognizedSeriesFile
 
   #Make our working directory if it doesn't already exist
@@ -670,7 +645,7 @@ parse_command_flags(){
     ;;
     --log)
       Debug "Recognised command line switch '--log'"
-      recording_log
+      recording_log "$m2karg2"
       exit $?
     ;;
     --unmanned_doover)
@@ -1298,7 +1273,7 @@ get_mythtvdb_info_mysql(){
   #  these seem to be redundant. In case there was an old DB schema or older mysql version that required
   #  this additional processing, if the below isn't working for you try adding the additional sed commands
   #  back in, something like:
-  #    | sed s/"\/"/""/g | sed -n "2p" | tr -d 'chanid' | tr -d ' '
+  #    | sed s/"\/"/""/g | sed -n "2p" | sed 's/chanid//g' | tr -d ' '
   #  to replace the
   #    | sed -n "2p"
   #  found below. Finally, if any of the above processing turns out to be SchedulesDirect specific then it
@@ -1320,9 +1295,9 @@ get_mythtvdb_info_mysql(){
 
   #TODO: Clean up all the following mysql commands, like we've done for the above.
   #get DataType
-  XMLTVGrabber=$(mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select xmltvgrabber from videosource ; " | tr -d 'xmltvgrabber' | sed s/"\/"/""/g | sed -n "2p" | tr -d ' ')
+  XMLTVGrabber=$(mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select xmltvgrabber from videosource ; " | sed 's/xmltvgrabber//g' | tr -d '/' | sed -n "2p" | tr -d ' ')
   #get year for movies
-  MovieAirDate=$(mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select airdate from recordedprogram where programid like '$ProgramID' and chanid like '$ChanID' ; " | sed s/"\/"/""/g | tr -d 'airdate' | sed -n "2p" | tr -d ' ')
+  MovieAirDate=$(mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select airdate from recordedprogram where programid like '$ProgramID' and chanid like '$ChanID' ; " | tr -d '/' | sed 's/airdate//g' | sed -n "2p" | tr -d ' ')
   #Blank year if it is invalid
   if [ ! -z "$MovieAirDate" ] && (( MovieAirDate < 1900 )); then
     MovieAirDate=''
@@ -1333,10 +1308,10 @@ get_mythtvdb_info_mysql(){
   if [ "$CommercialMarkup" = "Enabled" ]; then
     #Remove old and generate a comskip Start list
     echo "">"$m2kdir/markupstart.txt"
-    mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select mark from recordedmarkup where starttime like '$ShowStartTime' and chanid like '$ChanID' and type like "4" ; " | tr -d 'mark' | tr -d ' ' >> "$m2kdir/markupstart.txt"
+    mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select mark from recordedmarkup where starttime like '$ShowStartTime' and chanid like '$ChanID' and type like "4" ; " | sed 's/mark//g' | tr -d ' ' >> "$m2kdir/markupstart.txt"
     #Remove old and generate comskip Stop list
     echo "">"$m2kdir/markupstop.txt"
-    mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select mark from recordedmarkup where starttime like '$ShowStartTime' and chanid like '$ChanID' and type like "5" ; " | tr -d 'mark' | tr -d ' ' >> "$m2kdir/markupstop.txt"
+    mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select mark from recordedmarkup where starttime like '$ShowStartTime' and chanid like '$ChanID' and type like "5" ; " | sed 's/mark//g' | tr -d ' ' >> "$m2kdir/markupstop.txt"
     #Combine commercial data into a single comskip file and remove the initial files
     generate_comskip
   fi
@@ -1785,17 +1760,17 @@ process_mythtvdb_sydfta(){
 
   #FTA stations providing a ProgramID use CRID: https://en.wikipedia.org/wiki/Crid
   #Remove the leading CRID://
-  ProgramID="$(sed s/"crid:\/\/"//I <<< "$ProgramID")"
+  ProgramID="$(sed 's#crid://##I' <<< "$ProgramID")"
   #Extract the Authority, ie the station broadcasting the show
   ProgramAuthority="$(cut -f1 -d"/" <<< "$ProgramID")"
   #Extract the show specific information, removing the leading /
-  ProgramData="$(sed s/$ProgramAuthority"\/"// <<< "$ProgramID")"
+  ProgramData="$(sed "s#$ProgramAuthority/##" <<< "$ProgramID")"
   #Populate the ProgramID variable with the ProgramData field of CRID
   ProgramID="$ProgramData"
   #TODO: figure out if anything useful can actually be done with this ProgramID.
 
   #strip needless chars from date
-  datehour="$(echo "$ShowStartTime" | tr ":" "." | tr " " "@")"
+  datehour="$(echo "$ShowStartTime" | tr ":" "." | tr " " "@")" #TODO: Consider getting rid of the @ from this, as it's used in file naming... Maybe _ instead
 
   #predefined naming conventions
   [[ "$ShowCategory" =~ ^(Sports event|News|Newsmagazine)$ ]] && NamingConvention="$ShowCategory"
@@ -1905,7 +1880,7 @@ check_m2k_database_up_to_date(){
   curl -L -s -m"$Timeout" "${updates_site}?type=none" > "$dbdir/TheTVDB_current.time"
 
   #Get the time from the file
-  CurrentTimeTVDB=$(grep '<Time>' "$dbdir/TheTVDB_current.time" | sed s/"<\/\?Time>"/""/g)
+  CurrentTimeTVDB=$(grep '<Time>' "$dbdir/TheTVDB_current.time" | sed -r 's#</?Time>##g')
   #if time server is down, then just update #TODO: If the Updates part of the api isn't working we probably shouldn't expect the rest to...
   [[ -z "$CurrentTimeTVDB" ]] && Warn "${FUNCNAME[0]}() TheTVDB TIME SERVER WAS DOWN" && return 1
 
@@ -2081,7 +2056,7 @@ download_series_info(){
         for i in $(seq 0 $((EpisodeCount-1))); do
           jq -r ".[$i] | .summary" "$tvmazeJsonFile" \
               | tr -d "\n"                           \
-              | sed s/"<\/\?p>"/""/g                 \
+              | sed -r 's#</?p>##g'                  \
               | sed -r 's/[^[:alnum:] &,.-]//g'      \
               | sed -r 's/\s{2,}/ /g' >> "$dbdir/$NewShowName.Plot.txt"
           printf '\n' >> "$dbdir/$NewShowName.Plot.txt"
@@ -2490,18 +2465,18 @@ download_series_identification(){
   curl -L -s -m"$Timeout" "www.thetvdb.com/api/GetSeries.php?seriesname=$tvdbshowname" > "$m2kdir/working.xml"
 
   #Separate the XML into textual DBs containing SeriesID, ShowName and Zap2it IDs
-  grep "<seriesid>" "$m2kdir/working.xml" | sed -e s/"<\/\?seriesid>"//g \
-                                                -e s/'&quot;'/'"'/g      \
-                                                -e s/"&amp;"/"\&"/g      \
-                                                -e s/'&ndash;'/'-'/g     \
-                                                -e s/"&lt;"/"<"/g        \
-                                                -e s/"&gt;"/">"/g >"$m2kdir/sid.txt"
-  grep "<SeriesName>" "$m2kdir/working.xml" | sed -e s/"<\/\?SeriesName>"//g \
-                                                  -e s/'&quot;'/'"'/g        \
-                                                  -e s/"&amp;"/"\&"/g        \
-                                                  -e s/'&ndash;'/'-'/g       \
-                                                  -e s/"&lt;"/"<"/g          \
-                                                  -e s/"&gt;"/">"/g >"$m2kdir/shn.txt"
+  grep "<seriesid>" "$m2kdir/working.xml" | sed -e 's#</\?seriesid>##g' \
+                                                -e 's/&quot;/"/g'       \
+                                                -e 's/&amp;/\&/g'       \
+                                                -e 's/&ndash;/-/g'      \
+                                                -e 's/&lt;/</g'         \
+                                                -e 's/&gt;/>/g' >"$m2kdir/sid.txt"
+  grep "<SeriesName>" "$m2kdir/working.xml" | sed -e 's#</\?SeriesName>##g' \
+                                                  -e 's/&quot;/"/g'         \
+                                                  -e 's/&amp;/\&/g'         \
+                                                  -e 's/&ndash;/-/g'        \
+                                                  -e 's/&lt;/</g'           \
+                                                  -e 's/&gt;/>/g' >"$m2kdir/shn.txt"
 
   #parse the XML for shows with Zap2ItIDs
   test -f "$m2kdir/zap2it.txt" && rm -f "$m2kdir/zap2it.txt"
@@ -2513,12 +2488,12 @@ download_series_identification(){
     fi
 
     if [[ "$line" =~ '<zap2it_id>'* ]] ; then
-      echo "$line" | sed -e s/"<\/\?zap2it_id>"//g \
-                         -e s/'&quot;'/'"'/g       \
-                         -e s/"&amp;"/"\&"/g       \
-                         -e s/'&ndash;'/'-'/g      \
-                         -e s/"&lt;"/"<"/g         \
-                         -e s/"&gt;"/">"/g >> "$m2kdir/zap2it.txt"
+      echo "$line" | sed -e 's#</\?zap2it_id>##g' \
+                        -e 's/&quot;/"/g'         \
+                        -e 's/&amp;/\&/g'         \
+                        -e 's/&ndash;/-/g'        \
+                        -e 's/&lt;/</g'           \
+                        -e 's/&gt;/>/g' >> "$m2kdir/zap2it.txt"
       NextShow=0
     fi
   done < "$m2kdir/working.xml"
@@ -3159,8 +3134,8 @@ m2k_maintenance(){
         #TODO: the "ls ... | grep"  stuff below seems a bit random, reconsider how to achieve the desired goal here...
         #[[ $(find "$line" -maxdepth 0 -type d -empty 2>/dev/null) ]] && echo "is empty"
         #See also, find option -exec  find "$line" -maxdepth 0 -type d -empty -exec rmdir {} \;
-        DirToCheckCheck=$(ls "$line" | tr -d 'tvshow.nfo' | grep -m1 ^)
-        [[ -z "$DirToCheckCheck" ]] && DirToCheckCheck=$(ls "$line" | tr -d 'tvshow.nfo' | grep -m2 ^)
+        DirToCheckCheck=$(ls "$line" | sed 's/tvshow.nfo//g' | grep -m1 ^)
+        [[ -z "$DirToCheckCheck" ]] && DirToCheckCheck=$(ls "$line" | sed 's/tvshow.nfo//g' | grep -m2 ^)
         if [[ -z "$DirToCheckCheck" ]]; then
           Inform "REMOVING ORPHAN FOLDER: $line"
           [[ -f "$line/tvshow.nfo" ]] && rm -f "$line/tvshow.nfo"
@@ -3536,7 +3511,7 @@ m2k_diagnostics(){
     pythonpath=$(command -v python) || checkf="python"
     if [[ -z "$checkf" ]]; then
       python_version="$(python --version 2>&1)"  #Python returns version info to stderr
-      pyver="$(echo "$python_version" | sed s/"python\s*"//I | cut -f1-2 -d"." | tr -d '.')"
+      pyver="$(echo "$python_version" | sed 's/python\s*//I' | cut -f1-2 -d"." | tr -d '.')"
       python -c "from MythTV import MythDB ; exit()" &> /dev/null
       test "$?" != "0" && checka="libmyth-python"
       python -c "import lxml ; exit()" &> /dev/null
@@ -3974,7 +3949,7 @@ msg_options(){
   printf '%s\n'   "    eg. myth2kodi --disconnect '/home/mythtv/recordings/1099_20151210093000.mpg'"
   printf '\n%s\n' "  --log '/path/to/file'"
   printf '%s\n'   "    Identify and display the log entries for the recording."
-  printf '%s\n'   "    eg. myth2kodi --log '/home/mythtv/recordings/1099_20151210093000.mpg'"
+  printf '%s\n'   "    eg. myth2kodi --log '1099_20151210093000.mpg'"
   printf '\n%s\n' "  --comskip /path/to/folder/or/file"
   printf '%s\n'   "    Regenerates the comskip file for recordings that have"
   printf '%s\n'   "    already been moved. Argument can be either a single"
@@ -4130,14 +4105,57 @@ disconnect_recording(){
   return 1
 }
 
+#Displays the log entries for processing of a specified recording file.
 recording_log(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  #TODO: Add a --log <filename> option
-  #    + Identify the first and last log entry for that file when it was
-  #      processed and display everything in between in a pager, concatenate
-  #      if there are multiple results (processed multiple times).
-  Err "NotImplemented"
-  return 1
+  #Process all the log files in our working directory and:
+  #  Select only recording processing entries;
+  #  Make each recording processing entry into an awk 'record';
+  #  Print only records containing RECNAME, slightly formatted:
+  #    two blank lines between records;
+  #    prepend each record with the name of the log file it came from.
+  local PROC='@@@@ PROCESSING RECORDING:'
+  local COMP='@@@@ COMPLETE:'
+  local LOGFILEPATTERN="${LogFileName}_20[0-9][0-9]-[0-1][0-9]-[0-3][0-9]*.gz"
+  local LOG_FILE
+  local RECNAME="$(basename "$1")"
+  #Start a log file list with the current log file
+  printf '%s\n' "$LogFile" > "logfilelist.txt"
+  #Add archived log files to the list, most recent first
+  find "$m2kdir" -maxdepth 1 -type f -name "$LOGFILEPATTERN" | sort -r >> "$m2kdir/logfilelist.txt"
+  #Create a temporary log file for this recording
+  printf '%s\n\n' "#### Log entries for: $RECNAME ####" > "$m2kdir/temp.log"
+  while read -r LOG_FILE ; do
+    if [[ "${LOG_FILE##*.}" = 'gz' ]]; then
+      if gzip -dc "$LOG_FILE" 2>/dev/null | grep -q "$PROC" ; then
+        Debug "Searching for relevant entries in: $LOG_FILE"
+        awk '/'"$PROC"'/,/'"$COMP"'/ {print $0}' <(gzip -dc "$LOG_FILE") \
+          | awk -v RS="$PROC" -v OFS='\n' -v ORS='\n\n'                  \
+              '$0~/'"${RECNAME%%.}"'/{print "'"$LOG_FILE"'",RS$0}' >> "$m2kdir/temp.log"
+      fi
+    elif [[ "${LOG_FILE##*.}" = 'log' ]]; then
+      #Confirm the log file actually contains a process recording entry
+      if grep -q "$PROC" "$LOG_FILE" ; then
+        Debug "Searching for relevant entries in: $LOG_FILE"
+        awk '/'"$PROC"'/,/'"$COMP"'/ {print $0}' "$LOG_FILE" \
+          | awk -v RS="$PROC" -v OFS='\n' -v ORS='\n\n'      \
+              '$0~/'"${RECNAME%%.}"'/{print "'"$LOG_FILE"'",RS$0}' >> "$m2kdir/temp.log"
+      fi
+    else
+      Warn "Unrecognised log file match: $LOG_FILE"
+    fi
+  done <"$m2kdir/logfilelist.txt"
+  #
+  if (( $(wc --lines < "$m2kdir/temp.log") > 2 )); then
+    Debug "Viewing log entries for $RECNAME in less."
+    less "$m2kdir/temp.log"
+    Debug "Finished viewing."
+    return 0
+  else
+    Inform "There don't appear to be any processing entries for: $1"
+    printf '%s\n' "#### NO ENTRIES FOUND ####" >> "$m2kdir/temp.log"
+    return 1
+  fi
 }
 
 ########################### END FUNCTION DEFINITIONS ###########################
@@ -4243,7 +4261,7 @@ ignore_list #TODO: Should the ignorelist be processed against the translated tit
 EpisodeSubtitle="$(sed 's/;.*//' <<< "$InputSubtitle")"
 #Only keep Alpha-numeric characters, space, parenthesis and the four chars & , . -
 EpisodeSubtitle="$(sed -r 's/[^[:alnum:] &,.)(-]//g' <<< "$EpisodeSubtitle")"
-OriginalExt="${InputFileBasename#*.}"
+OriginalExt="${InputFileBasename#*.}" #TODO: Should be "${InputFileBasename##*.}" ???
 originaldirname="$(dirname "$InputPath")"
 #Set originaldir name if none was supplied
 [[ "$originaldirname" =~ ^('./'|'.'|'')$ ]] && originaldirname="$(pwd)"

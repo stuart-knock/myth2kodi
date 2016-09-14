@@ -246,8 +246,9 @@
 ###Stand-alone mode values###
 #Specify the name of the user running mythtv, myth2kodi should always be run by that user. Default="mythtv"
 Librarian="librarian"
-#SYMLINK has 3 modes.  MOVE|LINK|Disabled: Default=MOVE
-#Create symlink at InputPath after 'MOVE' | Do not move, just create a sym'LINK' | move the file, symlinking is 'Disabled'
+#TODO: Rethink naming of 'SYMLINK' variable and modes here as the current may be confusing as to what they actually do...
+#SYMLINK has 3 modes.  MOVE|LINK|Disabled: Default=MOVE. WARNING: "Disabled" Mode removes MythTV-DB entry, SO CAN'T BE UNDONE.
+#Create symlink at InputPath after 'MOVE' | Do not move, just create a sym'LINK' | move the file, DELETE MythTV-DB entry, symlinking is 'Disabled'
 SYMLINK="MOVE"
 #MoveDir is the folder which myth2kodi will move the file. No trailing / is accepted eg. "~/videos"
 MoveDir="/media/video/tv"  #<------THIS VALUE MUST BE SET-------
@@ -291,7 +292,7 @@ StorageGroupFallback="Enabled"
 #Plot field from the Guide data in MythTV DB against the Plot data for the series, which we retrieved from
 #TheTVDB.
 #Options: ['Enabled'|'Disabled']
-PlotMatchFallback="Enabled"
+PlotMatchFallback="Disabled"
 
 ###Database settings###
 #MythTV MYSQL access allows addition of movies, comskip data, and improves accuracy of episode recognition.
@@ -319,7 +320,7 @@ PrimaryMovieDir="/media/video/movies" #<------THIS VALUE MUST BE SET-------
 #AlternateMovieDir will act as a Secondary move dir if the primary movie dir fails
 AlternateMovieDir="/home/librarian/recordedMovies"
 #ShowStopper = Enabled prevents generic shows and unrecognised episodes from being processed
-ShowStopper="Disabled"
+ShowStopper="Enabled"
 #Primary Show Dir. myth2kodi will attempt to move to this dir first. No trailing / is accepted eg. "~/videos"
 PrimaryShowDir="/media/video/recordedShows" #<------THIS VALUE MUST BE SET-------
 #AlternateMoveDir will act as a Secondary move dir if the primary move dir fails
@@ -337,7 +338,7 @@ DAILYREPORT_LIFE=12
 #Notify tells myth2kodi to send a notification to GNOME Desktop upon completion. Enabled|Disabled
 Notify="Disabled"
 #If notifications are enabled, NotifyUserName should be the same as the user logged into the GNOME Session. (your username)
-NotifyUserName="librarian" #<------THIS VALUE MUST BE SET-------
+NotifyUserName="$Librarian" #<------THIS VALUE MUST BE SET-------
 #Send a notification to KODI to Update library upon Successful move job Enabled|Disabled
 KODIUpdate="Enabled"
 #PREVENT CLOBBERING ON RECURSIVE CALLS#[[ -z "$KODIUpdate" ]] && KODIUpdate="Enabled"
@@ -867,11 +868,9 @@ generate_comskip(){
     printf '%s\n' "------------------------"
   }> "$m2kdir/markupframes.txt"
 
-  #TODO: markupstop.txt is being read into line and then subsequently ignored...
-  while read -r line ; do
+  while read -r StopData ; do
     ((++Counter))
     StartData=$(sed -n "$Counter"p "$m2kdir/markupstart.txt")
-    StopData=$(sed -n "$Counter"p "$m2kdir/markupstop.txt")
     if [[ ! -z "$StopData" ]]; then
       printf '%s\n' "$StartData $StopData" >> "$m2kdir/markupframes.txt"
       CommercialMarkup="Created"
@@ -1410,16 +1409,16 @@ get_mythtvdb_info_pythonbindings(){
   [[ -z "$InputEpisodeNum" ]] && InputEpisodeNum="$episode" && DebugCont "InputEpisodeNum=$episode"
 
   #redefine database var names into myth2kodi var names
-  MovieAirDate="$airdate"            && InformCont "MovieAirDate=$airdate"
-  OriginalAirDate="$originalairdate" && InformCont "OriginalAirDate=$originalairdate"
-  ShowCategory="$category"           && InformCont "ShowCategory=$category"
-  StorageGroup="$storagegroup"       && InformCont "StorageGroup=$storagegroup"
-  Stars="$stars"                     && InformCont "Stars=$stars"
-  Plot="$description"                && InformCont "Plot=$description"
-  LocalSeriesID="$seriesid"          && InformCont "LocalSeriesID=$seriesid"
-  ProgramID="$programid"             && InformCont "ProgramID=$programid"
-  ChanID="$chanid"                   && InformCont "ChanID=$chanid"
-  ShowStartTime="$starttime"         && InformCont "ShowStartTime=$starttime"
+  MovieAirDate="$airdate"            && DebugCont "MovieAirDate=$airdate"
+  OriginalAirDate="$originalairdate" && DebugCont "OriginalAirDate=$originalairdate"
+  ShowCategory="$category"           && DebugCont "ShowCategory=$category"
+  StorageGroup="$storagegroup"       && DebugCont "StorageGroup=$storagegroup"
+  Stars="$stars"                     && DebugCont "Stars=$stars"
+  Plot="$description"                && DebugCont "Plot=$description"
+  LocalSeriesID="$seriesid"          && DebugCont "LocalSeriesID=$seriesid"
+  ProgramID="$programid"             && DebugCont "ProgramID=$programid"
+  ChanID="$chanid"                   && DebugCont "ChanID=$chanid"
+  ShowStartTime="$starttime"         && DebugCont "ShowStartTime=$starttime"
 
   #Clean-up the file written by MythDataGrabber
   [[ -f "$m2kdir/mythicalDbOut" ]] && rm -f "$m2kdir/mythicalDbOut"
@@ -1894,7 +1893,7 @@ check_m2k_database_up_to_date(){
   #If no last updated time, then assign a never updated value and update now
   elif [ ! -f "$dbdir/lastupdated.time" ]; then
     Inform "Seems we've never updated $NewShowName from TheTVDB -- no lastupdated.time file."
-    LastUpdatedTVDB=42
+    LastUpdatedTVDB=42 #A meaningless low number to start from...
     return 1
   fi
 
@@ -1904,7 +1903,7 @@ check_m2k_database_up_to_date(){
 
   #if episode information is out of date or not created
   if ((CurrentTimeTVDB > NextUpdate)); then
-    curl -L -s -m"$Timeout" "${updates_site}?type=all&time=$LastUpdatedTVDB" >> "$dbdir/UpdatesList.txt"
+    curl -L -s -m"$Timeout" "${updates_site}?type=all&time=$LastUpdatedTVDB" > "$dbdir/UpdatesList.txt"
     if grep -q "$SeriesID" "$dbdir/UpdatesList.txt" ; then
       Inform "DATABASE OUT OF DATE. Next update: $NextUpdate. Current: $CurrentTimeTVDB"
       return 1
@@ -2920,7 +2919,7 @@ generate_series_nfo(){
 
   {
     printf '%b\n' "\t</episodeguide>"
-    [[ -n "$SeriesID" ]] && printf '%b\n' "\t <id>$SeriesID</id>"
+    [[ -n "$SeriesID" ]] && printf '%b\n' "\t<id>$SeriesID</id>"
     printf '%b\n' "\t<dateadded>$(date --rfc-3339=seconds)</dateadded>"
     printf '%s\n' "</tvshow>"
   } >> "$MoveDir/tvshow.nfo"
@@ -2960,7 +2959,7 @@ generate_episode_nfo(){
 
   {
     printf '%b\n' "\t<rating>$rating</rating>"
-    printf '%b\n' "\t<Plot>$Plot</Plot>"
+    printf '%b\n' "\t<plot>$Plot</plot>"
     printf '%b\n' "\t<genre>$ShowCategory</genre>"
     printf '%b\n' "\t<aired>${ShowStartTime%% *}</aired>"
     printf '%b\n' "\t<dateadded>$(date --rfc-3339=seconds)</dateadded>"
@@ -3939,7 +3938,7 @@ msg_options(){
   printf '%s\n'   "    Returns all processed recordings to their original state."
   printf '%s\n'   "    There is an exception for recordings successfully processed"
   printf '%s\n'   "    with SYMLINK='Disabled', as MythTV-DB info has been deleted,"
-  printf '%s\n'   "    these will not be undone."
+  printf '%s\n'   "    these can not be undone."
   printf '%s\n'   "    eg. myth2kodi --undo"
   printf '\n%s\n' "  --getSeriesInfo 'Series Name'"
   printf '%s\n'   "    Updates our local database tables for a specified series,"

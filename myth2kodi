@@ -292,7 +292,7 @@ StorageGroupFallback="Enabled"
 #Plot field from the Guide data in MythTV DB against the Plot data for the series, which we retrieved from
 #TheTVDB.
 #Options: ['Enabled'|'Disabled']
-PlotMatchFallback="Disabled"
+PlotMatchFallback="Enabled"
 
 ###Database settings###
 #MythTV MYSQL access allows addition of movies, comskip data, and improves accuracy of episode recognition.
@@ -561,7 +561,10 @@ m2k_init(){
 
   Debug "myth2kodi script initialisation complete."
   Debug "Running myth2kodi as $MyUserName"
-  #TODO: Debug "$(set)" OR "$(printenv)" OR something like that.
+
+  #Some excessive logging for extra buggy bugs.
+  ((LogLevel>=4)) && env | err_pipe "env:  "
+  ((LogLevel>=42)) && set | err_pipe "set:  "
 }
 
 #TODO: Consider adding a validate_settings function, it should check for
@@ -922,8 +925,12 @@ recreate_comskip(){
           Debug "Not a File and Link, so not moved with symlinking enabled... Not regenerating comskip. TODO: HANDLE ALL MOVE MODES PROPERLY HERE."
         fi
       done < "$m2kdir/comskip_scan.temp"
-      Debug "Removing the temporary scan file: $m2kdir/comskip_scan.temp"
-      rm -f "$m2kdir/comskip_scan.temp"
+
+      if (( LogLevel < 3 )); then
+        #If we're not in debug mode then remove the comskip scan file we just processed.
+        Debug "Removing the temporary scan file: $m2kdir/comskip_scan.temp"
+        rm -f "$m2kdir/comskip_scan.temp"
+      fi
       return 0
     else
       Warn "You must press 'y' to scan, aborting."
@@ -1307,10 +1314,10 @@ get_mythtvdb_info_mysql(){
   if [ "$CommercialMarkup" = "Enabled" ]; then
     #Remove old and generate a comskip Start list
     echo "">"$m2kdir/markupstart.txt"
-    mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select mark from recordedmarkup where starttime like '$ShowStartTime' and chanid like '$ChanID' and type like "4" ; " | sed 's/mark//g' | tr -d ' ' >> "$m2kdir/markupstart.txt"
+    mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select mark from recordedmarkup where starttime like '$ShowStartTime' and chanid like '$ChanID' and type like 4 ; " | sed 's/mark//g' | tr -d ' ' >> "$m2kdir/markupstart.txt"
     #Remove old and generate comskip Stop list
     echo "">"$m2kdir/markupstop.txt"
-    mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select mark from recordedmarkup where starttime like '$ShowStartTime' and chanid like '$ChanID' and type like "5" ; " | sed 's/mark//g' | tr -d ' ' >> "$m2kdir/markupstop.txt"
+    mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select mark from recordedmarkup where starttime like '$ShowStartTime' and chanid like '$ChanID' and type like 5 ; " | sed 's/mark//g' | tr -d ' ' >> "$m2kdir/markupstop.txt"
     #Combine commercial data into a single comskip file and remove the initial files
     generate_comskip
   fi
@@ -1357,21 +1364,20 @@ get_mythtvdb_info_pythonbindings(){
   # declare mdb_programid
   # declare mdb_chanid
   # declare mdb_starttime
-
+  [[ -f "$m2kdir/mythicalDbOut" ]] && rm -f "$m2kdir/mythicalDbOut"
   #TODO: If possible without blocking MythDataGrabber exit status, return $m2kdir/mythicalDbOut to being a named pipe.
   #run the python bindings and output to named pipe
-  "$binpath"/MythDataGrabber --verbosity="$LogLevel"          \
-                             --filename="$InputFileBasename"  \
-                             --SecurityPin="$DBPin"           \
-                             --DBHostName="$DBHostName"       \
-                             --DBName="$MySQLMythDb"          \
-                             --DBUserName="$MySQLuser"        \
-                             --DBPassword="$MySQLpass"        \
-                             --output="$m2kdir/mythicalDbOut" \
-                             --writeFile  2> >(tee -a "$LogFile" >&2)
-  #TODO: Need to adapt this based on LogType, current is only correct for 'both'
-  #      'logfile': 2> "$LogFile"  ; and nothing for 'stdout'
-  pythonExitStatus="$?"
+  "$binpath"/MythDataGrabber --verbosity="$(($LogLevel<3?$LogLevel:3))" \
+                             --filename="$InputFileBasename"            \
+                             --SecurityPin="$DBPin"                     \
+                             --DBHostName="$DBHostName"                 \
+                             --DBName="$MySQLMythDb"                    \
+                             --DBUserName="$MySQLuser"                  \
+                             --DBPassword="$MySQLpass"                  \
+                             --output="$m2kdir/mythicalDbOut"           \
+                             --writeFile 2>&1 | err_pipe "MythDataGrabber: "
+
+  pythonExitStatus="${PIPESTATUS[0]}"
   if [ "$pythonExitStatus" != "0" ] ; then
     Err "${FUNCNAME[0]}() DATABASE ACCESS ERROR: COULD NOT OBTAIN INFORMATION"
     Debug "Check DBInfo in mythicalSetup, verify file is mythtv file"
@@ -1420,8 +1426,10 @@ get_mythtvdb_info_pythonbindings(){
   ChanID="$chanid"                   && DebugCont "ChanID=$chanid"
   ShowStartTime="$starttime"         && DebugCont "ShowStartTime=$starttime"
 
-  #Clean-up the file written by MythDataGrabber
-  [[ -f "$m2kdir/mythicalDbOut" ]] && rm -f "$m2kdir/mythicalDbOut"
+  #If we're not in debug mode then clean-up the file written by MythDataGrabber
+  if [[ -f "$m2kdir/mythicalDbOut" ]] && (( LogLevel < 3 )) ; then
+    rm -f "$m2kdir/mythicalDbOut"
+  fi
 
   #cleanup, remove the fifo named pipe
   #test -p "$m2kdir/mythicalDbOut" && rm -f "$m2kdir/mythicalDbOut"
@@ -1889,9 +1897,7 @@ check_m2k_database_up_to_date(){
   #If file exist for last updated time, then get value
   if [ -f "$dbdir/lastupdated.time" ]; then
     LastUpdatedTVDB=$(cat "$dbdir/lastupdated.time")
-
-  #If no last updated time, then assign a never updated value and update now
-  elif [ ! -f "$dbdir/lastupdated.time" ]; then
+  else #no last updated time, so assign a never updated value and update now.
     Inform "Seems we've never updated $NewShowName from TheTVDB -- no lastupdated.time file."
     LastUpdatedTVDB=42 #A meaningless low number to start from...
     return 1
@@ -1981,6 +1987,7 @@ download_series_info(){
       Inform "Parsing Downloaded information from TheTVDB: $NewShowName.xml"
       while read -r line ; do
         if ((recordNumber < 0)); then
+          #TODO: Grab the Series description and first aired date, either here or in download_series_identification(), for use in series NFO
           #TODO:Check for a Status line and if it exists and says Ended then touch
           #  a file called Status.Ended in the $m2kdir/$NewShowName/
           #  directory, then add a check for this before we bother trying to
@@ -2040,7 +2047,7 @@ download_series_info(){
           line="${line//[[:space:]]/ }"
           #Only keep Alpha-numeric characters, space and the four chars & , . -
           line="$(sed -r 's/[^[:alnum:] &,.-]//g' <<< "$line")"
-          line="$(sed -r 's/\s{2,}/ /g' <<< "$line")"
+          line="$(tr -s ' ' <<< "$line")"
           #Remove any trailing space
           line="${line%%*([[:space:]])}"
           EpisodeOverview="$line"
@@ -2060,7 +2067,7 @@ download_series_info(){
               | tr -d "\n"                           \
               | sed -r 's#</?p>##g'                  \
               | sed -r 's/[^[:alnum:] &,.-]//g'      \
-              | sed -r 's/\s{2,}/ /g' >> "$dbdir/$NewShowName.Plot.txt"
+              | tr -s ' ' >> "$dbdir/$NewShowName.Plot.txt"
           printf '\n' >> "$dbdir/$NewShowName.Plot.txt"
         done
       fi
@@ -2214,9 +2221,9 @@ set_seriesid_newshowname_from_serieslinenumber(){
   NewShowName="$(sed -n "$serieslinenumber"'p' "$m2kdir/shn.txt" | grep -m1 ^)"
   NewShowName="${NewShowName//&amp;/&}"
 
-  #Cleanup files to prevent mismatch next time
-  [[ -f "$m2kdir/sid.txt" ]] && rm -f "$m2kdir/sid.txt"
-  [[ -f "$m2kdir/shn.txt" ]] && rm -f "$m2kdir/shn.txt"
+  #If we're not in debug mode then cleanup show identification files.
+  [[ -f "$m2kdir/sid.txt" ]] && (( LogLevel < 3 )) && rm -f "$m2kdir/sid.txt"
+  [[ -f "$m2kdir/shn.txt" ]] && (( LogLevel < 3 )) && rm -f "$m2kdir/shn.txt"
 }
 
 #Sets the AbsoluteEpisodeNumber variable by comparing OriginalAirDate
@@ -2466,6 +2473,13 @@ download_series_identification(){
   #Search TheTVDB and return an XML file with results
   curl -L -s -m"$Timeout" "www.thetvdb.com/api/GetSeries.php?seriesname=$tvdbshowname" > "$m2kdir/working.xml"
 
+  if (( $(wc --bytes < "$m2kdir/working.xml") == 0 )); then
+    Err "FUNCNAME[0]}(): Couldn't access info from TheTVDB."
+    ErrCont "Check your internet connection."
+    ErrCont "Check www.thetvdb.com for '$tvdbshowname'."
+    return 1
+  fi
+
   #Separate the XML into textual DBs containing SeriesID, ShowName and Zap2it IDs
   grep "<seriesid>" "$m2kdir/working.xml" | sed -e 's#</\?seriesid>##g' \
                                                 -e 's/&quot;/"/g'       \
@@ -2499,7 +2513,9 @@ download_series_identification(){
       NextShow=0
     fi
   done < "$m2kdir/working.xml"
-  rm -f "$m2kdir/working.xml"
+  #Assuming we're not in debug mode, remove the working file.
+  (( LogLevel < 3 )) && rm -f "$m2kdir/working.xml"
+  return 0
 }
 
 #A special exit point for when we're processing testfile.ext
@@ -2908,6 +2924,8 @@ generate_series_nfo(){
     printf '%s\n' '<?xml version="1.0" encoding="UTF-8" standalone="yes" ?>'
     printf '%s\n' "<tvshow>"
     printf '%b\n' "\t<title>$NewShowName</title>"
+    #printf '%b\n' "\t<plot>$SeriesPlot</plot>" #TODO: for when we've extracted the series description...
+    #printf '%b\n' "\t<status>$SeriesStatus</status>" #TODO: for when we've extracted the series status
     printf '%b\n' "\t<episodeguide>"
   } > "$MoveDir/tvshow.nfo"
 
@@ -2921,6 +2939,7 @@ generate_series_nfo(){
     printf '%b\n' "\t</episodeguide>"
     [[ -n "$SeriesID" ]] && printf '%b\n' "\t<id>$SeriesID</id>"
     printf '%b\n' "\t<dateadded>$(date --rfc-3339=seconds)</dateadded>"
+    #printf '%b\n' "\t<premiered>$SeriesFirstAired</premiered>" #TODO: for when we've extracted the series first aired field.
     printf '%s\n' "</tvshow>"
   } >> "$MoveDir/tvshow.nfo"
   Inform "Generated series NFO file: $MoveDir/tvshow.nfo"
@@ -3033,7 +3052,8 @@ process_cleanup_file(){
       rm -f "$line"
     fi
   done < "$CLEANUP_FILE"
-  rm -f "$CLEANUP_FILE"
+  #If we're not in debug mode then remove the clean-up file we just processed.
+  (( LogLevel < 3 )) && rm -f "$CLEANUP_FILE"
 }
 
 #Clean-up old files we don't need any more: log files; m2k database files; etc.
@@ -3275,10 +3295,14 @@ m2k_scan(){
     #Explicitly call m2k_maintenance() here as it's blocked in subsequent calls to myth2kodi from scan mode.
     m2k_maintenance
     myth2kodi --doover
-    dooverstatus="$?"
+    dooverstatus="$?" #TODO: This only catches the exit state of the final myth2kodi call... Need to review doover.
     if [[ "$dooverstatus" != 0 ]]; then
       Err "Doover failed or was aborted by user, not continuing with scan."
-      return "$dooverstatus"
+      #TODO: Temp hack: return status can be non-zero when it's not a problem,
+      #                 eg, all processed correctly, but it's a duplicate. Need to review doover generally and myth2kodi exit status...
+      read -r -n1 -p "  ERROR DURING DOOVER: Continue with the scan? y/(n)>" yesorno
+      printf '\n' ; [[ -z "$yesorno" ]] && yesorno="n"
+      [[ "$yesorno" != "y" ]] && return "$dooverstatus"
     fi
     Debug "Creating a temporary scan file: $m2kdir/scan.temp"
     ls -1 "$scanpath"/*."$checkext" > "$m2kdir/scan.temp"
@@ -3298,7 +3322,8 @@ m2k_scan(){
     done<"$m2kdir/scan.temp"
     Inform "Completed scan of $scanpath for $checkext files."
     Debug "Removing the temporary scan file: $m2kdir/scan.temp"
-    rm -f "$m2kdir/scan.temp"
+    #If we're not in debug mode then remove the scan file we just processed.
+    (( LogLevel < 3 )) && rm -f "$m2kdir/scan.temp"
     return 0
   else
     Warn "You must press 'y' to scan, aborting."
@@ -3590,13 +3615,13 @@ m2k_diagnostics(){
     #If checks above found python-lxml & libmyth-python, do a more thorough testing of MythTV python bindings
     if [[ -z "$checkf$checka$checkb" ]]; then
       #Use MythDataGrabber's internal diagnostics function
-      "$binpath"/MythDataGrabber --verbosity="$LogLevel"    \
-                                 --Diagnostic               \
-                                 --DBHostName="$DBHostName" \
-                                 --DBName="$MySQLMythDb"    \
-                                 --DBUserName="$MySQLuser"  \
-                                 --DBPassword="$MySQLpass"  \
-                                 --SecurityPin="$DBPin" 2> >(tee -a "$LogFile" >&2)
+      "$binpath"/MythDataGrabber --verbosity="$(($LogLevel<3?$LogLevel:3))" \
+                                 --Diagnostic                               \
+                                 --DBHostName="$DBHostName"                 \
+                                 --DBName="$MySQLMythDb"                    \
+                                 --DBUserName="$MySQLuser"                  \
+                                 --DBPassword="$MySQLpass"                  \
+                                 --SecurityPin="$DBPin" 2>&1 | err_pipe "MythDataGrabber: "
       if [[ $? = "0" ]]; then PythonBindingsCheck="OK"; else PythonBindingsCheck="FAILED"; fi
       if [ "$PythonBindingsCheck" = "OK" ]; then
         Inform "MythTV Python Bindings are installed properly."
@@ -3803,10 +3828,12 @@ m2k_doover(){
     #NOTE: The first command in doover.sh is to delete the file doover.sh.
     cp "$m2kdir/doover.sh" "$m2kdir/doover_${FileNameNow}.sh"
     chmod +x "$m2kdir/doover.sh"
-    "$m2kdir/doover.sh"
-    dooverstatus="$?"
+    "$m2kdir/doover.sh" 2>&1 | err_pipe "doover: "
+    dooverstatus="${PIPESTATUS[0]}"
+    #TODO: The dooverstatus is most likely the myth2kodi exit status for the
+    #      recording processed by doover.sh...
     if [[ "$dooverstatus" != 0 ]]; then
-      Err "Doover failed or was aborted by user."
+      Err "${FUNCNAME[0]}(): Doover failed or was aborted by user."
     else
       Inform "Finished running doover.sh."
       kodi_cleanup
@@ -3844,8 +3871,8 @@ m2k_undo_all(){
     if [[ -f "$m2kdir/undo.sh" ]]; then
       cp "$m2kdir/undo.sh" "$m2kdir/undo_${FileNameNow}.sh"
       chmod +x "$m2kdir/undo.sh"
-      "$m2kdir/undo.sh"
-      undostatus="$?"
+      "$m2kdir/undo.sh" 2>&1 | err_pipe "undo: "
+      undostatus="${PIPESTATUS[0]}"
       if [[ "$undostatus" != 0 ]]; then
         Err "undo failed or was aborted by user."
         return "$undostatus"
@@ -4071,6 +4098,7 @@ get_series_info(){
   local tvdbshowname
   tvdbshowname="$(sed 's/ /%20/g' <<< "$ShowName" | sed 's/&/%26/g')"
   download_series_identification
+  (( $? != 0 )) && return 1
   get_serieslinenumber_showname_fuzzy
   #if we have a series line number then translate that into a series id
   if [[ -n "$serieslinenumber" ]] && ((serieslinenumber > 0)); then
@@ -4227,6 +4255,8 @@ InputTitle="$2"
 #  Issue warnings for any conflicts. but don't override command line arguments...
 #InputSxx="$3"
 #InputExx="$4"
+#InputSubtitle="$5"
+#InputCategory="%6" #So we can specify that it's a Movie...
 InputSubtitle="$3"
 #TODO: Consider removing this "InputOption", it's only used by --BypassPermissionsCheck and removing that option seems like it might be a good idea...
 InputOption="$4"
@@ -4387,7 +4417,7 @@ fi
 #####PROCESS EPISODE INFORMATION#####
 #If we have a SeriesID but don't already have Season and Episode information
 if [[ -n "$SeriesID" ]]; then
-  Inform "SEARCHING: www.TheTVDB.com information for EPISODE: $EpisodeSubtitle"
+  Inform "Processing SeriesID:$SeriesID"
   #####GET ABSOLUTE EPISODE NUMBER#####
   if [ "$GuideDataType" = "SchedulesDirect" ] ; then
     ConfidenceReasoning="$ConfidenceReasoning Attempted match on OriginalAirDate:"

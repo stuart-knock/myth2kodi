@@ -4207,6 +4207,7 @@ delete_recording(){
   #    + associated support files
   #    + any undo, doover or created.tracking entries
   #    + and the associated database entry and thumbnails. (Probably should delete DB entry first)
+  #        see, delete_mythtv_database_entry()
   Err "NotImplemented"
   return 1
 }
@@ -4217,6 +4218,7 @@ disconnect_recording(){
   #    + removes file & links from undo, doover, created.tracking,
   #    + removes links from mythtv filename to moved filename, or if only 'moved' in LINK mode then actually move
   #    + remove database entry and associated thumbnails
+  #        see, delete_mythtv_database_entry()
   Err "NotImplemented"
   return 1
 }
@@ -4328,6 +4330,7 @@ declare -r m2karg1 m2karg2 m2karg3 m2karg4
 #Do initial setup: override defaults with myth2kodi.conf; initialise logging system.
 m2k_init
 
+#TODO: Make proper arg parser...
 #TODO: Set the inputs as fixed (read-only) parameters, then use different variables consistently if we need to modify them...
 InputPath="$1"
 InputTitle="$2"
@@ -4616,9 +4619,9 @@ if [[ "$Sxx" != "S" && -n "$Sxx" && "$Sxx" != "S00" && "$Exx" != "E" && -n "$Exx
     fi
   fi
   #Strip the leading "S" from Sxx,
-  SeasonNumber=${Sxx#S}
+  SeasonNumber="${Sxx#S}"
   #and any leading "0"
-  SeasonNumber=${SeasonNumber#0}
+  SeasonNumber="${SeasonNumber#0}"
 
 #If we don't already have EXX and SXX, set them by matching Absolute Episode Number across myth2kodi's database
 elif [[ -n "$AbsoluteEpisodeNumber" ]]; then
@@ -4696,7 +4699,7 @@ fi
 #If user wants database data deleted, then we will do that if the match was a good confidence level
 [[ "$SYMLINK" = "Disabled" ]] && ((ConfidenceRating > -4)) && RequiresDoover=0
 
-#####INVALID FILE HANDLING####
+#####INVALID FILE HANDLING#### #TODO: This should come straight after arg parse and the Initial log entry for the processing of recording
 #If file to be moved does not exist, then report
 if [ ! -f "$InputPath" ] && [ "$InputPath" != "testfile.ext" ]; then
   msg_invalid_path_error "$InputPath"

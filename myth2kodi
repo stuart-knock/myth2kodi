@@ -687,9 +687,9 @@ parse_command_flags(){
       m2k_undo_all
       exit $?
     ;;
-    --getSeriesInfo) #ShowName
-      Debug "Recognised command line switch '--getSeriesInfo'"
-      #Example usage: myth2kodi --getSeriesInfo "Black Books"
+    --series-info) #ShowName
+      Debug "Recognised command line switch '--series-info'"
+      #Example usage: myth2kodi --series-info "Black Books"
       get_series_info
       exit $?
     ;;
@@ -3075,7 +3075,7 @@ generate_episode_nfo(){
 }
 
 #Processes the title and categoric ignore lists
-ignore_list(){
+process_ignore_lists(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   local ignoreTest=""
   #Test if the title is in the titleIgnore file
@@ -4048,11 +4048,11 @@ msg_options(){
   printf '%s\n'   "    with SYMLINK='Disabled', as MythTV-DB info has been deleted,"
   printf '%s\n'   "    these can not be undone."
   printf '%s\n'   "    eg. myth2kodi --undo"
-  printf '\n%s\n' "  --getSeriesInfo 'Series Name'"
+  printf '\n%s\n' "  --series-info 'Series Name'"
   printf '%s\n'   "    Updates our local database tables for a specified series,"
   printf '%s\n'   "    ignoring lastupdated.time. Information is obtained from"
   printf '%s\n'   "    TheTVDB and tvmaze."
-  printf '%s\n'   "    eg. myth2kodi --getSeriesInfo 'Black Books'"
+  printf '%s\n'   "    eg. myth2kodi --series-info 'Black Books'"
   printf '\n%s\n' "  --delete '/path/to/file'"
   printf '%s\n'   "    Delete the file, any links to it and the associated database entry."
   printf '%s\n'   "    eg. myth2kodi --delete '/home/mythtv/recordings/1099_20151210093000.mpg'"
@@ -4206,7 +4206,7 @@ delete_recording(){
   #    + any links to it
   #    + associated support files
   #    + any undo, doover or created.tracking entries
-  #    + and the associated database entry and thumbnails.
+  #    + and the associated database entry and thumbnails. (Probably should delete DB entry first)
   Err "NotImplemented"
   return 1
 }
@@ -4376,7 +4376,7 @@ fi
 show_translation
 
 #Do not process files in files categoricIgnore or titleIgnore, just exit
-ignore_list #TODO: Should the ignorelist be processed against the translated title...
+process_ignore_lists
 
 #TODO: check whether the split on semicolon here and elsewhere should be in process_mythtvdb_schedulesdirect
 #split on semicolon, there will only be one episode looked up.
@@ -4404,7 +4404,7 @@ fi
 #####MAINTENANCE#####
 #Loop through the list of created comskip files from dir.tracking, created.tracking and remove orphans.
 if [ "$m2kScanMode" != "True" ] ; then
-  m2k_maintenance
+  m2k_maintenance #TODO: reconsider whether we want to do this every time we process a recording (outside of scan mode) because once we've processed lots of recordings it becomes a significant fraction of total run time...
 else
   Debug "Skipping m2k_maintenance() as m2kScanMode has been set to 'True'"
 fi
@@ -4412,14 +4412,14 @@ fi
 #####SEARCH FOR SHOW AND BUILD INFORMATION#####
 
 #Process as though it's an episode of a tv series.
-if [ "$m2kProgramIDCheck" != "SH" ] && [ "$m2kProgramIDCheck" != "MV" ]; then
+if [[ "$m2kProgramIDCheck" != "SH" && "$m2kProgramIDCheck" != "MV" ]]; then
   #Query TheTVDB on show title, then return a list of Zap2itID, ShowName and seriesid.
   download_series_identification
   if [[ "$?" = 0 ]]; then
     #Start by trying to match on Zap2itID
     ConfidenceReasoning="$ConfidenceReasoning Attempted Match On Zap2itID:"
     [[ -n "$Zap2itSeriesID" ]] && get_serieslinenumber_zap2itid
-    if [ $? = 0 ]; then
+    if [[ "$?" = 0 ]]; then
       ((++SeriesConfidenceRating))
       ConfidenceReasoning="$ConfidenceReasoning Successful;"
       Inform "MATCH FOUND BASED ON Zap2itID:$NewShowName"
@@ -4432,7 +4432,7 @@ if [ "$m2kProgramIDCheck" != "SH" ] && [ "$m2kProgramIDCheck" != "MV" ]; then
     if (( SeriesConfidenceRating <= 0 )); then
       ConfidenceReasoning="$ConfidenceReasoning Attempted match on Standard Logic:"
       [[ -n "$ShowName" ]] && get_serieslinenumber_showname
-      if [ $? = 0 ]; then
+      if [[ "$?" = 0 ]]; then
         ConfidenceReasoning="$ConfidenceReasoning Successful;"
       else
         Warn "FAILED to get series line number from table with standard logic, requiring doover."
@@ -4440,7 +4440,7 @@ if [ "$m2kProgramIDCheck" != "SH" ] && [ "$m2kProgramIDCheck" != "MV" ]; then
         ((--SeriesConfidenceRating))
         ConfidenceReasoning="$ConfidenceReasoning Failed; Attempted Title match on Fuzzy Logic:"
         [[ -n "$ShowName" ]] && get_serieslinenumber_showname_fuzzy
-        if [ $? = 0 ]; then
+        if [[ "$?" = 0 ]]; then
           ConfidenceReasoning="$ConfidenceReasoning Successful;"
         else
           ((--SeriesConfidenceRating))

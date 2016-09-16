@@ -81,7 +81,7 @@
 #TODO: Only emit one m2k_notify per job processed: success or failure.
 
 #Intention:
-#  This program automates the mapping of MythTv recordings to a Kodi library.
+#  This program automates the mapping of MythTV recordings to a Kodi library.
 #  It is designed to be a user job in MythTV. It can also be run manually from
 #  a command line. It must have access to your MythTV recordings. The program
 #  generates file names compatible with Kodi, then moves or links recordings
@@ -335,10 +335,12 @@ CommercialMarkupCleanup="Enabled"
 DailyReport="Enabled"
 #How long to persist daily report files in months, DEFAULT=12.
 DAILYREPORT_LIFE=12
-#Notify tells myth2kodi to send a notification to GNOME Desktop upon completion. Enabled|Disabled
-Notify="Disabled"
-#If notifications are enabled, NotifyUserName should be the same as the user logged into the GNOME Session. (your username)
-NotifyUserName="$Librarian" #<------THIS VALUE MUST BE SET-------
+#Notify tells myth2kodi to send a notification to the Desktop via DBUS upon completion. Enabled|Disabled
+Notify="Enabled"
+#If notifications are enabled, desktop messages are sent to the user specified by NotifyUserName, DEFAULT=$Librarian.
+#  NOTE: if you want to specify a user other than $Librarian then $Librarian must have passwordless sudo privileges
+#        otherwise the call to m2k_notify will block, waiting for a password.
+NotifyUserName="$Librarian"
 #Send a notification to KODI to Update library upon Successful move job Enabled|Disabled
 KODIUpdate="Enabled"
 #PREVENT CLOBBERING ON RECURSIVE CALLS#[[ -z "$KODIUpdate" ]] && KODIUpdate="Enabled"
@@ -399,6 +401,14 @@ exit_job(){
   local jobtype="$1"
   local ERR_HEADER="${FUNCNAME[0]}() CALLED FROM: ${FUNCNAME[1]}()."
   local -i exitstatus
+
+  if [[ "$m2kScanMode" != "True" && "$Notify" = "Enabled" && -n "$NOTIFY_MSG" ]]; then
+    Debug "NOTIFY_MSG=$NOTIFY_MSG  ;  NOTIFY_ICON=$NOTIFY_ICON"
+    sudo -u "$NotifyUserName" "$binpath/m2k_notify" "myth2kodi: $jobtype" "$NOTIFY_MSG" "$NOTIFY_ICON"
+  else
+    Debug "Either Notify not enabled or processing a recording from an ignore list."
+  fi
+
   case "$jobtype" in
     #Successful Completion of myth2kodi
     LinkModeSuccessful|MoveModeSuccessful)
@@ -406,12 +416,12 @@ exit_job(){
       exitstatus=0
       ;;
     #Information was not obtainable
-    TheTVDBIsIncomplete|GenericShow)
+    TheTVDBIsIncomplete)
       Warn "INSUFFICIENT INFORMATION WAS SUPPLIED: $jobtype"
       exitstatus=0
       ;;
-    #File system error occurred
-    PermissionError0Length|InvalidFileNameSupplied|PermissionErrorWhileMoving|FailSafeModeComplete|LinkModeFailed)
+    #File system error occurred #TODO: clean-up...
+    PermissionError|ZeroLengthFile|FileOrPathDoesNotExist|MoveFailed|FailSafeModeComplete|LinkingFailed)
       Err "$ERR_HEADER FILE SYSTEM ERROR: $jobtype"
       exitstatus=1
       ;;
@@ -581,10 +591,21 @@ validate_args(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   #TODO: Review/Expand the checks of whether we were called correctly.
   #We need at least one arg
-  [[ -z "$m2karg1" ]] && { msg_usage ; exit_job 'InvalidCall' ; }
+  if [[ -z "$m2karg1" ]]; then
+    if [[ "$Notify" = "Enabled" ]]; then
+      NOTIFY_MSG="myth2kodi must be called with at least one argument."
+      NOTIFY_ICON="error" #"$m2kdir/myth2kodi_failed.png"
+    fi
+    msg_usage
+    exit_job 'InvalidCall'
+  fi
 
   #If the first arg isn't a switch or our testfile, then it must be a file.
   if [[ "${m2karg1:0:1}" != "-" && "$m2karg1" != "testfile.ext" && ! -f "$m2karg1" ]]; then
+    if [[ "$Notify" = "Enabled" ]]; then
+      NOTIFY_MSG="The specified InputPath is not a file."
+      NOTIFY_ICON="error" #"$m2kdir/myth2kodi_failed.png"
+    fi
     msg_usage
     exit_job 'InputPathNotFile'
   fi
@@ -719,13 +740,24 @@ parse_command_flags(){
       Debug "Recognised command line switch '--comskip'"
       #eg: myth2kodi --comskip '/path/to/recordings/1070_20160331073100.mpg'
       InputPath="$m2karg2"
-      [[ -f "$InputPath" || -d "$InputPath" ]] || { msg_usage ; exit_job 'GenericUnspecifiedError' ; }
+      if [[ ! -f "$InputPath" && ! -d "$InputPath" ]]; then
+        if [[ "$Notify" = "Enabled" ]]; then
+          NOTIFY_MSG="called as: myth2kodi --comskip '$InputPath'."
+          NOTIFY_ICON="error" #"$m2kdir/myth2kodi_failed.png"
+        fi
+        msg_usage
+        exit_job 'FileOrPathDoesNotExist'
+      fi
       recreate_comskip
       exit $?
     ;;
   esac
 
   Err "Unrecognised command line switch: $m2karg1"
+  if [[ "$Notify" = "Enabled" ]]; then
+    NOTIFY_MSG="myth2kodi $m2karg1"
+    NOTIFY_ICON="error" #"$m2kdir/myth2kodi_failed.png"
+  fi
   msg_usage
   exit_job 'UnrecognisedCommand'
 }
@@ -1247,7 +1279,10 @@ failsafe(){
     Inform "FailSafeMode Disabled, we won't try and make a link as a fallback."
   fi
 
-  [[ "$Notify" = "Enabled" ]] && sudo -u "$NotifyUserName" "$binpath/m2k_notify" "myth2kodi FAILSAFE" "FAILSAFE mode active See $LogFile for more information" error
+  if [[ "$Notify" = "Enabled" ]]; then
+    NOTIFY_MSG="FAILSAFE mode active See $LogFile for more information"
+    NOTIFY_ICON="error" #"$m2kdir/myth2kodi_failed.png"
+  fi
 }
 
 dbselect(){
@@ -1401,7 +1436,7 @@ get_mythtvdb_info_pythonbindings(){
   fi
 
   #TODO: Consider making all the vars set here readonly "declare -r ", even if that means renaming
-  #  and tracking down the various inconsistent uses... NOTE: must do in non-python GetMythTv... as well.
+  #  and tracking down the various inconsistent uses... NOTE: must do in non-python GetMythTV... as well.
   #GuideTitle InputTitle => Title #Can be Series or Movie or ...
   #GuideSubtitle InputSubtitle ExtractPlotSubtitle SxxExxSubtitle FuzzyPlotSubtitle nlpPlotSubtitle => EpisodeTitle
   #GuideSeasonNum InputSeasonNum LogicSubtitleSeasonNum FuzzySubtitleSeasonNum FuzzyPlotSeasonNum nlpPlotSeasonNum => EpisodeSeasonNum
@@ -1450,10 +1485,20 @@ process_mythtvdb(){
       MythTVPythonBindings)
         get_mythtvdb_info_pythonbindings
         returnstatus="$?"
-        [[ "$returnstatus" != 0 ]] && exit_job 'MythTVdatabaseFailure'
+        if [[ "$returnstatus" != 0 ]]; then
+          if [[ "$Notify" = "Enabled" ]]; then
+            NOTIFY_MSG="Call to MythTV-Database python bindings failed."
+            NOTIFY_ICON="error" #"$m2kdir/myth2kodi_failed.png"
+          fi
+          exit_job 'MythTVdatabaseFailure'
+        fi
         ;;
       *)
         Err "DatabaseType incorrectly specified."
+        if [[ "$Notify" = "Enabled" ]]; then
+          NOTIFY_MSG="DatabaseType incorrectly specified."
+          NOTIFY_ICON="error" #"$m2kdir/myth2kodi_failed.png"
+        fi
         exit_job 'UserSettingError'
         ;;
     esac
@@ -1476,11 +1521,19 @@ process_mythtvdb(){
     esac
     if [[ -z "$InputTitle" ]]; then
       Err "Failed to determine InputTitle from MythTV-DB, and none provided via arg."
+      if [[ "$Notify" = "Enabled" ]]; then
+        NOTIFY_MSG="Failed to determine InputTitle from MythTV-DB, and none provided."
+        NOTIFY_ICON="error" #"$m2kdir/myth2kodi_failed.png"
+      fi
       exit_job 'NameCouldNotBeAssigned'
     fi
   else
     if [[ -z "$InputTitle" ]]; then
       Err "Database disabled and no InputTitle provided on command line."
+      if [[ "$Notify" = "Enabled" ]]; then
+        NOTIFY_MSG="Database disabled and no InputTitle provided on command line."
+        NOTIFY_ICON="error" #"$m2kdir/myth2kodi_failed.png"
+      fi
       exit_job 'InsufficientInformationProvided'
     fi
   fi
@@ -2396,6 +2449,12 @@ getAbsoluteEpisodeNumberWithFuzzyPlotMatch(){
         Inform "${FUNCNAME[0]}() - Identified AbsoluteEpisodeNumber: $AbsoluteEpisodeNumber using chunked Plot."
         Debug "$( IFS=','; printf '%s' "${FUNCNAME[0]}() - The following ${#AENguess[@]} AENguesses were identified as the same episode: ${AENguess[*]}." )"
         return 0
+      else
+        Debug "The AbsoluteEpisodeNumber guesses were different:"
+        DebugCont "AENguess = SxxGuesses, ExxGuesses"
+        for (( i = 0; i < ${#AENguess[@]}; i++ )) ; do
+          DebugCont "${AENguess[i]} = ${SxxGuesses[i]}, ${ExxGuesses[i]}"
+        done
       fi
     fi
 
@@ -2555,39 +2614,64 @@ increment_total_matches(){
   printf '%s\n' "$FuzzyLogicMatches" > "$m2kdir/TotalEpisodeMatches.log"
 }
 
-#Check to see if the file is owned by $Librarian and cause myth2kodi
-#to exit with a descriptive message if certain criteria are met.
-msg_myth2kodi_permission_error(){
-  #TODO: review this...
+#Check to see if a path/file is owned by $Librarian or at least that $Librarian
+#has sufficient read-write permissions. If not, exit with a descriptive message.
+check_path_permission(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  # if no bypass, and file is owned by mythtv, and username is not mythtv
-  # and system is set to use mythtv database, and symlink is move
-  #TODO: This might not work
-  #TODO: Probably should change explicit "mythtv" here to a variable designating
-  #  a single authorised librarian, eg Librarian="mythtv", then adding a simple
-  #  check of $MyUserName and bailing with an ERROR message if != $Librarian,
-  #  this should avoid most/all permission issues.
-  if [[ "$InputOption" != "--BypassPermissionsCheck" || -z "$InputOption" && -z "$InputSubtitle" && "$InputTitle" != "--BypassPermissionsCheck" ]]; then
-    #TODO: during --scan the find here gets $InputPath "--scan" which obviously doesn't work...
-    if [ "$(find "$InputPath" -printf %u)" = "$Librarian" ] && [ "$MyUserName" != "$Librarian" ] && [ "$SYMLINK" = "MOVE" ]; then
-      UserName="$USER"
-      Err "IN: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-      ErrCont "########################################################################"
-      ErrCont "##############################  ERROR  #################################"
-      ErrCont "########################################################################"
-      ErrCont "USER NAME:$UserName ATTEMPTED TO RENAME A $Librarian OWNED FILE."
-      ErrCont "myth2kodi HAS PREVENTED THIS UNAUTHORIZED FILE ACTION."
-      ErrCont "THIS IS A SAFETY FEATURE TO PRESERVE FILE PERMISSIONS."
-      ErrCont "PLEASE RUN THE FOLLOWING TO SET PROPER PERMISSIONS WHEN RENAMING FILES:"
-      ErrCont "    sudo su $Librarian"
-      ErrCont "    myth2kodi \"$InputPath\" \"$InputTitle\" \"$InputSubtitle\""
-      ErrCont "OR AT YOUR OWN RISK BYPASS THIS CHECK BY ADDING --BypassPermissionsCheck"
-      ErrCont "AT THE END OF THE LINE YOU JUST RAN."
-      ErrCont ""
-      ErrCont "Done."
-      exit_job 'PermissionErrorWhileMoving'
+  DebugCont "arg 1 = $1"
+  (( "$#" > 1 )) && Err "${FUNCNAME[0]}() only takes one arg."
+  local PATH_TO_CHECK
+  local PATH_OWNER
+  local PATH_GROUP
+  PATH_TO_CHECK="$1"
+  Inform "Checking permissions for: $PATH_TO_CHECK"
+
+  #First check that the file or path actually exists
+  if [[ ! -e "$PATH_TO_CHECK" ]]; then
+    Err "Path or file doesn't exist: $PATH_TO_CHECK"
+    if [[ "$Notify" = "Enabled" ]]; then
+      NOTIFY_MSG=": $PATH_TO_CHECK"
+      NOTIFY_ICON="error" #"$m2kdir/myth2kodi_failed.png"
     fi
+    exit_job 'FileOrPathDoesNotExist'
   fi
+  PATH_OWNER="$(find "$PATH_TO_CHECK" -printf %u)"
+  PATH_GROUP="$(find "$PATH_TO_CHECK" -printf %g)"
+
+  #Log some ownership related info
+  if [[ "$PATH_OWNER" = "$Librarian" ]]; then
+    Debug "Good start: $Librarian owns it."
+  elif id -nG "$Librarian" | grep -qw "PATH_GROUP"; then
+    Debug "May be ok: $Librarian is at least a member of the same group."
+  else
+    Warn "$Librarian neither owns nor is a member of the group for $PATH_TO_CHECK."
+  fi
+
+  #At the least we'll need to be able to read the path or file
+  if [[ ! -r "$PATH_TO_CHECK" ]]; then
+    Err "Can't read: $PATH_TO_CHECK"
+    if [[ "$Notify" = "Enabled" ]]; then
+      NOTIFY_MSG="Can't read: $PATH_TO_CHECK"
+      NOTIFY_ICON="error" #"$m2kdir/myth2kodi_failed.png"
+    fi
+    exit_job 'PermissionError'
+  fi
+
+  #If we're moving the file we'll need write permission
+  if [[ "$SYMLINK" = "MOVE" || "$SYMLINK" = "Disabled" ]]; then
+    if [[ ! -w "$PATH_TO_CHECK" ]]; then
+      Err "Can't write: $PATH_TO_CHECK"
+      ErrCont "USER NAME:$UserName ATTEMPTED TO MODIFY A $PATH_OWNER OWNED FILE."
+      ErrCont "To preserve file permissions this has bee prevented."
+      if [[ "$Notify" = "Enabled" ]]; then
+        NOTIFY_MSG="Can't write: $PATH_TO_CHECK"
+        NOTIFY_ICON="error" #"$m2kdir/myth2kodi_failed.png"
+      fi
+    fi
+    exit_job 'PermissionError'
+  fi
+  Debug "Permissions ok for: $PATH_TO_CHECK"
+  return 0
 }
 
 #An error message when we were called as a MythTV userjob from outside
@@ -2598,7 +2682,11 @@ msg_userjob_outside_mythtv_error(){
   ErrCont "MythTV User Job is only valid when run as a user job by MythTV."
   ErrCont "When outside MythTV call the file directly, see."
   ErrCont "  myth2kodi --usage"
-  exit_job 'GenericUnspecifiedError'
+  if [[ "$Notify" = "Enabled" ]]; then
+    NOTIFY_MSG="Called as MythTV user job outside of MythTV."
+    NOTIFY_ICON="error" #"$m2kdir/myth2kodi_failed.png"
+  fi
+  exit_job 'InvalidCall'
 }
 
 #TODO: review this message function...
@@ -2615,8 +2703,14 @@ msg_show_warning(){
 msg_completed_move(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   Inform "Move completed."
-  InformCont "MOVED: $InputPath"
-  InformCont "TO: $MoveDir/$ShowFileName.$OriginalExt"
+  InformCont "Moved: $InputPath"
+  InformCont "To: $MoveDir/$ShowFileName.$OriginalExt"
+  [[ "$SYMLINK" = "Enabled" ]] && InformCont "Added symbolic link from: $InputPath"
+  [[ "$SYMLINK" = "Enabled"  ]] && InformCont "To: $MoveDir/$ShowFileName.$OriginalExt"
+  if [[ "$Notify" = "Enabled" ]]; then
+    NOTIFY_MSG="myth2kodi Success" "$ShowFileName moved to $MoveDir"
+    NOTIFY_ICON="info" #"$m2kdir/myth2kodi.png"
+  fi
 }
 
 #A warning message for when a recording was thought to be an episode but
@@ -2664,12 +2758,12 @@ msg_standard_logic_warning(){
   LogLevel=3 #Enable debug level logging
 }
 
-#An error message for when the file we've been asked to process doesn't exist
-msg_invalid_file_error(){
+#An error message for when the path/file we've been asked to process doesn't exist
+msg_invalid_path_error(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  Err     "%%%%%%%%%%%%%%%%%%%%%%%% OPERATION FAILED %%%%%%%%%%%%%%%%%%%%%%%%%%%%"
-  ErrCont "%%%% INPUT FILE NAME NON EXISTANT CHECK FILE NAME AND PERMISSIONS %%%%"
-  ErrCont "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%"
+  local PATH_TO_CHECK="$1"
+  Err     "OPERATION FAILED, PATH OR FILE DOES NOT EXIST, CHECK NAME AND PERMISSIONS:"
+  ErrCont "'$PATH_TO_CHECK'"
 }
 
 #An error message for when information can't be obtained from TheTVDB.
@@ -2682,10 +2776,9 @@ msg_tvdb_incomplete(){
   ErrCont "%% Please consider helping out and adding to TheTVDB %%"
   ErrCont "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%"
   ErrCont "TO PROCESS THIS FILE & PREVENT THIS ERROR IN THE FUTURE, ENABLE HANDLING OF UNRECOGNIZED SHOWS."
-  local errtype="myth2kodi Error"
-  local errmsg="Could not obtain information from server about: $InputTitle. TheTVDB is incomplete"
-  if [ "$Notify" = "Enabled" ] ; then
-    sudo -u "$NotifyUserName" "$binpath/m2k_notify" "$errtype" "$errmsg" web-browser #"$m2kdir/myth2kodi_failed.png"
+  if [[ "$Notify" = "Enabled" ]]; then
+    NOTIFY_MSG="Could not obtain information from server about: $InputTitle. TheTVDB is incomplete"
+    NOTIFY_ICON="web-browser" #"$m2kdir/myth2kodi_failed.png"
   fi
 }
 
@@ -2703,10 +2796,9 @@ msg_tvdb_incomplete(){
 #   [[ -n "$SeriesID" ]] && InformCont "http://www.thetvdb.com/?tab=series&amp;id=$SeriesID"
 #   InformCont "To force processing of unrecognised recordings, disable ShowStopper."
 #   msg_tvdb_incomplete
-#   if [ "$Notify" = "Enabled" ] ; then
-#     local errtype="myth2kodi Error"
-#     local errmsg="Could not fully identify: $InputTitle."
-#     sudo -u "$NotifyUserName" "$binpath/m2k_notify" "$errtype" "$errmsg" "$m2kdir/myth2kodi_failed.png"
+#   if [[ "$Notify" = "Enabled" ]]; then
+#     NOTIFY_MSG="Could not fully identify: $InputTitle."
+#     NOTIFY_ICON="$m2kdir/myth2kodi_failed.png"
 #   fi
 # }
 
@@ -2714,35 +2806,32 @@ msg_tvdb_incomplete(){
 #original had zero length or we failed to move it).
 msg_wrote_zero_length_file(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  Err "%%%% OPERATION FAILED: WROTE 0 LENGTH FILE %%%%"
-  if [ "$Notify" = "Enabled" ] ; then
-    local errtype="myth2kodi Failure"
-    local errmsg="$ShowFileName could not be moved to $MoveDir"
-    sudo -u "$NotifyUserName" "$binpath/m2k_notify" "$errtype" "$errmsg" stop #"$m2kdir/myth2kodi_failed.png"
+  Err "MOVE FAILED: WROTE 0 LENGTH FILE: $MoveDir/$ShowFileName.$OriginalExt"
+  if [[ "$Notify" = "Enabled" ]]; then
+    NOTIFY_MSG="$ShowFileName could not be moved to $MoveDir"
+    NOTIFY_ICON="stop" #"$m2kdir/myth2kodi_failed.png"
   fi
 }
 
 #An error message for when issues are encountered during moving
 msg_permission_error_while_moving(){
-  #TODO: review this message, see also msg_myth2kodi_permission_error()
+  #TODO: review this message, see also check_path_permission()
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  Err "%%%% OPERATION FAILED: PERMISSION ERROR WHILE MOVING $ShowFileName %%%%"
-  if [ "$Notify" = "Enabled" ] ; then
-    local errtype="myth2kodi Failure"
-    local errmsg="$ShowFileName could not be moved to $MoveDir"
-    sudo -u "$NotifyUserName" "$binpath/m2k_notify" "$errtype" "$errmsg" stop #"$m2kdir/myth2kodi_failed.png"
+  Err "MOVE FAILED: Possible permission error while moving $ShowFileName"
+  if [[ "$Notify" = "Enabled" ]]; then
+    NOTIFY_MSG="$ShowFileName could not be moved to $MoveDir"
+    NOTIFY_ICON="stop"  #"$m2kdir/myth2kodi_failed.png"
   fi
 }
 
 #An error message for when we've failed to create a symlink
 msg_symlink_not_created(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  Err "%%%% OPERATION FAILED: LINK PERMISSION ERROR: SYMLINK NOT CREATED %%%%"
-  ErrCont "PERMISSION ERROR OR FILE SYSTEM DOES NOT SUPPORT SYMLINKS: $MoveDir"
-  if [ "$Notify" = "Enabled" ] ; then
-    local errtype="myth2kodi Error"
-    local errmsg="Failure while creating link. Check permissions"
-    sudo -u "$NotifyUserName" "$binpath/m2k_notify" "$errtype" "$errmsg" stop #"$m2kdir/myth2kodi_failed.png"
+  Err "SYMLINKING FAILED: Possible permission error while linking $ShowFileName"
+  ErrCont "Check that file system supports symlinks: $MoveDir"
+  if [[ "$Notify" = "Enabled" ]]; then
+    NOTIFY_MSG="Failure while creating link. Check permissions."
+    NOTIFY_ICON="stop"  #"$m2kdir/myth2kodi_failed.png"
   fi
 }
 
@@ -2877,8 +2966,9 @@ make_show_dir(){
     ErrCont "##################################################"
     ErrCont "######## FAILSAFE MODE HAS BEEN ACTIVATED ########"
     ErrCont "##################################################"
-    if [ "$Notify" = "Enabled" ]; then
-      sudo -u "$NotifyUserName" "$binpath/m2k_notify" "myth2kodi error" "failsafe mode activated."  error
+    if [[ "$Notify" = "Enabled" ]]; then
+      NOTIFY_MSG="failsafe mode activated."
+      NOTIFY_ICON="error"
     fi
     SYMLINK='LINK'
     MoveDir="$FailSafeDir"
@@ -3232,11 +3322,13 @@ m2k_scan(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   local yesorno=""
   local dooverstatus
-  msg_myth2kodi_permission_error
   #Map myth2kodi input variables to local variables for our current purpose.
   local checkext="$m2karg2"
   local scanpath="$m2karg3"
   Debug "Running ${FUNCNAME[0]}() on $checkext files in $scanpath"
+
+  check_path_permission "$scanpath"
+
   #Do some basic checks before we get started.
   if [ "$UID" = "0" ] || [ "$USER" = "root" ]; then
     #SAK: my fault
@@ -3310,12 +3402,7 @@ m2k_scan(){
     while read -r line ; do
       Debug "Attempting to envoke myth2kodi on $line"
       if [[ ! -L "$line" && ! -S "$line" && ! -d "$line" ]]; then
-        if [ "$InputOption" = "--BypassPermissionsCheck" ]; then
-          Warn "${FUNCNAME[0]}() Running myth2kodi with --BypassPermissionsCheck option."
-          myth2kodi "$line" "--BypassPermissionsCheck"
-        else
-          myth2kodi "$line"
-        fi
+        myth2kodi "$line"
       else
         Debug "Either we've already moved that or it's a directory. Either way, moving on."
       fi
@@ -4250,6 +4337,7 @@ m2k_init
 #TODO: Set the inputs as fixed (read-only) parameters, then use different variables consistently if we need to modify them...
 InputPath="$1"
 InputTitle="$2"
+InputSubtitle="$3"
 #TODO: Should allow manual input of season and episode numbers in addition to
 #  Title & Subtitle, with full information all searching should be overridden/bypassed...
 #  Issue warnings for any conflicts. but don't override command line arguments...
@@ -4257,9 +4345,6 @@ InputTitle="$2"
 #InputExx="$4"
 #InputSubtitle="$5"
 #InputCategory="%6" #So we can specify that it's a Movie...
-InputSubtitle="$3"
-#TODO: Consider removing this "InputOption", it's only used by --BypassPermissionsCheck and removing that option seems like it might be a good idea...
-InputOption="$4"
 
 #Some basic tests to make sure we were called correctly
 validate_args
@@ -4285,8 +4370,14 @@ msg_merged_input_mythtvdb
 
 #At this point we should have an initial show name, if not then abort.
 ShowName="$InputTitle"
-[[ -z "$ShowName" ]] && { msg_usage ; exit_job 'GenericUnspecifiedError' ; }
-
+if [[ -z "$ShowName" ]]; then
+  if [[ "$Notify" = "Enabled" ]]; then
+    NOTIFY_MSG="Unable to set ShowName."
+    NOTIFY_ICON="stop" #"$m2kdir/myth2kodi_failed.png"
+  fi
+  msg_usage
+  exit_job 'GenericUnspecifiedError'
+fi
 #Check for show Title translations relating to the show in question.
 show_translation
 
@@ -4613,11 +4704,12 @@ fi
 #####INVALID FILE HANDLING####
 #If file to be moved does not exist, then report
 if [ ! -f "$InputPath" ] && [ "$InputPath" != "testfile.ext" ]; then
-  msg_invalid_file_error
-  if [ "$Notify" = "Enabled" ]; then
-    sudo -u "$NotifyUserName" "$binpath/m2k_notify" "myth2kodi Error" "Invalid File supplied" error #"$m2kdir/myth2kodi_failed.png"
+  msg_invalid_path_error "$InputPath"
+  if [[ "$Notify" = "Enabled" ]]; then
+    NOTIFY_MSG="InputPath not a file: '$InputPath'"
+    NOTIFY_ICON="error" #"$m2kdir/myth2kodi_failed.png"
   fi
-  exit_job 'InvalidFileNameSupplied'
+  exit_job 'FileOrPathDoesNotExist'
 fi
 
 #Check write permissions and free space for Move and Working directories.
@@ -4633,6 +4725,10 @@ msg_operation_summary
 if [[ -z "$Exx" && "$InputPath" != "testfile.ext" ]]; then
   if [[ -z "$ChanID" && -n "$InputPath" ]]; then #TODO: check this...
     Warn "This episode could not be matched based on supplied Title and SubTitle."
+    if [[ "$Notify" = "Enabled" ]]; then
+      NOTIFY_MSG="Episode could not be matched based on supplied Title and SubTitle."
+      NOTIFY_ICON="error" #"$m2kdir/myth2kodi_failed.png"
+    fi
     exit_job 'NameCouldNotBeAssigned'
   elif [ "$m2kProgramIDCheck" = "MV" ]; then
     #Ensures the doover value was not set for the movie and use safe show name
@@ -4702,6 +4798,10 @@ if [ -f "$MoveDir/$ShowFileName.$OriginalExt" ]; then
   ErrCont "EITHER WAY, ABORTING."
   #Write an entry in the duplicates file, for easy check/removal of duplicates.
   printf "'%s' '%s' '%s' '%s'\n" "$InputTitle" "$ShowStartTime" "$InputPath" "$ShowFileName" >> "$DuplicatesFile"
+  if [[ "$Notify" = "Enabled" ]]; then
+    NOTIFY_MSG="Recording identified as duplicate of: $MoveDir/$ShowFileName.$OriginalExt"
+    NOTIFY_ICON="stop" #"$m2kdir/myth2kodi_failed.png"
+  fi
   exit_job 'FileAlreadyExists'
   #TODO: When refactoring main, consider allowing forced move with auto name incrementing when move-to file already exists.
   #If file exists then make a new name for it
@@ -4725,7 +4825,7 @@ fi
 [[ "$InputPath" = "testfile.ext" ]] && testfile_exit
 
 #If the user is not mythtv and the settings are set for mythtv only, then exit, display a clear status message.
-msg_myth2kodi_permission_error
+check_path_permission "$InputPath"
 
 #If the show is generic programming, this is the best myth2kodi can do.
 test  "$m2kProgramIDCheck" = "SH" && msg_show_warning
@@ -4735,7 +4835,6 @@ test  "$m2kProgramIDCheck" = "SH" && msg_show_warning
 if [ "$SYMLINK" != "LINK" ]; then
   #Send notifications, Move the file and rename
   Debug "MOVING FILE: '$InputPath' to '$MoveDir/$ShowFileName.$OriginalExt'"
-  test "$Notify" = "Enabled" && sudo -u "$NotifyUserName" "$binpath/m2k_notify" "myth2kodi Moving" "Moving and renaming $ShowFileName" drive-harddisk
   mv "$InputPath" "$MoveDir/$ShowFileName.$OriginalExt"
 
   #Check and report if file was moved
@@ -4752,7 +4851,6 @@ if [ "$SYMLINK" != "LINK" ]; then
         ln -s  "$MoveDir/$ShowFileName.$OriginalExt" "$InputPath"
         test ! -L "$InputPath" && Err "ERROR CREATING SYMLINK: FILESYSTEM MAY NOT SUPPORT SYMLINKS"
       fi
-      msg_completed_move
 
       #If SYMLINK=Disabled, remove database entries
       if [ "$SYMLINK" = "Disabled" ]; then
@@ -4773,9 +4871,6 @@ if [ "$SYMLINK" != "LINK" ]; then
         fi
       fi
 
-      #Send notification of completion
-      test "$Notify" = "Enabled" && sudo -u "$NotifyUserName" "$binpath/m2k_notify" "myth2kodi Success" "$ShowFileName moved to $MoveDir" info #"$m2kdir/myth2kodi.png"
-
       #Additional features, notifications, rss, daily report.
       [[ "$RequiresNFO" = "1" ]] &&  generate_episode_nfo
       kodi_newshow
@@ -4784,18 +4879,20 @@ if [ "$SYMLINK" != "LINK" ]; then
       dailyreport
       generaterss
       test "$SYMLINK" = "Disabled" && set_group_permission
+
+      #We've successfully moved the recording -- notify then exit.
+      msg_completed_move
       exit_job 'MoveModeSuccessful'
 
-    #if file was not moved (doesn't exist or has zero size), then fail
+    #if file was not moved (has zero size), then fail
     elif [ ! -s "$MoveDir/$ShowFileName.$OriginalExt" ]; then
       rm -f "$MoveDir/$ShowFileName.$OriginalExt"
       msg_wrote_zero_length_file
-      exit_job 'PermissionError0Length'
-
+      exit_job 'ZeroLengthFile'
     fi
   elif [ ! -f "$MoveDir/$ShowFileName.$OriginalExt" ]; then
     msg_permission_error_while_moving
-    exit_job 'PermissionErrorWhileMoving'
+    exit_job 'MoveFailed'
   fi
 
 #####LINK MODE HANDLING#####
@@ -4809,9 +4906,6 @@ elif [ "$SYMLINK" = "LINK" ]; then
   if [ -L "$MoveDir/$ShowFileName.$OriginalExt" ]; then
     Inform "Symlink created: $MoveDir/$ShowFileName.$OriginalExt"
     printf '%s\n' "'$MoveDir/$ShowFileName.$OriginalExt' '$InputPath'" >> "$m2kdir/created.tracking"
-    if [ "$Notify" = "Enabled" ]; then
-      sudo -u "$NotifyUserName" "$binpath/m2k_notify" "myth2kodi Success" "$ShowFileName linked to $MoveDir" info #"$m2kdir/myth2kodi.png"
-    fi
 
     #Move comskip data to proper folder
     if [ "$CommercialMarkup" = "Created" ]; then
@@ -4827,14 +4921,17 @@ elif [ "$SYMLINK" = "LINK" ]; then
     dailyreport
     generaterss
     test "$SYMLINK" = "Disabled" && set_group_permission
+    if [ "$Notify" = "Enabled" ]; then
+      NOTIFY_MSG="$ShowFileName linked to $MoveDir"
+      NOTIFY_ICON="info" #"$m2kdir/myth2kodi.png"
+    fi
     exit_job 'LinkModeSuccessful'
 
   #If link failure, send notification and fail
   elif [ ! -L "$MoveDir/$ShowFileName.$OriginalExt" ]; then
     msg_symlink_not_created
+    exit_job 'LinkingFailed'
   fi
-  exit_job 'LinkModeFailed'
-
 fi
 
 #####GENERIC UNSPECIFIED ERROR#####
@@ -4843,7 +4940,8 @@ fi
 
 #send notification if enabled
 if [ "$Notify" = "Enabled" ] ; then
-  sudo -u "$NotifyUserName" "$binpath/m2k_notify" "myth2kodi error" "myth2kodi operation failed See $LogFile for more information" error #"$m2kdir/myth2kodi_failed.png"
+  NOTIFY_MSG="myth2kodi operation failed See $LogFile for more information"
+  NOTIFY_ICON="error" #"$m2kdir/myth2kodi_failed.png"
 fi
 exit_job 'GenericUnspecifiedError'
 

@@ -406,7 +406,7 @@ exit_job(){
     Debug "NOTIFY_MSG=$NOTIFY_MSG  ;  NOTIFY_ICON=$NOTIFY_ICON"
     sudo -u "$NotifyUserName" "$binpath/m2k_notify" "myth2kodi: $jobtype" "$NOTIFY_MSG" "$NOTIFY_ICON"
   else
-    Debug "Either Notify not enabled or processing a recording from an ignore list."
+    Debug "Either Notify not enabled, in scan mode, or processing a recording from an ignore list."
   fi
 
   case "$jobtype" in
@@ -594,7 +594,7 @@ validate_args(){
   if [[ -z "$m2karg1" ]]; then
     if [[ "$Notify" = "Enabled" ]]; then
       NOTIFY_MSG="myth2kodi must be called with at least one argument."
-      NOTIFY_ICON="error" #"$m2kdir/myth2kodi_failed.png"
+      NOTIFY_ICON="$m2kdir/myth2kodi_failed.png"
     fi
     msg_usage
     exit_job 'InvalidCall'
@@ -604,7 +604,7 @@ validate_args(){
   if [[ "${m2karg1:0:1}" != "-" && "$m2karg1" != "testfile.ext" && ! -f "$m2karg1" ]]; then
     if [[ "$Notify" = "Enabled" ]]; then
       NOTIFY_MSG="The specified InputPath is not a file."
-      NOTIFY_ICON="error" #"$m2kdir/myth2kodi_failed.png"
+      NOTIFY_ICON="$m2kdir/myth2kodi_failed.png"
     fi
     msg_usage
     exit_job 'InputPathNotFile'
@@ -743,7 +743,7 @@ parse_command_flags(){
       if [[ ! -f "$InputPath" && ! -d "$InputPath" ]]; then
         if [[ "$Notify" = "Enabled" ]]; then
           NOTIFY_MSG="called as: myth2kodi --comskip '$InputPath'."
-          NOTIFY_ICON="error" #"$m2kdir/myth2kodi_failed.png"
+          NOTIFY_ICON="$m2kdir/myth2kodi_failed.png"
         fi
         msg_usage
         exit_job 'FileOrPathDoesNotExist'
@@ -756,7 +756,7 @@ parse_command_flags(){
   Err "Unrecognised command line switch: $m2karg1"
   if [[ "$Notify" = "Enabled" ]]; then
     NOTIFY_MSG="myth2kodi $m2karg1"
-    NOTIFY_ICON="error" #"$m2kdir/myth2kodi_failed.png"
+    NOTIFY_ICON="$m2kdir/myth2kodi_failed.png"
   fi
   msg_usage
   exit_job 'UnrecognisedCommand'
@@ -1281,7 +1281,7 @@ failsafe(){
 
   if [[ "$Notify" = "Enabled" ]]; then
     NOTIFY_MSG="FAILSAFE mode active See $LogFile for more information"
-    NOTIFY_ICON="error" #"$m2kdir/myth2kodi_failed.png"
+    NOTIFY_ICON="$m2kdir/myth2kodi_failed.png"
   fi
 }
 
@@ -1488,7 +1488,7 @@ process_mythtvdb(){
         if [[ "$returnstatus" != 0 ]]; then
           if [[ "$Notify" = "Enabled" ]]; then
             NOTIFY_MSG="Call to MythTV-Database python bindings failed."
-            NOTIFY_ICON="error" #"$m2kdir/myth2kodi_failed.png"
+            NOTIFY_ICON="$m2kdir/myth2kodi_failed.png"
           fi
           exit_job 'MythTVdatabaseFailure'
         fi
@@ -1497,7 +1497,7 @@ process_mythtvdb(){
         Err "DatabaseType incorrectly specified."
         if [[ "$Notify" = "Enabled" ]]; then
           NOTIFY_MSG="DatabaseType incorrectly specified."
-          NOTIFY_ICON="error" #"$m2kdir/myth2kodi_failed.png"
+          NOTIFY_ICON="$m2kdir/myth2kodi_failed.png"
         fi
         exit_job 'UserSettingError'
         ;;
@@ -1523,7 +1523,7 @@ process_mythtvdb(){
       Err "Failed to determine InputTitle from MythTV-DB, and none provided via arg."
       if [[ "$Notify" = "Enabled" ]]; then
         NOTIFY_MSG="Failed to determine InputTitle from MythTV-DB, and none provided."
-        NOTIFY_ICON="error" #"$m2kdir/myth2kodi_failed.png"
+        NOTIFY_ICON="$m2kdir/myth2kodi_failed.png"
       fi
       exit_job 'NameCouldNotBeAssigned'
     fi
@@ -1532,7 +1532,7 @@ process_mythtvdb(){
       Err "Database disabled and no InputTitle provided on command line."
       if [[ "$Notify" = "Enabled" ]]; then
         NOTIFY_MSG="Database disabled and no InputTitle provided on command line."
-        NOTIFY_ICON="error" #"$m2kdir/myth2kodi_failed.png"
+        NOTIFY_ICON="$m2kdir/myth2kodi_failed.png"
       fi
       exit_job 'InsufficientInformationProvided'
     fi
@@ -2631,7 +2631,7 @@ check_path_permission(){
     Err "Path or file doesn't exist: $PATH_TO_CHECK"
     if [[ "$Notify" = "Enabled" ]]; then
       NOTIFY_MSG=": $PATH_TO_CHECK"
-      NOTIFY_ICON="error" #"$m2kdir/myth2kodi_failed.png"
+      NOTIFY_ICON="$m2kdir/myth2kodi_failed.png"
     fi
     exit_job 'FileOrPathDoesNotExist'
   fi
@@ -2652,7 +2652,7 @@ check_path_permission(){
     Err "Can't read: $PATH_TO_CHECK"
     if [[ "$Notify" = "Enabled" ]]; then
       NOTIFY_MSG="Can't read: $PATH_TO_CHECK"
-      NOTIFY_ICON="error" #"$m2kdir/myth2kodi_failed.png"
+      NOTIFY_ICON="$m2kdir/myth2kodi_failed.png"
     fi
     exit_job 'PermissionError'
   fi
@@ -2665,7 +2665,7 @@ check_path_permission(){
       ErrCont "To preserve file permissions this has bee prevented."
       if [[ "$Notify" = "Enabled" ]]; then
         NOTIFY_MSG="Can't write: $PATH_TO_CHECK"
-        NOTIFY_ICON="error" #"$m2kdir/myth2kodi_failed.png"
+        NOTIFY_ICON="$m2kdir/myth2kodi_failed.png"
       fi
     fi
     exit_job 'PermissionError'
@@ -2684,7 +2684,7 @@ msg_userjob_outside_mythtv_error(){
   ErrCont "  myth2kodi --usage"
   if [[ "$Notify" = "Enabled" ]]; then
     NOTIFY_MSG="Called as MythTV user job outside of MythTV."
-    NOTIFY_ICON="error" #"$m2kdir/myth2kodi_failed.png"
+    NOTIFY_ICON="$m2kdir/myth2kodi_failed.png"
   fi
   exit_job 'InvalidCall'
 }
@@ -2709,7 +2709,7 @@ msg_completed_move(){
   [[ "$SYMLINK" = "Enabled"  ]] && InformCont "To: $MoveDir/$ShowFileName.$OriginalExt"
   if [[ "$Notify" = "Enabled" ]]; then
     NOTIFY_MSG="myth2kodi Success" "$ShowFileName moved to $MoveDir"
-    NOTIFY_ICON="info" #"$m2kdir/myth2kodi.png"
+    NOTIFY_ICON="$m2kdir/myth2kodi.png"
   fi
 }
 
@@ -2778,7 +2778,7 @@ msg_tvdb_incomplete(){
   ErrCont "TO PROCESS THIS FILE & PREVENT THIS ERROR IN THE FUTURE, ENABLE HANDLING OF UNRECOGNIZED SHOWS."
   if [[ "$Notify" = "Enabled" ]]; then
     NOTIFY_MSG="Could not obtain information from server about: $InputTitle. TheTVDB is incomplete"
-    NOTIFY_ICON="web-browser" #"$m2kdir/myth2kodi_failed.png"
+    NOTIFY_ICON="$m2kdir/myth2kodi_failed.png"
   fi
 }
 
@@ -2809,7 +2809,7 @@ msg_wrote_zero_length_file(){
   Err "MOVE FAILED: WROTE 0 LENGTH FILE: $MoveDir/$ShowFileName.$OriginalExt"
   if [[ "$Notify" = "Enabled" ]]; then
     NOTIFY_MSG="$ShowFileName could not be moved to $MoveDir"
-    NOTIFY_ICON="stop" #"$m2kdir/myth2kodi_failed.png"
+    NOTIFY_ICON="$m2kdir/myth2kodi_failed.png"
   fi
 }
 
@@ -2820,7 +2820,7 @@ msg_permission_error_while_moving(){
   Err "MOVE FAILED: Possible permission error while moving $ShowFileName"
   if [[ "$Notify" = "Enabled" ]]; then
     NOTIFY_MSG="$ShowFileName could not be moved to $MoveDir"
-    NOTIFY_ICON="stop"  #"$m2kdir/myth2kodi_failed.png"
+    NOTIFY_ICON="$m2kdir/myth2kodi_failed.png"
   fi
 }
 
@@ -2831,7 +2831,7 @@ msg_symlink_not_created(){
   ErrCont "Check that file system supports symlinks: $MoveDir"
   if [[ "$Notify" = "Enabled" ]]; then
     NOTIFY_MSG="Failure while creating link. Check permissions."
-    NOTIFY_ICON="stop"  #"$m2kdir/myth2kodi_failed.png"
+    NOTIFY_ICON="$m2kdir/myth2kodi_failed.png"
   fi
 }
 
@@ -2968,7 +2968,7 @@ make_show_dir(){
     ErrCont "##################################################"
     if [[ "$Notify" = "Enabled" ]]; then
       NOTIFY_MSG="failsafe mode activated."
-      NOTIFY_ICON="error"
+      NOTIFY_ICON="$m2kdir/myth2kodi_failed.png"
     fi
     SYMLINK='LINK'
     MoveDir="$FailSafeDir"
@@ -4373,7 +4373,7 @@ ShowName="$InputTitle"
 if [[ -z "$ShowName" ]]; then
   if [[ "$Notify" = "Enabled" ]]; then
     NOTIFY_MSG="Unable to set ShowName."
-    NOTIFY_ICON="stop" #"$m2kdir/myth2kodi_failed.png"
+    NOTIFY_ICON="$m2kdir/myth2kodi_failed.png"
   fi
   msg_usage
   exit_job 'GenericUnspecifiedError'
@@ -4707,7 +4707,7 @@ if [ ! -f "$InputPath" ] && [ "$InputPath" != "testfile.ext" ]; then
   msg_invalid_path_error "$InputPath"
   if [[ "$Notify" = "Enabled" ]]; then
     NOTIFY_MSG="InputPath not a file: '$InputPath'"
-    NOTIFY_ICON="error" #"$m2kdir/myth2kodi_failed.png"
+    NOTIFY_ICON="$m2kdir/myth2kodi_failed.png"
   fi
   exit_job 'FileOrPathDoesNotExist'
 fi
@@ -4727,7 +4727,7 @@ if [[ -z "$Exx" && "$InputPath" != "testfile.ext" ]]; then
     Warn "This episode could not be matched based on supplied Title and SubTitle."
     if [[ "$Notify" = "Enabled" ]]; then
       NOTIFY_MSG="Episode could not be matched based on supplied Title and SubTitle."
-      NOTIFY_ICON="error" #"$m2kdir/myth2kodi_failed.png"
+      NOTIFY_ICON="$m2kdir/myth2kodi_failed.png"
     fi
     exit_job 'NameCouldNotBeAssigned'
   elif [ "$m2kProgramIDCheck" = "MV" ]; then
@@ -4800,7 +4800,7 @@ if [ -f "$MoveDir/$ShowFileName.$OriginalExt" ]; then
   printf "'%s' '%s' '%s' '%s'\n" "$InputTitle" "$ShowStartTime" "$InputPath" "$ShowFileName" >> "$DuplicatesFile"
   if [[ "$Notify" = "Enabled" ]]; then
     NOTIFY_MSG="Recording identified as duplicate of: $MoveDir/$ShowFileName.$OriginalExt"
-    NOTIFY_ICON="stop" #"$m2kdir/myth2kodi_failed.png"
+    NOTIFY_ICON="$m2kdir/myth2kodi_failed.png"
   fi
   exit_job 'FileAlreadyExists'
   #TODO: When refactoring main, consider allowing forced move with auto name incrementing when move-to file already exists.
@@ -4923,7 +4923,7 @@ elif [ "$SYMLINK" = "LINK" ]; then
     test "$SYMLINK" = "Disabled" && set_group_permission
     if [ "$Notify" = "Enabled" ]; then
       NOTIFY_MSG="$ShowFileName linked to $MoveDir"
-      NOTIFY_ICON="info" #"$m2kdir/myth2kodi.png"
+      NOTIFY_ICON="$m2kdir/myth2kodi.png"
     fi
     exit_job 'LinkModeSuccessful'
 
@@ -4941,7 +4941,7 @@ fi
 #send notification if enabled
 if [ "$Notify" = "Enabled" ] ; then
   NOTIFY_MSG="myth2kodi operation failed See $LogFile for more information"
-  NOTIFY_ICON="error" #"$m2kdir/myth2kodi_failed.png"
+  NOTIFY_ICON="$m2kdir/myth2kodi_failed.png"
 fi
 exit_job 'GenericUnspecifiedError'
 

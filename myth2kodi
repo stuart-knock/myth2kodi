@@ -2158,23 +2158,20 @@ download_series_info(){
 #against the zap2it ids returned by querying TheTVDB.
 get_serieslinenumber_zap2itid(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  if [[ -n "$Zap2itSeriesID" ]]; then
-    local Zap2ItTest
-    serieslinenumber=0
-    #loop through all show names received by TheTVDB and match Zap2it ID.
-    while read -r line ; do
-      (( ++serieslinenumber ))
-      Info "TESTING FOR ZAP2ITID MATCH:$line $(sed -n "$serieslinenumber"'p' "$m2kdir/shn.txt")"
-      Zap2ItTest="$(echo "$line" | tr -d MVSHEP | sed 's/0*//')"
-      if [[ "$Zap2ItTest" = "$Zap2itSeriesID" ]]; then
-        return 0
-      fi
-    done < "$m2kdir/zap2it.txt"
-    return 1
-  else
-    Warn "${FUNCNAME[0]}() called, with no Zap2itSeriesID"
-    return 1
-  fi
+  local Zap2ItTest
+  serieslinenumber=0
+  #loop through all show names received by TheTVDB and match Zap2it ID.
+  while read -r line ; do
+    (( ++serieslinenumber ))
+    Info "TESTING FOR ZAP2ITID MATCH:$line $(sed -n "$serieslinenumber"'p' "$m2kdir/shn.txt")"
+    Zap2ItTest="$(echo "$line" | tr -d MVSHEP | sed 's/0*//')"
+    if [[ "$Zap2ItTest" = "$Zap2itSeriesID" ]]; then
+      return 0
+    fi
+  done < "$m2kdir/zap2it.txt"
+  Warn "${FUNCNAME[0]}() couldn't find serieslinenumber with Zap2itSeriesID"
+  serieslinenumber=0
+  return 1
 }
 
 #Set the serieslinenumber by fuzzy logic matching the current ShowName
@@ -2204,10 +2201,7 @@ get_serieslinenumber_showname(){
   #Correct for serieslinenumber = ""
   [[ -z "$serieslinenumber" ]] && serieslinenumber=0
   #Get the seriesid based on the showname
-  if ((serieslinenumber >= 1)); then
-    return 0
-  fi
-  return 1
+  if ((serieslinenumber >= 1)); then return 0; else return 1; fi
 }
 
 #Resolve multiple matches on the same airdate, the conflict is
@@ -4421,12 +4415,10 @@ fi
 if [ "$m2kProgramIDCheck" != "SH" ] && [ "$m2kProgramIDCheck" != "MV" ]; then
   #Query TheTVDB on show title, then return a list of Zap2itID, ShowName and seriesid.
   download_series_identification
-
-  #TODO: This would be better if it could be [ "$GuideDataType" = "SchedulesDirect" ]
-  #  Figure out if that's ok with respect to NoLookup...
-  if [ "$GuideDataType" != "SydFTA" ] ; then
+  if [[ "$?" = 0 ]]; then
+    #Start by trying to match on Zap2itID
     ConfidenceReasoning="$ConfidenceReasoning Attempted Match On Zap2itID:"
-    get_serieslinenumber_zap2itid
+    [[ -n "$Zap2itSeriesID" ]] && get_serieslinenumber_zap2itid
     if [ $? = 0 ]; then
       ((++SeriesConfidenceRating))
       ConfidenceReasoning="$ConfidenceReasoning Successful;"
@@ -4435,27 +4427,30 @@ if [ "$m2kProgramIDCheck" != "SH" ] && [ "$m2kProgramIDCheck" != "MV" ]; then
       ((--SeriesConfidenceRating))
       ConfidenceReasoning="$ConfidenceReasoning Failed;"
     fi
-  fi
 
-  #If the previous if block was skipped or failed to find the SeriesLineNumber
-  if [ $SeriesConfidenceRating -le 0 ] ; then
-    ConfidenceReasoning="$ConfidenceReasoning Attempted match on Standard Logic:"
-    get_serieslinenumber_showname
-    if [ $? = 0 ]; then
-      ConfidenceReasoning="$ConfidenceReasoning Successful;"
-    else
-      Warn "FAILED to get series line number from table with standard logic, requiring doover."
-      RequiresDoover=1
-      ((--SeriesConfidenceRating))
-      ConfidenceReasoning="$ConfidenceReasoning Failed; Attempted Title match on Fuzzy Logic:"
-      get_serieslinenumber_showname_fuzzy
+    #If Zap2itSeriesID match failed to find the SeriesLineNumber
+    if (( SeriesConfidenceRating <= 0 )); then
+      ConfidenceReasoning="$ConfidenceReasoning Attempted match on Standard Logic:"
+      [[ -n "$ShowName" ]] && get_serieslinenumber_showname
       if [ $? = 0 ]; then
         ConfidenceReasoning="$ConfidenceReasoning Successful;"
       else
+        Warn "FAILED to get series line number from table with standard logic, requiring doover."
+        RequiresDoover=1
         ((--SeriesConfidenceRating))
-        ConfidenceReasoning="$ConfidenceReasoning Failed; Information not obtainable;"
+        ConfidenceReasoning="$ConfidenceReasoning Failed; Attempted Title match on Fuzzy Logic:"
+        [[ -n "$ShowName" ]] && get_serieslinenumber_showname_fuzzy
+        if [ $? = 0 ]; then
+          ConfidenceReasoning="$ConfidenceReasoning Successful;"
+        else
+          ((--SeriesConfidenceRating))
+          ConfidenceReasoning="$ConfidenceReasoning Failed; Information not obtainable;"
+        fi
       fi
     fi
+  else
+    SeriesConfidenceRating=-3
+    ConfidenceReasoning="$ConfidenceReasoning Download series identification: Failed;"
   fi
 
   #if we have a series line number then translate that into a series id
@@ -4468,8 +4463,8 @@ if [ "$m2kProgramIDCheck" != "SH" ] && [ "$m2kProgramIDCheck" != "MV" ]; then
 fi
 
 #If it's not a recognized episode, then we need to assign the name myth2kodi will use.
-test -z "$ShowName" && ShowName="$InputTitle"
-test -z "$NewShowName" && NewShowName="$ShowName"
+[[ -z "$ShowName" ]] && ShowName="$InputTitle"
+[[ -z "$NewShowName" ]] && NewShowName="$ShowName"
 
 if [[ -n "$SeriesID" ]]; then
   make_m2k_database_dir

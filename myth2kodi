@@ -268,7 +268,7 @@ UpdateDatabase=88920
 M2K_DB_LIFE=6
 #The path which contains myth2kodi and associated scripts default=/usr/local/bin
 binpath="/usr/local/bin"
-#myth2kodi working directory: Default=$HOME/.myth2kodi (ie, /home/username/.myth2kodi)
+#myth2kodi working directory: Default=$HOME/.myth2kodi (ie, /home/username/.myth2kodi) #TODO: Consider: better to set???: /home/${Librarian}/.myth2kodi
 m2kdir="$HOME/.myth2kodi"
 #FailSafe mode will enable symlinks to be formed in FailSafeDir if the move or symlink operation fails. Enabled|Disabled
 FailSafeMode="Disabled"
@@ -279,7 +279,11 @@ DirTracking="Enabled"
 #Language setting
 Language="en"
 
-#StorageGroupFallback can be used to enable/disable a bit of code that, if Guide Data identified the
+#How often (in seconds) to perform routine maintenance of tracked files. DEFAULT=259200 (72 hours)
+#NOTE: Maintenance can be forced at any time with the 'myth2kodi --maintenance' command.
+MAINTENANCE_PERIOD=259200
+
+#StorageGroupFallback can enable/disable a bit of code that, if Guide Data identified the
 #input file as a show or episode, but no episode or series information was found, then it checks if
 #the MythTV DB's storagegroup is movie[s] or film[s] and uses this to reset the recording type as Movie.
 #To function it requires that you have created a MythTV storagegroup called something like 'Movies'
@@ -485,6 +489,30 @@ initialise_new_logfile(){
   } >> "$LogFile"
 }
 
+#TODO: logging, checks, etc...
+#When a file exceeds a specified size, give it an archive name and compress it.
+log_rotation(){
+  local FILE_NAME ARCHIVE_NAME
+  local -i FILE_SIZE_LIMIT
+  FILE_NAME="$1"
+  ARCHIVE_NAME="$2"
+  FILE_SIZE_LIMIT="${3-1048576}" #Default to ~1MB
+  ARCHIVED_FILE=''
+
+  #When the $FILE_NAME exceeds $FILE_SIZE_LIMIT, archive it.
+  if [ -f "$FILE_NAME" ]; then
+    local FILE_SIZE
+    FILE_SIZE=$(wc --bytes < "$FILE_NAME")
+    if ((LogFileSize > FILE_SIZE_LIMIT)); then
+      Inform "Moving and compressing $FILE_NAME"
+      mv "$FILE_NAME" "$ARCHIVE_NAME"
+      gzip "$ARCHIVE_NAME"
+      Inform "Moved old $FILE_NAME to ${ARCHIVE_NAME}.gz"
+      ARCHIVED_FILE='True'
+    fi
+  fi
+}
+
 #This is the first command executed after the setting of variables at the top
 #of this file. It initialises the state of the script and the logging system.
 m2k_init(){
@@ -552,16 +580,10 @@ m2k_init(){
   fi
 
   #When the LogFile exceeds 4MB compress it and start a fresh one.
-  if [ -f "$LogFile" ]; then
-    local LogFileSize
-    LogFileSize=$(wc --bytes < "$LogFile")
-    if ((LogFileSize > 4000000)); then
-      Inform "Moving and compressing LogFile"
-      mv "$LogFile" "$m2kdir/${LogFileName}_${FileNameNow}.log"
-      gzip "$m2kdir/${LogFileName}_${FileNameNow}.log"
-      initialise_new_logfile
-      Inform "Previous LogFile moved to: $m2kdir/${LogFileName}_${FileNameNow}.log"
-    fi
+  log_rotation "$LogFile" "$m2kdir/${LogFileName}_${FileNameNow}.log" '4000000'
+  if [[ "$ARCHIVED_FILE" = 'True' ]]; then
+   initialise_new_logfile
+   Inform "Previous LogFile moved to: $m2kdir/${LogFileName}_${FileNameNow}.log"
   fi
 
   #Set defaults for searching Series information
@@ -788,6 +810,31 @@ parse_command_flags(){
   msg_usage
   EXIT_JOB_TYPE='UnrecognisedCommand'
   return 1
+}
+
+periodic_maintenace(){
+  Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
+  #Do periodic maintenance
+  if [[ "$m2kScanMode" != "True" ]]; then
+    local CURRENT_TIME
+    local LAST_MAINTENANCE_TIME
+    CURRENT_TIME="$(date +%s)"
+    #If file exist for last maintenance time, then get value
+    if [[ -f "$m2kdir/lastmaintenace.time" ]]; then
+      LAST_MAINTENANCE_TIME="$(cat "$m2kdir/lastmaintenace.time")"
+    else #no last maintenance time, so assign a never updated value.
+      Inform "Seems we've never run maintenance -- no lastmaintenace.time file."
+      LAST_MAINTENANCE_TIME=42 #A meaningless low number to start from...
+    fi
+    if ((CURRENT_TIME > LAST_MAINTENANCE_TIME+MAINTENANCE_PERIOD)); then
+      Inform "Last maintenance more than $((MAINTENANCE_PERIOD/3600)) hours ago."
+      m2k_maintenance
+      #TODO: probably should check return value and only update lastmaintenance.time on success...
+      printf '%s\n' "$CURRENT_TIME" > "$m2kdir/lastmaintenace.time"
+    fi
+  else
+    Debug "Skipping m2k_maintenance() as m2kScanMode has been set to 'True'"
+  fi
 }
 
 #Set the name for episode & movie recordings when making them accessible to Kodi
@@ -3198,12 +3245,10 @@ m2k_cleanse(){
   fi
 }
 
-#Loops through all processed recordings and check if their parent is there. If no parent, then file is deleted.
+#Loops through tracked files and directories deleting them if they've been orphaned.
 m2k_maintenance(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   Inform "PERFORMING MAINTENANCE ROUTINE..."
-  #check for interrupted undo jobs
-  [[ -f "$m2kdir/undo.lock" && ! -f "$m2kdir/undo.sh" ]] && mv "$m2kdir/undo.lock" "$m2kdir/undo.sh"
 
   #Check for comskip (.txt) and .nfo files listed in created.tracking and
   #remove them if their associated "main" file (.mpg) is missing.
@@ -3235,8 +3280,8 @@ m2k_maintenance(){
           fi
         fi
       else
-        #If the MainFile is actually the original MythTV recording file (it was processed in LINK mode)
-        #and the SupportFile no longer exists, then
+        #If the MainFile is actually the original MythTV recording file (it was
+        #processed in LINK mode) and the SupportFile no longer exists, then
         #'[0-9]{4}_20[0-9]{2}[0-1][0-9][0-3][0-9][0-2][0-9][0-5][0-9]{3}'
         if grep -q -E '[0-9]{4}_20[0-9]{12}' <<< "$MainFile" ; then
           Debug "Identified as LINK mode created.tracking entry."
@@ -3259,30 +3304,28 @@ m2k_maintenance(){
 
   #Check if folders are empty and remove dir if needed and it was created by myth2kodi
   if [ "$DirTracking" = "Enabled" ] && [ -f "$m2kdir/dir.tracking" ]; then
+    Inform "PERFORMING CLEANUP OF EMPTY DIRECTORIES."
     #Reverse dictionary sort the tracked dirs, should have the effect of depth first.
     sort -dr "$m2kdir/dir.tracking" > "$m2kdir/dir.tracking.sorted"
-    while read -r line ; do
+    local CONTAINS
+    while read -r dirtocheck ; do
       (( ++Counter ))
-      DirToCheck="$line"
-      Debug "Folder record $Counter: ${DirToCheck}"
-      if [ -d "$DirToCheck" ]; then
-        #TODO: the "ls ... | grep"  stuff below seems a bit random, reconsider how to achieve the desired goal here...
-        #[[ $(find "$line" -maxdepth 0 -type d -empty 2>/dev/null) ]] && echo "is empty"
-        #See also, find option -exec  find "$line" -maxdepth 0 -type d -empty -exec rmdir {} \;
-        DirToCheckCheck=$(ls "$line" | sed 's/tvshow.nfo//g' | grep -m1 ^)
-        [[ -z "$DirToCheckCheck" ]] && DirToCheckCheck=$(ls "$line" | sed 's/tvshow.nfo//g' | grep -m2 ^)
-        if [[ -z "$DirToCheckCheck" ]]; then
-          Inform "REMOVING ORPHAN FOLDER: $line"
-          [[ -f "$line/tvshow.nfo" ]] && rm -f "$line/tvshow.nfo"
-          rmdir "$line"
-          printf '%s\n' "$line" >> "$m2kdir/dir.tracking.old"
-        elif [[ -n "$DirToCheckCheck" ]]; then
-          DebugCont "Continuing to track folder record $Counter, it contains, at least: ${DirToCheckCheck}"
-          printf '%s\n' "$DirToCheck" >> "$m2kdir/dir.tracking2"
+      Debug "Folder record $Counter: $dirtocheck"
+      if [[ -d "$dirtocheck" ]]; then
+        #Is there something in the directory other than 'tvshow.nfo'
+        CONTAINS="$(find "$dirtocheck" -mindepth 1 ! -name 'tvshow.nfo' -print -quit)"
+        if [[ -z "$CONTAINS" ]]; then
+          Inform "REMOVING ORPHAN FOLDER: $dirtocheck"
+          [[ -f "$dirtocheck/tvshow.nfo" ]] && rm -f "$dirtocheck/tvshow.nfo"
+          rmdir "$dirtocheck"
+          printf '%s\n' "$dirtocheck" >> "$m2kdir/dir.tracking.old"
+        else
+          DebugCont "Continuing to track folder record $Counter, it contains, at least: $CONTAINS"
+          printf '%s\n' "$dirtocheck" >> "$m2kdir/dir.tracking2"
         fi
-      elif [ ! -d "$DirToCheck" ]; then
+      else
         Warn "Tracked directory doesn't seem to be a directory. Continuing to track, just in case."
-        printf '%s\n' "$DirToCheck" >> "$m2kdir/dir.tracking2"
+        printf '%s\n' "$dirtocheck" >> "$m2kdir/dir.tracking2"
       fi
     done < "$m2kdir/dir.tracking.sorted"
     [[ -f "$m2kdir/dir.tracking" ]] && rm -f "$m2kdir/dir.tracking"
@@ -3290,29 +3333,11 @@ m2k_maintenance(){
     [[ -f "$m2kdir/dir.tracking2" ]] && mv "$m2kdir/dir.tracking2" "$m2kdir/dir.tracking"
   fi
 
-  #TODO: Make a log_rotation function for reuse.
-  local OldTrackingFileSize
   #When the dir.tracking.old exceeds 512kB compress it and start a fresh one.
-  if [ -f "$m2kdir/dir.tracking.old" ]; then
-    OldTrackingFileSize=$(wc --bytes < "$m2kdir/dir.tracking.old")
-    if (( OldTrackingFileSize > 512000)); then
-      Inform "Moving and compressing dir.tracking.old"
-      mv "$m2kdir/dir.tracking.old" "$m2kdir/dir.tracking.old_${FileNameNow}"
-      gzip "$m2kdir/dir.tracking.old_${FileNameNow}"
-      Inform "Previous dir.tracking.old file moved to: $m2kdir/dir.tracking.old_${FileNameNow}"
-    fi
-  fi
+  log_rotation "$m2kdir/dir.tracking.old" "$m2kdir/dir.tracking.old_${FileNameNow}" '512000'
 
   #When the created.tracking.old exceeds 512kB compress it and start a fresh one.
-  if [ -f "$m2kdir/created.tracking.old" ]; then
-    OldTrackingFileSize=$(wc --bytes < "$m2kdir/created.tracking.old")
-    if (( OldTrackingFileSize > 512000)); then
-      Inform "Moving and compressing created.tracking.old"
-      mv "$m2kdir/created.tracking.old" "$m2kdir/created.tracking.old_${FileNameNow}"
-      gzip "$m2kdir/created.tracking.old_${FileNameNow}"
-      Inform "Previous created.tracking.old file moved to: $m2kdir/created.tracking.old_${FileNameNow}"
-    fi
-  fi
+  log_rotation "$m2kdir/created.tracking.old" "$m2kdir/created.tracking.old_${FileNameNow}" '512000'
 
   #This isn't super fast, so only cleanse the working when called from --maintenance mode.
   if [[ "$removedead" = "1" ]]; then
@@ -3414,6 +3439,8 @@ m2k_scan(){
   #Default to safety, ie do nothing.
   [[ -z "$yesorno" ]] && yesorno="n"
   if [ "$yesorno" = "y" ]; then
+    #check for interrupted undo jobs
+    [[ -f "$m2kdir/undo.lock" && ! -f "$m2kdir/undo.sh" ]] && mv "$m2kdir/undo.lock" "$m2kdir/undo.sh"
     #Explicitly call m2k_maintenance() here as it's blocked in subsequent calls to myth2kodi from scan mode.
     m2k_maintenance
     myth2kodi --doover
@@ -4312,6 +4339,25 @@ recording_log(){
   fi
 }
 
+success_postprocessing(){
+  Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
+
+  #Move comskip data to proper folder
+  if [ "$CommercialMarkup" = "Created" ]; then
+    mv "$m2kdir/markupframes.txt" "$MoveDir/$ShowFileName.txt"
+    printf '%s\n' "'$MoveDir/$ShowFileName.txt' '$MoveDir/$ShowFileName.$OriginalExt'" >> "$m2kdir/created.tracking"
+  fi
+
+  #Additional features, notifications, rss, daily report.
+  [[ "$RequiresNFO" = "1" ]] &&  generate_episode_nfo
+  kodi_newshow
+  add_undo
+  [[ "$RequiresDoover" = "1" ]] && add_doover
+  dailyreport
+  generaterss
+  test "$SYMLINK" = "Disabled" && set_group_permission
+}
+
 ########################### END FUNCTION DEFINITIONS ###########################
 
 
@@ -4457,12 +4503,11 @@ if [[ "$TargetPathIsInputPath" = "Enabled" ]]; then
 fi
 
 #####MAINTENANCE#####
-#Loop through the list of created comskip files from dir.tracking, created.tracking and remove orphans.
-if [ "$m2kScanMode" != "True" ] ; then
-  m2k_maintenance #TODO: reconsider whether we want to do this every time we process a recording (outside of scan mode) because once we've processed lots of recordings it becomes a significant fraction of total run time...
-else
-  Debug "Skipping m2k_maintenance() as m2kScanMode has been set to 'True'"
-fi
+#check for interrupted undo jobs
+[[ -f "$m2kdir/undo.lock" && ! -f "$m2kdir/undo.sh" ]] && mv "$m2kdir/undo.lock" "$m2kdir/undo.sh"
+
+#From time-to-time check created.tracking, dir.tracking, and remove orphans.
+periodic_maintenace
 
 #####SEARCH FOR SHOW AND BUILD INFORMATION#####
 
@@ -4881,11 +4926,6 @@ if [ "$SYMLINK" != "LINK" ]; then
   #Check and report if file was moved
   if [ -e "$MoveDir/$ShowFileName.$OriginalExt" ]; then
     if [ -f "$MoveDir/$ShowFileName.$OriginalExt" ]; then
-      #Create Commercial skip data with file
-      if [ "$CommercialMarkup" = "Created" ]; then
-        mv "$m2kdir/markupframes.txt" "$MoveDir/$ShowFileName.txt"
-        echo "'$MoveDir/$ShowFileName.txt'" "'$MoveDir/$ShowFileName.$OriginalExt'" >> "$m2kdir/created.tracking"
-      fi
       #Make symlink back to original file
       if [ "$SYMLINK" = "MOVE" ]; then
         Inform "Creating symlink in move mode."
@@ -4912,14 +4952,7 @@ if [ "$SYMLINK" != "LINK" ]; then
         fi
       fi
 
-      #Additional features, notifications, rss, daily report.
-      [[ "$RequiresNFO" = "1" ]] &&  generate_episode_nfo
-      kodi_newshow
-      add_undo
-      [[ "$RequiresDoover" = "1" ]] && add_doover
-      dailyreport
-      generaterss
-      test "$SYMLINK" = "Disabled" && set_group_permission
+      success_postprocessing
 
       #We've successfully moved the recording -- notify then exit.
       msg_completed_move
@@ -4948,20 +4981,9 @@ elif [ "$SYMLINK" = "LINK" ]; then
     Inform "Symlink created: $MoveDir/$ShowFileName.$OriginalExt"
     printf '%s\n' "'$MoveDir/$ShowFileName.$OriginalExt' '$InputPath'" >> "$m2kdir/created.tracking"
 
-    #Move comskip data to proper folder
-    if [ "$CommercialMarkup" = "Created" ]; then
-      mv "$m2kdir/markupframes.txt" "$MoveDir/$ShowFileName.txt"
-      printf '%s\n' "'$MoveDir/$ShowFileName.txt' '$MoveDir/$ShowFileName.$OriginalExt'" >> "$m2kdir/created.tracking"
-    fi
+    success_postprocessing
 
-    #Additional features, notifications, rss, daily report.
-    [[ "$RequiresNFO" = "1" ]] && generate_episode_nfo
-    kodi_newshow
-    add_undo
-    [[ "$RequiresDoover" = "1" ]] && add_doover
-    dailyreport
-    generaterss
-    test "$SYMLINK" = "Disabled" && set_group_permission
+    #We've successfully linked the recording -- notify then exit.
     NOTIFY_MSG="$ShowFileName linked to $MoveDir"
     exit_job 'LinkModeSuccessful'
 

@@ -439,7 +439,7 @@ exit_job(){
       ;;
     #User elected not to process jobs which can not be properly categorized
     NameCouldNotBeAssigned)
-      Warn "NAME COULD NOT BE ASSIGNED BASED UPON DATA SUPPLIED"
+      Warn 'NAME COULD NOT BE ASSIGNED BASED UPON DATA SUPPLIED'
       exitstatus=1
       ;;
     #User elected to use a title/category ignore file
@@ -464,7 +464,7 @@ exit_job(){
     Debug "NOTIFY_MSG=$NOTIFY_MSG  ;  NOTIFY_ICON=${NOTIFY_ICON[$exitstatus]}"
     sudo -u "$NotifyUserName" "$binpath/m2k_notify" "myth2kodi: $jobtype" "$NOTIFY_MSG" "${NOTIFY_ICON[$exitstatus]}"
   else
-    Debug "Either Notify not enabled, in scan mode, or processing a recording from an ignore list."
+    Debug 'Either: Notify=Disabled; scan mode; or recording is in an ignore list.'
   fi
 
   #Final myth2kodi log entry when processing a recording, regardless of LogLevel.
@@ -474,7 +474,7 @@ exit_job(){
   #Run any user job specified for this job type.
   if [[ -f "$m2kdir/userjobs/$jobtype" ]]; then
     Inform "Processing user job: $m2kdir/userjobs/$jobtype"
-    source "$m2kdir/userjobs/$jobtype"
+    source "$m2kdir/userjobs/$jobtype" 2>&1 | err_pipe "${FUNCNAME[0]}(): $jobtype: "
   fi
   exit "$exitstatus"
 }
@@ -489,7 +489,6 @@ initialise_new_logfile(){
   } >> "$LogFile"
 }
 
-#TODO: logging, checks, etc...
 #When a file exceeds a specified size, give it an archive name and compress it.
 log_rotation(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
@@ -502,14 +501,21 @@ log_rotation(){
 
   #When the $FILE_NAME exceeds $FILE_SIZE_LIMIT, archive it.
   if [ -f "$FILE_NAME" ]; then
-    local FILE_SIZE
+    local FILE_SIZE mvstatus gzipstatus
     FILE_SIZE=$(wc --bytes < "$FILE_NAME")
     if ((FILE_SIZE > FILE_SIZE_LIMIT)); then
       Inform "Moving and compressing $FILE_NAME"
-      mv "$FILE_NAME" "$ARCHIVE_NAME"
-      gzip "$ARCHIVE_NAME"
-      Inform "Moved old $FILE_NAME to ${ARCHIVE_NAME}.gz"
-      ARCHIVED_FILE='True'
+      mv "$FILE_NAME" "$ARCHIVE_NAME" 2>&1 | err_pipe "${FUNCNAME[0]}(): "
+      mvstatus="${PIPESTATUS[0]}"
+      ((mvstatus==0)) && gzip "$ARCHIVE_NAME" 2>&1 | err_pipe "${FUNCNAME[0]}(): "
+      gzipstatus="${PIPESTATUS[0]}"
+      if ((mvstatus+gzipstatus==0)); then
+        Inform "Moved old $FILE_NAME to ${ARCHIVE_NAME}.gz"
+        ARCHIVED_FILE='True'
+      else
+        Err "Errors archiving $FILE_NAME: mv=$mvstatus; gzip=$gzipstatus"
+        ARCHIVED_FILE='False'
+      fi
     fi
   fi
 }
@@ -525,8 +531,8 @@ m2k_init(){
   m2kPlatform="$(uname)" ; declare -gr m2kPlatform
 
   #Who called me...
-  MyUserName=$(whoami) ; declare -gr MyUserName
-  if [[ "$MyUserName" != "$Librarian" ]]; then
+  CALLER=$(whoami) ; declare -gr CALLER
+  if [[ "$CALLER" != "$Librarian" ]]; then
     printf 'ERROR: %s\n' "myth2kodi should be run by user '$Librarian'"
     printf '  %s\n' "Check the USER SETTINGS section near the top of the script"
     printf '  %s\n' "you just ran or the settings file. That is, take a look at"
@@ -600,11 +606,11 @@ m2k_init(){
   EpisodeConfidenceRating=0
 
   Debug "myth2kodi script initialisation complete."
-  Debug "Running myth2kodi as $MyUserName"
+  Debug "Running myth2kodi as $CALLER"
 
   #Some excessive logging for extra buggy bugs.
-  ((LogLevel>=4)) && env | err_pipe "env:  "
-  ((LogLevel>=42)) && set | err_pipe "set:  "
+  ((LogLevel>=4)) && env | err_pipe 'env:  '
+  ((LogLevel>=42)) && set | err_pipe 'set:  '
 }
 
 #TODO: Consider adding a validate_settings function, it should check for
@@ -622,7 +628,7 @@ validate_args(){
   #TODO: Review/Expand the checks of whether we were called correctly.
   #We need at least one arg
   if [[ -z "$m2karg1" ]]; then
-    NOTIFY_MSG="myth2kodi must be called with at least one argument."
+    NOTIFY_MSG='myth2kodi must be called with at least one argument.'
     Err "${FUNCNAME[0]}(): $NOTIFY_MSG"
     msg_usage
     EXIT_JOB_TYPE='InvalidCall'
@@ -630,7 +636,7 @@ validate_args(){
   fi
 
   #Called at command line with MythTV user job form.
-  if [ "$m2karg1" = "%DIR%/%FILE%" ]; then
+  if [[ "$m2karg1" = '%DIR%/%FILE%' ]]; then
     msg_userjob_outside_mythtv_error
     return 1
   fi
@@ -683,7 +689,7 @@ parse_command_flags(){
       # myth2kodi --diagnostics from within myth2kodi
       LogFile="$PreCallLogFile"
       LogLevel="$PreCallLogLevel"
-      [[ "$LogType" != "stdout" ]] && Inform "Finished running diagnostics."
+      [[ "$LogType" != "stdout" ]] && Inform 'Finished running diagnostics.'
       unset m2kDiagnosticsMode
       return $diagnosticsreturnstatus
     ;;
@@ -941,10 +947,10 @@ check_write(){
               return 1
             fi
           else
-            Err "${FUNCNAME[0]}() $MyUserName TRIED TO WRITE TO $3 --FAILED"
+            Err "${FUNCNAME[0]}() $CALLER TRIED TO WRITE TO $3 --FAILED"
             [[ ! -r "$3" ]] && Inform "QUICK FIX: sudo chmod a+r '$3'"
             [[ ! -w "$3" ]] && Inform "QUICK FIX: sudo chmod a+w '$3'"
-            Inform "QUICK FIX: sudo chown $MyUserName '$3'"
+            Inform "QUICK FIX: sudo chown $CALLER '$3'"
           fi
         elif [ -z "$2" ] || (( $1 >= $2 )); then
           Err "${FUNCNAME[0]}() INSUFFICIENT FREE SPACE ON '$3'"
@@ -1007,8 +1013,8 @@ recreate_comskip(){
     #TODO: need to deal with link mode case, something like: movedrecordingname="$(find -L "$MoveDir/" -samefile "$InputPath")" #Actually, this form should work for both cases... with the problem that multiple links can be returned in link mode if there are multiple links...
     local ShowComSkip
     ShowComSkip="${movedrecordingname%.*}.txt"
-    mv "$m2kdir/markupframes.txt" "${ShowComSkip}"
-    return $?
+    mv "$m2kdir/markupframes.txt" "${ShowComSkip}" 2>&1 | err_pipe "${FUNCNAME[0]}(): "
+    return "${PIPESTATUS[0]}"
   elif [[ -d "$InputPath" ]]; then
     #TODO: confirm InputPath doesn't end in a /
     Warn "YOU ARE ABOUT TO SCAN THE DIRECTORY: $InputPath"
@@ -1132,15 +1138,15 @@ generaterss(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   #user settings:
   #TODO: this probably should be a setting at the top of file...
-  local rssDir="/var/www/myth2kodi-rss"
+  local rssDir='/var/www/myth2kodi-rss'
   ((RSSmaxItems == 0)) && RSSmaxItems=8  #maximum number of items to read into the feed
 
   #script settings
-  OLDrssFile="rss.xml"
-  TEMPrssFile="rss.temp"
+  local OLDrssFile='rss.xml'
+  local TEMPrssFile='rss.temp'
 
   #HTML line break code for nice formatting
-  lineBreak="&lt;br /&gt;"
+  local lineBreak='&lt;br /&gt;'
 
   #test if rssFile directory is writeable
   if [ ! -w "$rssDir" ]; then
@@ -1149,7 +1155,7 @@ generaterss(){
   fi
 
   #test if rssFile is writeable
-  if [ -e "$rssDir/$OLDrssFile" ] && [ ! -w "$rssDir/$OLDrssFile" ]; then
+  if [[ -e "$rssDir/$OLDrssFile" && ! -w "$rssDir/$OLDrssFile" ]]; then
     Err "${FUNCNAME[0]}() RSS generation failed: File exists but is not writeable: $rssDir/$OLDrssFile"
     return 6
   fi
@@ -1171,7 +1177,7 @@ generaterss(){
   rssEpisodeSubtitle="${EpisodeSubtitle//&/&amp;}"
   rssNewShowName="${NewShowName//&/&amp;}"
   rssPlot="${Plot//&/&amp;}"
-  mythicalGUID="$(sed 's/(/%28/g' <<< "$MyUserName@$myip$MoveDir/$ShowFileName.$OriginalExt" | sed 's/)/%29/g' | sed 's/ /%20/g')"
+  mythicalGUID="$(sed 's/(/%28/g' <<< "$CALLER@$myip$MoveDir/$ShowFileName.$OriginalExt" | sed 's/)/%29/g' | sed 's/ /%20/g')"
 
   #write current recording information to first item.
   {
@@ -1202,6 +1208,7 @@ generaterss(){
   #If there is an old RSS file
   if [ -e "$rssDir/$OLDrssFile" ]; then
     #test for number of </item> tags using grep
+    local RssItemCount itemLimit firstLine lastLine old_rss_data
     RssItemCount=$(grep -c "</item>" "$rssDir/$OLDrssFile")
 
     #if $RSSmaxItems is greater than this number
@@ -1240,7 +1247,7 @@ generaterss(){
   } >> "$rssDir/$TEMPrssFile"
 
   #move fully formed temp file on top of the old file
-  mv "$rssDir/$TEMPrssFile" "$rssDir/$OLDrssFile"
+  mv "$rssDir/$TEMPrssFile" "$rssDir/$OLDrssFile" 2>&1 | err_pipe "${FUNCNAME[0]}(): "
   Inform "RSS ENTRY SUCCESSFULLY CREATED: $rssDir/$OLDrssFile"
   return 0
 }
@@ -1491,7 +1498,7 @@ get_mythtvdb_info_pythonbindings(){
   pythonExitStatus="${PIPESTATUS[0]}"
   if [ "$pythonExitStatus" != "0" ] ; then
     Err "${FUNCNAME[0]}() DATABASE ACCESS ERROR: COULD NOT OBTAIN INFORMATION"
-    Debug "Check DBInfo in mythicalSetup, verify file is mythtv file"
+    Debug 'Check DBInfo in mythicalSetup, verify file is mythtv file.'
     return 1
   fi
 
@@ -1518,7 +1525,7 @@ get_mythtvdb_info_pythonbindings(){
   #GuideSeasonNum InputSeasonNum LogicSubtitleSeasonNum FuzzySubtitleSeasonNum FuzzyPlotSeasonNum nlpPlotSeasonNum => EpisodeSeasonNum
   #GuideEpisodeNum InputEpisodeNum LogicSubtitleEpisodeNum FuzzySubtitleEpisodeNum FuzzyPlotEpisodeNum nlpPlotEpisodeNum => EpisodeEpisodeNum
 
-  Debug "Setting the following variables based on MythTV-DB guide data:"
+  Debug 'Setting the following variables based on MythTV-DB guide data:'
   #Import mythtv values into myth2kodi values, don't clobber title, subtitle, season-number, or episode-number.
   [[ -z "$InputTitle" ]]      && InputTitle="$title"        && DebugCont "InputTitle=$title"
   [[ -z "$InputSubtitle" ]]   && InputSubtitle="$subtitle"  && DebugCont "InputSubtitle=$subtitle"
@@ -1674,7 +1681,7 @@ get_sxxexx_from_plot(){
   #extract a season number Sxx and episode number Exx
   #Assumes season and episode numbers in range 1-99
   if [[ -z "$SeasonEpisode" && -z "$InputSeasonNum" && -z "$InputEpisodeNum" ]]; then
-    Debug "Searching Plot for season & episode information."
+    Debug 'Searching Plot for season & episode information.'
     #Check the Plot field for the SeasonEpisode info, SBS is big on
     #including it in the plot/description field instead of where it belongs
     #The below should work for any of the following forms:
@@ -1682,11 +1689,11 @@ get_sxxexx_from_plot(){
     SeasonEpisode="$(grep -E -i --only-matching '(s\.?[0-9]?[0-9]\,?\s?(e|ep)\.?[0-9][0-9]?)|([0-9]?[0-9]x[0-9][0-9]?)' <<< "$Plot")"
   fi
   if [[ -n "$InputSeasonNum" && -n "$InputEpisodeNum" ]]; then
-    Debug "Using season & episode information from MythTV DB season & episode fields."
+    Debug 'Using season & episode information from MythTV DB season & episode fields.'
     Sxx="$InputSeasonNum"
     Exx="$InputEpisodeNum"
   elif [[ -n "$SeasonEpisode" ]]; then
-    Debug "Extracted season & episode information from Plot."
+    Debug 'Extracted season & episode information from Plot.'
     Sxx="$(echo "$SeasonEpisode" | grep -E -i --only-matching '(s\.?[0-9]?[0-9])|([0-9]?[0-9]x)' | sed 's/s\.\?\|x//I')"
     Exx="$(echo "$SeasonEpisode" | grep -E -i --only-matching '((e|ep)\.?[0-9][0-9]?)|(x[0-9][0-9]?)' | sed 's/\(E\.\?\|Ep\.\?\)\|x//I')"
     #Strip leading zero
@@ -1786,14 +1793,14 @@ remove_cast_from_plot(){
 #A Process function compatible with Sydney over the air data...
 process_mythtvdb_sydfta(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  Inform "Processing MythTV database info as SydFTA."
+  Inform 'Processing MythTV database info as SydFTA.'
   #Check for database permissions
   [[ -z "$ChanID" ]] && Err "IN: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}(). NO DATABASE INFORMATION. CHECK LOGIN/PASS OR FILE"
   #disqualify invalid movie airdates
   [[ -n "$MovieAirDate" ]] && (( MovieAirDate < 1900 )) && MovieAirDate=''
 
   #We don't use these, but if they're "none" we still want them changed to ""
-  [[ "${OriginalAirDate,,}" = "none" ]] && OriginalAirDate=""
+  [[ "${OriginalAirDate,,}" = 'none' ]] && OriginalAirDate=""
 
   #TODO:#NOTE: Stars field in SydFTA data tends to be empty, consider what to do here.
   #Get rating from Stars
@@ -2721,7 +2728,7 @@ check_path_permission(){
     if [[ ! -w "$PATH_TO_CHECK" ]]; then
       NOTIFY_MSG="Can't write: $PATH_TO_CHECK"
       Err "${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}(): $NOTIFY_MSG"
-      ErrCont "USER NAME:$MyUserName ATTEMPTED TO MODIFY A $PATH_OWNER OWNED FILE."
+      ErrCont "USER NAME:$CALLER ATTEMPTED TO MODIFY A $PATH_OWNER OWNED FILE."
       ErrCont "To preserve file permissions this has bee prevented."
       EXIT_JOB_TYPE='PermissionError'
       return 1
@@ -3391,7 +3398,7 @@ m2k_scan(){
       Debug "Type 'yes' to force the scan to continue, aborting."
       return 1
     fi
-    Warn "Continuation forced by $MyUserName, despite possible permission contamination."
+    Warn "Continuation forced by $CALLER, despite possible permission contamination."
   fi
   if [[ -z "$checkext" ]]; then
     NOTIFY_MSG='Cannot process blank file extensions'
@@ -3507,7 +3514,7 @@ msg_operation_summary(){
   Inform "################ OPERATION SUMMARY ################"
   InformCont "JOB: myth2kodi '$m2karg1' '$m2karg2' '$m2karg3' '$m2karg4'"
   InformCont "m2kVersion=$m2kVersion-"
-  InformCont "MyUserName=$MyUserName-"
+  InformCont "CALLER=$CALLER-"
   InformCont "InputPath=$InputPath-"
   InformCont "InputTitle=$InputTitle-"
   InformCont "InputSubtitle=$InputSubtitle-"
@@ -4345,7 +4352,7 @@ success_postprocessing(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
 
   #Move comskip data to proper folder
-  if [ "$CommercialMarkup" = "Created" ]; then
+  if [[ "$CommercialMarkup" = "Created" ]]; then
     mv "$m2kdir/markupframes.txt" "$MoveDir/$ShowFileName.txt"
     printf '%s\n' "'$MoveDir/$ShowFileName.txt' '$MoveDir/$ShowFileName.$OriginalExt'" >> "$m2kdir/created.tracking"
   fi
@@ -4371,7 +4378,7 @@ success_postprocessing(){
 #  settings at the start of this file. Probably with the default of
 #  Librarian="mythtv" for maximum compatibility with existing expectations of
 #  the code... Then simply refuse to run with a helpful error message if the
-#  variable $MyUserName doesn't equal $Librarain. The requirement would just be
+#  variable $CALLER doesn't equal $Librarain. The requirement would just be
 #  that the user $Librarian be the one running MythTV and that they have write
 #  privileges to the MoveDirs that Kodi can see. Then most/all of the need for
 #  running commands with sudo and the need for undo to be run as root can be
@@ -4920,7 +4927,7 @@ test  "$m2kProgramIDCheck" = "SH" && msg_show_warning
 
 #####MOVE MODE HANDLING#####
 #If symlink is not in LINK mode, Move and rename the file.
-if [ "$SYMLINK" != "LINK" ]; then
+if [[ "$SYMLINK" != "LINK" ]]; then
   #Send notifications, Move the file and rename
   Debug "MOVING FILE: '$InputPath' to '$MoveDir/$ShowFileName.$OriginalExt'"
   mv "$InputPath" "$MoveDir/$ShowFileName.$OriginalExt"

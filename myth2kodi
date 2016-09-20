@@ -492,18 +492,19 @@ initialise_new_logfile(){
 #TODO: logging, checks, etc...
 #When a file exceeds a specified size, give it an archive name and compress it.
 log_rotation(){
+  Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   local FILE_NAME ARCHIVE_NAME
   local -i FILE_SIZE_LIMIT
   FILE_NAME="$1"
   ARCHIVE_NAME="$2"
   FILE_SIZE_LIMIT="${3-1048576}" #Default to ~1MB
-  ARCHIVED_FILE=''
+  ARCHIVED_FILE='' #Global/return-state set to 'True' when we archive a file.
 
   #When the $FILE_NAME exceeds $FILE_SIZE_LIMIT, archive it.
   if [ -f "$FILE_NAME" ]; then
     local FILE_SIZE
     FILE_SIZE=$(wc --bytes < "$FILE_NAME")
-    if ((LogFileSize > FILE_SIZE_LIMIT)); then
+    if ((FILE_SIZE > FILE_SIZE_LIMIT)); then
       Inform "Moving and compressing $FILE_NAME"
       mv "$FILE_NAME" "$ARCHIVE_NAME"
       gzip "$ARCHIVE_NAME"
@@ -1477,14 +1478,14 @@ get_mythtvdb_info_pythonbindings(){
   [[ -f "$m2kdir/mythicalDbOut" ]] && rm -f "$m2kdir/mythicalDbOut"
   #TODO: If possible without blocking MythDataGrabber exit status, return $m2kdir/mythicalDbOut to being a named pipe.
   #run the python bindings and output to named pipe
-  "$binpath"/MythDataGrabber --verbosity="$(($LogLevel<3?$LogLevel:3))" \
-                             --filename="$InputFileBasename"            \
-                             --SecurityPin="$DBPin"                     \
-                             --DBHostName="$DBHostName"                 \
-                             --DBName="$MySQLMythDb"                    \
-                             --DBUserName="$MySQLuser"                  \
-                             --DBPassword="$MySQLpass"                  \
-                             --output="$m2kdir/mythicalDbOut"           \
+  "$binpath"/MythDataGrabber --verbosity="$((LogLevel<3?LogLevel:3))" \
+                             --filename="$InputFileBasename"          \
+                             --SecurityPin="$DBPin"                   \
+                             --DBHostName="$DBHostName"               \
+                             --DBName="$MySQLMythDb"                  \
+                             --DBUserName="$MySQLuser"                \
+                             --DBPassword="$MySQLpass"                \
+                             --output="$m2kdir/mythicalDbOut"         \
                              --writeFile 2>&1 | err_pipe "MythDataGrabber: "
 
   pythonExitStatus="${PIPESTATUS[0]}"
@@ -2701,7 +2702,7 @@ check_path_permission(){
   #Log some ownership related info
   if [[ "$PATH_OWNER" = "$Librarian" ]]; then
     Debug "Good start: $Librarian owns it."
-  elif id -nG "$Librarian" | grep -qw "PATH_GROUP"; then
+  elif id -nG "$Librarian" | grep -qw "$PATH_GROUP"; then
     Debug "May be ok: $Librarian is at least a member of the same group."
   else
     Warn "$Librarian neither owns nor is a member of the group for $PATH_TO_CHECK."
@@ -2720,7 +2721,7 @@ check_path_permission(){
     if [[ ! -w "$PATH_TO_CHECK" ]]; then
       NOTIFY_MSG="Can't write: $PATH_TO_CHECK"
       Err "${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}(): $NOTIFY_MSG"
-      ErrCont "USER NAME:$UserName ATTEMPTED TO MODIFY A $PATH_OWNER OWNED FILE."
+      ErrCont "USER NAME:$MyUserName ATTEMPTED TO MODIFY A $PATH_OWNER OWNED FILE."
       ErrCont "To preserve file permissions this has bee prevented."
       EXIT_JOB_TYPE='PermissionError'
       return 1
@@ -2900,7 +2901,7 @@ msg_recording_info(){
   printf '%s\n' "  Episode='$InputEpisodeNum'"
   printf '%s\n' "  Airdate='$MovieAirDate'"
   printf '%s\n' "  Originalairdate='$OriginalAirDate'"
-  printf '%s\n' "  Category='$Category'"
+  printf '%s\n' "  Category='$ShowCategory'"
   printf '%s\n' "  Storagegroup='$StorageGroup'"
   printf '%s\n' "  Stars='$Stars'"
   printf '%s\n' "  Description='$Plot'"
@@ -3759,12 +3760,12 @@ m2k_diagnostics(){
     #If checks above found python-lxml & libmyth-python, do a more thorough testing of MythTV python bindings
     if [[ -z "$checkf$checka$checkb" ]]; then
       #Use MythDataGrabber's internal diagnostics function
-      "$binpath"/MythDataGrabber --verbosity="$(($LogLevel<3?$LogLevel:3))" \
-                                 --Diagnostic                               \
-                                 --DBHostName="$DBHostName"                 \
-                                 --DBName="$MySQLMythDb"                    \
-                                 --DBUserName="$MySQLuser"                  \
-                                 --DBPassword="$MySQLpass"                  \
+      "$binpath"/MythDataGrabber --verbosity="$((LogLevel<3?LogLevel:3))" \
+                                 --Diagnostic                             \
+                                 --DBHostName="$DBHostName"               \
+                                 --DBName="$MySQLMythDb"                  \
+                                 --DBUserName="$MySQLuser"                \
+                                 --DBPassword="$MySQLpass"                \
                                  --SecurityPin="$DBPin" 2>&1 | err_pipe "MythDataGrabber: "
       if [[ $? = "0" ]]; then PythonBindingsCheck="OK"; else PythonBindingsCheck="FAILED"; fi
       if [ "$PythonBindingsCheck" = "OK" ]; then
@@ -4299,7 +4300,8 @@ recording_log(){
   local COMP='@@@@ COMPLETE:'
   local LOGFILEPATTERN="${LogFileName}_20[0-9][0-9]-[0-1][0-9]-[0-3][0-9]*.gz"
   local LOG_FILE
-  local RECNAME="$(basename "$1")"
+  local RECNAME
+  RECNAME="$(basename "$1")"
   #Start a log file list with the current log file
   printf '%s\n' "$LogFile" > "logfilelist.txt"
   #Add archived log files to the list, most recent first

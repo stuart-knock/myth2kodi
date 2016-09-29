@@ -267,6 +267,8 @@ UpdateDatabase=88920
 #How long to persist archived myth2kodi database files in months, DEFAULT=6.
 M2K_DB_LIFE=6
 #The path which contains myth2kodi and associated scripts default=/usr/local/bin
+#TODO: make this to just be used for essential sudo stuff, at the moment, I think, this is only Notify...
+#      then require caller add the location they choose to be in there path... recommend a default of /home/$Librarian/bin, see other related TODOs...
 binpath="/usr/local/bin"
 #myth2kodi working directory: Default=$HOME/.myth2kodi (ie, /home/username/.myth2kodi) #TODO: Consider: better to set???: /home/${Librarian}/.myth2kodi
 m2kdir="$HOME/.myth2kodi"
@@ -527,7 +529,7 @@ m2k_init(){
   [[ -f "$m2kdir/myth2kodi.conf" ]] && source "$m2kdir/myth2kodi.conf"
 
   #What am I...
-  m2kVersion="myth2kodi Version 0.9.8" ; declare -gr m2kVersion
+  m2kVersion="myth2kodi Version 0.9.9" ; declare -gr m2kVersion
   m2kPlatform="$(uname)" ; declare -gr m2kPlatform
 
   #Who called me...
@@ -2032,7 +2034,7 @@ check_m2k_database_up_to_date(){
     return 1
   fi
 
-  #Apply Database Update interval to last update time  LastUpdatedTVDB = NextUpdated
+  #Apply Database Update interval to last update time LastUpdatedTVDB = NextUpdated
   local -i NextUpdate=0
   NextUpdate=$((LastUpdatedTVDB + UpdateDatabase))
 
@@ -2046,8 +2048,8 @@ check_m2k_database_up_to_date(){
       Debug "TheTVDB doesn't appear to have any updates for $NewShowName."
       #TODO: SeriesID isn't being found in UpdatesList for Grey's Anatomy, Marvel's Agents of S.H.I.E.L.D., and possibly others, so the the local data isn't being updated
       #Inform "DATABASE DOESN'T APPEAR TO BE OUT OF DATE. BUT UNFORTUNATELY WE CURRENTLY HAVE A BUG HERE SO ARE FORCING UPDATE ANYWAY..."
-      return 0
       #return 1 #TODO: This is a current work around for some Series not being found in the UpdatesList from thetvdb, even though updated data is available...
+      return 0
     fi
   #Send report to the log if database was not updated.
   elif ((CurrentTimeTVDB <= NextUpdate)); then
@@ -2767,9 +2769,9 @@ msg_completed_move(){
   Inform "Move completed."
   InformCont "Moved: $InputPath"
   InformCont "To: $MoveDir/$ShowFileName.$OriginalExt"
-  [[ "$SYMLINK" = "Enabled" ]] && InformCont "Added symbolic link from: $InputPath"
-  [[ "$SYMLINK" = "Enabled"  ]] && InformCont "To: $MoveDir/$ShowFileName.$OriginalExt"
-  NOTIFY_MSG="myth2kodi Success" "$ShowFileName moved to $MoveDir"
+  [[ "$SYMLINK" != "Disabled" ]] && InformCont "Added symbolic link from: $InputPath"
+  [[ "$SYMLINK" != "Disabled"  ]] && InformCont "To: $MoveDir/$ShowFileName.$OriginalExt"
+  NOTIFY_MSG="myth2kodi Success $ShowFileName moved to $MoveDir"
   return 0
 }
 
@@ -3559,20 +3561,22 @@ msg_operation_summary(){
     InformCont "InputSeasonNum=$InputSeasonNum-"
     InformCont "InputEpisodeNum=$InputEpisodeNum-"
     InformCont "Plot=$Plot-"
-    [[ -n "$AbsoluteEpisodeNumber" ]] && InformCont "Matched Plot=$(sed -n "$AbsoluteEpisodeNumber"'p' "$m2kdir/$NewShowName/$NewShowName.Plot.txt")-"
+    if [[ -n "$AbsoluteEpisodeNumber" ]]; then
+      InformCont "Matched Plot=$(sed -n "$AbsoluteEpisodeNumber"'p' "$m2kdir/$NewShowName/$NewShowName.Plot.txt")-"
+    fi
   fi
   Inform "################ END OF OPERATION SUMMARY ################"
 }
 
 check_filesystem(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  #Get file size for the recording we are processing, default to ~1GB for diagnostics.
+  #Get file size for the recording we are processing.
   if [[ -f "$InputPath" ]]; then
     MoveFileSize=$(wc --bytes < "$InputPath")
   else
-    MoveFileSize=1000000000
+    MoveFileSize=1000000000 #default to ~1GB for diagnostics.
   fi
-  MoveFileSize=$((MoveFileSize/1048576)) #MB
+  MoveFileSize=$((MoveFileSize/1048576)) #Convert from Bytes to MB
 
   #Determine the free space available in all the directories we might use.
   WorkingDirFreeSpace=$(df -P "$m2kdir"             | sed -n 2p | awk '{print $4}') || WorkingDirFreeSpace=0
@@ -3619,18 +3623,18 @@ m2k_diagnostics(){
   #Move any existing diagnostics file to diagnostics_<Date&Time script was launched>.log
   [[ -f "$DiagnosticsFile" ]] && mv "$DiagnosticsFile" "$m2kdir/diagnostics_${FileNameNow}.log"
   #TODO: give these checka, checkb etc more meaningful names PKGNAME_LIBMYTH_PYTHON, etc
-  local checka="" #libmyth-python #PKGNAME_LIBMYTH_PYTHON
-  local checkb="" #python-lxml    #PKGNAME_PYTHON_LXML
-  local checkc="" #curl           #PKGNAME_CURL
-  local checkd="" #agrep          #PKGNAME_AGREP
-  local checke="" #libnotify-bin  #PKGNAME_LIBNOTIFY
-  local checkf="" #python         #PKGNAME_PYTHON
-  local checkj="" #jq             #PKGNAME_JQ
-  local curlpath=""               #PKGPATH_CURL
-  local agreppath=""              #PKGPATH_AGREP
-  local nspath=""                 #PKGPATH_LIBNOTIFY
-  local jqpath=""                 #PKGPATH_JQ
-  local pythonpath=""             #PKGPATH_PYTHON
+  local checka="" #libmyth-python #PKGNAME_LIBMYTH_PYTHON=''
+  local checkb="" #python-lxml    #PKGNAME_PYTHON_LXML=''
+  local checkc="" #curl           #PKGNAME_CURL=''
+  local checkd="" #agrep          #PKGNAME_AGREP=''
+  local checke="" #libnotify-bin  #PKGNAME_LIBNOTIFY=''
+  local checkf="" #python         #PKGNAME_PYTHON=''
+  local checkj="" #jq             #PKGNAME_JQ=''
+  local curlpath=""               #PKGPATH_CURL=''
+  local agreppath=""              #PKGPATH_AGREP=''
+  local nspath=""                 #PKGPATH_LIBNOTIFY=''
+  local jqpath=""                 #PKGPATH_JQ=''
+  local pythonpath=""             #PKGPATH_PYTHON=''
   local python_version="" #Python Version information
   local pyver=0 #An integer representing first 2 points of python version, ie 2.6.3 => 26
   local packagecheck=""
@@ -3983,7 +3987,7 @@ m2k_doover(){
     "$m2kdir/doover.sh" 2>&1 | err_pipe "doover: "
     dooverstatus="${PIPESTATUS[0]}"
     #TODO: The dooverstatus is most likely the myth2kodi exit status for the
-    #      recording processed by doover.sh...
+    #      last recording processed by doover.sh...
     if [[ "$dooverstatus" != 0 ]]; then
       Err "${FUNCNAME[0]}(): Doover failed or was aborted by user."
     else
@@ -4440,9 +4444,8 @@ InputSubtitle="$3"
 #TODO: Should allow manual input of season and episode numbers in addition to
 #  Title & Subtitle, with full information all searching should be overridden/bypassed...
 #  Issue warnings for any conflicts. but don't override command line arguments...
-#InputSxx="$3"
-#InputExx="$4"
-#InputSubtitle="$5"
+#InputSxx="$4"
+#InputExx="$5"
 #InputCategory="%6" #So we can specify that it's a Movie...
 
 #Some basic tests to make sure we were called correctly
@@ -4457,8 +4460,10 @@ fi
 Debug "No command flag set. Processing as recording."
 
 #Initial log entry for the processing of recording, regardless of LogLevel.
-printf '%s\n' "@@@@ PROCESSING RECORDING: $(date --rfc-3339=seconds) @@@@" >> "$LogFile"
-printf '%s\n' "$m2kVersion on $m2kPlatform" >> "$LogFile"
+{
+  printf '%s\n' "@@@@ PROCESSING RECORDING: $(date --rfc-3339=seconds) @@@@"
+  printf '%s\n' "$m2kVersion on $m2kPlatform"
+} >> "$LogFile"
 PROCESSING_RECORDING="True"
 Inform "Processing: $InputPath"
 
@@ -4607,7 +4612,7 @@ elif [ -z "$SeriesID" ] && [ "$m2kProgramIDCheck" != "SH" ] && [ "$m2kProgramIDC
   fi
 fi
 
-#TODO: I we haven't identified the Series, try NLP match $Plot against possible plots to guess a Series.
+#TODO: If we haven't identified the Series, try NLP match $Plot against possible plots to guess a Series.
 
 #####PROCESS EPISODE INFORMATION#####
 #If we have a SeriesID but don't already have Season and Episode information

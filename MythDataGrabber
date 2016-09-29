@@ -137,11 +137,6 @@ def closefile():
             f.close()
 ###########################################################################
 
-#TODO: Add an option for getting a list of storagegroup directories from MythTV-DB
-#      storage_groups = db.getStorageGroup()
-#      for sg in storage_groups:
-#          sg_dirname = sg['dirname'] #OR  sg.dirname.encode('utf-8')
-
 if __name__ == "__main__":
 
     import argparse
@@ -153,6 +148,11 @@ if __name__ == "__main__":
         action='store_true',
         default='False',
         help="Displays diagnostic information.")
+    #Storage group arg
+    group.add_argument('--storagegroups',
+        action='store_true',
+        default='False',
+        help="Write MythTV-DB storage group information to stdout.")
     #File arg
     group.add_argument('-f', '--filename',
         help="Name of the recording file you want information about.")
@@ -236,6 +236,22 @@ if __name__ == "__main__":
             #TODO: Consider expanding the diagnostics.
         except Exception:
             LOG.error("Diagnostics failed.")
+            raise Exception
+
+        sys.exit(0)
+    #######################################################################
+
+    #If requested, return storage group information.
+    if args.storagegroups == True:
+        try:
+            storage_groups = db.getStorageGroup()
+            f = sys.stdout
+            for sg in storage_groups:
+                sg_dirname = sg['dirname'] #OR  sg.dirname.encode('utf-8')
+                LOG.debug("Found StorageGroup: " + sg_dirname.strip())
+                f.write("%s " % sg_dirname.strip())
+        except Exception:
+            LOG.error("StorageGroup access failed.")
             raise Exception
 
         sys.exit(0)

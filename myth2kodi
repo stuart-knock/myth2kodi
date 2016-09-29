@@ -742,8 +742,10 @@ parse_command_flags(){
     --recording-info) #recording_filename
       Debug "Recognised command line switch '--recording-info'"
       #Example usage: myth2kodi --recording-info "1070_20160331073100.mpg"
-      InputPath="$m2karg2"
-      InputFileBasename="$(basename "$InputPath")"
+      Inform "Attempting to access recording info for: $m2karg2"
+      set_recording_name "$m2karg2"
+      [[ "$?" != 0 ]] && return "$?"
+      InputFileBasename="$RECORDING_NAME"
       InputTitle=''
       process_mythtvdb
       declare -i recordinginforeturnstatus="$?"
@@ -1392,7 +1394,7 @@ get_mythtvdb_info_mysql(){
 
   #Obtain MythTV Database Information
   Inform "Accessing MythTV DataBase Using mysql Commands:"
-  Inform "Attempting to pull database information on $InputPath"
+  Inform "Attempting to pull database information on $InputFileBasename"
   #NOTE: Previously the info retrieved from the MythTV-DB was also passed through additional sed commands
   #  where "/", the thing being selected (eg "title") and occasionally spaces were stripped. At least for
   #  mythtv 0.27.5 and "mysql  Ver 15.1 Distrib 10.0.22-MariaDB, for Linux (x86_64) using readline 5.2",
@@ -1460,7 +1462,7 @@ get_mythtvdb_info_pythonbindings(){
   DebugCont "InputSeasonNum: $InputSeasonNum"
   DebugCont "InputEpisodeNum: $InputEpisodeNum"
   Inform "Accessing MythTV DataBase Using PythonBindings:"
-  Inform "Attempting to pull database information on $InputPath"
+  Inform "Attempting to pull database information on $InputFileBasename"
 
   local pythonExitStatus
 
@@ -1702,7 +1704,7 @@ get_sxxexx_from_plot(){
     Sxx="${Sxx#0}"
     Exx="${Exx#0}"
   else
-    Inform "${FUNCNAME[0]}() No Season & Episode number information is available."
+    Debug "${FUNCNAME[0]}() No Season & Episode number information is available."
     return 1
   fi
   #Single digit episode and show names are not allowed Ex and Sx replaced with Sxx Exx
@@ -1753,7 +1755,7 @@ get_subtitle_from_plot(){
   #if [[ -n "$InputSubtitle" ]]; then
   #Clean off the trailing " -" or ":" that we're using to identify it
   InputSubtitle="$(grep -E --only-matching '(((\w+)(.?\s*))|(\&\s*)){,7}(\w+)' <<< "$InputSubtitle")"
-  Inform "Attempt to extract Subtitle from Plot field gave '$InputSubtitle'"
+  Debug "Attempt to extract Subtitle from Plot field gave '$InputSubtitle'"
   #TODO: consider calling remove_subtitle_from_plot() from here, instead of return 1 below.
   return 0
   #else
@@ -2903,7 +2905,7 @@ msg_generic_unspecified_error(){
 #--recording-info
 msg_recording_info(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  printf '\n%s\n\n' "MythTV-DB information for: $InputPath"
+  printf '\n%s\n\n' "MythTV-DB information for: $InputFileBasename"
   printf '%s\n' "  Title='$InputTitle'"
   printf '%s\n' "  Subtitle='$InputSubtitle'"
   printf '%s\n' "  Season='$InputSeasonNum'"
@@ -4270,6 +4272,44 @@ get_series_info(){
     return "$?"
   else
     Err "We had serieslinenumber: $serieslinenumber but couldn't get a SeriesID."
+    return 1
+  fi
+}
+
+#Sets the RECORDING_NAME variable. If the arg is a MythTV recording file then
+#it just sets as basename, if given a myth2kodi moved name then, if possible,
+#we find the correspionding MytTV recording name.
+set_recording_name(){
+  Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
+  DebugCont "arg1: $1"
+  #Takes a single argument
+  (( "$#" > 1 )) && { Err "${FUNCNAME[0]}() only takes one arg."; return 1 ; }
+  #A regex that should match MytTVs file naming, for the 21st century.
+  local RECPATTERN='[0-9]{4}_20[0-9]{2}[0-1][0-9][0-3][0-9][0-2][0-9][0-5][0-9]{3}'
+  local -i found=1 #Use exit code convention of 0=success 1=failure.
+  if [[ "$1" =~ $RECPATTERN ]]; then #NOTE: Don't quote the RHS.
+    #Is a MythTV recording.
+    found=0
+    RECORDING_NAME="$1"
+  else
+    #In this case we need a full or relative path
+    [[ -f "$1" ]] || { Err "${FUNCNAME[0]}(): arg1 isn't a file."; return 1; }
+    #Check if it's a moved file name that's still tracked by MythTV
+    local -a sg_dirs
+    #Get the sorage group directories defined in MythTV-DB
+    sg_dirs=($(MythDataGrabber --storagegroups))
+    for sg_dir in "${sg_dirs[@]}" ; do
+      RECORDING_NAME="$(find -L "$sg_dir" -samefile "$1")"
+      [[ "$RECORDING_NAME" =~ $RECPATTERN ]] && { found=0 ; break ; }
+    done
+    (( found == 0 )) && Inform "Mapping myth2kodi file name to $RECORDING_NAME"
+  fi
+  if (( found == 0 )); then
+    RECORDING_NAME="$(basename "$RECORDING_NAME")"
+    Debug "Setting RECORDING_NAME=$RECORDING_NAME"
+    return 0
+  else
+    Err "${FUNCNAME[0]}(): Failed to find MythTV-DB recording name for: $1"
     return 1
   fi
 }

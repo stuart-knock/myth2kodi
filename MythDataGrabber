@@ -70,61 +70,61 @@ except ImportError:
 ###########################################################################
 
 
-def readMysqlTxt():
+def read_mysql_text():
     """Read database settings from ~/.mythtv/mysql.txt
-    Function: readMysqlTxt
+    Function: read_mysql_text
     Arguments: None
     Returns: extracted login information
     """
-    LOG.debug("Calling readMysqlTxt()")
+    LOG.debug("Calling read_mysql_text()")
 
-    mysqlTXT = os.path.expanduser('~') + "/.mythtv/mysql.txt"
+    mysql_text = os.path.expanduser('~') + "/.mythtv/mysql.txt"
 
     dbdata = {}
-    for line in open(mysqlTXT, 'r'):
+    for line in open(mysql_text, 'r'):
         if line.startswith('#'):
             continue
         if '=' in line:
-            o, v = line.strip().split('=')
-            dbdata[o.strip()] = v.strip()
+            setting_name, setting_value = line.strip().split('=')
+            dbdata[setting_name.strip()] = setting_value.strip()
     return dbdata
 ###########################################################################
 
 
-def writeData():
+def write_data():
     """
-    Function: writeData
+    Function: write_data
     Arguments: None
-    Returns: extracted login information
+    Returns: database information for the recording.
     """
-    LOG.debug("Calling writeData()")
-    # loop through Recorded items
-    for x in rec.items():
-        #filter out unicode strings:
-        if type(x[1]) == str:
-            f.write('%s = "%s"\n' % (x[0], x[1].encode('utf-8')))
+    LOG.debug("Calling write_data()")
+    # loop through recording information
+    for field, value in REC.items():
+        #write recording information as unicode strings:
+        if isinstance(value, str):
+            OUTPUT.write('%s = "%s"\n' % (field, value.encode('utf-8')))
         else:
-            f.write('%s = "%s"\n' % x)
+            OUTPUT.write('%s = "%s"\n' % (field, value))
 
     # loop through comm-start points
-    for i, data in enumerate(markupstart):
-        f.write('startdata[%s] = "%s"\n' % (i, data))
+    for i, data in enumerate(MARKUPSTART):
+        OUTPUT.write('startdata[%s] = "%s"\n' % (i, data))
 
     # loop through comm-end points
-    for i, data in enumerate(markupstop):
-        f.write('stopdata[%s] = "%s"\n' % (i, data))
+    for i, data in enumerate(MARKUPSTOP):
+        OUTPUT.write('stopdata[%s] = "%s"\n' % (i, data))
 
     # grab guide data provider
-    with db as cursor:
+    with DB as cursor:
         # set cursor on xmltvgrabber
         cursor.execute("SELECT xmltvgrabber FROM videosource")
         # pull the data
         res = cursor.fetchone()
         # write the data if any
         if res is not None:
-            f.write('xmltvgrabber = "%s"\n' % res[0].strip())
+            OUTPUT.write('xmltvgrabber = "%s"\n' % res[0].strip())
     # verify valid data was written
-    if rec.chanid != '':
+    if REC.chanid != '': #TODO: this is strange to do at the end, and also doesn't test writting but rather that a valid recording was found in the first place.
         LOG.info("Operation complete.")
 ###########################################################################
 
@@ -132,96 +132,98 @@ def writeData():
 def closefile():
     """If we have an open file, close it."""
     LOG.debug("Closing out the file/stdout")
-    if f is not None:
-        if f.fileno() != 1:
-            f.close()
+    if OUTPUT is not None:
+        if OUTPUT.fileno() != 1:
+            OUTPUT.close()
 ###########################################################################
 
 if __name__ == "__main__":
 
     import argparse
-    parser = argparse.ArgumentParser(
+    PARSER = argparse.ArgumentParser(
         description="Pull data from MythTV-DB via python bindings.")
-    group = parser.add_mutually_exclusive_group(required=True)
+    GROUP = PARSER.add_mutually_exclusive_group(required=True)
     #Diagnostic arg
-    group.add_argument('--Diagnostic',
-        action='store_true',
-        default='False',
-        help="Displays diagnostic information.")
+    GROUP.add_argument('--Diagnostic',
+                       action='store_true',
+                       default='False',
+                       help="Displays diagnostic information.")
     #Storage group arg
-    group.add_argument('--storagegroups',
-        action='store_true',
-        default='False',
-        help="Write MythTV-DB storage group information to stdout.")
+    GROUP.add_argument('--storagegroups',
+                       action='store_true',
+                       default='False',
+                       help="Write MythTV-DB storage-group information to stdout.")
     #File arg
-    group.add_argument('-f', '--filename',
-        help="Name of the recording file you want information about.")
+    GROUP.add_argument('-f', '--filename',
+                       help="Name of the recording file you want information about.")
     #writeFile arg
-    parser.add_argument('--writeFile',
-        action='store_true',
-        default='False',
-        help="Use this flag to write data to the file specified by --output.")
+    PARSER.add_argument('--writeFile',
+                        action='store_true',
+                        default='False',
+                        help="""Use this flag to write data to the file
+                                specified by --output.""")
     #Output file arg
-    parser.add_argument('-o', '--output',
-        type=argparse.FileType('w'),
-        default=os.path.expanduser('~') + "/showdata.txt",
-        help="Use this argument to override default output file. NB. You must also set --writeFile.")
+    PARSER.add_argument('-o', '--output',
+                        type=argparse.FileType('w'),
+                        default=os.path.expanduser('~') + "/showdata.txt",
+                        help="""Use this argument to override default output file.
+                                NB. You must also set --writeFile.""")
     #DBHostName arg
-    parser.add_argument('--DBHostName',
-        default="localhost",
-        help="Sets the DB Host")
+    PARSER.add_argument('--DBHostName',
+                        default="localhost",
+                        help="Sets the DB Host")
     #DBName arg
-    parser.add_argument('--DBName',
-        default="mythconverg",
-        help="Sets the MythTV-DB Name, default: mythconverg")
+    PARSER.add_argument('--DBName',
+                        default="mythconverg",
+                        help="Sets the MythTV-DB Name, default: mythconverg")
     #DBUserName arg
-    parser.add_argument('--DBUserName',
-        default="mythtv",
-        help="Sets the MythTV-DB User Name")
+    PARSER.add_argument('--DBUserName',
+                        default="mythtv",
+                        help="Sets the MythTV-DB User Name")
     #DBPassword arg
-    parser.add_argument('--DBPassword',
-        default="mythtv",
-        help="Sets the MythTV-DB Password")
+    PARSER.add_argument('--DBPassword',
+                        default="mythtv",
+                        help="Sets the MythTV-DB Password")
     #SecurityPin arg
-    parser.add_argument('--SecurityPin',
-        type=int,
-        default=0,
-        help="Sets the MythTV-DB SecurityPin")
+    PARSER.add_argument('--SecurityPin',
+                        type=int,
+                        default=0,
+                        help="Sets the MythTV-DB SecurityPin")
     #version arg
-    parser.add_argument('--version',
-        action='version',
-        version=__version__,
-        help="Displays version information")
+    PARSER.add_argument('--version',
+                        action='version',
+                        version=__version__,
+                        help="Displays version information")
     #Logging arg
-    parser.add_argument("--verbosity",
-        type=int,
-        choices=[0, 1, 2, 3],
-        default=2,
-        help="Set the logging verbosity: 0=ERROR; 1=WARNING; 2=INFO; 3=DEBUG.")
-    args = parser.parse_args()
+    PARSER.add_argument("--verbosity",
+                        type=int,
+                        choices=[0, 1, 2, 3],
+                        default=2,
+                        help="""Set the logging verbosity: 0=ERROR; 1=WARNING;
+                                2=INFO; 3=DEBUG.""")
+    ARGS = PARSER.parse_args()
     #######################################################################
-    #mythdb_arg_dict = dict((k,v) for k,v in vars(args).items() if k not in ("Diagnostic","filename","writeFile","output","version","verbosity"))
     #import pdb; pdb.set_trace()
 
     #Set the logging level
-    loglevelmapping = ["ERROR", "WARNING", "INFO", "DEBUG"]
-    LOG.setLevel(loglevelmapping[args.verbosity])
+    LOGLEVELMAPPING = ["ERROR", "WARNING", "INFO", "DEBUG"]
+    LOG.setLevel(LOGLEVELMAPPING[ARGS.verbosity])
 
     #Get a connection to the database
     LOG.info("Establishing database connection")
     try:
-        # Defaults or args
-        db = MythDB(**vars(args)) #mythdb_arg_dict, if MythDB doesn't gracefully handle superfluous kwargs
+        # Defaults or ARGS
+        DB = MythDB(**vars(ARGS))
     except Exception:
         try:
             # mythtv preconfigured options
             LOG.error('Failed: attempting to use system default configuration')
-            db = MythDB(SecurityPin=args.SecurityPin)
+            DB = MythDB(SecurityPin=ARGS.SecurityPin)
         except Exception:
             try:
                 # read from the mysql.txt
                 LOG.error('Failed: attempting to read from default mythtv file')
-                db = MythDB(readMysqlTxt(), SecurityPin=args.SecurityPin)
+                DB = MythDB(read_mysql_text(), SecurityPin=ARGS.SecurityPin)
             except Exception:
                 LOG.error('Failed: Please specify database information manually')
                 LOG.error('See --help for more information.')
@@ -229,11 +231,11 @@ if __name__ == "__main__":
     #######################################################################
 
     #If requested, run some diagnostics.
-    if args.Diagnostic == True:
+    if ARGS.Diagnostic is True:
         try:
-            LOG.info("Connected to: " + db.gethostname())
+            LOG.info("Connected to: " + DB.gethostname())
             LOG.info("Diagnostics passed...")
-            #TODO: Consider expanding the diagnostics.
+            #TODO: Consider expanding the diagnostics. Eg a simple StorageGroup access.
         except Exception:
             LOG.error("Diagnostics failed.")
             raise Exception
@@ -242,14 +244,14 @@ if __name__ == "__main__":
     #######################################################################
 
     #If requested, return storage group information.
-    if args.storagegroups == True:
+    if ARGS.storagegroups is True:
         try:
-            storage_groups = db.getStorageGroup()
-            f = sys.stdout
-            for sg in storage_groups:
+            STORAGE_GROUPS = DB.getStorageGroup()
+            OUTPUT = sys.stdout
+            for sg in STORAGE_GROUPS:
                 sg_dirname = sg['dirname'] #OR  sg.dirname.encode('utf-8')
                 LOG.debug("Found StorageGroup: " + sg_dirname.strip())
-                f.write("%s " % sg_dirname.strip())
+                OUTPUT.write("%s " % sg_dirname.strip())
         except Exception:
             LOG.error("StorageGroup access failed.")
             raise Exception
@@ -259,33 +261,33 @@ if __name__ == "__main__":
 
     #Gather information from the database for the recording
     try:
-        rec = db.searchRecorded(basename=args.filename).next()
+        REC = DB.searchRecorded(basename=ARGS.filename).next()
     except StopIteration:
-        LOG.error("Failed to find DB record for: " + args.filename)
+        LOG.error("Failed to find DB record for: " + ARGS.filename)
         raise Exception('Recording Not Found')
 
     #Set comskip data
     try:
-        markupstart, markupstop = zip(*rec.markup.getskiplist())
+        MARKUPSTART, MARKUPSTOP = zip(*REC.markup.getskiplist())
     except Exception:
         LOG.warning("No comskip information found.")
-        markupstart, markupstop = '', ''
+        MARKUPSTART, MARKUPSTOP = '', ''
     #######################################################################
 
     # Return the data, either to a file or to stdout
-    f = None
-    if args.writeFile == True:
-        LOG.debug("Attempting to write data to file: " + args.output.name)
+    OUTPUT = None
+    if ARGS.writeFile is True:
+        LOG.debug("Attempting to write data to file: " + ARGS.output.name)
         try:
             # Write data to file defined by "output" keyword arg.
-            f = args.output
-            writeData()
+            OUTPUT = ARGS.output
+            write_data()
         except IOError: #the file failed to write
-            LOG.error("Write Failed: " + args.output.name)
+            LOG.error("Write Failed: " + ARGS.output.name)
             raise IOError
     else:
         LOG.debug("Writing data to standard out (terminal).")
-        f = sys.stdout
-        writeData()
+        OUTPUT = sys.stdout
+        write_data()
 
     closefile()

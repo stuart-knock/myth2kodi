@@ -66,7 +66,7 @@ try:
     from MythTV import MythDB
 except ImportError:
     LOG.error("Failed to import MythTV.MythDB...")
-    raise ImportError
+    raise
 ###########################################################################
 
 
@@ -227,18 +227,20 @@ if __name__ == "__main__":
             except Exception:
                 LOG.error('Failed: Please specify database information manually')
                 LOG.error('See --help for more information.')
-                raise Exception
+                raise
     #######################################################################
 
     #If requested, run some diagnostics.
     if ARGS.Diagnostic is True:
         try:
             LOG.info("Connected to: " + DB.gethostname())
+            LOG.info("Identified StorageGroups:")
+            for sg in DB.getStorageGroup():
+                LOG.info("  %s: %s" % (sg.groupname, sg.dirname))
             LOG.info("Diagnostics passed...")
-            #TODO: Consider expanding the diagnostics. Eg a simple StorageGroup access.
         except Exception:
             LOG.error("Diagnostics failed.")
-            raise Exception
+            raise
 
         sys.exit(0)
     #######################################################################
@@ -249,12 +251,12 @@ if __name__ == "__main__":
             STORAGE_GROUPS = DB.getStorageGroup()
             OUTPUT = sys.stdout
             for sg in STORAGE_GROUPS:
-                sg_dirname = sg['dirname'] #OR  sg.dirname.encode('utf-8')
+                sg_dirname = sg.dirname.encode('utf-8')
                 LOG.debug("Found StorageGroup: " + sg_dirname.strip())
                 OUTPUT.write("%s " % sg_dirname.strip())
         except Exception:
             LOG.error("StorageGroup access failed.")
-            raise Exception
+            raise
 
         sys.exit(0)
     #######################################################################
@@ -264,7 +266,7 @@ if __name__ == "__main__":
         REC = DB.searchRecorded(basename=ARGS.filename).next()
     except StopIteration:
         LOG.error("Failed to find DB record for: " + ARGS.filename)
-        raise Exception('Recording Not Found')
+        raise
 
     #Set comskip data
     try:
@@ -284,7 +286,7 @@ if __name__ == "__main__":
             write_data()
         except IOError: #the file failed to write
             LOG.error("Write Failed: " + ARGS.output.name)
-            raise IOError
+            raise
     else:
         LOG.debug("Writing data to standard out (terminal).")
         OUTPUT = sys.stdout

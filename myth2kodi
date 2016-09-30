@@ -3780,7 +3780,11 @@ m2k_diagnostics(){
                                  --DBUserName="$MySQLuser"                \
                                  --DBPassword="$MySQLpass"                \
                                  --SecurityPin="$DBPin" 2>&1 | err_pipe "MythDataGrabber: "
-      if [[ $? = "0" ]]; then PythonBindingsCheck="OK"; else PythonBindingsCheck="FAILED"; fi
+      if [[ "${PIPESTATUS[0]}" = "0" ]]; then
+        PythonBindingsCheck="OK"
+      else
+        PythonBindingsCheck="FAILED"
+      fi
       if [ "$PythonBindingsCheck" = "OK" ]; then
         Inform "MythTV Python Bindings are installed properly."
         DBTest="***PASSED***"

@@ -707,11 +707,33 @@ parse_command_flags(){
     ;;
     --delete)
       Debug "Recognised command line switch '--delete'"
+      Warn "Attempting to delete recording: $m2karg2"
+      WarnCont "This will PERMANENTLY delete the recording, associated files"
+      WarnCont "and the associated MythTV-Database entry."
+      WarnCont "Are you sure you want to continue?"
+      local yesorno=""
+      read -r -n1 -p "  Requested permanent deletion: 'y' to continue or 'n' to exit... y/(n):>" yesorno
+      printf '\n'
+      [[ "$yesorno" != 'y' ]] && { "You must press 'y' to continue, aborting."; return 1 ; }
+      set_recording_name "$m2karg2"
+      [[ "$?" != 0 ]] && return "$?"
+      InputFileBasename="$RECORDING_NAME"
       delete_recording
       return $?
     ;;
     --disconnect)
       Debug "Recognised command line switch '--disconnect'"
+      Warn "Attempting to disconnect recording: $m2karg2"
+      WarnCont "This will PERMANENTLY disconnect the recording from MythTV,"
+      WarnCont "deleting the associated MythTV-Database entry."
+      WarnCont "Are you sure you want to continue?"
+      local yesorno=""
+      read -r -n1 -p "  Requested permanent disconnection: 'y' to continue or 'n' to exit... y/(n):>" yesorno
+      printf '\n'
+      [[ "$yesorno" != 'y' ]] && { "You must press 'y' to continue, aborting."; return 1 ; }
+      set_recording_name "$m2karg2"
+      [[ "$?" != 0 ]] && return "$?"
+      InputFileBasename="$RECORDING_NAME"
       disconnect_recording
       return $?
     ;;
@@ -1981,9 +2003,12 @@ delete_mythtv_database_entry(){
   #Make sure we got input arguments and file is valid
   if [ ! -e "$InputPath" ]; then
     #Remove recording entry from mysql database
-    Inform "${FUNCNAME[0]}() REMOVING - $InputFileBasename - THUMBNAILS - DATABASE ENTRIES"
-    mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; delete from recorded where basename like '$InputFileBasename'; "
-    #TODO: Capture return state of mysql command so we can log success/failure, also make the rm of thumbnails, etc, below conditional.
+    Inform "${FUNCNAME[0]}() REMOVING: $InputFileBasename; THUMBNAILS; DATABASE ENTRIES."
+    mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; DELETE FROM recorded WHERE basename LIKE '$InputFileBasename'; "
+    if [[ "$?" = 0 ]]; then
+      Err "FUNCNAME[0]}(): Failed to delete DB entry for: $InputFileBasename"
+      return 1
+    fi
     #Remove thumbnails
     rm -f "$originaldirname/$InputFileBasename".*
   else
@@ -4290,7 +4315,7 @@ set_recording_name(){
   (( "$#" > 1 )) && { Err "${FUNCNAME[0]}() only takes one arg."; return 1 ; }
   #A regex that should match MytTVs file naming, for the 21st century.
   local RECPATTERN='[0-9]{4}_20[0-9]{2}[0-1][0-9][0-3][0-9][0-2][0-9][0-5][0-9]{3}'
-  local -i found=1 #Use exit code convention of 0=success 1=failure.
+  local -i found=1 #Use exit code convention of: 0=success; 1=failure.
   if [[ "$1" =~ $RECPATTERN ]]; then #NOTE: Don't quote the RHS.
     #Is a MythTV recording.
     found=0
@@ -4323,11 +4348,11 @@ delete_recording(){
   #TODO: Add a --delete <filename> option
   #    + It should delete the file
   #    + any links to it
-  #    + associated support files
+  #    + associated support files (commskip, nfo...)
   #    + any undo, doover or created.tracking entries
   #    + and the associated database entry and thumbnails. (Probably should delete DB entry first)
   #        see, delete_mythtv_database_entry()
-  Err "NotImplemented"
+  Err "${FUNCNAME[0]}(): NotImplemented"
   return 1
 }
 
@@ -4338,7 +4363,7 @@ disconnect_recording(){
   #    + removes links from mythtv filename to moved filename, or if only 'moved' in LINK mode then actually move
   #    + remove database entry and associated thumbnails
   #        see, delete_mythtv_database_entry()
-  Err "NotImplemented"
+  Err "${FUNCNAME[0]}(): NotImplemented"
   return 1
 }
 

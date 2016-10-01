@@ -707,34 +707,12 @@ parse_command_flags(){
     ;;
     --delete)
       Debug "Recognised command line switch '--delete'"
-      Warn "Attempting to delete recording: $m2karg2"
-      WarnCont "This will PERMANENTLY delete the recording, associated files"
-      WarnCont "and the associated MythTV-Database entry."
-      WarnCont "Are you sure you want to continue?"
-      local yesorno=""
-      read -r -n1 -p "  Requested permanent deletion: 'y' to continue or 'n' to exit... y/(n):>" yesorno
-      printf '\n'
-      [[ "$yesorno" != 'y' ]] && { "You must press 'y' to continue, aborting."; return 1 ; }
-      set_recording_name "$m2karg2"
-      [[ "$?" != 0 ]] && return "$?"
-      InputFileBasename="$RECORDING_NAME"
-      delete_recording
+      delete_recording "$m2karg2"
       return $?
     ;;
     --disconnect)
       Debug "Recognised command line switch '--disconnect'"
-      Warn "Attempting to disconnect recording: $m2karg2"
-      WarnCont "This will PERMANENTLY disconnect the recording from MythTV,"
-      WarnCont "deleting the associated MythTV-Database entry."
-      WarnCont "Are you sure you want to continue?"
-      local yesorno=""
-      read -r -n1 -p "  Requested permanent disconnection: 'y' to continue or 'n' to exit... y/(n):>" yesorno
-      printf '\n'
-      [[ "$yesorno" != 'y' ]] && { "You must press 'y' to continue, aborting."; return 1 ; }
-      set_recording_name "$m2karg2"
-      [[ "$?" != 0 ]] && return "$?"
-      InputFileBasename="$RECORDING_NAME"
-      disconnect_recording
+      disconnect_recording "$m2karg2"
       return $?
     ;;
     --log)
@@ -1068,7 +1046,7 @@ recreate_comskip(){
 
       if (( LogLevel < 3 )); then
         #If we're not in debug mode then remove the comskip scan file we just processed.
-        Debug "Removing the temporary scan file: $m2kdir/comskip_scan.temp"
+        Inform "Removing the temporary scan file: $m2kdir/comskip_scan.temp"
         rm -f "$m2kdir/comskip_scan.temp"
       fi
       return 0
@@ -1491,8 +1469,8 @@ get_mythtvdb_info_pythonbindings(){
   #make a named pipe for database output
   #test ! -p "$m2kdir/mythicalDbOut" && mkfifo "$m2kdir/mythicalDbOut"
 
-  #NOTE: the declare also makes them local, so we'd need to mark them for export
-  #      with -x to access them outside of the function, but not sure we want to push them to the environment just for this...
+  #NOTE: the declare also makes them local, so we'd need to mark them global
+  #      with -g to access them outside of the function.
   # declare -a mdb_startdata
   # declare -a mdb_stopdata
   # declare mdb_title
@@ -1849,7 +1827,7 @@ process_mythtvdb_sydfta(){
   if (( $(wc --chars <<< "$InputSubtitle") > 88 )) ; then #Probably not a subtitle.
     local PossiblePlot
     PossiblePlot="$InputSubtitle"
-    Warn "${FUNCNAME[0]}() InputSubtitle field from MytTV DB appears to contain Plot information."
+    Warn "${FUNCNAME[0]}() InputSubtitle field from MythTV DB appears to contain Plot information."
     Debug "Plot: $Plot"
     Debug "PossiblePlot: $PossiblePlot"
     Warn "Resetting  InputSubtitle to ''"
@@ -1995,7 +1973,6 @@ process_mythtvdb_nolookup(){
 delete_mythtv_database_entry(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   Debug "InputPath: $InputPath"
-  Debug "originaldirname: $originaldirname"
   Debug "InputFileBasename: $InputFileBasename"
   Debug "MySQLuser: $MySQLuser"
   Debug "MySQLpass: $MySQLpass"
@@ -2010,7 +1987,7 @@ delete_mythtv_database_entry(){
       return 1
     fi
     #Remove thumbnails
-    rm -f "$originaldirname/$InputFileBasename".*
+    rm -f "$InputPath".*
   else
     Warn "File still exists: $InputPath"
     WarnCont "Not removing MythTV-DB information."
@@ -3843,6 +3820,7 @@ m2k_diagnostics(){
            "params": {"title": "myth2kodi Test", "message": "'"$KODINotifyTestMessage"'"},
            "id": "myth2kodi"}'\'
 
+  #TODO: This isn't giving messages correctly for multiple IP addresses...
   Inform "Performing KODI Notifications test"
   for KODIIP in "${KODIIPs[@]}" ; do
     Inform "SENDING REQUESTED COMMANDS TO: $KODIIP"
@@ -3951,12 +3929,22 @@ m2k_diagnostics(){
     printf '\n' | tee -a "$DiagnosticsFile"
   fi
   if [ "$KODIcomm" = "***FAILED***" ]; then
-    Err "Kodi communication tests failed"
-    ErrCont "KODI Communications have failed.  Likely causes: Improper IP address,"
-    ErrCont "or KODI is not equipped to handle external network commands in settings."
-    ErrCont "If you've set a user and password for http access to kodi, make sure that"
-    ErrCont "it's prepended to the ip addresses user:password@192..."
-    ErrCont "myth2kodi can not send messages or library update requests."
+    Err "Kodi communication tests failed."
+    ErrCont "This will not prevent myth2kodi from functioning, it just means"
+    ErrCont "that myth2kodi can not send messages or library update requests"
+    ErrCont "to Kodi. There are a few possible causes for this problem:"
+    ErrCont "    1. One or more of the Kodi instances you specified in KODIIPs"
+    ErrCont "       is not currently running. Start Kodi."
+    ErrCont "    2. One or more of the Kodi instances is not configured to accept"
+    ErrCont "       external network commands. See,"
+    ErrCont "         Kodi->System->Settings->Services->Remote Control."
+    ErrCont "         Kodi->System->Settings->Services->Web Server."
+    ErrCont "    3. The settings you provided in KODIIPs are incorrect. Check"
+    ErrCont "       that the IP addresses are correct. If you've set a user and"
+    ErrCont "       password for http access in Kodi, make sure that you've also"
+    ErrCont "       prepended them to the ip addresses in KODIIPs"
+    ErrCont "         user:password@192..."
+    ErrCont ""
     printf '\n' | tee -a "$DiagnosticsFile"
   fi
   if [ "$folderchecks" = "***FAILED***" ]; then
@@ -4305,15 +4293,84 @@ get_series_info(){
   fi
 }
 
+#Given a recording file or link find the associated link or file.
+#Full paths are returned via RECORDING_FILE and RECORDING_LINK variables.
+#It's possible to get RECORDING_LINK='' if recording is disconnected from MythTV.
+find_file_link_pairs(){
+  Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
+  DebugCont "arg1: $1"
+  #Takes a single argument
+  (( "$#" > 1 )) && { Err "${FUNCNAME[0]}() only takes one arg."; return 1 ; }
+  local FILE="$1"
+  [[ -e "$FILE" ]] || { Err "Doesn't exist: $FILE"; return 1; }
+  #A regex that should match MythTVs file naming, for the 21st century.
+  local RECPATTERN='[0-9]{4}_20[0-9]{2}[0-1][0-9][0-3][0-9][0-2][0-9][0-5][0-9]{3}'
+  #Is FILE a link or a file
+  if [[ -L "$FILE" ]]; then
+    #FILE is a link, grab its target.
+    RECORDING_LINK="$(realpath  --no-symlinks "$FILE")"
+    RECORDING_FILE="$(readlink "$FILE")"
+    [[ -f "$RECORDING_FILE" ]] || { Err "Broken link: $RECORDING_FILE"; return 1; }
+    [[ -L "$RECORDING_FILE" ]] && { Err "Multiple links, not following: $RECORDING_FILE"; return 1; }
+    if [[ "$RECORDING_FILE" =~ $RECPATTERN ]]; then #NOTE: Don't quote the RHS.
+      RECORDING_FILE_OWNER='MythTV'
+      RECORDING_LINK_OWNER='myth2kodi'
+    elif [[ "$RECORDING_LINK" =~ $RECPATTERN ]]; then #NOTE: Don't quote the RHS.
+      RECORDING_FILE_OWNER='myth2kodi'
+      RECORDING_LINK_OWNER='MythTV'
+    fi
+    return 0
+  elif [[ -f "$FILE" ]]; then
+    #FILE is a file,
+    RECORDING_FILE="$(realpath "$FILE")"
+    local -i found=1 #Use exit code convention of 0=success 1=failure.
+    local -a check_dirs
+    local LINK_NAME
+    if [[ "$RECORDING_FILE" =~ $RECPATTERN ]]; then #NOTE: Don't quote the RHS.
+      #FILE is a MythTV file name, check if there is a link to FILE from a myth2kodi target directory
+      RECORDING_FILE_OWNER='MythTV'
+      RECORDING_LINK_OWNER='myth2kodi'
+      check_dirs=("$MoveDir" "$PrimaryMovieDir" "$PrimaryShowDir" "$AlternateMoveDir" "$AlternateMovieDir" "$AlternateShowDir")
+    else
+      #FILE is a moved file name, check if there is a link to FILE from a StorageGroup Directory
+      RECORDING_FILE_OWNER='myth2kodi'
+      RECORDING_LINK_OWNER='MythTV'
+      check_dirs=($("$binpath"/MythDataGrabber --storagegroups            \
+                                               --SecurityPin="$DBPin"     \
+                                               --DBHostName="$DBHostName" \
+                                               --DBName="$MySQLMythDb"    \
+                                               --DBUserName="$MySQLuser"  \
+                                               --DBPassword="$MySQLpass"))
+    fi
+    for check_dir in check_dirs ; do
+      LINK_NAME="$(find -L "$check_dir" -samefile "$RECORDING_FILE")"
+      [[ -L "$LINK_NAME" ]] && { found=0 ; break ; }
+    done
+    (( found == 0 )) && { RECORDING_LINK="$(realpath  --no-symlinks "$LINK_NAME")"; return 0; }
+    if [[ ! "$RECORDING_FILE" =~ $RECPATTERN ]]; then
+      Warn "No link found to: $RECORDING_FILE"
+      WarnCont "Assuming recording has been disconnected from MythTV."
+      RECORDING_LINK=""
+      return 0
+    if
+    Err "Can't find link to: $RECORDING_FILE"
+    ErrCont "This probably means that the file hasn't been successfully processed by myth2kodi."
+    return 1
+  else
+    Err "Not a file or link: $FILE"
+    return 1
+  fi
+}
+
 #Sets the RECORDING_NAME variable. If the arg is a MythTV recording file then
 #it just sets as basename, if given a myth2kodi moved name then, if possible,
-#we find the correspionding MytTV recording name.
+#we find the corresponding MythTV recording name.
 set_recording_name(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   DebugCont "arg1: $1"
   #Takes a single argument
   (( "$#" > 1 )) && { Err "${FUNCNAME[0]}() only takes one arg."; return 1 ; }
-  #A regex that should match MytTVs file naming, for the 21st century.
+  #A regex that should match MythTVs file naming, for the 21st century.
   local RECPATTERN='[0-9]{4}_20[0-9]{2}[0-1][0-9][0-3][0-9][0-2][0-9][0-5][0-9]{3}'
   local -i found=1 #Use exit code convention of: 0=success; 1=failure.
   if [[ "$1" =~ $RECPATTERN ]]; then #NOTE: Don't quote the RHS.
@@ -4326,7 +4383,13 @@ set_recording_name(){
     #Check if it's a moved file name that's still tracked by MythTV
     local -a sg_dirs
     #Get the sorage group directories defined in MythTV-DB
-    sg_dirs=($(MythDataGrabber --storagegroups))
+    sg_dirs=($("$binpath"/MythDataGrabber --storagegroups            \
+                                          --SecurityPin="$DBPin"     \
+                                          --DBHostName="$DBHostName" \
+                                          --DBName="$MySQLMythDb"    \
+                                          --DBUserName="$MySQLuser"  \
+                                          --DBPassword="$MySQLpass"))
+    #TODO: should check return state...
     for sg_dir in "${sg_dirs[@]}" ; do
       RECORDING_NAME="$(find -L "$sg_dir" -samefile "$1")"
       [[ "$RECORDING_NAME" =~ $RECPATTERN ]] && { found=0 ; break ; }
@@ -4334,7 +4397,9 @@ set_recording_name(){
     (( found == 0 )) && Inform "Mapping myth2kodi file name to $RECORDING_NAME"
   fi
   if (( found == 0 )); then
+    RECORDING_PATH="$(realpath --no-symlinks "$RECORDING_NAME")"
     RECORDING_NAME="$(basename "$RECORDING_NAME")"
+    Debug "Setting RECORDING_PATH=$RECORDING_PATH"
     Debug "Setting RECORDING_NAME=$RECORDING_NAME"
     return 0
   else
@@ -4343,28 +4408,114 @@ set_recording_name(){
   fi
 }
 
+#Delete: the recording file and any links to it; associated database entry and
+#        thumbnails; any undo, doover or created.tracking entries; and any
+#        associated support files (comskip, NFO).
 delete_recording(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  #TODO: Add a --delete <filename> option
-  #    + It should delete the file
-  #    + any links to it
-  #    + associated support files (commskip, nfo...)
-  #    + any undo, doover or created.tracking entries
-  #    + and the associated database entry and thumbnails. (Probably should delete DB entry first)
-  #        see, delete_mythtv_database_entry()
+  Warn "Attempting to delete recording: $1"
+  WarnCont "This will PERMANENTLY delete the recording, associated files"
+  WarnCont "and the associated MythTV-Database entry."
+  WarnCont "Are you sure you want to continue?"
+  local yesorno=""
+  read -r -n1 -p "  Requested permanent deletion: 'y' to continue or 'n' to exit... y/(n):>" yesorno
+  printf '\n'
+  [[ "$yesorno" != 'y' ]] && { "You must press 'y' to continue, aborting."; return 1 ; }
+
   Err "${FUNCNAME[0]}(): NotImplemented"
   return 1
+
+  #Delete the recording file and any link to it.
+  find_file_link_pairs "$1"
+  [[ "$?" != 0 ]] && return "$?"
+  Debug "RECORDING_LINK: $RECORDING_LINK"
+  Debug "RECORDING_LINK_OWNER: $RECORDING_LINK_OWNER"
+  Debug "RECORDING_FILE: $RECORDING_FILE"
+  Debug "RECORDING_FILE_OWNER: $RECORDING_FILE_OWNER"
+  [[ -f "$RECORDING_LINK" ]] && rm -f "$RECORDING_LINK"
+  [[ -f "$RECORDING_FILE" ]] && rm -f "$RECORDING_FILE"
+
+  #Delete the associated database entry and thumbnails.
+  set_recording_name "$1"
+  [[ "$?" != 0 ]] && return "$?"
+  Debug "RECORDING_PATH: $RECORDING_PATH"
+  Debug "RECORDING_NAME: $RECORDING_NAME"
+  InputPath="$RECORDING_PATH"
+  InputFileBasename="$RECORDING_NAME"
+  delete_mythtv_database_entry
+
+  #Delete undo.sh entries associated with $RECORDING_NAME
+  sed -i.bak "/$RECORDING_NAME/d" "$m2kdir/undo.sh"
+  (( LogLevel < 3 )) && rm -f "$m2kdir/undo.sh.bak"
+
+  #Delete doover.sh entries associated with $RECORDING_NAME
+  sed -i.bak "/$RECORDING_NAME/d" "$m2kdir/doover.sh"
+  (( LogLevel < 3 )) && rm -f "$m2kdir/doover.sh.bak"
+
+  #Delete created.tracking entries associated with $RECORDING_NAME
+  sed -i.bak "/$RECORDING_NAME/d" "$m2kdir/created.tracking"
+  (( LogLevel < 3 )) && rm -f "$m2kdir/created.tracking.bak"
+
+  #Delete any comskip or NFO files associated with the recording.
+  if [[ "$RECORDING_FILE_OWNER" = 'myth2kodi' ]]; then
+    rm -f "${RECORDING_FILE%.*}.nfo"
+    rm -f "${RECORDING_FILE%.*}.txt"
+  elif [[ "$RECORDING_LINK_OWNER" = 'myth2kodi' ]]; then
+    rm -f "${RECORDING_LINK%.*}.nfo"
+    rm -f "${RECORDING_LINK%.*}.txt"
+  fi
+  return 0
 }
 
 disconnect_recording(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  #TODO: Add a --disconnect <filename> option
-  #    + removes file & links from undo, doover, created.tracking,
-  #    + removes links from mythtv filename to moved filename, or if only 'moved' in LINK mode then actually move
-  #    + remove database entry and associated thumbnails
-  #        see, delete_mythtv_database_entry()
+  Warn "Attempting to disconnect recording: $1"
+  WarnCont "This will PERMANENTLY disconnect the recording from MythTV,"
+  WarnCont "deleting the associated MythTV-Database entry."
+  WarnCont "Are you sure you want to continue?"
+  local yesorno=""
+  read -r -n1 -p "  Requested permanent disconnection: 'y' to continue or 'n' to exit... y/(n):>" yesorno
+  printf '\n'
+  [[ "$yesorno" != 'y' ]] && { "You must press 'y' to continue, aborting."; return 1 ; }
+
   Err "${FUNCNAME[0]}(): NotImplemented"
   return 1
+
+  #Remove link associated with recording, and if recording file still has a
+  #MythTV name ('moved' in LINK mode) then actually move it to myth2kodi name.
+  find_file_link_pairs "$1"
+  [[ "$?" != 0 ]] && return "$?"
+  Debug "RECORDING_LINK: $RECORDING_LINK"
+  Debug "RECORDING_LINK_OWNER: $RECORDING_LINK_OWNER"
+  Debug "RECORDING_FILE: $RECORDING_FILE"
+  Debug "RECORDING_FILE_OWNER: $RECORDING_FILE_OWNER"
+  [[ -L "$RECORDING_LINK" ]] && rm -f "$RECORDING_LINK"
+  if [[ "$RECORDING_FILE_OWNER" = 'MythTV' ]]; then
+    mv "$RECORDING_FILE" "$RECORDING_LINK"
+  fi
+
+  #Delete the associated database entry and thumbnails.
+  set_recording_name "$1"
+  [[ "$?" != 0 ]] && return "$?"
+  Debug "RECORDING_PATH: $RECORDING_PATH"
+  Debug "RECORDING_NAME: $RECORDING_NAME"
+  InputPath="$RECORDING_PATH"
+  InputFileBasename="$RECORDING_NAME"
+  delete_mythtv_database_entry
+
+  #Delete undo.sh entries associated with $RECORDING_NAME
+  sed -i.bak "/$RECORDING_NAME/d" "$m2kdir/undo.sh"
+  (( LogLevel < 3 )) && rm -f "$m2kdir/undo.sh.bak"
+
+  #Delete doover.sh entries associated with $RECORDING_NAME
+  sed -i.bak "/$RECORDING_NAME/d" "$m2kdir/doover.sh"
+  (( LogLevel < 3 )) && rm -f "$m2kdir/doover.sh.bak"
+
+  #Delete created.tracking entries associated with $RECORDING_NAME
+  sed -i.bak "/$RECORDING_NAME/d" "$m2kdir/created.tracking"
+  (( LogLevel < 3 )) && rm -f "$m2kdir/created.tracking.bak"
+
+  return 0
 }
 
 #Displays the log entries for processing of a specified recording file.

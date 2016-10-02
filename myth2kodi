@@ -5169,7 +5169,7 @@ if [ -f "$MoveDir/$ShowFileName.$OriginalExt" ]; then
   ErrCont "WE'VE EITHER ALREADY PROCESSED THIS RECORDING OR OUR FILE NAME GENERATION IS TOO GENERIC."
   ErrCont "EITHER WAY, ABORTING."
   #Write an entry in the duplicates file, for easy check/removal of duplicates.
-  printf "'%s' '%s' '%s' '%s'\n" "$InputTitle" "$ShowStartTime" "$InputPath" "$ShowFileName" >> "$DuplicatesFile"
+  printf '"%s" "%s" "%s" "%s"\n' "$InputTitle" "$ShowStartTime" "$InputPath" "$ShowFileName" >> "$DuplicatesFile"
   NOTIFY_MSG="Recording identified as duplicate of: $MoveDir/$ShowFileName.$OriginalExt"
   exit_job 'FileAlreadyExists'
   #TODO: When refactoring main, consider allowing forced move with auto name incrementing when move-to file already exists.

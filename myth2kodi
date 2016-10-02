@@ -675,6 +675,14 @@ parse_command_flags(){
       unset m2kScanMode
       return $scanreturnstatus
     ;;
+    --movie)  #/path/to/recording/filename.mpg
+      Debug "Recognised command line switch '--movie'"
+      export ShowCategory="Movie"
+      myth2kodi "$m2karg2" "$m2karg3" "$m2karg4"
+      declare -i m2kreturnstatus="$?"
+      unset ShowCategory
+      return $m2kreturnstatus
+    ;;
     --diagnostics)
       Debug "Recognised command line switch '--diagnostics'"
       export m2kDiagnosticsMode="True"
@@ -1418,7 +1426,7 @@ get_mythtvdb_info_mysql(){
   Plot="$(           dbselect description     | sed -n "2p")"
   Stars="$(          dbselect stars           | sed -n "2p")"
   ShowStartTime="$(  dbselect starttime       | sed -n "2p")"
-  ShowCategory="$(   dbselect category        | sed -n "2p")"
+  [[ -z "$ShowCategory" ]] && ShowCategory="$(   dbselect category        | sed -n "2p")"
   StorageGroup="$(   dbselect storagegroup    | sed -n "2p")"
   OriginalAirDate="$(dbselect originalairdate | sed -n "2p")"
   [[ "$OriginalAirDate" = "0000-00-00" ]] && OriginalAirDate=''
@@ -1547,7 +1555,7 @@ get_mythtvdb_info_pythonbindings(){
   #redefine database var names into myth2kodi var names
   MovieAirDate="$airdate"            && DebugCont "MovieAirDate=$airdate"
   OriginalAirDate="$originalairdate" && DebugCont "OriginalAirDate=$originalairdate"
-  ShowCategory="$category"           && DebugCont "ShowCategory=$category"
+  [[ -z "$ShowCategory" ]] && ShowCategory="$category"           && DebugCont "ShowCategory=$category"
   StorageGroup="$storagegroup"       && DebugCont "StorageGroup=$storagegroup"
   Stars="$stars"                     && DebugCont "Stars=$stars"
   Plot="$description"                && DebugCont "Plot=$description"

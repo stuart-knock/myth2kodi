@@ -247,6 +247,8 @@
 #Specify the name of the user running mythtv, myth2kodi should always be run by that user. Default="mythtv"
 Librarian="librarian"
 #TODO: Rethink naming of 'SYMLINK' variable and modes here as the current may be confusing as to what they actually do...
+#      PROCESS_RECORDING_MODE: LINK(same as orig); MOVE(MOVE in orig if SYMLINK=Enabled; 'Disabled' in orig if SYMLINK=Disabled);
+#      Then SYMLINK: 'Enabled' or 'Disabled'
 #SYMLINK has 3 modes.  MOVE|LINK|Disabled: Default=MOVE. WARNING: "Disabled" Mode removes MythTV-DB entry, SO CAN'T BE UNDONE.
 #Create symlink at InputPath after 'MOVE' | Do not move, just create a sym'LINK' | move the file, DELETE MythTV-DB entry, symlinking is 'Disabled'
 SYMLINK="MOVE"
@@ -263,7 +265,7 @@ APIkey="6DF511BB2A64E0E9"  #TODO: If I ever put this on GitHub I should register
 #Internet access Timeout in seconds, used for TheTVDB, : Default Timeout=50 (seconds)
 Timeout=50
 #Update database time in seconds, Longer duration means faster processing time and less strain on TheTVDB. Default='88920' (1 day + eps)
-UpdateDatabase=88920
+UpdateDatabase=264920
 #How long to persist archived myth2kodi database files in months, DEFAULT=6.
 M2K_DB_LIFE=6
 #The path which contains myth2kodi and associated scripts default=/usr/local/bin
@@ -2051,6 +2053,13 @@ check_m2k_database_up_to_date(){
 
   #if episode information is out of date or not created
   if ((CurrentTimeTVDB > NextUpdate)); then
+    #TODO: the Updates part of TheTVDb v1 api is deprecated, for that matter so is
+    #      the v1 api... Need to implement access to the new JSON based v2 api...
+    #      See:
+    #          https://api.thetvdb.com/swagger
+    Warn "Bypassing TheTVDB LatUpdated checks... Forcing update. See TODO. Line $LINENO"
+    return 1
+    ##########################################################################
     curl -L -s -m"$Timeout" "${updates_site}?type=all&time=$LastUpdatedTVDB" > "$dbdir/UpdatesList.txt"
     if grep -q "$SeriesID" "$dbdir/UpdatesList.txt" ; then
       Inform "DATABASE OUT OF DATE. Next update: $NextUpdate. Current: $CurrentTimeTVDB"

@@ -1385,7 +1385,7 @@ failsafe(){
 dbselect(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   DebugCont "arg 1 = $1"
-  mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; SELECT $1 FROM recorded WHERE basename LIKE '$InputFileBasename' ; "
+  mysql -u"$MySQLuser" -p"$MySQLpass" -e "USE '$MySQLMythDb' ; SELECT $1 FROM recorded WHERE basename LIKE '$InputFileBasename' ; "
 }
 
 #####ACCESS MythTV DATABASE#####
@@ -1433,9 +1433,9 @@ get_mythtvdb_info_mysql(){
 
   #TODO: Clean up all the following mysql commands, like we've done for the above.
   #get DataType
-  XMLTVGrabber=$(mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select xmltvgrabber from videosource ; " | sed 's/xmltvgrabber//g' | tr -d '/' | sed -n "2p" | tr -d ' ')
+  XMLTVGrabber=$(mysql -u"$MySQLuser" -p"$MySQLpass" -e "USE '$MySQLMythDb' ; SELECT xmltvgrabber FROM videosource ; " | sed 's/xmltvgrabber//g' | tr -d '/' | sed -n "2p" | tr -d ' ')
   #get year for movies
-  MovieAirDate=$(mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select airdate from recordedprogram where programid like '$ProgramID' and chanid like '$ChanID' ; " | tr -d '/' | sed 's/airdate//g' | sed -n "2p" | tr -d ' ')
+  MovieAirDate=$(mysql -u"$MySQLuser" -p"$MySQLpass" -e "USE '$MySQLMythDb' ; SELECT airdate FROM recordedprogram WHERE programid LIKE '$ProgramID' AND chanid LIKE '$ChanID' ; " | tr -d '/' | sed 's/airdate//g' | sed -n "2p" | tr -d ' ')
   #Blank year if it is invalid
   if [ ! -z "$MovieAirDate" ] && (( MovieAirDate < 1900 )); then
     MovieAirDate=''
@@ -1446,10 +1446,10 @@ get_mythtvdb_info_mysql(){
   if [ "$CommercialMarkup" = "Enabled" ]; then
     #Remove old and generate a comskip Start list
     echo "">"$m2kdir/markupstart.txt"
-    mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select mark from recordedmarkup where starttime like '$ShowStartTime' and chanid like '$ChanID' and type like 4 ; " | sed 's/mark//g' | tr -d ' ' >> "$m2kdir/markupstart.txt"
+    mysql -u"$MySQLuser" -p"$MySQLpass" -e "USE '$MySQLMythDb' ; SELECT mark FROM recordedmarkup WHERE starttime LIKE '$ShowStartTime' AND chanid LIKE '$ChanID' AND type LIKE 4 ; " | sed 's/mark//g' | tr -d ' ' >> "$m2kdir/markupstart.txt"
     #Remove old and generate comskip Stop list
     echo "">"$m2kdir/markupstop.txt"
-    mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; select mark from recordedmarkup where starttime like '$ShowStartTime' and chanid like '$ChanID' and type like 5 ; " | sed 's/mark//g' | tr -d ' ' >> "$m2kdir/markupstop.txt"
+    mysql -u"$MySQLuser" -p"$MySQLpass" -e "USE '$MySQLMythDb' ; SELECT mark FROM recordedmarkup WHERE starttime LIKE '$ShowStartTime' AND chanid LIKE '$ChanID' AND type LIKE 5 ; " | sed 's/mark//g' | tr -d ' ' >> "$m2kdir/markupstop.txt"
     #Combine commercial data into a single comskip file and remove the initial files
     generate_comskip
   fi
@@ -1998,7 +1998,7 @@ delete_mythtv_database_entry(){
   if [ ! -e "$InputPath" ]; then
     #Remove recording entry from mysql database
     Inform "${FUNCNAME[0]}() REMOVING: $InputFileBasename; THUMBNAILS; DATABASE ENTRIES."
-    mysql -u$MySQLuser -p$MySQLpass -e "use '$MySQLMythDb' ; DELETE FROM recorded WHERE basename LIKE '$InputFileBasename'; "
+    mysql -u"$MySQLuser" -p"$MySQLpass" -e "USE '$MySQLMythDb' ; DELETE FROM recorded WHERE basename LIKE '$InputFileBasename' ; "
     if [[ "$?" != 0 ]]; then
       Err "${FUNCNAME[0]}(): Failed to delete DB entry for: $InputFileBasename"
       return 1
@@ -3650,19 +3650,18 @@ m2k_diagnostics(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   #Move any existing diagnostics file to diagnostics_<Date&Time script was launched>.log
   [[ -f "$DiagnosticsFile" ]] && mv "$DiagnosticsFile" "$m2kdir/diagnostics_${FileNameNow}.log"
-  #TODO: give these checka, checkb etc more meaningful names PKGNAME_LIBMYTH_PYTHON, etc
-  local checka="" #libmyth-python #PKGNAME_LIBMYTH_PYTHON=''
-  local checkb="" #python-lxml    #PKGNAME_PYTHON_LXML=''
-  local checkc="" #curl           #PKGNAME_CURL=''
-  local checkd="" #agrep          #PKGNAME_AGREP=''
-  local checke="" #libnotify-bin  #PKGNAME_LIBNOTIFY=''
-  local checkf="" #python         #PKGNAME_PYTHON=''
-  local checkj="" #jq             #PKGNAME_JQ=''
-  local curlpath=""               #PKGPATH_CURL=''
-  local agreppath=""              #PKGPATH_AGREP=''
-  local nspath=""                 #PKGPATH_LIBNOTIFY=''
-  local jqpath=""                 #PKGPATH_JQ=''
-  local pythonpath=""             #PKGPATH_PYTHON=''
+  local PKGNAME_LIBMYTH_PYTHON=''
+  local PKGNAME_PYTHON_LXML=''
+  local PKGNAME_CURL=''
+  local PKGNAME_AGREP=''
+  local PKGNAME_LIBNOTIFY=''
+  local PKGNAME_PYTHON=''
+  local PKGNAME_JQ=''
+  local PKGPATH_CURL=''
+  local PKGPATH_AGREP=''
+  local PKGPATH_LIBNOTIFY=''
+  local PKGPATH_JQ=''
+  local PKGPATH_PYTHON=''
   local python_version="" #Python Version information
   local pyver=0 #An integer representing first 2 points of python version, ie 2.6.3 => 26
   local packagecheck=""
@@ -3719,48 +3718,48 @@ m2k_diagnostics(){
   ((our_scripts!=0)) && Err "Checks for our own scripts ***FAILED***"
 
   #Test if required packages are installed and accessible to caller.
-  curlpath=$(command -v curl)      || checkc="curl"
-  agreppath=$(command -v agrep)    || checkd="agrep or tre-agrep"
-  nspath=$(command -v notify-send) || checke="libnotify-bin"
-  jqpath=$(command -v jq)          || checkj="jq"
+  PKGPATH_CURL=$(command -v curl)             || PKGNAME_CURL="curl"
+  PKGPATH_AGREP=$(command -v agrep)           || PKGNAME_AGREP="agrep or tre-agrep"
+  PKGPATH_LIBNOTIFY=$(command -v notify-send) || PKGNAME_LIBNOTIFY="libnotify-bin"
+  PKGPATH_JQ=$(command -v jq)                 || PKGNAME_JQ="jq"
   if [ "$DatabaseType" = "MythTVPythonBindings" ]; then
-    pythonpath=$(command -v python) || checkf="python"
-    if [[ -z "$checkf" ]]; then
+    PKGPATH_PYTHON=$(command -v python) || PKGNAME_PYTHON="python"
+    if [[ -z "$PKGNAME_PYTHON" ]]; then
       python_version="$(python --version 2>&1)"  #Python returns version info to stderr
       pyver="$(echo "$python_version" | sed 's/python\s*//I' | cut -f1-2 -d"." | tr -d '.')"
       python -c "from MythTV import MythDB ; exit()" &> /dev/null
-      test "$?" != "0" && checka="libmyth-python"
+      test "$?" != "0" && PKGNAME_LIBMYTH_PYTHON="libmyth-python"
       python -c "import lxml ; exit()" &> /dev/null
-      test "$?" != "0" && checkb="python-lxml"
+      test "$?" != "0" && PKGNAME_PYTHON_LXML="python-lxml"
     fi
   fi
 
   #Provide feedback on package checks
-  packagecheck="$checkc$checkd$checke$checkj"
+  packagecheck="$PKGNAME_CURL$PKGNAME_AGREP$PKGNAME_LIBNOTIFY$PKGNAME_JQ"
   printf '\n' | tee -a "$DiagnosticsFile"
-  [[ -n "$curlpath" ]]  && Inform "package 'curl' found: $curlpath"
-  [[ -n "$agreppath" ]] && Inform "package 'agrep' or 'tre-agrep' found: $agreppath"
-  [[ -n "$nspath" ]]    && Inform "package 'libnotify-bin' found: $nspath"
-  [[ -n "$jqpath" ]]    && Inform "package 'jq' found: $jqpath"
+  [[ -n "$PKGPATH_CURL" ]]      && Inform "package 'curl' found: $PKGPATH_CURL"
+  [[ -n "$PKGPATH_AGREP" ]]     && Inform "package 'agrep' or 'tre-agrep' found: $PKGPATH_AGREP"
+  [[ -n "$PKGPATH_LIBNOTIFY" ]] && Inform "package 'libnotify-bin' found: $PKGPATH_LIBNOTIFY"
+  [[ -n "$PKGPATH_JQ" ]]        && Inform "package 'jq' found: $PKGPATH_JQ"
   if [ "$DatabaseType" = "MythTVPythonBindings" ]; then
-    packagecheck="$packagecheck$checkf$checka$checkb"
-    [[ -n "$pythonpath" ]] && Inform "package 'python' found: $pythonpath"
-    if [[ -z "$checkf" ]] && ((pyver < 26 || pyver >= 30)); then
+    packagecheck="$packagecheck$PKGNAME_PYTHON$PKGNAME_LIBMYTH_PYTHON$PKGNAME_PYTHON_LXML"
+    [[ -n "$PKGPATH_PYTHON" ]] && Inform "package 'python' found: $PKGPATH_PYTHON"
+    if [[ -z "$PKGNAME_PYTHON" ]] && ((pyver < 26 || pyver >= 30)); then
       Warn "Python 3 and Python older than 2.6 aren't supported."
     fi
-    [[ -z "$checka" ]] && Inform "package 'libmyth-python' found."
-    [[ -z "$checkb" ]] && Inform "package 'python-lxml' found."
+    [[ -z "$PKGNAME_LIBMYTH_PYTHON" ]] && Inform "package 'libmyth-python' found."
+    [[ -z "$PKGNAME_PYTHON_LXML" ]] && Inform "package 'python-lxml' found."
   fi
   if [[ -n "$packagecheck" ]] ; then
     packagecheck="***FAILED***"
     Err "Installed packages check ***FAILED***"
-    ErrCont "Missing packages are: $checkc $checkd $checke $checkj $checkf $checka $checkb"
+    ErrCont "Missing packages are: $PKGNAME_CURL $PKGNAME_AGREP $PKGNAME_LIBNOTIFY $PKGNAME_JQ $PKGNAME_PYTHON $PKGNAME_LIBMYTH_PYTHON $PKGNAME_PYTHON_LXML"
     ErrCont "If packages are already installed, check your path settings."
     if [ "$m2kPlatform" != "Darwin" ] ; then
-      ErrCont "Please run 'apt-get install $checkc $checkd $checke $checkj $checkf $checka $checkb' or equivalent."
+      ErrCont "Please run 'apt-get install $PKGNAME_CURL $PKGNAME_AGREP $PKGNAME_LIBNOTIFY $PKGNAME_JQ $PKGNAME_PYTHON $PKGNAME_LIBMYTH_PYTHON $PKGNAME_PYTHON_LXML' or equivalent."
     else
-      ErrCont "Please obtain MacPorts and install $checkc $checkd $checke $checkj $checka $checkb"
-      [[ -n "$checkf" ]] && ErrCont "Python is missing, please install Python, or make sure it's in your path."
+      ErrCont "Please obtain MacPorts and install $PKGNAME_CURL $PKGNAME_AGREP $PKGNAME_LIBNOTIFY $PKGNAME_JQ $PKGNAME_LIBMYTH_PYTHON $PKGNAME_PYTHON_LXML"
+      [[ -n "$PKGNAME_PYTHON" ]] && ErrCont "Python is missing, please install Python, or make sure it's in your path."
     fi
   else
     packagecheck="***PASSED***"
@@ -3791,13 +3790,13 @@ m2k_diagnostics(){
     read -r -n1 -p "Press any key to perform a test of the MythTV Database python bindings..."
     printf '\n'
     Inform "Performing MythTV Python Bindings database test."
-    if [[ -z "$checkf" ]]; then
-      Inform "Python: $pythonpath"
+    if [[ -z "$PKGNAME_PYTHON" ]]; then
+      Inform "Python: $PKGPATH_PYTHON"
       Inform "Version: $python_version"
     fi
 
     #If checks above found python-lxml & libmyth-python, do a more thorough testing of MythTV python bindings
-    if [[ -z "$checkf$checka$checkb" ]]; then
+    if [[ -z "$PKGNAME_PYTHON$PKGNAME_LIBMYTH_PYTHON$PKGNAME_PYTHON_LXML" ]]; then
       #Use MythDataGrabber's internal diagnostics function
       "$binpath"/MythDataGrabber --verbosity="$((LogLevel<3?LogLevel:3))" \
                                  --Diagnostic                             \
@@ -3835,6 +3834,7 @@ m2k_diagnostics(){
   local KODINotifyTestMessage
   local data
   local KODIresp
+  local -i KODI_COMM_FAILURES=0
   local GOOD_KODI_RESPONSE
   GOOD_KODI_RESPONSE='{"id":"myth2kodi","jsonrpc":"2.0","result":"OK"}'
   curlPOST='curl --silent --max-time 8 --connect-timeout 5 -H "Content-Type:application/json;" --data-binary'
@@ -3844,27 +3844,32 @@ m2k_diagnostics(){
            "params": {"title": "myth2kodi Test", "message": "'"$KODINotifyTestMessage"'"},
            "id": "myth2kodi"}'\'
 
-  #TODO: This isn't giving messages correctly for multiple IP addresses...
-  Inform "Performing KODI Notifications test"
+  Inform "Performing KODI Notification tests..."
   for KODIIP in "${KODIIPs[@]}" ; do
     Inform "SENDING REQUESTED COMMANDS TO: $KODIIP"
     #SEE: http://kodi.wiki/view/HOW-TO:Remotely_update_library and 'man curl'
     KODIresp=$( eval "$curlPOST $data http://$KODIIP/jsonrpc" 2>&1 )
+    DebugCont "RESPONSE: $KODIresp"
     if [[ -n "$KODIresp" ]]; then
-      InformCont "TESTING: $KODIresp"
+      if [[ "$(printf '%s' "$KODIresp")" = "$GOOD_KODI_RESPONSE" ]]; then
+        Inform "KODI Communications ***PASSED***"
+      else
+        Err "KODI Communications ***FAILED***"
+        ErrCont "Expected response: '$GOOD_KODI_RESPONSE'"
+        ErrCont "Got response: '$KODIresp'"
+        ((++KODI_COMM_FAILURES))
+      fi
     else
       Err "COMMUNICATIONS NOT ESTABLISHED: $KODIIP"
+      ErrCont "This may just mean that the Kodi instance isn't running."
+      ((++KODI_COMM_FAILURES))
     fi
   done
-  if [ "$(printf '%s' "$KODIresp")" = "$GOOD_KODI_RESPONSE" ] ; then
+  if ((KODI_COMM_FAILURES==0)); then
     KODIcomm="***PASSED***"
-    Inform "KODI Communications $KODIcomm"
   else
     KODIcomm="***FAILED***"
-    Err "KODI Communications $KODIcomm"
-    ErrCont "Expected response: '$GOOD_KODI_RESPONSE'"
-    ErrCont "Got response: '$KODIresp'"
-    [[ -z "$KODIresp" ]] && ErrCont "This may just mean the Kodi instance isn't running."
+    Err "Communication failed for $KODI_COMM_FAILURES of ${#KODIIPs[@]} Kodi instances."
   fi
 
   #Check filesystem permissions
@@ -3924,7 +3929,7 @@ m2k_diagnostics(){
   printf '\n'
   Inform "RESULTS SUMMARY:"
   [[ "$DatabaseType" = "MythTVPythonBindings" ]] && InformCont "MythTV Database Test: $DBTest"
-  InformCont "Installed Packages:   $packagecheck $checka $checkb $checkc $checkd $checke $checkj"
+  InformCont "Installed Packages:   $packagecheck $PKGNAME_LIBMYTH_PYTHON $PKGNAME_PYTHON_LXML $PKGNAME_CURL $PKGNAME_AGREP $PKGNAME_LIBNOTIFY $PKGNAME_JQ"
   InformCont "Notifications Test:   $notifytest"
   InformCont "KODI Communications:  $KODIcomm"
   InformCont "File System Checks:   $folderchecks"
@@ -3953,7 +3958,7 @@ m2k_diagnostics(){
     printf '\n' | tee -a "$DiagnosticsFile"
   fi
   if [ "$KODIcomm" = "***FAILED***" ]; then
-    Err "Kodi communication tests failed."
+    Err "Kodi communication tests failed: $KODI_COMM_FAILURES of ${#KODIIPs[@]}."
     ErrCont "This will not prevent myth2kodi from functioning, it just means"
     ErrCont "that myth2kodi can not send messages or library update requests"
     ErrCont "to Kodi. There are a few possible causes for this problem:"
@@ -4423,8 +4428,8 @@ set_recording_name(){
   if (( found == 0 )); then
     RECORDING_PATH="$(realpath --no-symlinks "$RECORDING_NAME")"
     RECORDING_NAME="$(basename "$RECORDING_NAME")"
-    Debug "Setting RECORDING_PATH=$RECORDING_PATH"
-    Debug "Setting RECORDING_NAME=$RECORDING_NAME"
+    Debug "Setting RECORDING_PATH='$RECORDING_PATH'"
+    Debug "Setting RECORDING_NAME='$RECORDING_NAME'"
     return 0
   else
     Err "${FUNCNAME[0]}(): Failed to find MythTV-DB recording name for: $1"
@@ -4457,8 +4462,6 @@ delete_recording(){
   #Find the MythTV recording file name and its path.
   set_recording_name "$1"
   [[ "$?" != 0 ]] && return "$?"
-  Debug "RECORDING_PATH: $RECORDING_PATH"
-  Debug "RECORDING_NAME: $RECORDING_NAME"
   InputPath="$RECORDING_PATH"
   InputFileBasename="$RECORDING_NAME"
 

@@ -274,6 +274,16 @@ M2K_DB_LIFE=6
 binpath="/usr/local/bin"
 #myth2kodi working directory: Default=$HOME/.myth2kodi (ie, /home/username/.myth2kodi) #TODO: Consider: better to set???: /home/${Librarian}/.myth2kodi
 m2kdir="$HOME/.myth2kodi"
+
+#The directory where myth2kodi writes its temporary files, Default='/tmp'
+#Typically, /tmp is tmpfs and so avoids unnecessary writes to disk. If you're
+#on Linux and /tmp isn't tmpfs but you would rather avoid writing to disk then
+#/dev/shm is guaranteed to be tmpfs. Alternatively, if you're short on RAM but
+#don't mind some extra disk writes then use "$m2kdir". NOTE: When running with
+#LogLevel>=3, there are a number of temporary files that aren't automatically
+#deleted, they will, however, be cleared as part of: myth2kodi --maintenance
+M2K_TMPDIR='/dev/shm'
+
 #FailSafe mode will enable symlinks to be formed in FailSafeDir if the move or symlink operation fails. Enabled|Disabled
 FailSafeMode="Disabled"
 #FailSafeDir is used when the file cannot be moved to the MoveDir. FailSafe will not create folders. eg. /home/username
@@ -993,21 +1003,33 @@ generate_comskip(){
   local -i Counter=0
   local StartData
   local StopData
+  MARKUPFRAMES_TMP="$(mktemp --tmpdir="$M2K_TMPDIR" --suffix=.txt m2k_markupframes_$FileNameNow-XXXX)"
+  [[ "$?" != 0 ]] && { Err "Failed to create temporary file." ; return 1 ; }
+  Debug "Created a temporary comskip markupframes file: '$MARKUPFRAMES_TMP'"
+  declare -gr MARKUPFRAMES_TMP
   #Set up comskip file
   {
     printf '%s\n' "FILE PROCESSING COMPLETE"
     printf '%s\n' "------------------------"
-  }> "$m2kdir/markupframes.txt"
+  } > "$MARKUPFRAMES_TMP"
 
   while read -r StopData ; do
     ((++Counter))
-    StartData=$(sed -n "$Counter"p "$m2kdir/markupstart.txt")
+    StartData=$(sed -n "$Counter"p "$MARKUPSTART_TMP")
     if [[ ! -z "$StopData" ]]; then
-      printf '%s\n' "$StartData $StopData" >> "$m2kdir/markupframes.txt"
+      printf '%s\n' "$StartData $StopData" >> "$MARKUPFRAMES_TMP"
       CommercialMarkup="Created"
       Debug "COMMERCIAL DATA START:$StartData STOP:$StopData"
     fi
-  done <"$m2kdir/markupstop.txt"
+  done < "$MARKUPSTOP_TMP"
+
+  #If we're not in debug mode then remove the temporary files we just processed.
+  if (( LogLevel < 3 )); then
+    rm -f "$MARKUPSTART_TMP"
+    rm -f "$MARKUPSTOP_TMP"
+  else
+    Debug "Not removing the temporary markup files: '$MARKUPSTART_TMP'; '$MARKUPSTOP_TMP'."
+  fi
   return 0
 }
 
@@ -1027,7 +1049,7 @@ recreate_comskip(){
     #TODO: need to deal with link mode case, something like: movedrecordingname="$(find -L "$MoveDir/" -samefile "$InputPath")" #Actually, this form should work for both cases... with the problem that multiple links can be returned in link mode if there are multiple links...
     local ShowComSkip
     ShowComSkip="${movedrecordingname%.*}.txt"
-    mv "$m2kdir/markupframes.txt" "${ShowComSkip}" 2>&1 | err_pipe "${FUNCNAME[0]}(): "
+    mv "$MARKUPFRAMES_TMP" "${ShowComSkip}" 2>&1 | err_pipe "${FUNCNAME[0]}(): "
     return "${PIPESTATUS[0]}"
   elif [[ -d "$InputPath" ]]; then
     #TODO: confirm InputPath doesn't end in a /
@@ -1040,8 +1062,11 @@ recreate_comskip(){
     if [ "$yesorno" = "y" ]; then
       checkext="mpg" #TODO: Make this user/caller specifiable
       scanpath="$InputPath"
-      Debug "Creating a temporary comskip_scan file: $m2kdir/comskip_scan.temp"
-      ls -1 "$scanpath"/*."$checkext" > "$m2kdir/comskip_scan.temp"
+      local COMSKIP_SCAN_FILE
+      COMSKIP_SCAN_FILE="$(mktemp --tmpdir="$M2K_TMPDIR" --suffix=.txt m2k_comskip_scan_$FileNameNow-XXXX)"
+      [[ "$?" != 0 ]] && { Err "Failed to create temporary file." ; return 1 ; }
+      Debug "Created a temporary comskip_scan file: $COMSKIP_SCAN_FILE"
+      ls -1 "$scanpath"/*."$checkext" > "$COMSKIP_SCAN_FILE"
       Inform "Scanning $scanpath for already moved $checkext files"
       while read -r line ; do
         Debug "Attempting to regenerate comskip file for $line"
@@ -1052,12 +1077,13 @@ recreate_comskip(){
         else
           Debug "Not a File and Link, so not moved with symlinking enabled... Not regenerating comskip. TODO: HANDLE ALL MOVE MODES PROPERLY HERE."
         fi
-      done < "$m2kdir/comskip_scan.temp"
+      done < "$COMSKIP_SCAN_FILE"
 
+      #If we're not in debug mode then remove the comskip scan file we just processed.
       if (( LogLevel < 3 )); then
-        #If we're not in debug mode then remove the comskip scan file we just processed.
-        Inform "Removing the temporary scan file: $m2kdir/comskip_scan.temp"
-        rm -f "$m2kdir/comskip_scan.temp"
+        rm -f "$COMSKIP_SCAN_FILE"
+      else
+        Debug "Not removing the temporary comskip scan file: '$COMSKIP_SCAN_FILE'"
       fi
       return 0
     else
@@ -1444,12 +1470,22 @@ get_mythtvdb_info_mysql(){
   #####COMSKIP DATA#####
   #Set up counter, remove old markup data and generate new markup file from markupstart and stop
   if [ "$CommercialMarkup" = "Enabled" ]; then
+    MARKUPSTART_TMP="$(mktemp --tmpdir="$M2K_TMPDIR" --suffix=.txt m2k_markupstart_$FileNameNow-XXXX)"
+    [[ "$?" != 0 ]] && { Err "Failed to create temporary file." ; return 1 ; }
+    Debug "Created a temporary comskip markupstart file: '$MARKUPSTART_TMP'"
+    declare -gr MARKUPSTART_TMP
+
+    MARKUPSTOP_TMP="$(mktemp --tmpdir="$M2K_TMPDIR" --suffix=.txt m2k_markupstop_$FileNameNow-XXXX)"
+    [[ "$?" != 0 ]] && { Err "Failed to create temporary file." ; return 1 ; }
+    Debug "Created a temporary comskip markupstop file: '$MARKUPSTOP_TMP'"
+    declare -gr MARKUPSTOP_TMP
+
     #Remove old and generate a comskip Start list
-    echo "">"$m2kdir/markupstart.txt"
-    mysql -u"$MySQLuser" -p"$MySQLpass" -e "USE '$MySQLMythDb' ; SELECT mark FROM recordedmarkup WHERE starttime LIKE '$ShowStartTime' AND chanid LIKE '$ChanID' AND type LIKE 4 ; " | sed 's/mark//g' | tr -d ' ' >> "$m2kdir/markupstart.txt"
+    echo "" > "$MARKUPSTART_TMP"
+    mysql -u"$MySQLuser" -p"$MySQLpass" -e "USE '$MySQLMythDb' ; SELECT mark FROM recordedmarkup WHERE starttime LIKE '$ShowStartTime' AND chanid LIKE '$ChanID' AND type LIKE 4 ; " | sed 's/mark//g' | tr -d ' ' >> "$MARKUPSTART_TMP"
     #Remove old and generate comskip Stop list
-    echo "">"$m2kdir/markupstop.txt"
-    mysql -u"$MySQLuser" -p"$MySQLpass" -e "USE '$MySQLMythDb' ; SELECT mark FROM recordedmarkup WHERE starttime LIKE '$ShowStartTime' AND chanid LIKE '$ChanID' AND type LIKE 5 ; " | sed 's/mark//g' | tr -d ' ' >> "$m2kdir/markupstop.txt"
+    echo "" > "$MARKUPSTOP_TMP"
+    mysql -u"$MySQLuser" -p"$MySQLpass" -e "USE '$MySQLMythDb' ; SELECT mark FROM recordedmarkup WHERE starttime LIKE '$ShowStartTime' AND chanid LIKE '$ChanID' AND type LIKE 5 ; " | sed 's/mark//g' | tr -d ' ' >> "$MARKUPSTOP_TMP"
     #Combine commercial data into a single comskip file and remove the initial files
     generate_comskip
   fi
@@ -1475,9 +1511,10 @@ get_mythtvdb_info_pythonbindings(){
   Inform "Attempting to pull database information on $InputFileBasename"
 
   local pythonExitStatus
-
-  #make a named pipe for database output
-  #[[ -p "$m2kdir/mythicalDbOut" ]] || mkfifo "$m2kdir/mythicalDbOut"
+  local MTV_RECINFO_FILE
+  MTV_RECINFO_FILE="$(mktemp --tmpdir="$M2K_TMPDIR" --suffix=.txt m2k_recinfo_$FileNameNow-XXXX)"
+  [[ "$?" != 0 ]] && { Err "Failed to create temporary file." ; return 1 ; }
+  Debug "Storing MythTV-DB info in temporary file: '$MTV_RECINFO_FILE'"
 
   #NOTE: the declare also makes them local, so we'd need to mark them global
   #      with -g to access them outside of the function.
@@ -1496,12 +1533,8 @@ get_mythtvdb_info_pythonbindings(){
   # declare mdb_programid
   # declare mdb_chanid
   # declare mdb_starttime
-  [[ -f "$m2kdir/mythicalDbOut" ]] && rm -f "$m2kdir/mythicalDbOut"
-  #TODO: If possible without blocking MythDataGrabber exit status, return $m2kdir/mythicalDbOut to being a named pipe.
-  #      We could just create mythicalDbOut in /tmp, then it's the system problem to make that tmpfs or not... or we
-  #      could lock ourselves to Linux by using /dev/shm which is always tmpfs -- or slightly more portable, have the
-  #      myth2kodi able to override TMPDIR then use mktemp() which honours TMPDIR...
-  #run the python bindings and output to named pipe
+
+  #Access MytTV-DB via the python bindings and output to a temporary file.
   "$binpath"/MythDataGrabber --verbosity="$((LogLevel<3?LogLevel:3))" \
                              --filename="$InputFileBasename"          \
                              --SecurityPin="$DBPin"                   \
@@ -1509,11 +1542,8 @@ get_mythtvdb_info_pythonbindings(){
                              --DBName="$MySQLMythDb"                  \
                              --DBUserName="$MySQLuser"                \
                              --DBPassword="$MySQLpass"                \
-                             --output="$m2kdir/mythicalDbOut"         \
+                             --output="$MTV_RECINFO_FILE"             \
                              --writeFile 2>&1 | err_pipe "MythDataGrabber: "
-
-                             #TODO: This looses us return status: 2>&1 1>"$m2kdir/mythicalDbOut" | err_pipe "MythDataGrabber: " &
-                             #      and without the & it just hangs...
 
   pythonExitStatus="${PIPESTATUS[0]}"
   if [ "$pythonExitStatus" != "0" ] ; then
@@ -1526,14 +1556,24 @@ get_mythtvdb_info_pythonbindings(){
   Debug "Guide data as extracted by: ${FUNCNAME[0]}()"
   while read -r var equals value ; do
     value="$(tr -d \" <<< "$value")"
-    #[[ "$equals" = "=" ]] && declare -r "mdb_$var=$value" && DebugCont "mdb_$var$equals$value"
+    #[[ "$equals" = "=" ]] && declare -gr "mdb_$var=$value" && DebugCont "mdb_$var$equals$value"
     [[ "$equals" = "=" ]] && declare "$var=$value" && DebugCont "$var$equals$value"
-  done < "$m2kdir/mythicalDbOut"
+  done < "$MTV_RECINFO_FILE"
 
   if [ "$CommercialMarkup" = "Enabled" ]; then
+    MARKUPSTART_TMP="$(mktemp --tmpdir="$M2K_TMPDIR" --suffix=.txt m2k_markupstart_$FileNameNow-XXXX)"
+    [[ "$?" != 0 ]] && { Err "Failed to create temporary file." ; return 1 ; }
+    Debug "Created a temporary comskip markupstart file: '$MARKUPSTART_TMP'"
+    declare -gr MARKUPSTART_TMP
+
+    MARKUPSTOP_TMP="$(mktemp --tmpdir="$M2K_TMPDIR" --suffix=.txt m2k_markupstop_$FileNameNow-XXXX)"
+    [[ "$?" != 0 ]] && { Err "Failed to create temporary file." ; return 1 ; }
+    Debug "Created a temporary comskip markupstop file: '$MARKUPSTOP_TMP'"
+    declare -gr MARKUPSTOP_TMP
+
     #Output commercial data to initial files
-    printf '%s\n' "${startdata[@]}" >"$m2kdir/markupstart.txt"
-    printf '%s\n' "${stopdata[@]}"  >"$m2kdir/markupstop.txt"
+    printf '%s\n' "${startdata[@]}" > "$MARKUPSTART_TMP"
+    printf '%s\n' "${stopdata[@]}"  > "$MARKUPSTOP_TMP"
     #Combine commercial data into a single comskip file and remove the initial files
     generate_comskip
   fi
@@ -1566,12 +1606,11 @@ get_mythtvdb_info_pythonbindings(){
   XMLTVGrabber="$xmltvgrabber"       && DebugCont "XMLTVGrabber=$xmltvgrabber"
 
   #If we're not in debug mode then clean-up the file written by MythDataGrabber
-  if [[ -f "$m2kdir/mythicalDbOut" ]] && (( LogLevel < 3 )) ; then
-    rm -f "$m2kdir/mythicalDbOut"
+  if (( LogLevel < 3 )) ; then
+    rm -f "$MTV_RECINFO_FILE"
+  else
+    Debug "Not removing the temporary MythTV-DB info file: '$MTV_RECINFO_FILE'"
   fi
-
-  #cleanup, remove the fifo named pipe
-  #[[ -p "$m2kdir/mythicalDbOut" ]] && rm -f "$m2kdir/mythicalDbOut"
 }
 
 #####PROCESS MythTV DATABASE INFORMATION#####
@@ -2269,12 +2308,12 @@ get_serieslinenumber_zap2itid(){
   #loop through all show names received by TheTVDB and match Zap2it ID.
   while read -r line ; do
     (( ++serieslinenumber ))
-    Info "TESTING FOR ZAP2ITID MATCH:$line $(sed -n "$serieslinenumber"'p' "$m2kdir/shn.txt")"
+    Info "TESTING FOR ZAP2ITID MATCH:$line $(sed -n "$serieslinenumber"'p' "$TMP_SHN_FILE")"
     Zap2ItTest="$(echo "$line" | tr -d MVSHEP | sed 's/0*//')"
     if [[ "$Zap2ItTest" = "$Zap2itSeriesID" ]]; then
       return 0
     fi
-  done < "$m2kdir/zap2it.txt"
+  done < "$TMP_ZAP2IT_FILE"
   Warn "${FUNCNAME[0]}() couldn't find serieslinenumber with Zap2itSeriesID"
   serieslinenumber=0
   return 1
@@ -2285,7 +2324,7 @@ get_serieslinenumber_zap2itid(){
 get_serieslinenumber_showname_fuzzy(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   #TODO: Why the restriction to the first 27 characters for matching here???
-  serieslinenumber=$(agrep -Byn "${ShowName:0:27}" "$m2kdir/shn.txt" | sed 's/:.*//' | grep -m1 ^)
+  serieslinenumber=$(agrep -Byn "${ShowName:0:27}" "$TMP_SHN_FILE" | sed 's/:.*//' | grep -m1 ^)
   #Correct for serieslinenumber = ""
   [[ -z "$serieslinenumber" ]] && serieslinenumber=0
 
@@ -2302,7 +2341,7 @@ get_serieslinenumber_showname_fuzzy(){
 #against show names returned by querying TheTVDB.
 get_serieslinenumber_showname(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  serieslinenumber="$(grep -nix "$ShowName" "$m2kdir/shn.txt" | sed 's/:.*//' | grep -m1 ^)"
+  serieslinenumber="$(grep -nix "$ShowName" "$TMP_SHN_FILE" | sed 's/:.*//' | grep -m1 ^)"
 
   #Correct for serieslinenumber = ""
   [[ -z "$serieslinenumber" ]] && serieslinenumber=0
@@ -2370,13 +2409,13 @@ make_m2k_database_dir(){
 set_seriesid_newshowname_from_serieslinenumber(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   #Get the seriesid based on the showname
-  SeriesID="$(sed -n "$serieslinenumber"'p' "$m2kdir/sid.txt" | grep -m1 ^)"
-  NewShowName="$(sed -n "$serieslinenumber"'p' "$m2kdir/shn.txt" | grep -m1 ^)"
+  SeriesID="$(sed -n "$serieslinenumber"'p' "$TMP_SID_FILE" | grep -m1 ^)"
+  NewShowName="$(sed -n "$serieslinenumber"'p' "$TMP_SHN_FILE" | grep -m1 ^)"
   NewShowName="${NewShowName//&amp;/&}"
 
   #If we're not in debug mode then cleanup show identification files.
-  [[ -f "$m2kdir/sid.txt" ]] && (( LogLevel < 3 )) && rm -f "$m2kdir/sid.txt"
-  [[ -f "$m2kdir/shn.txt" ]] && (( LogLevel < 3 )) && rm -f "$m2kdir/shn.txt"
+  [[ -f "$TMP_SID_FILE" ]] && (( LogLevel < 3 )) && rm -f "$TMP_SID_FILE"
+  [[ -f "$TMP_SHN_FILE" ]] && (( LogLevel < 3 )) && rm -f "$TMP_SHN_FILE"
 }
 
 #Sets the AbsoluteEpisodeNumber variable by comparing OriginalAirDate
@@ -2628,52 +2667,73 @@ download_series_identification(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   local -i NextShow=0
   Inform "SEARCHING www.TheTVDB.com FOR $tvdbshowname"
-  #TODO: Instance searching rather then global.  Need to create an instance variable based on time and chanid.
-  #Search TheTVDB and return an XML file with results
-  curl -L -s -m"$Timeout" "www.thetvdb.com/api/GetSeries.php?seriesname=$tvdbshowname" > "$m2kdir/working.xml"
 
-  if (( $(wc --bytes < "$m2kdir/working.xml") == 0 )); then
+  #Create temporary file to hold the show data from TheTVDB
+  local WORKING_FILE
+  WORKING_FILE="$(mktemp --tmpdir="$M2K_TMPDIR" --suffix=.xml "m2k_working_$FileNameNow-XXXX")"
+  [[ "$?" != 0 ]] && { Err "Failed to create temporary file." ; return 1 ; }
+
+  #Search TheTVDB and return an XML file with results
+  curl -L -s -m"$Timeout" "www.thetvdb.com/api/GetSeries.php?seriesname=$tvdbshowname" > "$WORKING_FILE"
+
+  if (( $(wc --bytes < "$WORKING_FILE") == 0 )); then
     Err "FUNCNAME[0]}(): Couldn't access info from TheTVDB."
     ErrCont "Check your internet connection."
     ErrCont "Check www.thetvdb.com for '$tvdbshowname'."
     return 1
   fi
 
+  #Create temporary files to hold the show ID and show name
+  TMP_SID_FILE="$(mktemp --tmpdir="$M2K_TMPDIR" --suffix=.txt "m2k_sid_$FileNameNow-XXXX")"
+  [[ "$?" != 0 ]] && { Err "Failed to create temporary file." ; return 1 ; }
+  TMP_SHN_FILE="$(mktemp --tmpdir="$M2K_TMPDIR" --suffix=.txt "m2k_shn_$FileNameNow-XXXX")"
+  [[ "$?" != 0 ]] && { Err "Failed to create temporary file." ; return 1 ; }
+  declare -gr TMP_SID_FILE TMP_SHN_FILE
+
   #Separate the XML into textual DBs containing SeriesID, ShowName and Zap2it IDs
-  grep "<seriesid>" "$m2kdir/working.xml" | sed -e 's#</\?seriesid>##g' \
-                                                -e 's/&quot;/"/g'       \
-                                                -e 's/&amp;/\&/g'       \
-                                                -e 's/&ndash;/-/g'      \
-                                                -e 's/&lt;/</g'         \
-                                                -e 's/&gt;/>/g' >"$m2kdir/sid.txt"
-  grep "<SeriesName>" "$m2kdir/working.xml" | sed -e 's#</\?SeriesName>##g' \
-                                                  -e 's/&quot;/"/g'         \
-                                                  -e 's/&amp;/\&/g'         \
-                                                  -e 's/&ndash;/-/g'        \
-                                                  -e 's/&lt;/</g'           \
-                                                  -e 's/&gt;/>/g' >"$m2kdir/shn.txt"
+  grep "<seriesid>" "$WORKING_FILE" | sed -e 's#</\?seriesid>##g' \
+                                          -e 's/&quot;/"/g'       \
+                                          -e 's/&amp;/\&/g'       \
+                                          -e 's/&ndash;/-/g'      \
+                                          -e 's/&lt;/</g'         \
+                                          -e 's/&gt;/>/g' > "$TMP_SID_FILE"
+  grep "<SeriesName>" "$WORKING_FILE" | sed -e 's#</\?SeriesName>##g' \
+                                            -e 's/&quot;/"/g'         \
+                                            -e 's/&amp;/\&/g'         \
+                                            -e 's/&ndash;/-/g'        \
+                                            -e 's/&lt;/</g'           \
+                                            -e 's/&gt;/>/g' > "$TMP_SHN_FILE"
+
+  #Create a temporary file to contain zap2it info
+  TMP_ZAP2IT_FILE="$(mktemp --tmpdir="$M2K_TMPDIR" --suffix=.txt "m2k_zap2it_$FileNameNow-XXXX")"
+  [[ "$?" != 0 ]] && { Err "Failed to create temporary zap2it file." ; return 1 ; }
+  declare -gr TMP_ZAP2IT_FILE
+  Debug "Created a temporary zap2it file: '$TMP_ZAP2IT_FILE'"
 
   #parse the XML for shows with Zap2ItIDs
-  test -f "$m2kdir/zap2it.txt" && rm -f "$m2kdir/zap2it.txt"
   while read -r line ; do
     test "$line" = "<Series>" && NextShow=1
     if [[ "$line" = "</Series>" ]] && ((NextShow==1)); then
-      printf '\n' >> "$m2kdir/zap2it.txt"
+      printf '\n' >> "$TMP_ZAP2IT_FILE"
       NextShow=0
     fi
 
     if [[ "$line" =~ '<zap2it_id>'* ]] ; then
       echo "$line" | sed -e 's#</\?zap2it_id>##g' \
-                        -e 's/&quot;/"/g'         \
-                        -e 's/&amp;/\&/g'         \
-                        -e 's/&ndash;/-/g'        \
-                        -e 's/&lt;/</g'           \
-                        -e 's/&gt;/>/g' >> "$m2kdir/zap2it.txt"
+                         -e 's/&quot;/"/g'        \
+                         -e 's/&amp;/\&/g'        \
+                         -e 's/&ndash;/-/g'       \
+                         -e 's/&lt;/</g'          \
+                         -e 's/&gt;/>/g' >> "$TMP_ZAP2IT_FILE"
       NextShow=0
     fi
-  done < "$m2kdir/working.xml"
-  #Assuming we're not in debug mode, remove the working file.
-  (( LogLevel < 3 )) && rm -f "$m2kdir/working.xml"
+  done < "$WORKING_FILE"
+  #If we're not in debug mode, remove the working file.
+  if (( LogLevel < 3 )); then
+    rm -f "$WORKING_FILE"
+  else
+    Debug "Not removing the temporary working file: '$WORKING_FILE'"
+  fi
   return 0
 }
 
@@ -2948,7 +3008,7 @@ msg_recording_info(){
   printf '%s\n' "  Starttime='$ShowStartTime'"
   if [[ "$CommercialMarkup" = "Created" ]]; then
     printf '\n%s\n' "Commercial Skip Info"
-    tail -n +2 "$m2kdir/markupframes.txt"
+    tail -n +2 "$MARKUPFRAMES_TMP"
     printf '\n'
   fi
 }
@@ -3245,8 +3305,13 @@ process_cleanup_file(){
       rm -f "$line"
     fi
   done < "$CLEANUP_FILE"
+
   #If we're not in debug mode then remove the clean-up file we just processed.
-  (( LogLevel < 3 )) && rm -f "$CLEANUP_FILE"
+  if (( LogLevel < 3 )); then
+    rm -f "$CLEANUP_FILE"
+  else
+    Debug "Not removing temporary clean-up file: '$CLEANUP_FILE'"
+  fi
 }
 
 #Clean-up old files we don't need any more: log files; m2k database files; etc.
@@ -3257,24 +3322,40 @@ m2k_cleanse(){
   #      Maybe make an archived_logs directory with sub directories: main; diagnostics; etc.
 
   #Create cleanup files for archived logs, myth2kodi database, and daily report files.
-  find "$m2kdir" -maxdepth 1 -type f -name '*20[0-9][0-9]-[0-1][0-9]-[0-3][0-9]*' > "$m2kdir/cleanup_logs"
-  find "$m2kdir" -mindepth 2 -type f ! -path "*DailyReport*" -name '*20[0-9][0-9]-[0-1][0-9]-[0-3][0-9]*' > "$m2kdir/cleanup_m2k_db"
-  find "$m2kdir/DailyReport" -type f -name '*20[0-9][0-9]-[0-1][0-9]-[0-3][0-9]*' > "$m2kdir/cleanup_dailyreport"
+  local CLEANUP_LOGS CLEANUP_M2K_DB CLEANUP_DAILYREPORT
+  CLEANUP_LOGS="$(mktemp --tmpdir="$M2K_TMPDIR" --suffix=.txt m2k_cleanup_logs_$FileNameNow-XXXX)"
+  [[ "$?" != 0 ]] && { Err "Failed to create temporary file." ; return 1 ; }
+  CLEANUP_M2K_DB="$(mktemp --tmpdir="$M2K_TMPDIR" --suffix=.txt m2k_cleanup_m2k_db_$FileNameNow-XXXX)"
+  [[ "$?" != 0 ]] && { Err "Failed to create temporary file." ; return 1 ; }
+  CLEANUP_DAILYREPORT="$(mktemp --tmpdir="$M2K_TMPDIR" --suffix=.txt m2k_cleanup_dailyreport_$FileNameNow-XXXX)"
+  [[ "$?" != 0 ]] && { Err "Failed to create temporary file." ; return 1 ; }
+  find "$m2kdir" -maxdepth 1 -type f -name '*20[0-9][0-9]-[0-1][0-9]-[0-3][0-9]*' > "$CLEANUP_LOGS"
+  find "$m2kdir" -mindepth 2 -type f ! -path "*DailyReport*" -name '*20[0-9][0-9]-[0-1][0-9]-[0-3][0-9]*' > "$CLEANUP_M2K_DB"
+  find "$m2kdir/DailyReport" -type f -name '*20[0-9][0-9]-[0-1][0-9]-[0-3][0-9]*' > "$CLEANUP_DAILYREPORT"
 
-  Inform "Processing log clean-up file: $m2kdir/cleanup_logs"
-  process_cleanup_file "$m2kdir/cleanup_logs" "$LOG_LIFE"
+  Inform "Processing log clean-up file: $CLEANUP_LOGS"
+  process_cleanup_file "$CLEANUP_LOGS" "$LOG_LIFE"
 
-  Inform "Processing myth2kodi database clean-up file: $m2kdir/cleanup_m2k_db"
-  process_cleanup_file "$m2kdir/cleanup_m2k_db" "$M2K_DB_LIFE"
+  Inform "Processing myth2kodi database clean-up file: $CLEANUP_M2K_DB"
+  process_cleanup_file "$CLEANUP_M2K_DB" "$M2K_DB_LIFE"
 
-  Inform "Processing daily report clean-up file: $m2kdir/cleanup_dailyreport"
-  process_cleanup_file "$m2kdir/cleanup_dailyreport" "$DAILYREPORT_LIFE"
+  Inform "Processing daily report clean-up file: $CLEANUP_DAILYREPORT"
+  process_cleanup_file "$CLEANUP_DAILYREPORT" "$DAILYREPORT_LIFE"
 
-  #Clean-up some other files we sometimes leave around
-  [[ -f "$m2kdir/markupstart.txt" ]]  && rm -f "$m2kdir/markupstart.txt"
-  [[ -f "$m2kdir/markupstop.txt" ]]   && rm -f "$m2kdir/markupstop.txt"
-  [[ -f "$m2kdir/markupframes.txt" ]] && rm -f "$m2kdir/markupframes.txt"
-  [[ -f "$m2kdir/zap2it.txt" ]]       && rm -f "$m2kdir/zap2it.txt"
+  #Clean-up temporary files we leave around when running with debug logging.
+  rm -f "$M2K_TMPDIR/m2k_cleanup_logs_"*
+  rm -f "$M2K_TMPDIR/m2k_cleanup_m2k_db_"*
+  rm -f "$M2K_TMPDIR/m2k_cleanup_dailyreport_"*
+  rm -f "$M2K_TMPDIR/m2k_comskip_scan_"*
+  rm -f "$M2K_TMPDIR/m2k_scan_"*
+  rm -f "$M2K_TMPDIR/m2k_recinfo_"*
+  rm -f "$M2K_TMPDIR/m2k_shn_"*
+  rm -f "$M2K_TMPDIR/m2k_sid_"*
+  rm -f "$M2K_TMPDIR/m2k_working_"*
+  rm -f "$M2K_TMPDIR/m2k_markupframes_"*
+  rm -f "$M2K_TMPDIR/m2k_markupstart_"*
+  rm -f "$M2K_TMPDIR/m2k_markupstop_"*
+  rm -f "$M2K_TMPDIR/m2k_zap2it_"*
 
   #Archive our duplicates.log.
   if [[ -f "$DuplicatesFile" ]]; then
@@ -3301,7 +3382,7 @@ m2k_maintenance(){
       Debug "Support file (record $Counter): ${SupportFile}"
       MainFile="$(cut -d"'" -f4 <<< "$line")"
       Debug "Main file (record $Counter): ${MainFile}"
-      #TODO: Why the ls rather than [[ ! -f "$MainFile" ]]
+      #TODO: Why the ls rather than [[ ! -e "$MainFile" ]]
       ls "$MainFile" > /dev/null 2>&1
       if [ "$?" != "0" ]; then
         if [ -d "$(dirname "$SupportFile")" ]; then
@@ -3335,7 +3416,7 @@ m2k_maintenance(){
           printf '%s\n' "$line" >> "$m2kdir/created.tracking2"
         fi
       fi
-    done <"$m2kdir/created.tracking"
+    done < "$m2kdir/created.tracking"
     [[ -f "$m2kdir/created.tracking" ]] && rm -f "$m2kdir/created.tracking"
     [[ -f "$m2kdir/created.tracking2" ]] && mv "$m2kdir/created.tracking2" "$m2kdir/created.tracking"
   fi
@@ -3344,7 +3425,7 @@ m2k_maintenance(){
   if [ "$DirTracking" = "Enabled" ] && [ -f "$m2kdir/dir.tracking" ]; then
     Inform "PERFORMING CLEANUP OF EMPTY DIRECTORIES."
     #Reverse dictionary sort the tracked dirs, should have the effect of depth first.
-    sort -dr "$m2kdir/dir.tracking" > "$m2kdir/dir.tracking.sorted"
+    sort -dr "$m2kdir/dir.tracking" > "$m2kdir/dir.tracking.sorted" #TODO: mktemp
     local CONTAINS
     while read -r dirtocheck ; do
       (( ++Counter ))
@@ -3417,7 +3498,7 @@ m2k_scan(){
     #SAK: my fault
     Warn     "${FUNCNAME[0]}()"
     WarnCont "myth2kodi has detected that you are (or were previously)"
-    WarnCont "running as a privileged user.  This may lead to permission"
+    WarnCont "running as a privileged user. This may lead to permission"
     WarnCont "contamination of normally unprivileged files."
     WarnCont "Do not run this command with sudo."
     read -r -p "Possible permission contamination. Continue anyway? yes/(no)" yesorno
@@ -3491,8 +3572,11 @@ m2k_scan(){
       printf '\n' ; [[ -z "$yesorno" ]] && yesorno="n"
       [[ "$yesorno" != "y" ]] && return "$dooverstatus"
     fi
-    Debug "Creating a temporary scan file: $m2kdir/scan.temp"
-    ls -1 "$scanpath"/*."$checkext" > "$m2kdir/scan.temp"
+    local SCAN_FILE
+    SCAN_FILE="$(mktemp --tmpdir="$M2K_TMPDIR" --suffix=.txt m2k_scan_$FileNameNow-XXXX)"
+    [[ "$?" != 0 ]] && { Err "Failed to create temporary file." ; return 1 ; }
+    Debug "Created a temporary scan file: '$SCAN_FILE'"
+    ls -1 "$scanpath"/*."$checkext" > "$SCAN_FILE"
     Inform "Scanning $scanpath for $checkext files."
     while read -r line ; do
       Debug "Attempting to envoke myth2kodi on $line"
@@ -3501,11 +3585,14 @@ m2k_scan(){
       else
         Debug "Either we've already moved that or it's a directory. Either way, moving on."
       fi
-    done<"$m2kdir/scan.temp"
+    done < "$SCAN_FILE"
     Inform "Completed scan of $scanpath for $checkext files."
-    Debug "Removing the temporary scan file: $m2kdir/scan.temp"
     #If we're not in debug mode then remove the scan file we just processed.
-    (( LogLevel < 3 )) && rm -f "$m2kdir/scan.temp"
+    if (( LogLevel < 3 )); then
+      rm -f "$SCAN_FILE"
+    else
+      Debug "Not removing the temporary scan file: '$SCAN_FILE'"
+    fi
     return 0
   else
     Inform "You must press 'y' to scan, aborting."
@@ -4586,7 +4673,7 @@ recording_log(){
   Debug "RECORDING_PATH: $RECORDING_PATH"
   Debug "RECORDING_NAME: $RECORDING_NAME"
   #Start a log file list with the current log file
-  printf '%s\n' "$LogFile" > "logfilelist.txt"
+  printf '%s\n' "$LogFile" > "logfilelist.txt"  #TODO: mktemp
   #Add archived log files to the list, most recent first
   find "$m2kdir" -maxdepth 1 -type f -name "$LOGFILEPATTERN" | sort -r >> "$m2kdir/logfilelist.txt"
   #Create a temporary log file for this recording
@@ -4610,7 +4697,7 @@ recording_log(){
     else
       Warn "Unrecognised log file match: $LOG_FILE"
     fi
-  done <"$m2kdir/logfilelist.txt"
+  done < "$m2kdir/logfilelist.txt"
   #
   if (( $(wc --lines < "$m2kdir/temp.log") > 2 )); then
     Debug "Viewing log entries for $RECORDING_NAME in less."
@@ -4629,7 +4716,7 @@ success_postprocessing(){
 
   #Move comskip data to proper folder
   if [[ "$CommercialMarkup" = "Created" ]]; then
-    mv "$m2kdir/markupframes.txt" "$MoveDir/$ShowFileName.txt"
+    mv "$MARKUPFRAMES_TMP" "$MoveDir/$ShowFileName.txt"
     printf '%s\n' "'$MoveDir/$ShowFileName.txt' '$MoveDir/$ShowFileName.$OriginalExt'" >> "$m2kdir/created.tracking"
   fi
 

@@ -485,6 +485,11 @@ exit_job(){
   if [[ "$PROCESSING_RECORDING" = "True" ]]; then
     printf '%s\n' "@@@@ COMPLETE: $(date --rfc-3339=seconds) @@@@" >> "$LogFile"
   fi
+
+  #Some excessive logging for extra buggy bugs.
+  ((LogLevel>=4)) && env | err_pipe 'env:  '
+  ((LogLevel>=42)) && set | err_pipe 'set:  '
+
   #Run any user job specified for this job type.
   if [[ -f "$m2kdir/userjobs/$jobtype" ]]; then
     Inform "Processing user job: $m2kdir/userjobs/$jobtype"
@@ -511,6 +516,7 @@ log_rotation(){
   FILE_NAME="$1"
   ARCHIVE_NAME="$2"
   FILE_SIZE_LIMIT="${3-1048576}" #Default to ~1MB
+  declare -g ARCHIVED_FILE
   ARCHIVED_FILE='' #Global/return-state set to 'True' when we archive a file.
 
   #When the $FILE_NAME exceeds $FILE_SIZE_LIMIT, archive it.
@@ -556,6 +562,7 @@ m2k_init(){
   fi
   #Strongly recommend against running as root.
   if [[ "$EUID" = '0' || "$UID" = '0' || "$USER" = 'root' ]]; then
+    local yesorno='no'
     printf 'WARNING: %s\n' "myth2kodi should NOT be run as root."
     printf '  %s\n' "myth2kodi has detected that you are running as"
     printf '  %s\n' "a privileged user. This may lead to permission"
@@ -647,7 +654,7 @@ m2k_init(){
 #      and abort as appropriate.
 validate_settings(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  Err "NotImplemented."
+  Err "${FUNCNAME[0]}(): NotImplemented."
 }
 
 #Do some basic tests to make sure we were called correctly
@@ -710,8 +717,8 @@ parse_command_flags(){
     --diagnostics)
       Debug "Recognised command line switch '--diagnostics'"
       export m2kDiagnosticsMode="True"
-      PreCallLogFile="$LogFile"
-      PreCallLogLevel="$LogLevel"
+      local PreCallLogFile="$LogFile"
+      local PreCallLogLevel="$LogLevel"
       (( LogLevel < 2 )) && LogLevel=2 && Inform "Escalating LogLevel to Info (2)."
       if [[ "$LogType" != "stdout" ]] ; then
         Inform "Running diagnostics, so redirecting subsequent messages to $DiagnosticsFile"
@@ -756,7 +763,7 @@ parse_command_flags(){
     ;;
     --unmanned_doover)
       Debug "Recognised command line switch '--unmanned_doover'"
-      DoOverBypass=1
+      declare -gi DoOverBypass=1
       m2k_doover
       return $?
     ;;
@@ -808,7 +815,7 @@ parse_command_flags(){
       Debug "Recognised command line switch '--maintenance'"
       maintenance_warning
       [[ "$?" != 0 ]] && return $?
-      removedead=1
+      declare -gi removedead=1
       m2k_maintenance
       return $?
     ;;
@@ -916,6 +923,7 @@ set_show_file_name(){
 #Set the name for special recording "Categories": 'NEWS'; 'SPORT'; etc
 set_show_file_name_categoric(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
+  local -i testedmethod
   #Method1 - use airdate for season
   if [[ "${OriginalAirDate:0:4}" != "0000" && -n "${OriginalAirDate:0:4}" && "$UseMethod2" != "1" ]]; then
     EventYear="${OriginalAirDate:0:4}"
@@ -924,24 +932,24 @@ set_show_file_name_categoric(){
     Exx="$EventMonthDay"
     [[ -z "$NewShowName" ]] && NewShowName="$ShowName"
   else #Flag failure of Method1
-    testedmethod1=0
+    testedmethod=0
   fi
   #Slight further testing of Method1 results
   if [[ -n "$EventMonthDay" ]] && ((EventYear > 1900)) && ((EventMonthDay > 0)); then
-    testedmethod1=1
+    testedmethod=1
   else
-    testedmethod1=0
+    testedmethod=0
   fi
 
   #Method2 -
-  if [ "$testedmethod1" != "1" ]; then
+  if ((testedmethod != 1)); then
     if [[ "${ShowStartTime:0:4}" != 0000 && -n "${ShowStartTime:0:4}" ]] ; then
       EventYear="${ShowStartTime:0:4}"
       EventMonthDay="$(echo "${ShowStartTime:5:5}" | tr -d "-" | sed 's/0*//')"
     fi
     Exx="$EventMonthDay"
     Sxx="$EventYear"
-    #Check validity of Method2
+    #TODO: Check validity of Method2
   fi
 
   #Test final result and assign ShowFileName
@@ -1066,14 +1074,15 @@ recreate_comskip(){
     mv "$MARKUPFRAMES_TMP" "${ShowComSkip}" 2>&1 | err_pipe "${FUNCNAME[0]}(): "
     return "${PIPESTATUS[0]}"
   elif [[ -d "$InputPath" ]]; then
+    local yesorno='no' #Default to safety, ie do nothing.
     #TODO: confirm InputPath doesn't end in a /
     Warn "YOU ARE ABOUT TO SCAN THE DIRECTORY: $InputPath"
     WarnCont "AND REGENERATE COMSKIP FILES FOR ALL PREVIOUSLY MOVED RECORDINGS."
     read -r -n1 -p "  Do you want myth2kodi to regenerate comskip files? y/(n)>" yesorno
     printf '\n'
     #Default to safety, ie do nothing.
-    [[ -z "$yesorno" ]] && yesorno="n"
     if [ "$yesorno" = "y" ]; then
+      local checkext scanpath
       checkext="mpg" #TODO: Make this user/caller specifiable
       scanpath="$InputPath"
       local COMSKIP_SCAN_FILE
@@ -1425,7 +1434,7 @@ failsafe(){
 dbselect(){
   Debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   DebugCont "arg 1 = $1"
-  mysql -u"$MySQLuser" -p"$MySQLpass" -e "USE '$MySQLMythDb' ; SELECT $1 FROM recorded WHERE basename LIKE '$InputFileBasename' ; "
+  mysql -u"$MySQLuser" -p"$MySQLpass" -e "USE $MySQLMythDb ; SELECT $1 FROM recorded WHERE basename LIKE '$InputFileBasename' ; "
 }
 
 #####ACCESS MythTV DATABASE#####
@@ -1473,9 +1482,9 @@ get_mythtvdb_info_mysql(){
 
   #TODO: Clean up all the following mysql commands, like we've done for the above.
   #get DataType
-  XMLTVGrabber=$(mysql -u"$MySQLuser" -p"$MySQLpass" -e "USE '$MySQLMythDb' ; SELECT xmltvgrabber FROM videosource ; " | sed 's/xmltvgrabber//g' | tr -d '/' | sed -n "2p" | tr -d ' ')
+  XMLTVGrabber=$(mysql -u"$MySQLuser" -p"$MySQLpass" -e "USE $MySQLMythDb ; SELECT xmltvgrabber FROM videosource ; " | sed 's/xmltvgrabber//g' | tr -d '/' | sed -n "2p" | tr -d ' ')
   #get year for movies
-  MovieAirDate=$(mysql -u"$MySQLuser" -p"$MySQLpass" -e "USE '$MySQLMythDb' ; SELECT airdate FROM recordedprogram WHERE programid LIKE '$ProgramID' AND chanid LIKE '$ChanID' ; " | tr -d '/' | sed 's/airdate//g' | sed -n "2p" | tr -d ' ')
+  MovieAirDate=$(mysql -u"$MySQLuser" -p"$MySQLpass" -e "USE $MySQLMythDb ; SELECT airdate FROM recordedprogram WHERE programid LIKE '$ProgramID' AND chanid LIKE '$ChanID' ; " | tr -d '/' | sed 's/airdate//g' | sed -n "2p" | tr -d ' ')
   #Blank year if it is invalid
   if [ ! -z "$MovieAirDate" ] && (( MovieAirDate < 1900 )); then
     MovieAirDate=''
@@ -1496,10 +1505,10 @@ get_mythtvdb_info_mysql(){
 
     #Remove old and generate a comskip Start list
     echo "" > "$MARKUPSTART_TMP" #TODO: Compare this against what's returned by the python bindings version.
-    mysql -u"$MySQLuser" -p"$MySQLpass" -e "USE '$MySQLMythDb' ; SELECT mark FROM recordedmarkup WHERE starttime LIKE '$ShowStartTime' AND chanid LIKE '$ChanID' AND type LIKE 4 ; " | sed 's/mark//g' | tr -d ' ' >> "$MARKUPSTART_TMP"
+    mysql -u"$MySQLuser" -p"$MySQLpass" -e "USE $MySQLMythDb ; SELECT mark FROM recordedmarkup WHERE starttime LIKE '$ShowStartTime' AND chanid LIKE '$ChanID' AND type LIKE 4 ; " | sed 's/mark//g' | tr -d ' ' >> "$MARKUPSTART_TMP"
     #Remove old and generate comskip Stop list
     echo "" > "$MARKUPSTOP_TMP"
-    mysql -u"$MySQLuser" -p"$MySQLpass" -e "USE '$MySQLMythDb' ; SELECT mark FROM recordedmarkup WHERE starttime LIKE '$ShowStartTime' AND chanid LIKE '$ChanID' AND type LIKE 5 ; " | sed 's/mark//g' | tr -d ' ' >> "$MARKUPSTOP_TMP"
+    mysql -u"$MySQLuser" -p"$MySQLpass" -e "USE $MySQLMythDb ; SELECT mark FROM recordedmarkup WHERE starttime LIKE '$ShowStartTime' AND chanid LIKE '$ChanID' AND type LIKE 5 ; " | sed 's/mark//g' | tr -d ' ' >> "$MARKUPSTOP_TMP"
     #Combine commercial data into a single comskip file and remove the initial files
     generate_comskip
   fi
@@ -2052,7 +2061,7 @@ delete_mythtv_database_entry(){
   if [ ! -e "$InputPath" ]; then
     #Remove recording entry from mysql database
     Inform "${FUNCNAME[0]}() REMOVING: $InputFileBasename; THUMBNAILS; DATABASE ENTRIES."
-    mysql -u"$MySQLuser" -p"$MySQLpass" -e "USE '$MySQLMythDb' ; DELETE FROM recorded WHERE basename LIKE '$InputFileBasename' ; "
+    mysql -u"$MySQLuser" -p"$MySQLpass" -e "USE $MySQLMythDb ; DELETE FROM recorded WHERE basename LIKE '$InputFileBasename' ; "
     if [[ "$?" != 0 ]]; then
       Err "${FUNCNAME[0]}(): Failed to delete DB entry for: $InputFileBasename"
       return 1
@@ -3410,7 +3419,7 @@ m2k_maintenance(){
           printf '%s\n' "$line" >> "$m2kdir/created.tracking.old"
         else
           Warn "${FUNCNAME[0]}() FOLDER DISCONNECTED: $SupportFile"
-          if [ "$removedead" != "1" ] ; then
+          if (( removedead != 1 )); then
             printf '%s\n' "$line" >> "$m2kdir/created.tracking2"
           else
             Inform "REMOVING FROM FUTURE SEARCHES: $line"
@@ -3478,7 +3487,7 @@ m2k_maintenance(){
   log_rotation "$m2kdir/created.tracking.old" "$m2kdir/created.tracking.old_${FileNameNow}" '512000'
 
   #This isn't super fast, so only cleanse the working when called from --maintenance mode.
-  if [[ "$removedead" = "1" ]]; then
+  if (( removedead == 1 )); then
     Inform "Cleaning up old archived logs, myth2kodi database files, and daily report files."
     m2k_cleanse
   fi
@@ -4113,8 +4122,8 @@ m2k_doover(){
   WarnCont "In this mode of operation, myth2kodi will be rerun against all"
   WarnCont "files which were moved in the past despite having low confidence."
   WarnCont "It is important that this process isn't interrupted or data loss may occur."
-  test "$DoOverBypass" != "1" && read -r -n1 -p "  Doover requested -- 'y' to continue, 'n' to exit... y/(n):>" yesorno && printf '\n'
-  test "$DoOverBypass" = "1" && yesorno="y"
+  ((DoOverBypass != 1)) && read -r -n1 -p "  Doover requested -- 'y' to continue, 'n' to exit... y/(n):>" yesorno && printf '\n'
+  ((DoOverBypass == 1)) && yesorno="y"
 
   if [ "$yesorno" = "y" ] && [ -f "$m2kdir/doover.sh" ]; then
     Debug "Running doover.sh"

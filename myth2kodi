@@ -80,6 +80,10 @@
 
 #TODO: Only emit one m2k_notify per job processed: success or failure.
 
+#TODO: review issues caused by multiple simultaneous instances, eg log file
+#      needs to be locked to prevent deleting by subsequent call that triggers
+#      logrotate... maybe GUID log files on a per-call basis???
+
 #Intention:
 #  This program automates the mapping of MythTV recordings to a Kodi library.
 #  It is designed to be a user job in MythTV. It can also be run manually from
@@ -260,8 +264,8 @@ AlternateMoveDir="/home/librarian/recordedTV"
 #for multiple recording dirs. TargetPathIsInputPath will separate generic shows
 #from episodes and movies. Enabled|Disabled
 TargetPathIsInputPath="Disabled"
-#the following line contains the API key from www.TheTVDB.Com. Default project code: 6DF511BB2A64E0E9
-APIkey="6DF511BB2A64E0E9"  #TODO: If I ever put this on GitHub I should register a fresh APIkey - http://thetvdb.com/?tab=apiregister
+#the following line contains the API key from www.TheTVDB.Com. Default project code: myth2kodi=3B054E548E3F4FBE ; mythicalLibrarian=6DF511BB2A64E0E9
+APIkey="3B054E548E3F4FBE"
 #Internet access Timeout in seconds, used for TheTVDB, : Default Timeout=50 (seconds)
 Timeout=50
 #Update database time in seconds, Longer duration means faster processing time and less strain on TheTVDB. Default='88920' (1 day + eps)

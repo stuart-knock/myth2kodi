@@ -46,7 +46,7 @@ REQUIRES:
   libmyth-python
   python-lxml
 
-#NOTE: Then a listing of people to blame, the below form won't show up in docs.
+#NOTE: A listing of people to blame, the below form won't show up in docs.
 .. moduleauthor:: Stuart Knock <>
 .. moduleauthor:: Mike Szczys <>
 .. moduleauthor:: Adam Outler <outleradam (at) hotmail.com>

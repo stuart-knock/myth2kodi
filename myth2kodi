@@ -3508,8 +3508,12 @@ m2k_maintenance(){
   #Check if folders are empty and remove dir if needed and it was created by myth2kodi
   if [ "$DirTracking" = "Enabled" ] && [ -f "$m2kdir/dir.tracking" ]; then
     Inform "PERFORMING CLEANUP OF EMPTY DIRECTORIES."
+    local SORTED_DIR_TRACKING_FILE
+    SORTED_DIR_TRACKING_FILE="$(mktemp --tmpdir="$M2K_TMPDIR" --suffix=.sorted m2k_sorted_dir_tracking)"
+    [[ "$?" != 0 ]] && { Err "Failed to create temporary file." ; return 1 ; }
+    Debug "Created a temporary sorted dir,tracking file: $SORTED_DIR_TRACKING_FILE"
     #Reverse dictionary sort the tracked dirs, should have the effect of depth first.
-    sort -dr "$m2kdir/dir.tracking" > "$m2kdir/dir.tracking.sorted" #TODO: mktemp
+    sort -dr "$m2kdir/dir.tracking" > "$SORTED_DIR_TRACKING_FILE"
     local CONTAINS
     while read -r dirtocheck ; do
       (( ++Counter ))
@@ -3530,9 +3534,9 @@ m2k_maintenance(){
         Warn "Tracked directory doesn't seem to be a directory. Continuing to track, just in case."
         printf '%s\n' "$dirtocheck" >> "$m2kdir/dir.tracking2"
       fi
-    done < "$m2kdir/dir.tracking.sorted"
+    done < "$SORTED_DIR_TRACKING_FILE"
     [[ -f "$m2kdir/dir.tracking" ]] && rm -f "$m2kdir/dir.tracking"
-    [[ -f "$m2kdir/dir.tracking.sorted" ]] && rm -f "$m2kdir/dir.tracking.sorted"
+    [[ -f "$SORTED_DIR_TRACKING_FILE" ]] && rm -f "$SORTED_DIR_TRACKING_FILE"
     [[ -f "$m2kdir/dir.tracking2" ]] && mv "$m2kdir/dir.tracking2" "$m2kdir/dir.tracking"
   fi
 
@@ -3981,7 +3985,6 @@ m2k_diagnostics(){
     fi
   fi
 
-  #TODO: This currently tests Kodi notification even if Notifications are disabled in settings, is this actually the behaviour we want?
   #Test communication with Kodi
   read -r -n1 -p "Press any key to perform KODI Notification test..."
   printf '\n'
@@ -4735,24 +4738,32 @@ recording_log(){
   local COMP='@@@@ COMPLETE:'
   local LOGFILEPATTERN="${LogFileName}_20[0-9][0-9]-[0-1][0-9]-[0-3][0-9]*.gz"
   local LOG_FILE
+  local LOGFILELIST_FILE
+  local TEMPLOG_FILE
   #Find the MythTV recording file name and its path.
   set_recording_name "$1"
   [[ "$?" != 0 ]] && return "$?"
   Debug "RECORDING_PATH: $RECORDING_PATH"
   Debug "RECORDING_NAME: $RECORDING_NAME"
+  LOGFILELIST_FILE="$(mktemp --tmpdir="$M2K_TMPDIR" --suffix=.txt m2k_logfilelist)"
+  [[ "$?" != 0 ]] && { Err "Failed to create temporary file." ; return 1 ; }
+  Debug "Created a temporary list of logfiles file: $LOGFILELIST_FILE"
+  TEMPLOG_FILE="$(mktemp --tmpdir="$M2K_TMPDIR" --suffix=.log m2k_templog)"
+  [[ "$?" != 0 ]] && { Err "Failed to create temporary file." ; return 1 ; }
+  Debug "Created a temporary recording-specific log file: $TEMPLOG_FILE"
   #Start a log file list with the current log file
-  printf '%s\n' "$LogFile" > "logfilelist.txt" #TODO: mktemp
+  printf '%s\n' "$LogFile" > "$LOGFILELIST_FILE"
   #Add archived log files to the list, most recent first
-  find "$m2kdir" -maxdepth 1 -type f -name "$LOGFILEPATTERN" | sort -r >> "$m2kdir/logfilelist.txt"
+  find "$m2kdir" -maxdepth 1 -type f -name "$LOGFILEPATTERN" | sort -r >> "$LOGFILELIST_FILE"
   #Create a temporary log file for this recording
-  printf '%s\n\n' "#### Log entries for: $RECORDING_NAME ####" > "$m2kdir/temp.log"
+  printf '%s\n\n' "#### Log entries for: $RECORDING_NAME ####" > "$TEMPLOG_FILE"
   while read -r LOG_FILE ; do
     if [[ "${LOG_FILE##*.}" = 'gz' ]]; then
       if gzip -dc "$LOG_FILE" 2>/dev/null | grep -q "$PROC" ; then
         Debug "Searching for relevant entries in: $LOG_FILE"
         awk '/'"$PROC"'/,/'"$COMP"'/ {print $0}' <(gzip -dc "$LOG_FILE") \
           | awk -v RS="$PROC" -v OFS='\n' -v ORS='\n\n'                  \
-              '$0~/'"${RECORDING_NAME%%.}"'/{print "'"$LOG_FILE"'",RS$0}' >> "$m2kdir/temp.log"
+              '$0~/'"${RECORDING_NAME%%.}"'/{print "'"$LOG_FILE"'",RS$0}' >> "$TEMPLOG_FILE"
       fi
     elif [[ "${LOG_FILE##*.}" = 'log' ]]; then
       #Confirm the log file actually contains a process recording entry
@@ -4760,21 +4771,21 @@ recording_log(){
         Debug "Searching for relevant entries in: $LOG_FILE"
         awk '/'"$PROC"'/,/'"$COMP"'/ {print $0}' "$LOG_FILE" \
           | awk -v RS="$PROC" -v OFS='\n' -v ORS='\n\n'      \
-              '$0~/'"${RECORDING_NAME%%.}"'/{print "'"$LOG_FILE"'",RS$0}' >> "$m2kdir/temp.log"
+              '$0~/'"${RECORDING_NAME%%.}"'/{print "'"$LOG_FILE"'",RS$0}' >> "$TEMPLOG_FILE"
       fi
     else
       Warn "Unrecognised log file match: $LOG_FILE"
     fi
-  done < "$m2kdir/logfilelist.txt"
+  done < "$LOGFILELIST_FILE"
   #
-  if (( $(wc --lines < "$m2kdir/temp.log") > 2 )); then
+  if (( $(wc --lines < "$TEMPLOG_FILE") > 2 )); then
     Debug "Viewing log entries for $RECORDING_NAME in less."
-    less "$m2kdir/temp.log"
+    less "$TEMPLOG_FILE"
     Debug "Finished viewing."
     return 0
   else
     Inform "There don't appear to be any processing entries for: $1"
-    printf '%s\n' "#### NO ENTRIES FOUND ####" >> "$m2kdir/temp.log"
+    printf '%s\n' "#### NO ENTRIES FOUND ####" >> "$TEMPLOG_FILE"
     return 1
   fi
 }

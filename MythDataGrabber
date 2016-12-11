@@ -15,6 +15,9 @@ MythDataGrabber is designed to pull data from MythTV python bindings.
   adamoutler (at) gmail.com as a formality before any derivative work.
   We just want to hear about your project.
 
+  Original version: https://github.com/adamoutler/mythicallibrarian
+  This version: https://github.com/stuart-knock/myth2kodi
+
 USAGE:
   MythDataGrabber [options]
 

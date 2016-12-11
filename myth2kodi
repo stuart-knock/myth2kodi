@@ -3898,8 +3898,9 @@ m2k_diagnostics(){
   if [ "$DatabaseType" = "MythTVPythonBindings" ]; then
     packagecheck="$packagecheck$PKGNAME_PYTHON$PKGNAME_LIBMYTH_PYTHON$PKGNAME_PYTHON_LXML"
     [[ -n "$PKGPATH_PYTHON" ]] && Inform "package 'python' found: $PKGPATH_PYTHON"
-    if [[ -z "$PKGNAME_PYTHON" ]] && ((pyver < 26 || pyver >= 30)); then
-      Warn "Python 3 and Python older than 2.6 aren't supported."
+    if [[ -z "$PKGNAME_PYTHON" ]] && ((pyver < 27 || pyver >= 30)); then
+      Warn "Python 3 and Python older than 2.7 aren't supported."
+      WarnCont "You'll need to set: DatabaseType='MythTV' in user settings."
     fi
     [[ -z "$PKGNAME_LIBMYTH_PYTHON" ]] && Inform "package 'libmyth-python' found."
     [[ -z "$PKGNAME_PYTHON_LXML" ]] && Inform "package 'python-lxml' found."

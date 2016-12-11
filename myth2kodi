@@ -190,6 +190,12 @@
 #  or
 #    "zypper install curl"
 #
+#  Logging in myth2kodi relies on a script called:
+#    "bashlogging"
+#  if you downloaded a release, then, this should be included in the tarball.
+#  Otherwise it can be found at:
+#    https://github.com/stuart-knock/bash-tools
+#
 #Gnome Notifications:
 #  In order for myth2kodi to send notifications to the GNOME desktop, it
 #  must have no-password sudo access. It uses this access strictly to send

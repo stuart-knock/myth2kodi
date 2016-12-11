@@ -4273,7 +4273,7 @@ msg_about(){
   printf ' %s\n\n' "$m2kVersion"
   printf ' %s\n' "myth2kodi automates the mapping of MythTV recordings to a Kodi library."
   printf ' %s\n\n' "It is a modified version of mythicalLibrarian."
-  printf ' %s\n' "mythicalLibrarian Author: Adam Outler outleradam(at)hotmail.com"
+  printf ' %s\n' "mythicalLibrarian Author: Adam Outler adamoutler(at)gmail.com"
   printf ' %s\n\n' "myth2kodi Author: Stuart Knock"
 }
 

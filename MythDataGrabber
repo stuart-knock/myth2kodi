@@ -12,7 +12,7 @@ MythDataGrabber is designed to pull data from MythTV python bindings.
   For support, please visit: http://forum.xbmc.org/showthread.php?t=65644
   This file was written for the mythicalLibrarian project, and is licensed
   under the Apache License, which requires a notification to
-  outleradam (at) hotmail.com as a formality before any derrivative work.
+  adamoutler (at) gmail.com as a formality before any derivative work.
   We just want to hear about your project.
 
 USAGE:
@@ -49,7 +49,7 @@ REQUIRES:
 #NOTE: A listing of people to blame, the below form won't show up in docs.
 .. moduleauthor:: Stuart Knock <>
 .. moduleauthor:: Mike Szczys <>
-.. moduleauthor:: Adam Outler <outleradam (at) hotmail.com>
+.. moduleauthor:: Adam Outler <adamoutler (at) gmail.com>
 """
 
 __version__ = '0.1.0'

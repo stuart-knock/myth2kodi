@@ -1,6 +1,8 @@
 # myth2kodi:
 ![myth2kodi icon](myth2kodi.png)
 
+**WARNING:** Still a work in progress...
+
 myth2kodi automates the mapping of MythTV recordings to a Kodi library.
 It is designed to be a user job in MythTV. It can also be run manually from
 a command line. It must have access to your MythTV recordings. The program

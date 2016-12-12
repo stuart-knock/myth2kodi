@@ -189,7 +189,7 @@
 ###Stand-alone mode values###
 #Specify the name of the user running mythtv, myth2kodi should always be run
 #by that user. Default: 'mythtv'
-Librarian='librarian'
+Librarian='librarian' #<------THIS VALUE MUST BE SET-------
 
 #TODO: Rethink naming of 'SYMLINK' variable and modes here as the current may be confusing as to what they actually do...
 #      PROCESS_RECORDING_MODE: LINK(same as orig); MOVE(MOVE in orig if SYMLINK=Enabled; 'Disabled' in orig if SYMLINK=Disabled);

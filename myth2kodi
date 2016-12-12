@@ -26,6 +26,9 @@
 #    bashlogging
 #    MythDataGrabber
 #    m2k_notify
+#    myth2kodi.conf
+#    myth2kodi.png
+#    myth2kodi_failed.png
 #    showTranslations.SydFTA
 
 #TODO: Make use of TMDb (https://www.themoviedb.org/) when the recorded
@@ -34,10 +37,6 @@
 #    "https://api.themoviedb.org/3/movie/$TMDbID?api_key=$TMDb_key
 #Or http://omdbapi.com/, eg
 #  http://www.omdbapi.com/?t=Casino&y=&plot=short&r=xml
-
-#TODO: Consider replacing all echo statements with corresponding printf, as
-#  it's apparently preferred for compatibility/portability reasons. See,
-#    http://wiki.bash-hackers.org/commands/builtin/printf
 
 #TODO: Review logging statements throughout... Add consistent stack-trace
 #      information to all Warn and Err statements (maybe in bash-logging).
@@ -56,12 +55,6 @@
 #TODO: If we just prepend $binpath to $Librarian's path we could avoid all the
 #      explicit paths in our function calls... Though we may need to clean up before we finished...
 #          SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
-
-#TODO: Make a directory called userjobs in ~/.myth2kodi/
-#      Add a readme.md with the example jobs from lower in this script
-#      Add an entry like:
-#        [[ -f "$m2kdir/userjobs/$jobtype" ]] && source "$m2kdir/userjobs/$jobtype"
-#      to the exit_job
 
 #TODO: Check all deletion or other reference of ' ' and consider whether it
 #      would be better to use the more inclusive [[:blank:]] or [[:space:]]...

@@ -18,51 +18,6 @@
 #mythicalLibrarian Tech Support: http://forum.kodi.tv/showthread.php?pid=470402
 #
 
-#TODO: Review text under: Output Files; Database-external; Database-internal;
-#      Dependencies; .
-
-#TODO: If making a tar ball as a "Release", include the following:
-#    myth2kodi
-#    bashlogging
-#    MythDataGrabber
-#    m2k_notify
-#    myth2kodi.conf
-#    myth2kodi.png
-#    myth2kodi_failed.png
-#    showTranslations.SydFTA
-
-#TODO: Make use of TMDb (https://www.themoviedb.org/) when the recorded
-#  program is identified as being a Movie... eg
-#    "https://api.themoviedb.org/3/search/movie?query=$$tmdbshowname&api_key=%(apikey)s&page=%%s" % (config)
-#    "https://api.themoviedb.org/3/movie/$TMDbID?api_key=$TMDb_key
-#Or http://omdbapi.com/, eg
-#  http://www.omdbapi.com/?t=Casino&y=&plot=short&r=xml
-
-#TODO: Review logging statements throughout... Add consistent stack-trace
-#      information to all warn and err statements (maybe in bash-logging).
-#      Move some of the inform statements to debug, to avoid lots of
-#      repetition with inform (level 2) logging.
-
-#TODO: Consider changing default binpath from "/usr/local/bin" to
-#      "/home/$Librarian/bin". We really want to avoid root/sudo requirements
-#      as much as possible.
-
-#TODO: really need to review doover and undo usage...
-#TODO: REALLY NEED TO REVIEW sudo USE AND PERMISSIONS EXPECTATIONS WITHIN THE SCRIPT...
-
-#TODO: Review RequiresDoover and EpisodeConfidenceRating usage...
-
-#TODO: If we just prepend $binpath to $Librarian's path we could avoid all the
-#      explicit paths in our function calls... Though we may need to clean up before we finished...
-#          SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
-
-#TODO: Check all deletion or other reference of ' ' and consider whether it
-#      would be better to use the more inclusive [[:blank:]] or [[:space:]]...
-
-#TODO: review issues caused by multiple simultaneous instances, eg log file
-#      needs to be locked to prevent deleting by subsequent call that triggers
-#      logrotate... maybe GUID log files on a per-call basis???
-
 #Intention:
 #  This program automates the mapping of MythTV recordings to a Kodi library.
 #  It is designed to be a user job in MythTV. It can also be run manually from
@@ -450,6 +405,52 @@ LogFileName='output'
 #NOTE: This is made read only within the bashlogging script.
 LOGTYPE='both'
 ########################## END USER SETTINGS ###################################
+
+
+#TODO: Review text under: Output-Files; Database-external; Database-internal;
+#      Dependencies; .
+
+#TODO: If making a tar ball as a "Release", include the following:
+#    myth2kodi
+#    bashlogging
+#    MythDataGrabber
+#    m2k_notify
+#    myth2kodi.conf
+#    myth2kodi.png
+#    myth2kodi_failed.png
+#    showTranslations.SydFTA
+
+#TODO: Make use of TMDb (https://www.themoviedb.org/) when the recorded
+#  program is identified as being a Movie... eg
+#    "https://api.themoviedb.org/3/search/movie?query=$$tmdbshowname&api_key=%(apikey)s&page=%%s" % (config)
+#    "https://api.themoviedb.org/3/movie/$TMDbID?api_key=$TMDb_key
+#Or http://omdbapi.com/, eg
+#  http://www.omdbapi.com/?t=Casino&y=&plot=short&r=xml
+
+#TODO: Review logging statements throughout... Add consistent stack-trace
+#      information to all warn and err statements (maybe in bash-logging).
+#      Move some of the inform statements to debug, to avoid lots of
+#      repetition with inform (level 2) logging.
+
+#TODO: Consider changing default binpath from "/usr/local/bin" to
+#      "/home/$Librarian/bin". We really want to avoid root/sudo requirements
+#      as much as possible.
+
+#TODO: really need to review doover and undo usage...
+#TODO: REALLY NEED TO REVIEW sudo USE AND PERMISSIONS EXPECTATIONS WITHIN THE SCRIPT...
+
+#TODO: Review RequiresDoover and EpisodeConfidenceRating usage...
+
+#TODO: If we just prepend $binpath to $Librarian's path we could avoid all the
+#      explicit paths in our function calls... Though we may need to clean up before we finished...
+#          SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
+
+#TODO: Check all deletion or other reference of ' ' and consider whether it
+#      would be better to use the more inclusive [[:blank:]] or [[:space:]]...
+
+#TODO: review issues caused by multiple simultaneous instances, eg log file
+#      needs to be locked to prevent deleting by subsequent call that triggers
+#      logrotate... maybe GUID log files on a per-call basis???
 
 ################################################################################
 ##################### Abandon all hope, ye who enter here. #####################

@@ -2,11 +2,13 @@
 
 # This file goes in /usr/local/bin/ and should be named m2k_notify
 # This file is a modified version of librarian-notify-send.
-# Which in turn is a modified version of alt-notify-send. It has been modified to send images with the notifications
-# See:http://xbmc.org/wiki/?title=MythicalLibrarian#GNOME_Desktop_Notifications for usage
+# Which in turn is a modified version of alt-notify-send. It has
+# been modified to send images with the notifications.
+# For usage see:
+#    http://xbmc.org/wiki/?title=MythicalLibrarian#GNOME_Desktop_Notifications
 
 #TODO: Categories, from http://www.galago-project.org/specs/notification/0.9/x211.html
-# "transfer"   A generic file transfer or download notification that doesn't fit into any other category.
+# "transfer" A generic file transfer or download notification that doesn't fit into any other category.
 # "transfer.complete"     A file transfer or download complete notification.
 # "transfer.error"        A file transfer or download error.
 # "network"  A generic network notification that doesn't fit into any other category.

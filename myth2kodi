@@ -99,7 +99,7 @@
 #  find the log file in myth2kodi's working folder (see USER SETTING, m2kdir).
 #  For configuration options, see, the "Logging settings" section of
 #  USER SETTINGS below. The default location of the main log file is:
-#    /home/<Librarian>/.myth2kodi/output.log
+#    /home/$Librarian/.myth2kodi/output.log
 #
 #Database-external:
 #  This program will make 3 calls to TheTVDB for every episode. The first one is

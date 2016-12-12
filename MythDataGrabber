@@ -55,7 +55,7 @@ REQUIRES:
 .. moduleauthor:: Adam Outler <adamoutler (at) gmail.com>
 """
 
-__version__ = '0.1.0'
+__version__ = '0.4.2'
 
 # First, import from python standard library
 import logging
@@ -127,7 +127,7 @@ def write_data():
         if res is not None:
             OUTPUT.write('xmltvgrabber = "%s"\n' % res[0].strip())
     # verify valid data was written
-    if REC.chanid != '': #TODO: this is strange to do at the end, and also doesn't test writting but rather that a valid recording was found in the first place.
+    if REC.chanid != '': #TODO: this is strange to do at the end, and also doesn't test writing but rather that a valid recording was found in the first place.
         LOG.info("Operation complete.")
 ###########################################################################
 

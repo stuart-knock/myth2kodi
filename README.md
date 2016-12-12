@@ -10,7 +10,7 @@ generates file names compatible with Kodi, then moves or links recordings
 based on user settings. Comskip and NFO files are also generated from your
 MythTV database, as required, so that Kodi can make use of them.
 
-*myth2kodi is a modified version of mythicalLibrarian by Adam Outler.*
+*myth2kodi is a modified version of [mythicalLibrarian](https://github.com/adamoutler/mythicallibrarian) by Adam Outler.*
 
 ### Quick Start Guide
   + Download the release tarball.
@@ -20,11 +20,11 @@ MythTV database, as required, so that Kodi can make use of them.
   + Check basic functionality with: `myth2kodi --diagnostics`
 
 #### Dependencies
-**curl** -- downloads webpages and sends commands to Kodi;
-**jq** -- parses json files, used for tvmaze data.
-**agrep** -- provides fuzzy string matching;
-**libnotify-bin** -- allows GNOME desktop notifications;
-**mythbackend** -- Access the MythTV database.
+**curl** -- downloads webpages and sends commands to Kodi;  
+**jq** -- parses json files, used for tvmaze data;  
+**agrep** -- provides fuzzy string matching;  
+**libnotify-bin** -- allows GNOME desktop notifications;  
+**mythbackend** -- Access the MythTV database.  
 
 #### Installation & Configuration
 The myth2kodi file should be placed in the users path, see the binpath

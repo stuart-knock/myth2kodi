@@ -542,6 +542,9 @@ exit_job(){
     printf '%s\n' "@@@@ COMPLETE: $(date --rfc-3339=seconds) @@@@" >> "$LOGFILE"
   fi
 
+  #TODO: Hacky fix to work around markupframes temp files we loose track of when processing fails...
+  [[ -f "$MARKUPFRAMES_TMP" ]] && (( LOGLEVEL < 3 )) && rm -rf "$MARKUPFRAMES_TMP"
+
   #Some excessive logging for extra buggy bugs.
   ((LOGLEVEL>=4)) && env | err_pipe 'env:  '
   ((LOGLEVEL>=42)) && set | err_pipe 'set:  '
@@ -848,6 +851,7 @@ parse_command_flags(){
       declare -i recordinginforeturnstatus="$?"
       [[ "$recordinginforeturnstatus" != 0 ]] && return "$recordinginforeturnstatus"
       msg_recording_info
+      (( LOGLEVEL < 3 )) && rm -rf "$MARKUPFRAMES_TMP"
       return "$recordinginforeturnstatus"
     ;;
     --about)
@@ -2396,7 +2400,6 @@ get_serieslinenumber_zap2itid(){
       return 0
     fi
   done < "$TMP_ZAP2IT_FILE"
-  (( LOGLEVEL < 3 )) && rm -f "$TMP_ZAP2IT_FILE"
   warn "${FUNCNAME[0]}() couldn't find serieslinenumber with Zap2itSeriesID"
   serieslinenumber=0
   return 1
@@ -4475,6 +4478,9 @@ get_series_info(){
     make_m2k_database_dir
   else
     warn "${FUNCNAME[0]}() SeriesID COULD NOT BE DETERMINED"
+    #If we're not in debug mode then cleanup show identification files.
+    [[ -f "$TMP_SID_FILE" ]] && (( LOGLEVEL < 3 )) && rm -f "$TMP_SID_FILE"
+    [[ -f "$TMP_SHN_FILE" ]] && (( LOGLEVEL < 3 )) && rm -f "$TMP_SHN_FILE"
     return 1
   fi
   if [[ -n "$SeriesID" ]]; then
@@ -4642,9 +4648,11 @@ delete_recording(){
   (( LOGLEVEL < 3 )) && rm -f "$m2kdir/undo.sh.bak"
 
   #Delete doover.sh entries associated with $RECORDING_NAME
-  debug "Removing lines mentioning '$RECORDING_NAME' from $m2kdir/doover.sh"
-  sed -i.bak "\#$RECORDING_NAME#d" "$m2kdir/doover.sh" 2>&1 | err_pipe "${FUNCNAME[0]}(): Line $LINENO: "
-  (( LOGLEVEL < 3 )) && rm -f "$m2kdir/doover.sh.bak"
+  if [[ -f "$m2kdir/doover.sh" ]]; then
+    debug "Removing lines mentioning '$RECORDING_NAME' from $m2kdir/doover.sh"
+    sed -i.bak "\#$RECORDING_NAME#d" "$m2kdir/doover.sh" 2>&1 | err_pipe "${FUNCNAME[0]}(): Line $LINENO: "
+    (( LOGLEVEL < 3 )) && rm -f "$m2kdir/doover.sh.bak"
+  fi
 
   #Delete created.tracking entries associated with recording.
   if [[ "$RECORDING_FILE_OWNER" = 'myth2kodi' ]]; then
@@ -4986,6 +4994,7 @@ if [[ "$m2kProgramIDCheck" != "SH" && "$m2kProgramIDCheck" != "MV" ]]; then
     #Start by trying to match on Zap2itID
     ConfidenceReasoning="$ConfidenceReasoning Attempted Match On Zap2itID:"
     [[ -n "$Zap2itSeriesID" ]] && get_serieslinenumber_zap2itid
+    (( LOGLEVEL < 3 )) && rm -f "$TMP_ZAP2IT_FILE"
     if [[ "$?" = 0 ]]; then
       ((++SeriesConfidenceRating))
       ConfidenceReasoning="$ConfidenceReasoning Successful;"
@@ -5026,6 +5035,9 @@ if [[ "$m2kProgramIDCheck" != "SH" && "$m2kProgramIDCheck" != "MV" ]]; then
     inform "FOUND:$NewShowName ID#:$SeriesID WITH CONFIDENCE:$SeriesConfidenceRating"
   else
     warn "SERIESID COULD NOT BE DETERMINED"
+    #If we're not in debug mode then cleanup show identification files.
+    [[ -f "$TMP_SID_FILE" ]] && (( LOGLEVEL < 3 )) && rm -f "$TMP_SID_FILE"
+    [[ -f "$TMP_SHN_FILE" ]] && (( LOGLEVEL < 3 )) && rm -f "$TMP_SHN_FILE"
   fi
 fi
 

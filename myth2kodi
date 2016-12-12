@@ -390,7 +390,7 @@ LOG_LIFE=6
 #    2=adds more information;  --> DEFAULT
 #    3=provides debugging output.
 #Recommend 2 to start with or if you want to keep track of what myth2kodi is doing.
-#Recommend 1 for usual operation, once you're confident that everything is working fine.
+#Recommend 1 for usual operation, once you're confident that everything is working.
 #Only use 3 if you have a particular problem that you're trying to track down,
 #it significantly increases the output.
 LOGLEVEL=2
@@ -888,8 +888,8 @@ parse_command_flags(){
       msg_rss
       return 0
     ;;
-    --version|-v|-ver|-V)
-      debug "Recognised command line switch '--version|-v|-ver|-V'"
+    --version)
+      debug "Recognised command line switch '--version'"
       printf '%s\n' "$m2kVersion"
       return 0
     ;;

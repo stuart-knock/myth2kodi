@@ -2224,9 +2224,11 @@ download_series_info(){
   tvmaze_id=$(curl -L -s -m"$Timeout" http://api.tvmaze.com/lookup/shows?thetvdb="$SeriesID" | jq '.id')
   local tvmazeJsonFile="$dbdir/${NewShowName}_tvmaze.json"
   # to get the matching tvmaze id, then
-  if [[ -n "$tvmaze_id" ]] ; then
+  if ((tvmaze_id != 0)) ; then
+    debug "Found matchiong tvmaze id: $tvmaze_id"
     local tvmazeShowJson="http://api.tvmaze.com/shows/$tvmaze_id/episodes"
     [[ -f "$tvmazeJsonFile" ]] && mv "$tvmazeJsonFile" "$dbdir/${Today}_${NewShowName}_tvmaze.json"
+    debug "Getting new tvmaze show info from: $tvmazeShowJson"
     curl -L -s -m"$Timeout" "$tvmazeShowJson" > "$tvmazeJsonFile"
   fi
 

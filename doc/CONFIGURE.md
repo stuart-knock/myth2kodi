@@ -11,18 +11,18 @@ this is used to find the `myth2kodi.conf` file.
 It is essential that the following parameters are set correctly, as they
 are specific to your setup:  
 `Librarian` -- Name of the user running mythbackend and myth2kodi.  
-Some vocabulary: *episodes* are recordings recognised episodes of a TV series; 
+Some vocabulary: *episodes* are recordings recognised as episodes of a TV series; 
 *movies*  are recordings recognised as being a movie; and *shows* are
-that aren't recognised -- which when everything else is working correctly
+recordings that aren't recognised -- which when everything else is working correctly
 means one-off things like news or sports events.  
 `MoveDir` -- Default directory to move recorded TV episodes to.  
 `PrimaryMovieDir` -- Default directory to move recorded movies to.   
 `PrimaryShowDir` -- Default directory to move recorded shows to.  
 `DBHostName` -- The IP address or name of the server for MythTV Database.  
-`MySQLuser` -- MySQL User name  
-`MySQLpass` -- MySQL Password  
-`DBPin` --  
-`MySQLMythDb` --  
+`MySQLuser` -- MySQL user name  
+`MySQLpass` -- MySQL password  
+`DBPin` -- The database pin for the MythTV database.  
+`MySQLMythDb` -- MythTV database name.  
 
 You'll also ideally want to set:  
 `GuideDataType` -- Specifies the method for processing the guide data found in
@@ -32,7 +32,7 @@ existing options will hopefully work for your guide data-source. If not then
 you may need to make your own processing function by modifying one of the
 existing ones.
 
-If you `Enable` Kodi notification (it is by default), then it is essential to set:
+If you `Enable` Kodi notification (it is by default), then it is essential to set:  
 `KODIIPs` -- IP-Address and port for KODI Notifications.
 
 ## Optional Extras
@@ -57,7 +57,7 @@ Additionally:
 `KODIUpdate` -- Whether to ask KODI to Update library upon Successful move job.  
 `KODIClean` -- Whether to ask KODI to cleanup its library.  
 You can also create the directory `/var/www/myth2kodi-rss` and point Kodi
-at it to have recently added recordings to the RSS feed scrolling across
+at it to have recently added recordings show up in the RSS feed scrolling across
 the bottom of Kodi.
 
 ######Desktop:  

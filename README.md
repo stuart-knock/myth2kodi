@@ -31,10 +31,10 @@ For usage and command line options see: `myth2kodi --help`
 The myth2kodi file should be placed in the users path, see the binpath
 variable in user settings (Default: /usr/local/bin). Some of the
 functionality of this script is provided in other files, these will also
-need to be placed in $binpath along with this script. They are:
-MythDataGrabber -- Uses MythTV python bindings to access database information.
-m2k_notify -- A script for sending notifications to Gnome Desktop.
-bashlogging -- A set of bash functions that provide the logging mechanism
+need to be placed in $binpath along with this script. They are:  
+*MythDataGrabber* -- Uses MythTV python bindings to access database information.  
+*m2k_notify* -- A script for sending notifications to Gnome Desktop.  
+[*bashlogging*](https://github.com/stuart-knock/bash-tools/blob/master/bashlogging) -- A set of bash functions that provide the logging mechanism
                used throughout myth2kodi.
 
 #### Usage

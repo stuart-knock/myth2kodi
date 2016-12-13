@@ -1,7 +1,7 @@
 # Install
 Installation is relatively straight-forward, it just involves copying the
 four scripts into an appropriate directory, making sure the ones that need
-to be are executable
+to be are executable.
 
 *NOTE:* If you're setting up a new [MythTV](https://www.mythtv.org/) system
 then I recommend you simplify your life by having a single user function
@@ -17,10 +17,10 @@ See the `bindir` user setting in myth2kodi.conf:
     sudo cp m2k_notify /usr/local/bin/
 
 ### Make those that need to be executable:
-    
-    chmod o+rx /usr/local/bin/myth2kodi
-    chmod o+rx /usr/local/bin/MythDataGrabber
-    chmod o+rx /usr/local/bin/m2k_notify
+
+    sudo chmod o+rx /usr/local/bin/myth2kodi
+    sudo chmod o+rx /usr/local/bin/MythDataGrabber
+    sudo chmod o+rx /usr/local/bin/m2k_notify
 
 ### Create the myth2kodi working directory
 **This is an optional extra.** It's possible to configure myth2kodi using

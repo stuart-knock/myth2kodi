@@ -3,8 +3,8 @@ If you want to fully test myth2kodi without risking your active MythTV
 system then it's relatively straight-forward to duplicate your setup on
 a spare device such as a laptop.
 
-*NOTE:* The specifics below are based on my specific directory structure
-but should be 
+*NOTE:* The specifics, such as directory names, below are based on my
+directory structure but should be sufficient as a guide...
 
 ## On Your MythTV Box
 #### Get a copy of your MythTV database
@@ -12,7 +12,7 @@ https://www.mythtv.org/wiki/Database_Backup_and_Restore
     
     mythconverg_backup.pl
 
-####  and directory structure
+####  and a listing of your recording files
     
     cd /media/video/recordings/Movies
     ls -l > 'recMovies.txt'
@@ -33,9 +33,13 @@ Install MythTV and [myth2kodi](INSTALL.md)
     mkdir /media/video/movies
     mkdir /media/video/tv
 
-#### Use ls dumps to touch fake files
+#### Create some fake recording files
 Put the recordings listings created above into the newly created directories
-on your test system.
+on your test system, then use them to create empty files with the names of 
+your recordings (and thus compatible with your MythTV-DB information):
+    
+    cp recMovies.txt /media/video/recordings/Movies
+    cp recTVshows.txt /media/video/recordings/TVshows
     
     cd /media/video/recordings/Movies
     while read line ; do
@@ -48,7 +52,7 @@ on your test system.
       [[ -n "$line" ]] && touch "$line"
     done <"recTVshows.txt"
 
-#### Restore the database with either:
+#### Restore the database
 https://www.mythtv.org/wiki/Backend_migration
 
 *NOTE:* the MySQL Time Zone Tables must be installed on the MySQL server prior to using MythTV
@@ -61,8 +65,9 @@ on a fresh machine, or:
     
     mythconverg_restore.pl --verbose --drop_database --create_database --filename mythconverg-1317-20151210151330.sql.gz
 
-on a machine that previously had a mythconverg database, stick a --verbose
-on the end if you want to see what's happening.
+on a machine that previously had a mythconverg database. Remove the --verbose
+if you don't want to see what's happening (maybe a good idea if you have a MythTV-DB
+that has spent years filling up).
 
 #### Change the hostname stored in the restored database to that of the new machine, it has the form:
     

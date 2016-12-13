@@ -38,12 +38,7 @@ bashlogging -- A set of bash functions that provide the logging mechanism
                used throughout myth2kodi.
 
 #### Usage
-To function on your system, some of the variables specified in the
-USER SETTINGS section below may need to be modified from their defaults.
-For example, to avoid permission issues, myth2kodi should be run as the
-same user running MythTV (see USER SETTING, Librarian), or at the very
-least a user permitted to read and write the recording files generated
-by MythTV.
+myth2kodi can be used as a MythTV user-job or from the commmand-line.
 
 The MythTV user job should be called as follows:
 

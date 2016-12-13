@@ -14,43 +14,49 @@ https://www.mythtv.org/wiki/Database_Backup_and_Restore
 
 ####  and a listing of your recording files
     
-    cd /media/video/recordings/Movies
-    ls -l > 'recMovies.txt'
+```bash
+cd /media/video/recordings/Movies
+ls -l > 'recMovies.txt'
 
-    cd /media/video/recordings/TVshows
-    ls -l > 'recTVshows.txt'
+cd /media/video/recordings/TVshows
+ls -l > 'recTVshows.txt'
+```
 
 
 ## On Your Test Box (eg laptop)
 Install MythTV and [myth2kodi](INSTALL.md)
 
 #### Create the directory structure for your MythTV recordings and Kodi Library...
-    
-    sudo mkdir /media
-    sudo chown librarian:users /media
-    mkdir --parents /media/video/recordings/TVshows
-    mkdir /media/video/recordings/Movies
-    mkdir /media/video/movies
-    mkdir /media/video/tv
+
+```bash
+sudo mkdir /media
+sudo chown librarian:users /media
+mkdir --parents /media/video/recordings/TVshows
+mkdir /media/video/recordings/Movies
+mkdir /media/video/movies
+mkdir /media/video/tv
+```
 
 #### Create some fake recording files
 Put the recordings listings created above into the newly created directories
 on your test system, then use them to create empty files with the names of 
 your recordings (and thus compatible with your MythTV-DB information):
     
-    cp recMovies.txt /media/video/recordings/Movies
-    cp recTVshows.txt /media/video/recordings/TVshows
-    
-    cd /media/video/recordings/Movies
-    while read line ; do
-      [[ -n "$line" ]] && touch "$line"
-      printf '%s\n' "Created: $line"
-    done <"recMovies.txt"
-    
-    cd /media/video/recordings/TVshows
-    while read line ; do
-      [[ -n "$line" ]] && touch "$line"
-    done <"recTVshows.txt"
+```bash
+cp recMovies.txt /media/video/recordings/Movies
+cp recTVshows.txt /media/video/recordings/TVshows
+
+cd /media/video/recordings/Movies
+while read line ; do
+  [[ -n "$line" ]] && touch "$line"
+  printf '%s\n' "Created: $line"
+done <"recMovies.txt"
+
+cd /media/video/recordings/TVshows
+while read line ; do
+  [[ -n "$line" ]] && touch "$line"
+done <"recTVshows.txt"
+```
 
 #### Restore the database
 https://www.mythtv.org/wiki/Backend_migration

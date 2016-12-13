@@ -1,5 +1,5 @@
-# myth2kodi:
 ![myth2kodi icon](myth2kodi.png)
+# myth2kodi:
 
 **WARNING:** Still a work in progress...
 
@@ -9,6 +9,7 @@ a command line. It must have access to your MythTV recordings. The program
 generates file names compatible with Kodi, then moves or links recordings
 based on user settings. Comskip and NFO files are also generated from your
 MythTV database, as required, so that Kodi can make use of them.
+For usage and command line options see: `myth2kodi --help`
 
 *myth2kodi is a modified version of [mythicalLibrarian](https://github.com/adamoutler/mythicallibrarian) by Adam Outler.*
 
@@ -36,5 +37,29 @@ m2k_notify -- A script for sending notifications to Gnome Desktop.
 bashlogging -- A set of bash functions that provide the logging mechanism
                used throughout myth2kodi.
 
+#### Usage
+To function on your system, some of the variables specified in the
+USER SETTINGS section below may need to be modified from their defaults.
+For example, to avoid permission issues, myth2kodi should be run as the
+same user running MythTV (see USER SETTING, Librarian), or at the very
+least a user permitted to read and write the recording files generated
+by MythTV.
+
+The MythTV user job should be called as follows:
+
+    $binpath/myth2kodi "%DIR%/%FILE%"
+
+where "$binpath" is replaced by the full explicit path from USER SETTINGS.
+At the command line, the script can be called with the following form:
+    
+    myth2kodi "Input File" "show name" "episode name"
+
+for example:
+
+    myth2kodi "/home/myth/recordings/2308320472023429837.mpg" "South Park" "Here Comes the Neighborhood"
+
+for additional functionality type:
+    
+    myth2kodi --help
 
 ### User Jobs

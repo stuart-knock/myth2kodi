@@ -1,5 +1,6 @@
-![myth2kodi icon](myth2kodi.png)
-# myth2kodi:
+<img align="right" src="myth2kodi.png" alt="myth2kodi icon" />
+
+# myth2kodi
 
 **WARNING:** Still a work in progress...
 

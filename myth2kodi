@@ -204,7 +204,7 @@ MoveDir='/media/video/tv'  #<------THIS VALUE MUST BE SET-------
 
 #AlternateMoveDir will act as a secondary MoveDir if the primary MoveDir fails.
 #No trailing / is accepted eg. "~/videos"
-AlternateMoveDir="~/recordedTV"
+AlternateMoveDir="$HOME/recordedTV"
 
 #If TargetPathIsInputPath is Enabled, original dir will override MoveDir. This
 #is useful for multiple recording dirs. TargetPathIsInputPath will separate
@@ -249,7 +249,7 @@ FailSafeMode='Disabled'
 
 #FailSafeDir is used when the file cannot be moved to the MoveDir. FailSafe
 #will not create folders. eg. /home/username
-FailSafeDir='~/FailSafe'  #<------THIS VALUE MUST BE SET-------
+FailSafeDir="$HOME/FailSafe"  #<------THIS VALUE MUST BE SET-------
 
 #DirTracking will check for and remove the folders created by myth2kodi
 #Options: ['Enabled'(DEFAULT)|'Disabled']
@@ -317,7 +317,7 @@ MySQLMythDb='mythconverg'
 PrimaryMovieDir='/media/video/movies' #<------THIS VALUE MUST BE SET-------
 
 #AlternateMovieDir is a fallback move dir if the primary movie dir fails.
-AlternateMovieDir="~/recordedMovies"
+AlternateMovieDir="$HOME/recordedMovies"
 
 #ShowStopper prevents generic shows and unrecognised episodes from being
 #processed. Options: ['Enabled'(DEFAULT)|'Disabled']
@@ -328,7 +328,7 @@ ShowStopper='Enabled'
 PrimaryShowDir='/media/video/recordedShows' #<------THIS VALUE MUST BE SET-------
 
 #AlternateMoveDir is a fallback move dir if the primary move dir fails
-AlternateShowDir="~/recordedShows"
+AlternateShowDir="$HOME/recordedShows"
 
 #CommercialMarkup will generate comskip files for recordings when they are moved.
 #Options: ['Enabled'(DEFAULT)|'Disabled']

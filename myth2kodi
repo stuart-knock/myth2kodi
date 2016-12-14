@@ -182,86 +182,46 @@
 #      The Office = The Office (US)
 #      Millionaire = Who Wants To Be A Millionaire
 #      Aqua teen Hungerforce = Aqua Teen Hunger Force
-################################################################################
+##############################################################################
 
 
-########################### BEGIN USER SETTINGS ################################
-###Stand-alone mode values###
+##############################################################################
+########################## BEGIN USER SETTINGS ###############################
+##############################################################################
+
 #Specify the name of the user running mythtv, myth2kodi should always be run
 #by that user. Default: 'mythtv'
-Librarian='mythtv' #<------THIS VALUE MUST BE SET-------
+Librarian='mythtv'                           #<------THIS VALUE MUST BE SET-------
+
+
+############################ Processing settings #############################
 
 #TODO: Rethink naming of 'SYMLINK' variable and modes here as the current may be confusing as to what they actually do...
 #      PROCESS_RECORDING_MODE: LINK(same as orig); MOVE(MOVE in orig if SYMLINK=Enabled; 'Disabled' in orig if SYMLINK=Disabled);
 #      Then SYMLINK: 'Enabled' or 'Disabled'
-#SYMLINK has 3 modes. MOVE|LINK|Disabled: Default=MOVE. WARNING: "Disabled" Mode removes MythTV-DB entry, SO CAN'T BE UNDONE.
-#Create symlink at InputPath after 'MOVE' | Do not move, just create a sym'LINK' | move the file, DELETE MythTV-DB entry, symlinking is 'Disabled'
+#SYMLINK has 3 modes. 'MOVE'(DEFAULT)|'LINK'|'Disabled':
+# 'MOVE' -- Move the recording and Create symlink at InputPath;
+# 'LINK' -- Do not move, just create a sym'LINK';
+# 'Disabled' -- move the file, DELETE MythTV-DB entry, symlinking is 'Disabled'.
+#WARNING: 'Disabled' Mode removes MythTV-DB entry, SO CANNOT BE UNDONE.
 SYMLINK='MOVE'
-
-#MoveDir is the folder which myth2kodi will move the file. No trailing / is
-#accepted eg. "~/videos"
-MoveDir='/media/video/tv'  #<------THIS VALUE MUST BE SET-------
-
-#AlternateMoveDir will act as a secondary MoveDir if the primary MoveDir fails.
-#No trailing / is accepted eg. "~/videos"
-AlternateMoveDir="$HOME/recordedTV"
 
 #If TargetPathIsInputPath is Enabled, original dir will override MoveDir. This
 #is useful for multiple recording dirs. TargetPathIsInputPath will separate
 #generic shows from episodes and movies. Options: ['Enabled'|'Disabled'(DEFAULT)]
 TargetPathIsInputPath='Disabled'
 
-#API key used to access www.TheTVDB.com. Default: '3B054E548E3F4FBE'
-APIkey='3B054E548E3F4FBE'
-
-#Internet access Timeout in seconds, used for TheTVDB. Default: 50
-Timeout=50
-
-#Update database time in seconds, Longer duration means faster processing time
-#and less strain on TheTVDB. Default='88920' (1 day + eps)
-UpdateDatabase=264920
-
-#How long to persist archived myth2kodi database files in months, DEFAULT=6.
-M2K_DB_LIFE=6
-
-#The path which contains myth2kodi and associated scripts default=/usr/local/bin
-#TODO: make this to just be used for essential sudo stuff, at the moment, I think, this is only Notify...
-#      then require caller add the location they choose to be in there path... recommend a default of /home/$Librarian/bin, see other related TODOs...
-binpath='/usr/local/bin'
-
-#myth2kodi working directory: Default: "$HOME/.myth2kodi"
-#NOTE: This is the one parameter that cannot be set in 'myth2kodi.conf' and
-#      must be set in the script -- as it's used to find 'myth2kodi.conf'.
-m2kdir="$HOME/.myth2kodi"
-
-#The directory where myth2kodi writes its temporary files, Default='/tmp'
-#Typically, /tmp is tmpfs and so avoids unnecessary writes to disk. If you're
-#on Linux and /tmp isn't tmpfs but you would rather avoid writing to disk then
-#/dev/shm is guaranteed to be tmpfs. Alternatively, if you're short on RAM but
-#don't mind some extra disk writes then use "$m2kdir". NOTE: When running with
-#LOGLEVEL>=3, there are a number of temporary files that aren't automatically
-#deleted, they will, however, be cleared as part of: myth2kodi --maintenance
-M2K_TMPDIR='/tmp'
-
-#FailSafe mode will enable symlinks to be formed in FailSafeDir if the move or
-#symlink operation fails. Options: Enabled|Disabled
-FailSafeMode='Disabled'
-
-#FailSafeDir is used when the file cannot be moved to the MoveDir. FailSafe
-#will not create folders. eg. /home/username
-FailSafeDir="$HOME/FailSafe"  #<------THIS VALUE MUST BE SET-------
+#ShowStopper prevents generic shows and unrecognised episodes from being
+#processed. Options: ['Enabled'(DEFAULT)|'Disabled']
+ShowStopper='Enabled'
 
 #DirTracking will check for and remove the folders created by myth2kodi
 #Options: ['Enabled'(DEFAULT)|'Disabled']
 DirTracking='Enabled'
 
-#Language setting
-Language='en'
-
-#How often (in seconds) to perform routine maintenance of tracked files.
-#DEFAULT=259200 (72 hours)
-#NOTE: Maintenance can be forced at any time using 'myth2kodi --maintenance'.
-MAINTENANCE_PERIOD=259200
+#FailSafe mode will enable symlinks to be formed in FailSafeDir if the move or
+#symlink operation fails. Options: Enabled|Disabled
+FailSafeMode='Disabled'
 
 #StorageGroupFallback can enable/disable a bit of code that, if Guide Data
 #identified the input file as a show or episode, but no episode or series
@@ -281,13 +241,91 @@ StorageGroupFallback='Disabled'
 #Options: ['Enabled'(DEFAULT)|'Disabled']
 PlotMatchFallback='Enabled'
 
-###Database settings###
+#CommercialMarkup will generate comskip files for recordings when they are moved.
+#Options: ['Enabled'(DEFAULT)|'Disabled']
+CommercialMarkup='Enabled'
+
+#CommercialMarkupCleanup if "Enabled", when m2k_maintenance() is run, removes
+#comskip & NFO files if the associated .mpg file can't be found.
+#Options: ['Enabled'(DEFAULT)|'Disabled']
+CommercialMarkupCleanup='Enabled'
+
+
+############################# Directory Settings #############################
+
+#myth2kodi working directory: Default: "$HOME/.myth2kodi"
+#NOTE: This is the one parameter that cannot be set in 'myth2kodi.conf' and
+#      must be set in the script -- as it's used to find 'myth2kodi.conf'.
+m2kdir="$HOME/.myth2kodi"
+
+#The path which contains myth2kodi and associated scripts default=/usr/local/bin
+#TODO: make this to just be used for essential sudo stuff, at the moment, I think, this is only Notify...
+#      then require caller add the location they choose to be in there path... recommend a default of /home/$Librarian/bin, see other related TODOs...
+binpath='/usr/local/bin'
+
+#The directory where myth2kodi writes its temporary files, Default='/tmp'
+#Typically, /tmp is tmpfs and so avoids unnecessary writes to disk. If you're
+#on Linux and /tmp isn't tmpfs but you would rather avoid writing to disk then
+#/dev/shm is guaranteed to be tmpfs. Alternatively, if you're short on RAM but
+#don't mind some extra disk writes then use "$m2kdir". NOTE: When running with
+#LOGLEVEL>=3, there are a number of temporary files that aren't automatically
+#deleted, they will, however, be cleared as part of: myth2kodi --maintenance
+M2K_TMPDIR='/tmp'
+
+#MoveDir is the folder which myth2kodi will move the file. No trailing / is
+#accepted eg. "~/videos"
+MoveDir='/media/video/tv'                    #<------THIS VALUE MUST BE SET-------
+
+#AlternateMoveDir will act as a secondary MoveDir if the primary MoveDir fails.
+#No trailing / is accepted eg. "~/videos"
+AlternateMoveDir="$HOME/recordedTV"
+
+#Primary Movie Dir. myth2kodi will attempt to move to this dir first. No
+#trailing / is accepted eg. "~/videos"
+PrimaryMovieDir='/media/video/movies'        #<------THIS VALUE MUST BE SET-------
+
+#AlternateMovieDir is a fallback move dir if the primary movie dir fails.
+AlternateMovieDir="$HOME/recordedMovies"
+
+#Primary Show Dir. myth2kodi will attempt to move to this dir first. No
+#trailing / is accepted eg. "~/videos"
+PrimaryShowDir='/media/video/recordedShows'  #<------THIS VALUE MUST BE SET-------
+
+#AlternateMoveDir is a fallback move dir if the primary move dir fails
+AlternateShowDir="$HOME/recordedShows"
+
+#FailSafeDir is used when the file cannot be moved to the MoveDir. FailSafe
+#will not create folders. eg. /home/username
+FailSafeDir="$HOME/FailSafe"                 #<------THIS VALUE MUST BE SET-------
+
+
+######################### myth2kodi Database Settings ########################
+
+#Language setting, used when accessing www.TheTVDB.com to build our local DB.
+Language='en'
+
+#API key used to access www.TheTVDB.com. Default: '3B054E548E3F4FBE'
+APIkey='3B054E548E3F4FBE'
+
+#Internet access Timeout in seconds, used for TheTVDB. Default: 50
+Timeout=50
+
+#Update database time in seconds, Longer duration means faster processing time
+#and less strain on TheTVDB. Default='88920' (1 day + eps)
+UpdateDatabase=264920
+
+
+########################## MythTV Database Settings ##########################
+
 #MythTV MYSQL access allows addition of movies, comskip data, and improves
 #accuracy of episode recognition. Options: ['Enabled'(DEFAULT)|'Disabled']
 Database='Enabled'  #TODO: Review this: I'm not clear on the purpose/function in the absence of MythTV-DB...
 
 #Database Type MythTV|MythTVPythonBindings Default=MythTVPythonBinding
 DatabaseType='MythTVPythonBindings' #TODO: would seem more consistent here to have 'MySQL' and 'PythonBindings' as the options, and maybe rename DATABASE_ACCESS.
+
+#MySQL Myth Database: Default: 'mythconverg'
+MySQLMythDb='mythconverg'
 
 #Guide data type: SchedulesDirect currently covers DataDirect, MC2XML and others.
 #NoLookup will bypass tvdb scanning
@@ -298,54 +336,23 @@ GuideDataType='SydFTA'
 
 #The IP address or name of the server for MythTV Database (used in python bindings only)
 #TODO: This doesn't seem to be being used, at least, having it set incorrectly (192.168.1.42 while testing on borg (.78)) doesn't seem to cause a problem...
-DBHostName='192.168.1.78' #<------THIS VALUE MUST BE SET-------
+DBHostName='192.168.1.78'                    #<------THIS VALUE MUST BE SET-------
 
 #MySQL User name: Default: 'mythtv'
 MySQLuser='mythtv'
 
 #MySQL Password: Default: 'mythtv'
-MySQLpass='mythtv' #<------THIS VALUE MUST BE SET-------
+MySQLpass='mythtv'                           #<------THIS VALUE MUST BE SET-------
 
 #The Database Pin for the MythTV Database (used in python bindings only)
-DBPin=8446
+DBPin=0000                                   #<------THIS VALUE MUST BE SET-------
 
-#MySQL Myth Database: Default: 'mythconverg'
-MySQLMythDb='mythconverg'
 
-#Primary Movie Dir. myth2kodi will attempt to move to this dir first. No
-#trailing / is accepted eg. "~/videos"
-PrimaryMovieDir='/media/video/movies' #<------THIS VALUE MUST BE SET-------
+########################## Reporting/Communications ##########################
 
-#AlternateMovieDir is a fallback move dir if the primary movie dir fails.
-AlternateMovieDir="$HOME/recordedMovies"
-
-#ShowStopper prevents generic shows and unrecognised episodes from being
-#processed. Options: ['Enabled'(DEFAULT)|'Disabled']
-ShowStopper='Enabled'
-
-#Primary Show Dir. myth2kodi will attempt to move to this dir first. No
-#trailing / is accepted eg. "~/videos"
-PrimaryShowDir='/media/video/recordedShows' #<------THIS VALUE MUST BE SET-------
-
-#AlternateMoveDir is a fallback move dir if the primary move dir fails
-AlternateShowDir="$HOME/recordedShows"
-
-#CommercialMarkup will generate comskip files for recordings when they are moved.
-#Options: ['Enabled'(DEFAULT)|'Disabled']
-CommercialMarkup='Enabled'
-
-#CommercialMarkupCleanup if "Enabled", when m2k_maintenance() is run, removes
-#comskip & NFO files if the associated .mpg file can't be found.
-#Options: ['Enabled'(DEFAULT)|'Disabled']
-CommercialMarkupCleanup='Enabled'
-
-###Reporting/Communications###
 #DailyReport provides a local log of shows added to your library per day.
 #Options: ['Enabled'(DEFAULT)|'Disabled']
 DailyReport='Enabled'
-
-#How long to persist daily report files in months, DEFAULT=12.
-DAILYREPORT_LIFE=12
 
 #Notify tells myth2kodi to send a notification to the Desktop via DBUS upon
 #completion. Options: ['Enabled'|'Disabled'(DEFAULT)]
@@ -375,18 +382,33 @@ KODINotify='Enabled'
 #password for remote access to kodi then you'll need to prepend user:password@
 #to the ip addresses.
 #Eg.KODIIPs=( '192.168.1.110:8080' 'user:password@192.168.1.111:8080' 'XBOX:8080' )
-KODIIPs=( '127.0.0.1:8080' ) #<------THIS VALUE MUST BE SET-------
+KODIIPs=( '127.0.0.1:8080' )                 #<------THIS VALUE MUST BE SET-------
 
 #RSSmaxItems controls the number of items in the RSS. RSS Can be activated by
 #creating a folder in /var/www/myth2kodi-rss. NOTE: setting this to 0 will
 #essentially be ignored as generateRSS() considers it unset and defaults to 8.
 declare -i RSSmaxItems=8
 
-###Logging settings###
+
+############################ Maintenance Settings ############################
+
+#How often (in seconds) to perform routine maintenance of tracked files.
+#DEFAULT=259200 (72 hours)
+#NOTE: Maintenance can be forced at any time using 'myth2kodi --maintenance'.
+MAINTENANCE_PERIOD=259200
+
+#How long to persist archived myth2kodi database files in months, DEFAULT=6.
+M2K_DB_LIFE=6
+
+#How long to persist daily report files in months, DEFAULT=12.
+DAILYREPORT_LIFE=12
+
 #How long to persist archived log files in months. Log files older than this
 #will be deleted during maintenance. Default: 6
 LOG_LIFE=6
 
+
+############################## Logging Settings ##############################
 #The settings below are for the bashlogging script which provides the configurable
 #logging functionality used in myth2kodi.
 #LOGLEVEL provides control over the amount of information myth2kodi reports.
@@ -409,7 +431,11 @@ LogFileName='myth2kodi'
 #LOGTYPE defines where to direct logging messages ['stdout|'logfile'|'both'(DEFAULT)]:
 #NOTE: This is made read only within the bashlogging script.
 LOGTYPE='both'
-########################## END USER SETTINGS ###################################
+
+##############################################################################
+######################### END USER SETTINGS ##################################
+##############################################################################
+
 
 
 #TODO: Review text under: Output-Files; Database-external; Database-internal;

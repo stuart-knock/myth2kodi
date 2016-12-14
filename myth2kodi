@@ -724,6 +724,31 @@ m2k_init(){
 validate_settings(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   err "${FUNCNAME[0]}(): NotImplemented."
+  return 1
+  local msg="is expected to be set as either 'Enabled' or 'Disabled'."
+  [[ "$TargetPathIsInputPath"   =~ ^(Enabled|Disabled)$ ]] || err "TargetPathIsInputPath $msg"
+  [[ "$FailSafeMode"            =~ ^(Enabled|Disabled)$ ]] || err "FailSafeMode $msg"
+  [[ "$DirTracking"             =~ ^(Enabled|Disabled)$ ]] || err "DirTracking $msg"
+  [[ "$StorageGroupFallback"    =~ ^(Enabled|Disabled)$ ]] || err "StorageGroupFallback $msg"
+  [[ "$PlotMatchFallback"       =~ ^(Enabled|Disabled)$ ]] || err "PlotMatchFallback $msg"
+  [[ "$Database"                =~ ^(Enabled|Disabled)$ ]] || err "Database $msg"
+  [[ "$ShowStopper"             =~ ^(Enabled|Disabled)$ ]] || err "ShowStopper $msg"
+  [[ "$CommercialMarkup"        =~ ^(Enabled|Disabled)$ ]] || err "CommercialMarkup $msg"
+  [[ "$CommercialMarkupCleanup" =~ ^(Enabled|Disabled)$ ]] || err "CommercialMarkupCleanup $msg"
+  [[ "$DailyReport"             =~ ^(Enabled|Disabled)$ ]] || err "DailyReport $msg"
+  [[ "$Notify"                  =~ ^(Enabled|Disabled)$ ]] || err "Notify $msg"
+  [[ "$KODIUpdate"              =~ ^(Enabled|Disabled)$ ]] || err "KODIUpdate $msg"
+  [[ "$KODIClean"               =~ ^(Enabled|Disabled)$ ]] || err "KODIClean $msg"
+  [[ "$KODINotify"              =~ ^(Enabled|Disabled)$ ]] || err "KODINotify $msg"
+  #Or
+  # local -a switch_user_settings
+  # switch_user_settings=('TargetPathIsInputPath' 'FailSafeMode' 'DirTracking' \
+  #                       'StorageGroupFallback' 'PlotMatchFallback' 'Database'\
+  #                       'ShowStopper' 'CommercialMarkup' 'CommercialMarkupCleanup' \
+  #                       'DailyReport' 'Notify' 'KODIUpdate' 'KODIClean' 'KODINotify' )
+  # for var in switch_user_settings ; do
+  #   [[ "${!var}" =~ ^(Enabled|Disabled)$ ]] || err "$var $msg"
+  # done
 }
 
 #Do some basic tests to make sure we were called correctly

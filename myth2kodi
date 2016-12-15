@@ -2455,9 +2455,10 @@ get_serieslinenumber_zap2itid(){
   #loop through all show names received by TheTVDB and match Zap2it ID.
   while read -r line ; do
     (( ++serieslinenumber ))
-    Info "TESTING FOR ZAP2ITID MATCH:$line $(sed -n "$serieslinenumber"'p' "$TMP_SHN_FILE")"
+    debug "TESTING FOR ZAP2ITID MATCH:$line $(sed -n "$serieslinenumber"'p' "$TMP_SHN_FILE")"
     Zap2ItTest="$(echo "$line" | tr -d MVSHEP | sed 's/0*//')"
     if [[ "$Zap2ItTest" = "$Zap2itSeriesID" ]]; then
+      inform "Found ZAP2ITID match: $line $(sed -n "$serieslinenumber"'p' "$TMP_SHN_FILE")"
       return 0
     fi
   done < "$TMP_ZAP2IT_FILE"
@@ -5054,12 +5055,12 @@ if [[ "$m2kProgramIDCheck" != "SH" && "$m2kProgramIDCheck" != "MV" ]]; then
   if [[ "$?" = 0 ]]; then
     #Start by trying to match on Zap2itID
     ConfidenceReasoning="$ConfidenceReasoning Attempted Match On Zap2itID:"
-    [[ -n "$Zap2itSeriesID" ]] && get_serieslinenumber_zap2itid
+    [[ -n "$Zap2itSeriesID" ]] && { get_serieslinenumber_zap2itid ; zap2itid_exitstatus="$?" ; }
     (( LOGLEVEL < 3 )) && rm -f "$TMP_ZAP2IT_FILE"
-    if [[ "$?" = 0 ]]; then
+    if [[ "$zap2itid_exitstatus" = 0 ]]; then
       ((++SeriesConfidenceRating))
       ConfidenceReasoning="$ConfidenceReasoning Successful;"
-      inform "MATCH FOUND BASED ON Zap2itID:$NewShowName"
+      inform "MATCH FOUND BASED ON Zap2itID: $NewShowName"
     else
       ((--SeriesConfidenceRating))
       ConfidenceReasoning="$ConfidenceReasoning Failed;"

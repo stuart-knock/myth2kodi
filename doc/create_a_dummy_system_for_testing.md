@@ -59,7 +59,8 @@ done <"recTVshows.txt"
 ```
 
 #### Restore the database
-https://www.mythtv.org/wiki/Backend_migration
+https://www.mythtv.org/wiki/Backend_migration  
+https://www.mythtv.org/wiki/Database_Backup_and_Restore
 
 *NOTE:* the MySQL Time Zone Tables must be installed on the MySQL server prior to using MythTV
 

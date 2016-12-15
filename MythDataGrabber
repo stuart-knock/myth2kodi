@@ -22,7 +22,7 @@ USAGE:
   MythDataGrabber [options]
 
 OPTIONS:
-   --filename=file.ext : returns information to a file
+   --filename=file.ext : recording to be accessed
    --DBHostName        : sets the DB Host, default: localhost
    --DBName            : sets the DB Name, default: mythconverg
    --DBUserName        : sets the User Name, default: mythtv
@@ -171,6 +171,12 @@ if __name__ == "__main__":
                         default=os.path.expanduser('~') + "/showdata.txt",
                         help="""Use this argument to override default output file.
                                 NB. You must also set --writeFile.""")
+    #delete arg
+    PARSER.add_argument('--delete',
+                        action='store_true',
+                        default='False',
+                        help="""Use this flag to delete the recording
+                                specified by --filename.""")
     #DBHostName arg
     PARSER.add_argument('--DBHostName',
                         default="localhost",
@@ -296,3 +302,9 @@ if __name__ == "__main__":
         write_data()
 
     closefile()
+    #######################################################################
+
+    # Ask the backend to delete the recording
+    if ARGS.delete is True:
+        LOG.debug("Deleting recording: " + ARGS.filename)
+        REC.delete()

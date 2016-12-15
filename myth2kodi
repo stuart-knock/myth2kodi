@@ -2180,7 +2180,6 @@ delete_mythtv_database_entry(){
   debug "MySQLMythDb: $MySQLMythDb"
   #Make sure we got input arguments and file is valid
   if [ ! -e "$InputPath" ]; then
-    #TODO: Support python-bindings based deletion here...
     #Remove recording entry from mysql database
     inform "${FUNCNAME[0]}() REMOVING: $InputFileBasename; THUMBNAILS; DATABASE ENTRIES."
     mysql -u"$MySQLuser" -p"$MySQLpass" -e "USE $MySQLMythDb ; DELETE FROM recorded WHERE basename LIKE '$InputFileBasename' ; "
@@ -4697,6 +4696,43 @@ delete_recording(){
   [[ "$?" != 0 ]] && return "$?"
   InputPath="$RECORDING_PATH"
   InputFileBasename="$RECORDING_NAME"
+
+  #TODO: Support python-bindings based deletion here...
+  #NOTE: The delete method for a recorded object asks the backend to take care
+  #      of deleting the specified recording. So when using Python bindings we
+  #      don't have to manually rm or call  delete_mythtv_database_entry.
+  #        Recorded.delete(force=False, rerecord=False) -> retcode
+  #            Informs backend to delete recording and all relevent data.
+  #            'force' forces a delete if the file cannot be found.
+  #            'rerecord' sets the file as recordable in oldrecorded
+  #
+  #case "$DatabaseType" in
+  #  MythTV)
+  #    #Delete the recording file and any link to it.
+  #    [[ -f "$RECORDING_LINK" ]] && rm -f "$RECORDING_LINK"
+  #    [[ -f "$RECORDING_FILE" ]] && rm -f "$RECORDING_FILE"
+  #
+  #    #Delete the associated database entry and thumbnails.
+  #    delete_mythtv_database_entry
+  #    ;;
+  #  MythTVPythonBindings)
+  #    "$binpath"/MythDataGrabber --verbosity="$((LOGLEVEL<3?LOGLEVEL:3))" \
+  #                               --filename="$InputFileBasename"          \
+  #                               --SecurityPin="$DBPin"                   \
+  #                               --DBHostName="$DBHostName"               \
+  #                               --DBName="$MySQLMythDb"                  \
+  #                               --DBUserName="$MySQLuser"                \
+  #                               --DBPassword="$MySQLpass"                \
+  #                               --delete | err_pipe "MythDataGrabber: "
+  #    ;;
+  #  *)
+  #    NOTIFY_MSG="DatabaseType incorrectly specified."
+  #    err "${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}(): $NOTIFY_MSG"
+  #    EXIT_JOB_TYPE='UserSettingError'
+  #    return 1
+  #    ;;
+  #esac
+
 
   #Delete the recording file and any link to it.
   [[ -f "$RECORDING_LINK" ]] && rm -f "$RECORDING_LINK"

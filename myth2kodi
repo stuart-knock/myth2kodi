@@ -2180,6 +2180,7 @@ delete_mythtv_database_entry(){
   debug "MySQLMythDb: $MySQLMythDb"
   #Make sure we got input arguments and file is valid
   if [ ! -e "$InputPath" ]; then
+    #TODO: Support python-bindings based deletion here...
     #Remove recording entry from mysql database
     inform "${FUNCNAME[0]}() REMOVING: $InputFileBasename; THUMBNAILS; DATABASE ENTRIES."
     mysql -u"$MySQLuser" -p"$MySQLpass" -e "USE $MySQLMythDb ; DELETE FROM recorded WHERE basename LIKE '$InputFileBasename' ; "

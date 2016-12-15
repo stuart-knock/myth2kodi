@@ -4697,49 +4697,41 @@ delete_recording(){
   InputPath="$RECORDING_PATH"
   InputFileBasename="$RECORDING_NAME"
 
-  #TODO: Support python-bindings based deletion here...
-  #NOTE: The delete method for a recorded object asks the backend to take care
-  #      of deleting the specified recording. So when using Python bindings we
-  #      don't have to manually rm or call  delete_mythtv_database_entry.
-  #        Recorded.delete(force=False, rerecord=False) -> retcode
-  #            Informs backend to delete recording and all relevent data.
-  #            'force' forces a delete if the file cannot be found.
-  #            'rerecord' sets the file as recordable in oldrecorded
-  #
-  #case "$DatabaseType" in
-  #  MythTV)
-  #    #Delete the recording file and any link to it.
-  #    [[ -f "$RECORDING_LINK" ]] && rm -f "$RECORDING_LINK"
-  #    [[ -f "$RECORDING_FILE" ]] && rm -f "$RECORDING_FILE"
-  #
-  #    #Delete the associated database entry and thumbnails.
-  #    delete_mythtv_database_entry
-  #    ;;
-  #  MythTVPythonBindings)
-  #    "$binpath"/MythDataGrabber --verbosity="$((LOGLEVEL<3?LOGLEVEL:3))" \
-  #                               --filename="$InputFileBasename"          \
-  #                               --SecurityPin="$DBPin"                   \
-  #                               --DBHostName="$DBHostName"               \
-  #                               --DBName="$MySQLMythDb"                  \
-  #                               --DBUserName="$MySQLuser"                \
-  #                               --DBPassword="$MySQLpass"                \
-  #                               --delete | err_pipe "MythDataGrabber: "
-  #    ;;
-  #  *)
-  #    NOTIFY_MSG="DatabaseType incorrectly specified."
-  #    err "${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}(): $NOTIFY_MSG"
-  #    EXIT_JOB_TYPE='UserSettingError'
-  #    return 1
-  #    ;;
-  #esac
+  #Delete the recording file and its associated DB entry
+  case "$DatabaseType" in
+    MythTV)
+      #Delete the recording file and any link to it.
+      [[ -f "$RECORDING_LINK" ]] && rm -f "$RECORDING_LINK"
+      [[ -f "$RECORDING_FILE" ]] && rm -f "$RECORDING_FILE"
 
+      #Delete the associated database entry and thumbnails.
+      delete_mythtv_database_entry
+      ;;
+    MythTVPythonBindings)
+      local MTV_RECINFO_FILE
+      MTV_RECINFO_FILE="$(mktemp "$M2K_TMPDIR/m2k_delrecinfo_$FileNameNow"-XXXX)"
+      [[ "$?" != 0 ]] && { err "Failed to create temporary file." ; return 1 ; }
+      debug "Deleted recording info will be stored temporary file: '$MTV_RECINFO_FILE'"
 
-  #Delete the recording file and any link to it.
-  [[ -f "$RECORDING_LINK" ]] && rm -f "$RECORDING_LINK"
-  [[ -f "$RECORDING_FILE" ]] && rm -f "$RECORDING_FILE"
-
-  #Delete the associated database entry and thumbnails.
-  delete_mythtv_database_entry
+      #Ask mythbackend to delete the recording
+      "$binpath"/MythDataGrabber --verbosity="$((LOGLEVEL<3?LOGLEVEL:3))" \
+                                 --filename="$InputFileBasename"          \
+                                 --SecurityPin="$DBPin"                   \
+                                 --DBHostName="$DBHostName"               \
+                                 --DBName="$MySQLMythDb"                  \
+                                 --DBUserName="$MySQLuser"                \
+                                 --DBPassword="$MySQLpass"                \
+                                 --output="$MTV_RECINFO_FILE"             \
+                                 --writeFile                              \
+                                 --delete 2>&1 | err_pipe "MythDataGrabber: "
+      ;;
+    *)
+      NOTIFY_MSG="DatabaseType incorrectly specified."
+      err "${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}(): $NOTIFY_MSG"
+      EXIT_JOB_TYPE='UserSettingError'
+      return 1
+      ;;
+  esac
 
   #Delete undo.sh entries associated with $RECORDING_NAME
   debug "Removing lines mentioning '$RECORDING_NAME' from $m2kdir/undo.sh"

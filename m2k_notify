@@ -1,33 +1,51 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
-# This file goes in /usr/local/bin/ and should be named m2k_notify
+# m2k_notify sends a notification to the caller's desktop (currently only gnome).
+#
+# This file goes in $binpath
 # This file is a modified version of librarian-notify-send.
 # Which in turn is a modified version of alt-notify-send. It has
 # been modified to send images with the notifications.
-# For usage see:
-#    http://xbmc.org/wiki/?title=MythicalLibrarian#GNOME_Desktop_Notifications
+# An example of how it's used can be found in myth2kodi:
+#    https://github.com/stuart-knock/myth2kodi/blob/master/myth2kodi
+#
 
-#TODO: Categories, from http://www.galago-project.org/specs/notification/0.9/x211.html
-# "transfer" A generic file transfer or download notification that doesn't fit into any other category.
-# "transfer.complete"     A file transfer or download complete notification.
-# "transfer.error"        A file transfer or download error.
-# "network"  A generic network notification that doesn't fit into any other category.
-# "network.connected"     A network connection notification, such as successful sign-on to a network service. This should not be confused with device.added for new network devices.
-# "network.disconnected"  A network disconnected notification. This should not be confused with device.removed for disconnected network devices.
-# "network.error" A network-related or connection-related error. 
+#TODO: enable messages for DBUS using desktops other than Gnome. See 'pids='.
+#      KDE equiv is either kwin or kwin_x11.
+#
+#TODO: Categories, http://www.galago-project.org/specs/notification/0.9/x211.html
+# "transfer" -- A generic file transfer or download notification that doesn't
+#               fit into any other category.
+#   ".complete" -- A file transfer or download complete notification.
+#   ".error" -- A file transfer or download error.
+# "network" -- A generic network notification that doesn't fit into any other
+#              category.
+#   ".connected" -- A network connection notification, such as successful
+#                   sign-on to a network service. This should not be
+#                   confused with device.added for new network devices.
+#   ".disconnected" -- A network disconnected notification. This should not be
+#                      confused with device.removed for disconnected network
+#                      devices.
+#   ".error" A network-related or connection-related error.
 
 user="$(whoami)"
-pids="$(pgrep -u $user gnome-session)"
+pids="$(pgrep -u "$user" gnome-session)"
 title="$1"
 text="$2"
 image="$3"
 
-[[ -z "$title" ]] && printf '%s\n' 'You need to give me a title' >&2 && exit 1
+#notify-send fails without at least a title ('summary' in notify-send's terminology)
+if [[ -z "$title" ]]; then
+  printf '%s\n' "ERROR: ${BASH_SOURCE[0]}: You need to give me a title" >&2
+  exit 1
+fi
 
-[[ -z "$text" ]] && text=$title
+#notify-send can complain if there is no message, so fallback to reusing the title.
+[[ -z "$text" ]] && text="$title"
 
-#TODO: this isn't used... #NOTE: Ubuntu's Notify OSD and GNOME Shell both ignore this parameter.
-if [ -z "$timeout" ]; then
+#TODO: this isn't used by most/all desktops... consider just dropping it.
+#NOTE: Ubuntu's Notify OSD and GNOME Shell both known to ignore this parameter.
+if [[ -z "$timeout" ]]; then
   #timeout=6000    #6 seconds
   #timeout=60000   #1 minute
   #timeout=180000  #3 minutes
@@ -35,8 +53,10 @@ if [ -z "$timeout" ]; then
 fi
 
 for pid in $pids; do
+  #Avoid the warning about ignoring null-bytes in command substitution introduced in BASH 4.4
+  desktopenv="$( sed 's/\x0/\n/g' "/proc/$pid/environ" )"
   # find DBUS session bus for this session
-  DBUS_SESSION_BUS_ADDRESS=$(grep -z DBUS_SESSION_BUS_ADDRESS /proc/$pid/environ | sed -e 's/DBUS_SESSION_BUS_ADDRESS=//')
+  DBUS_SESSION_BUS_ADDRESS=$(grep DBUS_SESSION_BUS_ADDRESS <<<"$desktopenv" | sed -e 's/DBUS_SESSION_BUS_ADDRESS=//')
   # send message to DBUS
   DBUS_SESSION_BUS_ADDRESS=$DBUS_SESSION_BUS_ADDRESS notify-send -u low -i "$image" "$title" "$text"
   #DBUS_SESSION_BUS_ADDRESS=$DBUS_SESSION_BUS_ADDRESS notify-send --app-name=Kodi -t $timeout -u low -i "$image" "$title" "$text"

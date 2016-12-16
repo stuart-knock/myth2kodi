@@ -13,13 +13,13 @@ See the `bindir` user setting in myth2kodi.conf:
 
     sudo cp myth2kodi /usr/local/bin/
     sudo cp bashlogging /usr/local/bin/
-    sudo cp MythDataGrabber /usr/local/bin/
+    sudo cp mythdb_access /usr/local/bin/
     sudo cp m2k_notify /usr/local/bin/
 
 ### Make those that need to be executable:
 
     sudo chmod o+rx /usr/local/bin/myth2kodi
-    sudo chmod o+rx /usr/local/bin/MythDataGrabber
+    sudo chmod o+rx /usr/local/bin/mythdb_access
     sudo chmod o+rx /usr/local/bin/m2k_notify
 
 ### Create the myth2kodi working directory

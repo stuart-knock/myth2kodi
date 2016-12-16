@@ -31,7 +31,7 @@
 #  variable in user settings (Default: /usr/local/bin). Some of the
 #  functionality of this script is provided in other files, these will also
 #  need to be placed in $binpath along with this script. They are:
-#  MythDataGrabber -- Uses MythTV python bindings to access database information.
+#  mythdb_access -- Uses MythTV python bindings to access database information.
 #  m2k_notify -- A script for sending notifications to Gnome Desktop.
 #  bashlogging -- A set of bash functions that provide the logging mechanism
 #                 used throughout myth2kodi.
@@ -444,7 +444,7 @@ LOGTYPE='both'
 #TODO: If making a tar ball as a "Release", include the following:
 #    myth2kodi
 #    bashlogging
-#    MythDataGrabber
+#    mythdb_access
 #    m2k_notify
 #    myth2kodi.conf
 #    myth2kodi.png
@@ -1679,15 +1679,15 @@ get_mythtvdb_info_pythonbindings(){
   # declare -g mdb_starttime
 
   #Access MytTV-DB via the python bindings and output to a temporary file.
-  "$binpath"/MythDataGrabber --verbosity="$((LOGLEVEL<3?LOGLEVEL:3))" \
-                             --filename="$InputFileBasename"          \
-                             --SecurityPin="$DBPin"                   \
-                             --DBHostName="$DBHostName"               \
-                             --DBName="$MySQLMythDb"                  \
-                             --DBUserName="$MySQLuser"                \
-                             --DBPassword="$MySQLpass"                \
-                             --output="$MTV_RECINFO_FILE"             \
-                             --writeFile 2>&1 | err_pipe "MythDataGrabber: "
+  "$binpath"/mythdb_access --verbosity="$((LOGLEVEL<3?LOGLEVEL:3))" \
+                           --filename="$InputFileBasename"          \
+                           --SecurityPin="$DBPin"                   \
+                           --DBHostName="$DBHostName"               \
+                           --DBName="$MySQLMythDb"                  \
+                           --DBUserName="$MySQLuser"                \
+                           --DBPassword="$MySQLpass"                \
+                           --output="$MTV_RECINFO_FILE"             \
+                           --writeFile 2>&1 | err_pipe "mythdb_access: "
 
   pythonExitStatus="${PIPESTATUS[0]}"
   if [ "$pythonExitStatus" != "0" ] ; then
@@ -1750,7 +1750,7 @@ get_mythtvdb_info_pythonbindings(){
   ShowStartTime="$starttime"         && debugcont "ShowStartTime=$starttime"
   XMLTVGrabber="$xmltvgrabber"       && debugcont "XMLTVGrabber=$xmltvgrabber"
 
-  #If we're not in debug mode then clean-up the file written by MythDataGrabber
+  #If we're not in debug mode then clean-up the file written by mythdb_access
   if (( LOGLEVEL < 3 )) ; then
     rm -f "$MTV_RECINFO_FILE"
   else
@@ -3904,8 +3904,8 @@ m2k_diagnostics(){
   printf '\n'
 
   local -i bashlogging_file=0
-  local -i MythDataGrabber_file=0
-  local -i MythDataGrabber_exec=0
+  local -i mythdb_access_file=0
+  local -i mythdb_access_exec=0
   local -i m2k_notify_file=0
   local -i m2k_notify_exec=0
   local -i our_scripts=0
@@ -3916,18 +3916,18 @@ m2k_diagnostics(){
     err "Can't Find: $binpath/bashlogging"
     bashlogging_file=1
   fi
-  if [[ -f "$binpath/MythDataGrabber" ]]; then
-    inform "Found: $binpath/MythDataGrabber"
-    [[ -x "$binpath/MythDataGrabber" ]] || MythDataGrabber_exec=1
-    if ((MythDataGrabber_exec==0)); then
-      inform "Executable: $binpath/MythDataGrabber"
+  if [[ -f "$binpath/mythdb_access" ]]; then
+    inform "Found: $binpath/mythdb_access"
+    [[ -x "$binpath/mythdb_access" ]] || mythdb_access_exec=1
+    if ((mythdb_access_exec==0)); then
+      inform "Executable: $binpath/mythdb_access"
     else
-      err "Not Executable: $binpath/MythDataGrabber"
+      err "Not Executable: $binpath/mythdb_access"
     fi
   else
-    err "Can't Find: $binpath/MythDataGrabber"
-    MythDataGrabber_file=1
-    MythDataGrabber_exec=1
+    err "Can't Find: $binpath/mythdb_access"
+    mythdb_access_file=1
+    mythdb_access_exec=1
   fi
   if [[ -f "$binpath/m2k_notify" ]]; then
     inform "Found: $binpath/m2k_notify"
@@ -3943,7 +3943,7 @@ m2k_diagnostics(){
     m2k_notify_exec=1
   fi
 
-  our_scripts=$((bashlogging_file+MythDataGrabber_file+MythDataGrabber_exec+m2k_notify_file+m2k_notify_exec))
+  our_scripts=$((bashlogging_file+mythdb_access_file+mythdb_access_exec+m2k_notify_file+m2k_notify_exec))
   ((our_scripts!=0)) && err "Checks for our own scripts ***FAILED***"
 
   #Test if required packages are installed and accessible to caller.
@@ -4027,14 +4027,14 @@ m2k_diagnostics(){
 
     #If checks above found python-lxml & libmyth-python, do a more thorough testing of MythTV python bindings
     if [[ -z "$PKGNAME_PYTHON$PKGNAME_LIBMYTH_PYTHON$PKGNAME_PYTHON_LXML" ]]; then
-      #Use MythDataGrabber's internal diagnostics function
-      "$binpath"/MythDataGrabber --verbosity="$((LOGLEVEL<3?LOGLEVEL:3))" \
-                                 --Diagnostic                             \
-                                 --DBHostName="$DBHostName"               \
-                                 --DBName="$MySQLMythDb"                  \
-                                 --DBUserName="$MySQLuser"                \
-                                 --DBPassword="$MySQLpass"                \
-                                 --SecurityPin="$DBPin" 2>&1 | err_pipe "MythDataGrabber: "
+      #Use mythdb_access's internal diagnostics function
+      "$binpath"/mythdb_access --verbosity="$((LOGLEVEL<3?LOGLEVEL:3))" \
+                               --Diagnostic                             \
+                               --DBHostName="$DBHostName"               \
+                               --DBName="$MySQLMythDb"                  \
+                               --DBUserName="$MySQLuser"                \
+                               --DBPassword="$MySQLpass"                \
+                               --SecurityPin="$DBPin" 2>&1 | err_pipe "mythdb_access: "
       if [[ "${PIPESTATUS[0]}" = "0" ]]; then
         PythonBindingsCheck="OK"
       else
@@ -4596,12 +4596,12 @@ find_file_link_pairs(){
       #FILE is a moved file name, check if there is a link to FILE from a StorageGroup Directory
       RECORDING_FILE_OWNER='myth2kodi'
       RECORDING_LINK_OWNER='MythTV'
-      check_dirs=($("$binpath"/MythDataGrabber --storagegroups            \
-                                               --SecurityPin="$DBPin"     \
-                                               --DBHostName="$DBHostName" \
-                                               --DBName="$MySQLMythDb"    \
-                                               --DBUserName="$MySQLuser"  \
-                                               --DBPassword="$MySQLpass"))
+      check_dirs=($("$binpath"/mythdb_access --storagegroups            \
+                                             --SecurityPin="$DBPin"     \
+                                             --DBHostName="$DBHostName" \
+                                             --DBName="$MySQLMythDb"    \
+                                             --DBUserName="$MySQLuser"  \
+                                             --DBPassword="$MySQLpass"))
     fi
     for check_dir in "${check_dirs[@]}" ; do
       LINK_NAME="$(find -L "$check_dir" -samefile "$RECORDING_FILE")"
@@ -4644,12 +4644,12 @@ set_recording_name(){
     #Check if it's a moved file name that's still tracked by MythTV
     local -a sg_dirs
     #Get the sorage group directories defined in MythTV-DB
-    sg_dirs=($("$binpath"/MythDataGrabber --storagegroups            \
-                                          --SecurityPin="$DBPin"     \
-                                          --DBHostName="$DBHostName" \
-                                          --DBName="$MySQLMythDb"    \
-                                          --DBUserName="$MySQLuser"  \
-                                          --DBPassword="$MySQLpass"))
+    sg_dirs=($("$binpath"/mythdb_access --storagegroups            \
+                                        --SecurityPin="$DBPin"     \
+                                        --DBHostName="$DBHostName" \
+                                        --DBName="$MySQLMythDb"    \
+                                        --DBUserName="$MySQLuser"  \
+                                        --DBPassword="$MySQLpass"))
     #TODO: should check return state...
     for sg_dir in "${sg_dirs[@]}" ; do
       RECORDING_NAME="$(find -L "$sg_dir" -samefile "$1")"
@@ -4713,17 +4713,17 @@ delete_recording(){
       [[ "$?" != 0 ]] && { err "Failed to create temporary file." ; return 1 ; }
       debug "Deleted recording info will be stored temporary file: '$MTV_RECINFO_FILE'"
 
-      #Ask mythbackend to delete the recording
-      "$binpath"/MythDataGrabber --verbosity="$((LOGLEVEL<3?LOGLEVEL:3))" \
-                                 --filename="$InputFileBasename"          \
-                                 --SecurityPin="$DBPin"                   \
-                                 --DBHostName="$DBHostName"               \
-                                 --DBName="$MySQLMythDb"                  \
-                                 --DBUserName="$MySQLuser"                \
-                                 --DBPassword="$MySQLpass"                \
-                                 --output="$MTV_RECINFO_FILE"             \
-                                 --writeFile                              \
-                                 --delete 2>&1 | err_pipe "MythDataGrabber: "
+      #Ask mythbackend to delete the recording (ther is typically a delay of 5-10 min).
+      "$binpath"/mythdb_access --verbosity="$((LOGLEVEL<3?LOGLEVEL:3))" \
+                               --filename="$InputFileBasename"          \
+                               --SecurityPin="$DBPin"                   \
+                               --DBHostName="$DBHostName"               \
+                               --DBName="$MySQLMythDb"                  \
+                               --DBUserName="$MySQLuser"                \
+                               --DBPassword="$MySQLpass"                \
+                               --output="$MTV_RECINFO_FILE"             \
+                               --writeFile                              \
+                               --delete 2>&1 | err_pipe "mythdb_access: "
       ;;
     *)
       NOTIFY_MSG="DatabaseType incorrectly specified."
@@ -4931,7 +4931,7 @@ success_postprocessing(){
 #  that the user $Librarian be the one running MythTV and that they have write
 #  privileges to the MoveDirs that Kodi can see. Then most/all of the need for
 #  running commands with sudo and the need for undo to be run as root can be
-#  removed... Need to check expectations of MythDataGrabber and other auxiliary
+#  removed... Need to check expectations of mythdb_access and other auxiliary
 #  functions before making this change.
 
 #TODO: At some point this main needs to be cleaned up, at the moment it's a

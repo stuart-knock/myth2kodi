@@ -354,12 +354,12 @@ DBPin=0000                                   #<------THIS VALUE MUST BE SET-----
 #Options: ['Enabled'(DEFAULT)|'Disabled']
 DailyReport='Enabled'
 
-#Notify tells myth2kodi to send a notification to the Desktop via DBUS upon
-#completion. Options: ['Enabled'|'Disabled'(DEFAULT)]
+#Notify tells myth2kodi to send a notification to the Desktop (currently only
+#gnome) via DBUS upon completion. Options: ['Enabled'|'Disabled'(DEFAULT)]
 Notify='Disabled'
 
-#If notifications are enabled, desktop messages are sent to the user specified
-#by NotifyUserName, Default: "$Librarian".
+#If notifications are enabled, desktop (currently only gnome) messages are
+#sent to the user specified by NotifyUserName, Default: "$Librarian".
 #  NOTE: if you want to specify a user other than $Librarian then $Librarian
 #        must have passwordless sudo privileges otherwise the call to
 #        m2k_notify will block, waiting for a password.

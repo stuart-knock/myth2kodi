@@ -9,13 +9,15 @@
 *MythDataGrabber* ==> **mythdb_access**  
 *librarian-notify-send* ==> **m2k_notify**  
 
+### Removed:
+**mythicalSetup.sh**: *A nice feature that I've, so far, been too lazy to update and maintain.*
 
 ## Changes to command flags
 ### Added:
 **--movie**: *Specifies that the recording being processed is a movie.*  
 **--comskip**: *Regenerates the comskip file for recordings that have
                 already been processed.*  
-**--recording-info**: *Retrieves information on a recording from the MythTV-DB
+**--recording-info**: *Retrieves information on a recording from your MythTV-DB
                        and prints it to stdout.*  
 **--log**: *Extracts just those parts of the log files relevant to the
             processing of a specified recording and displays them in a pager.*  
@@ -36,7 +38,7 @@
 **-m**, **-s**, **-u**, **-d**: *All short forms have been removed. The version of
 mythicalLibrarian I started from already had duplicates of these that made things
 ambiguous. With the increased number of command flags the potential for confusion
-only increased. So, it seemed safer, and easier, just to drop them,*
+only increased. So, it seemed safer, and easier, just to drop them.*
 
 
 ## Configuration Options
@@ -83,7 +85,8 @@ in an appropriately named file in the `$m2kdir/userjobs` directory will be run
 as the final task of the exit_job() (formerly RunJob()) function.
 
 ## Refactoring
-A large number of functions and variables have been renamed to improve conformance
-with standard practices for bash scripts. A considerable number of new functions
-have been added. A large number of minor bugs were fixed along the way (of course,
-the extent of the changes probably means new ones have been introduced too... ).
+A large number of functions and variables have been renamed to improve
+consistency and conformance with standard practices for bash scripts. A
+considerable number of new functions have been added. A large number of minor
+bugs were fixed along the way (of course, the extent of the changes probably
+means new ones have been introduced too...).

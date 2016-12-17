@@ -73,8 +73,11 @@ for additional functionality type:
   ├── <a href="./showTranslations.SydFTA">showTranslations.SydFTA</a> (An example translation file for Sydney free-to-air guide data.) <br>
   ├── <a href="./guessepisodefromplot.py">guessepisodefromplot.py</a> (Possible future NLP addon.) <br>
   ├── <a href="./doc/">doc</a> (Documentation.) <br>
+      ├── <a href="./doc/OVERVIEW.md">OVERVIEW.md</a> (An overview of what myth2kodi is and what it is used for.) <br>
       ├── <a href="./doc/INSTALL.md">INSTALL.md</a> (A description of how to install myth2kodi.) <br>
       ├── <a href="./doc/CONFIGURE.md">CONFIGURE.md</a> (An overview of the configuration options.) <br>
+      ├── <a href="./doc/USAGE.md">USAGE.md</a> (A brief guide to using myth2kodi.) <br>
+      ├── <a href="./doc/key_differences_to_mythicalLibrarian.md">key_differences_to_mythicalLibrarian.md</a> (How is myth2kodi different from mythicalLibrarian.) <br>
       ├── <a href="./doc/create_a_dummy_system_for_testing.md">create_a_dummy_system_for_testing.md</a> (Rough guide to building a test system that mirrors your actual system.) <br>
       └── <a href="./doc/example_myth2kodi.conf">example_myth2kodi.conf</a> (A minimal example configuration file.) <br>
   └── <a href="./attic/">attic</a> (Old stuff I just haven't thrown away yet.) <br>

@@ -189,8 +189,8 @@
 ########################## BEGIN USER SETTINGS ###############################
 ##############################################################################
 
-#Specify the name of the user running mythtv, myth2kodi should always be run
-#by that user. Default: 'mythtv'
+#Specify the name of the user running mythbackend, myth2kodi should always be
+#run by that user. Default: 'mythtv'
 Librarian='mythtv'                           #<------THIS VALUE MUST BE SET-------
 
 
@@ -4394,7 +4394,8 @@ msg_options(){
   printf '%s\n'   "    Returns all processed recordings to their original state."
   printf '%s\n'   "    There is an exception for recordings successfully processed"
   printf '%s\n'   "    with SYMLINK='Disabled', as MythTV-DB info has been deleted,"
-  printf '%s\n'   "    these can not be undone."
+  printf '%s\n'   "    these can not be undone. Also,recordings that have been"
+  printf '%s\n'   "    deleted or disconnected cannot be undone."
   printf '%s\n'   "    eg. myth2kodi --undo"
   printf '\n%s\n' "  --series-info 'Series Name'"
   printf '%s\n'   "    Updates our local database tables for a specified series,"

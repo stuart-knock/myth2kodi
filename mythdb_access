@@ -151,7 +151,7 @@ def write_data():
             OUTPUT.write('xmltvgrabber = "%s"\n' % res[0].strip())
     # verify valid data was written
     if REC.chanid != '': #TODO: this is strange to do at the end, and also doesn't test writing but rather that a valid recording was found in the first place.
-        LOG.info("Operation complete.")
+        LOG.debug("Operation complete.")
 ###########################################################################
 
 
@@ -249,7 +249,7 @@ if __name__ == "__main__":
     LOG.setLevel(LOGLEVELMAPPING[ARGS.verbosity])
 
     #Get a connection to the database
-    LOG.info("Establishing database connection")
+    LOG.debug("Establishing database connection")
     try:
         # Defaults or ARGS
         DB = MythDB(**vars(ARGS))

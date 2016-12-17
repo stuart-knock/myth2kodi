@@ -3165,24 +3165,24 @@ msg_recording_info(){
 
 #Report the combination of command line input and MythTV-DB data.
 msg_merged_input_mythtvdb(){
-  inform "Input and MythTV-DB guide data for $InputFileBasename"
-  [[ "$Database" = "Enabled" ]] && informcont "RECSTART:$ShowStartTime"
-  [[ "$Database" = "Enabled" ]] && informcont "DATE:$MovieAirDate $OriginalAirDate"
-  [[ "$Database" = "Enabled" ]] && informcont "PROGRAMID:$ProgramID"
-  [[ "$Database" = "Enabled" ]] && informcont "ShowCategory:$ShowCategory"
+  debug "Input and MythTV-DB guide data for $InputFileBasename"
+  [[ "$Database" = "Enabled" ]] && debugcont "RECSTART:$ShowStartTime"
+  [[ "$Database" = "Enabled" ]] && debugcont "DATE:$MovieAirDate $OriginalAirDate"
+  [[ "$Database" = "Enabled" ]] && debugcont "PROGRAMID:$ProgramID"
+  [[ "$Database" = "Enabled" ]] && debugcont "ShowCategory:$ShowCategory"
   if [[ -n "$InputTitle" ]]; then
-    informcont "InputTitle:$InputTitle"
+    debugcont "InputTitle:$InputTitle"
   else
-    informcont "InputTitle: UNKNOWN"
+    debugcont "InputTitle: UNKNOWN"
   fi
   if [[ -n "$InputSubtitle" ]]; then
-    informcont "InputSubtitle:$InputSubtitle"
+    debugcont "InputSubtitle:$InputSubtitle"
   else
-    informcont "InputSubtitle: UNKNOWN"
+    debugcont "InputSubtitle: UNKNOWN"
   fi
-  if [[ -n "$Sxx" ]]; then informcont "Sxx:$Sxx"; else informcont "Sxx: UNKNOWN"; fi
-  if [[ -n "$Exx" ]]; then informcont "Exx:$Exx"; else informcont "Exx: UNKNOWN"; fi
-  [[ "$Database" = "Enabled" ]] && informcont "PLOT: $Plot"
+  if [[ -n "$Sxx" ]]; then debugcont "Sxx:$Sxx"; else debugcont "Sxx: UNKNOWN"; fi
+  if [[ -n "$Exx" ]]; then debugcont "Exx:$Exx"; else debugcont "Exx: UNKNOWN"; fi
+  [[ "$Database" = "Enabled" ]] && debugcont "PLOT: $Plot"
 }
 
 #A warning message about performing maintenance that waits on user input
@@ -3772,49 +3772,49 @@ msg_operation_summary(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   inform "################ OPERATION SUMMARY ################"
   informcont "JOB: myth2kodi '$m2karg1' '$m2karg2' '$m2karg3' '$m2karg4'"
-  informcont "m2kVersion=$m2kVersion-"
+  debugcont  "m2kVersion=$m2kVersion-"
   informcont "CALLER=$CALLER-"
+  debugcont  "m2kdir=$m2kdir-"
+  debugcont  "Timeout=$Timeout-"
+  debugcont  "APIkey=$APIkey-"
+  informcont "SYMLINK=$SYMLINK-"
+  informcont "TargetPathIsInputPath=$TargetPathIsInputPath-"
+  informcont "FailSafeMode=$FailSafeMode-"
+  debugcont  "FailSafeDir=$FailSafeDir-"
+  debugcont  "Notify=$Notify-"
+
+  #Print a summary table of writeable directories.
+  msg_dir_summary
+
   informcont "InputPath=$InputPath-"
   informcont "InputTitle=$InputTitle-"
   informcont "InputSubtitle=$InputSubtitle-"
-  informcont "Timeout=$Timeout-"
-  informcont "APIkey=$APIkey-"
-  informcont "m2kdir=$m2kdir-"
-  informcont "MoveDir=$MoveDir-"
-  informcont "FailSafeMode=$FailSafeMode-"
-  informcont "FailSafeDir=$FailSafeDir-"
-  informcont "AlternateMoveDir=$AlternateMoveDir-"
-  informcont "TargetPathIsInputPath=$TargetPathIsInputPath-"
-  informcont "Notify=$Notify-"
   informcont "showtranslation=$showtranslation-"
   informcont "ShowName=$ShowName-"
-  informcont "LastUpdatedTVDB=$LastUpdatedTVDB-"
-  informcont "CurrentTimeTVDB=$CurrentTimeTVDB-"
+  debugcont  "LastUpdatedTVDB=$LastUpdatedTVDB-"
+  debugcont  "CurrentTimeTVDB=$CurrentTimeTVDB-"
   informcont "SeriesID=$SeriesID-"
   informcont "NewShowName=$NewShowName-"
-  informcont "AbsoluteEpisodeNumber=$AbsoluteEpisodeNumber-"
+  debugcont  "AbsoluteEpisodeNumber=$AbsoluteEpisodeNumber-"
   informcont "EpisodeSubtitle=$EpisodeSubtitle-"
   informcont "Sxx=$Sxx- Exx=$Exx-"
-  informcont "SYMLINK=$SYMLINK-"
   informcont "MoveFileSize=$MoveFileSize MB"
   informcont "ConfidenceRating=$ConfidenceRating-"
   informcont "ConfidenceReasoning=$ConfidenceReasoning-"
-  #Print a summary table of writeable directories.
-  msg_dir_summary
   if [ "$Database" = "Enabled" ]; then
-    informcont "XMLTVGrabber=$XMLTVGrabber-"
+    debugcont  "XMLTVGrabber=$XMLTVGrabber-"
     informcont "ShowStartTime=$ShowStartTime-"
-    informcont "MovieAirDate=$MovieAirDate-"
-    informcont "OriginalAirDate=$OriginalAirDate-"
+    debugcont  "MovieAirDate=$MovieAirDate-"
+    debugcont  "OriginalAirDate=$OriginalAirDate-"
     informcont "ProgramID=$ProgramID-"
     informcont "ChanID=$ChanID-"
     informcont "StorageGroup=$StorageGroup-"
     informcont "ShowCategory=$ShowCategory-"
-    informcont "GoForDoover=$GoForDoover-"
+    debugcont  "GoForDoover=$GoForDoover-"
     informcont "ProgramIDType=$ProgramIDType-"
-    informcont "rating=$rating-"
+    debugcont  "rating=$rating-"
     informcont "Zap2itSeriesID=$Zap2itSeriesID-"
-    informcont "LocalSeriesID=$LocalSeriesID-"
+    debugcont  "LocalSeriesID=$LocalSeriesID-"
     informcont "InputSeasonNum=$InputSeasonNum-"
     informcont "InputEpisodeNum=$InputEpisodeNum-"
     informcont "Plot=$Plot-"
@@ -3874,7 +3874,7 @@ check_filesystem(){
   WorkingDirWritable="$?"
 }
 
-#This function provides a functions check on myth2kodi
+#This function provides basic testing of myth2kodi's functionality.
 m2k_diagnostics(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   #Move any existing diagnostics file to diagnostics_<Date&Time script was launched>.log
@@ -5261,9 +5261,9 @@ if [[ -n "$SeriesID" ]]; then
 
   #Statistical Fuzzy Logic monitoring
   increment_total_matches
-  inform "TOTAL FUZZY LOGIC MATCHES:$FuzzyLogicMatches"
-  #TODO: Consider repositioning this inform, also look into increment_fuzzy_logic_error_count usage... Maybe use $FuzzyLogicError here: ${FuzzyLogicError:-0}
-  inform "TOTAL VERIFIED FUZZY ERRORS:$(test -f "$m2kdir/FuzzyLogicError.log" && cat "$m2kdir/FuzzyLogicError.log" || echo "0")"
+  debug "TOTAL FUZZY LOGIC MATCHES:$FuzzyLogicMatches"
+  #TODO: Consider repositioning this debug, also look into increment_fuzzy_logic_error_count usage... Maybe use $FuzzyLogicError here: ${FuzzyLogicError:-0}
+  debug "TOTAL VERIFIED FUZZY ERRORS:$(test -f "$m2kdir/FuzzyLogicError.log" && cat "$m2kdir/FuzzyLogicError.log" || echo "0")"
 fi
 
 #TODO: The following few blocks will run even if we haven't properly identified the series, which doesn't make
@@ -5380,9 +5380,6 @@ fi
 
 #Check write permissions and free space for Move and Working directories.
 check_filesystem
-
-#Report naming decisions
-inform "CONFIDENCE:$ConfidenceRating LOGIC PATH:$ConfidenceReasoning"
 
 msg_operation_summary
 

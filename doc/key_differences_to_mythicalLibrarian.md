@@ -32,7 +32,11 @@
 *--doMaintenance* ==> **--maintenance**
 
 ### Removed:
-**--update**: *A nice feature that I've, so far, been too lazy to update and maintain.*
+**--update**: *A nice feature that I've, so far, been too lazy to update and maintain.*  
+**-m**, **-s**, **-u**, **-d**: *All short forms have been removed. The version of
+mythicalLibrarian I started from already had duplicates of these that made things
+ambiguous. With the increased number of command flags the potential for confusion
+only increased. So, it seemed safer, and easier, just to drop them,*
 
 
 ## Configuration Options

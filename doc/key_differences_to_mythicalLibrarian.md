@@ -2,7 +2,7 @@
 
 ## Scripts
 ### Added:
-**bashlogging**
+**bashlogging**: *Provides configurable logging functionality.*
 
 ### Renamed:
 *mythicalLibrarian* ==> **myth2kodi**  
@@ -15,14 +15,14 @@
 **--movie**: *Specifies that the recording being processed is a movie.*  
 **--comskip**: *Regenerates the comskip file for recordings that have
                 already been processed.*  
-**--series-info**: *Updates our local database tables for a specified series.*  
-**--delete**: *Deletes a specified recording and its associated database entry.*  
-**--disconnect**: *Disconnects a specified recording from MythTV, deleting the
-                   MythTV-DB entry.*  
 **--recording-info**: *Retrieves information on a recording from the MythTV-DB
                        and prints it to stdout.*  
 **--log**: *Extracts just those parts of the log files relevant to the
             processing of a specified recording and displays them in a pager.*  
+**--series-info**: *Updates our local database tables for a specified series.*  
+**--delete**: *Deletes a specified recording and its associated database entry.*  
+**--disconnect**: *Disconnects a specified recording from MythTV, deleting the
+                   MythTV-DB entry.*  
 **--cleanse**: *Delete archived log files, myth2kodi database files, and daily
                 report files that are older than the lifetime specified by
                 their associated user setting.*
@@ -32,7 +32,7 @@
 *--doMaintenance* ==> **--maintenance**
 
 ### Removed:
-**--update**
+**--update**: *A nice feature that I've, so far, been too lazy to update and maintain.*
 
 
 ## Configuration Options
@@ -47,11 +47,11 @@
 **LogFileName**: *Is the base of the name of the main log file*  
 **LOG_LIFE**: *How long to persist archived log files in months.*  
 **M2K_DB_LIFE**: *How long to persist archived myth2kodi database files in months.*  
-**DAILYREPORT_LIFE**: *How long to persist daily report files in months*  
-**LOGTYPE**: *Defines where to direct logging messages.*
+**DAILYREPORT_LIFE**: *How long to persist daily report files in months.*  
+**LOGTYPE**: *Defines where to direct logging messages -- stdout, stderr, file.*
 
 ### Renamed:
-*mythicalLibrarian* ==> m2kdir**  
+*mythicalLibrarian* ==> **m2kdir**  
 *XBMCIPs* ==> **KODIIPs**  
 *XBMCUpdate* ==> **KODIUpdate**  
 *XBMCNotify* ==> **KODINotify**  

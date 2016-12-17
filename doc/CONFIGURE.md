@@ -5,8 +5,11 @@ the working directory. The latter (`myth2kodi.conf`) is preferred.
 
 ## Essentials
 **NOTE:** Even if you're doing configuration via the `myth2kodi.conf` file
-you **must** configure the `m2kdir` parameter directly in the script, as 
-this is used to find the `myth2kodi.conf` file.
+you **must** make sure that the `m2kdir` parameter is configured correctly
+directly in the script, as this is used to find the `myth2kodi.conf` file.
+The default value of a `.myth2kodi` directory in the callers home directory
+should work fine as long as you don't intend to make significant 
+modifications of other defaults.
 
 It is essential that the following parameters are set correctly, as they
 are specific to your setup:  
@@ -15,25 +18,26 @@ Some vocabulary: *episodes* are recordings recognised as episodes of a TV series
 *movies*  are recordings recognised as being a movie; and *shows* are
 recordings that aren't recognised -- which when everything else is working correctly
 means one-off things like news or sports events.  
-`MoveDir` -- Default directory to move recorded TV episodes to.  
-`PrimaryMovieDir` -- Default directory to move recorded movies to.   
-`PrimaryShowDir` -- Default directory to move recorded shows to.  
-`DBHostName` -- The IP address or name of the server for MythTV Database.  
-`MySQLuser` -- MySQL user name  
-`MySQLpass` -- MySQL password  
-`DBPin` -- The database pin for the MythTV database.  
-`MySQLMythDb` -- MythTV database name.  
+`MoveDir` -- *Default directory to move recorded TV episodes to.*  
+`PrimaryMovieDir` -- *Default directory to move recorded movies to.*   
+`PrimaryShowDir` -- *Default directory to move recorded shows to.*  
+`DBHostName` -- *The IP address or name of the server for MythTV Database.*  
+`MySQLuser` -- *MySQL user name*  
+`MySQLpass` -- *MySQL password*  
+`DBPin` -- *The database pin for the MythTV database.*  
+`MySQLMythDb` -- *MythTV database name.*  
 
-You'll also ideally want to set:  
-`GuideDataType` -- Specifies the method for processing the guide data found in
-your MythTV-DB.  
-correctly. Even if it wasn't originally written for the purpose, one of the
-existing options will hopefully work for your guide data-source. If not then
-you may need to make your own processing function by modifying one of the
-existing ones.
+You'll also ideally want to make sure you have correctly set:  
+`GuideDataType` -- *Specifies the method for processing the guide data found in
+your MythTV-DB.*  
+Even if it wasn't originally written for the purpose, one of the existing
+`GuideDataType` options will hopefully work for your guide data-source. If not
+then you may need to make your own processing function by modifying one of the
+existing ones. (*WARNING: that's how I fell down the rabbit hole...*)
 
 If you `Enable` Kodi notification (it is by default), then it is essential to set:  
-`KODIIPs` -- IP-Address and port for KODI Notifications.
+`KODIIPs` -- IP-Address and port for KODI Notifications, you will also need to add
+             username and password if you have enabled these in Kodi.
 
 ## Optional Extras
 There are a number other parameters that can be used to Enable, Disable

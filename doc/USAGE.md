@@ -9,10 +9,9 @@ For a very brief overview of usage, at a command prompt run:
     myth2kodi --usage
 
 The use of myth2kodi can be broken into three categories:
-
-    1. MythTV user job;
-    2. Process a recording from the command line; and
-    3. Access support functionality via command line flags.
+  1. MythTV user job;
+  2. Process a recording from the command line; and
+  3. Access support functionality via command line flags.
 
 ### MythTV User Job.
 
@@ -20,7 +19,8 @@ The MythTV user job should be called as follows:
 
     $binpath/myth2kodi "%DIR%/%FILE%"
 
-where `$binpath` is replaced by the full explicit path from USER SETTINGS.
+where `$binpath` is replaced by the full explicit path from `myth2kodi.conf` or
+the USER SETTINGS section of `myth2kodi`.
 
 
 ### Process a Recording from the Command Line
@@ -55,10 +55,12 @@ step of installation, is the `--diagnostics` flag. Running:
     
     myth2kodi --diagnostics
 
-causes basic tests for the presence of dependencies and does some checks of the
-configuration and core functionality. Summaries of what is found are printed
-via the logging system (by default this means both to stdout and a file called
-`diagnostics.log` in the myth2kodi working directory).
+causes basic tests for the presence of dependencies to be run, it also does
+some checks of the configuration and core functionality. Summaries of what is
+found are printed via the logging system (by default this means both to stdout
+and a file called `diagnostics.log` in the myth2kodi working directory).
+
+*PROBABLY SHOULD PUT A DESCRIPTION OF ALL COMMAND FLAGS HERE...*
 
 #### A practical example of using some of myth2kodi's command flags:
 If a recording fails to process, you can look at the logs for that recording
@@ -95,14 +97,18 @@ which, in this case returned:
     Starttime='2015-11-05 19:38:00+10:00'
 
 As you can see, the guide data broadcast by Australian free-to-air digital tv
-stations is pretty terrible. Luckily, interwebs search is a magical invention.
+stations can be pretty terrible. Luckily, interwebs search is a magical invention.
 Copying the description field into your favourite search engine quickly reveals
 that this is "Sherlock, Season 1, Episode 3, The Great Game", so, with this
 knowledge at hand, we just run:
     
     myth2kodi  '/media/video/recordings/TVshows/1020_20151105093800.mpg' 'Sherlock' 'The Great Game'
 
-and the recording is now processed correctly:
+and the recording is now processed correctly, with:
+    
+    ls -l /media/video/recordings/TVshows/1020_20151105093800.mpg
+
+returning:
     
     lrwxrwxrwx 1 librarian users  70 Dec 17 16:07 /media/video/recordings/TVshows/1020_20151105093800.mpg -> /media/video/tv/Sherlock/Season 1/Sherlock S01E03 (The Great Game).mpg
 

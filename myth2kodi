@@ -751,7 +751,12 @@ validate_settings(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   err "${FUNCNAME[0]}(): NotImplemented."
   return 1
-  local msg="is expected to be set as either 'Enabled' or 'Disabled'."
+
+  #A local reusable message variable
+  local msg
+
+  #Check all Enabled|Disabled switches are set correctly.
+  msg="is expected to be set as either 'Enabled' or 'Disabled'."
   [[ "$TargetPathIsInputPath"   =~ ^(Enabled|Disabled)$ ]] || err "TargetPathIsInputPath $msg"
   [[ "$FailSafeMode"            =~ ^(Enabled|Disabled)$ ]] || err "FailSafeMode $msg"
   [[ "$DirTracking"             =~ ^(Enabled|Disabled)$ ]] || err "DirTracking $msg"
@@ -775,6 +780,24 @@ validate_settings(){
   # for var in switch_user_settings ; do
   #   [[ "${!var}" =~ ^(Enabled|Disabled)$ ]] || err "$var $msg"
   # done
+
+  #Check that all user set directories are, in fact, directories.
+  msg='is not a directory:'
+  [[ -d "$m2kdir" ]]            || err "'m2kdir' $msg $m2kdir"
+  [[ -d "$binpath" ]]           || err "'binpath' $msg $binpath"
+  [[ -d "$M2K_TMPDIR" ]]        || err "'M2K_TMPDIR' $msg $M2K_TMPDIR"
+  [[ -d "$MoveDir" ]]           || err "'MoveDir' $msg $MoveDir"
+  [[ -d "$AlternateMoveDir" ]]  || err "'AlternateMoveDir' $msg $AlternateMoveDir"
+  [[ -d "$PrimaryMovieDir" ]]   || err "'PrimaryMovieDir' $msg $PrimaryMovieDir"
+  [[ -d "$AlternateMovieDir" ]] || err "'AlternateMovieDir' $msg $AlternateMovieDir"
+  [[ -d "$PrimaryShowDir" ]]    || err "'PrimaryShowDir' $msg $PrimaryShowDir"
+  [[ -d "$AlternateShowDir" ]]  || err "'AlternateShowDir' $msg $AlternateShowDir"
+  [[ -d "$FailSafeDir" ]]       || err "'FailSafeDir' $msg $FailSafeDir"
+
+  #
+  msg="Don't update from TheTVDB more than once per day, ie set UpdateDatabase>=86400."
+  ((UpdateDatabase < 86400)) && err "$msg"
+
 }
 
 #Do some basic tests to make sure we were called correctly

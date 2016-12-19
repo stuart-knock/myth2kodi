@@ -790,7 +790,6 @@ validate_settings(){
   local msg
 
   #Check all Enabled|Disabled switches are set correctly.
-  msg="is expected to be set as either 'Enabled' or 'Disabled'."
   local -a switch_user_settings
   switch_user_settings=( 'SYMLINK' 'TRACKING' 'TargetPathIsInputPath'        \
                          'FailSafeMode' 'DirTracking' 'StorageGroupFallback' \
@@ -798,8 +797,9 @@ validate_settings(){
                          'CommercialMarkup' 'CommercialMarkupCleanup'        \
                          'DailyReport' 'Notify' 'KODIUpdate' 'KODIClean'     \
                          'KODINotify' )
-  for var in switch_user_settings ; do
-    [[ "${!var}" =~ ^(Enabled|Disabled)$ ]] || err "${!var} $msg"
+  msg="is expected to be set as either 'Enabled' or 'Disabled'."
+  for var in "${switch_user_settings[@]}"; do
+    [[ "${!var}" =~ ^(Enabled|Disabled)$ ]] || err "$var $msg"
   done
 
   msg="is expected to be set as either 'PythonBindings' or 'MySQL'."

@@ -1036,8 +1036,13 @@ periodic_maintenace(){
     if ((CURRENT_TIME > LAST_MAINTENANCE_TIME+MAINTENANCE_PERIOD)); then
       inform "Last maintenance more than $((MAINTENANCE_PERIOD/3600)) hours ago."
       m2k_maintenance
-      #TODO: probably should check return value and only update lastmaintenance.time on success...
-      printf '%s\n' "$CURRENT_TIME" > "$m2kdir/lastmaintenace.time"
+      local m2k_maintenance_status="$?"
+      if [[ "$m2k_maintenance_status" = '0' ]]; then
+        printf '%s\n' "$CURRENT_TIME" > "$m2kdir/lastmaintenace.time"
+      else
+        warn "FUNCNAME[0]}(): maintenance failed to run correctly."
+        return "$m2k_maintenance_status"
+      fi
     fi
   else
     debug "Skipping m2k_maintenance() as m2kScanMode has been set to 'True'"

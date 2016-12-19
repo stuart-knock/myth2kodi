@@ -223,6 +223,7 @@ TargetPathIsInputPath='Disabled'
 #processed. Options: ['Enabled'(DEFAULT)|'Disabled']
 ShowStopper='Enabled'
 
+#TODO: Review. Consider renaming this.
 #DirTracking will check for and remove the folders created by myth2kodi
 #Options: ['Enabled'(DEFAULT)|'Disabled']
 DirTracking='Enabled'
@@ -257,6 +258,15 @@ CommercialMarkup='Enabled'
 #comskip & NFO files if the associated .mpg file can't be found.
 #Options: ['Enabled'(DEFAULT)|'Disabled']
 CommercialMarkupCleanup='Enabled'
+
+#Whether to track files and directories created by myth2kodi. This should always
+#be 'Enabled' when performing ordinary processing to make MythTV recordings
+#available to a Kodi library. It exists so we don't mess-up the tracking of
+#myth2kodi's modifications to our Kodi library when we want to use myth2kodi
+#with PROCESS_RECORDING_MODE='COPY' to put nicely named copies of our MythTV
+#recordings on a removable media. See, 'example_copy_to_removable_media_myth2kodi.conf'.
+#Options: ['Enabled'(DEFAULT)|'Disabled']
+TRACKING='Enabled'
 
 
 ############################# Directory Settings #############################
@@ -391,6 +401,14 @@ KODINotify='Enabled'
 #to the ip addresses.
 #Eg.KODIIPs=( '192.168.1.110:8080' 'user:password@192.168.1.111:8080' 'XBOX:8080' )
 KODIIPs=( '127.0.0.1:8080' )                 #<------THIS VALUE MUST BE SET-------
+
+#Whether to create an RSS entry. The RSS can be given as a target for the
+#RSS-ticker running across the bottom of the default Kodi interface. If enabled
+#it will show a list of recent successfully processed recordings. See,
+#    myth2kodi --config-help
+#for more information on setting this up.
+#Options: ['Enabled'(DEFAULT)|'Disabled']
+CREATE_RSS='Enabled'
 
 #RSSmaxItems controls the number of items in the RSS. RSS Can be activated by
 #creating a folder in /var/www/myth2kodi-rss. NOTE: setting this to 0 will
@@ -3319,7 +3337,7 @@ make_show_dir(){
     MoveDir="$MoveDir/$NewShowName"
     if [ ! -d "$MoveDir" ]; then
       inform "CREATING SERIES FOLDER: $MoveDir"
-      echo "$MoveDir" >> "$m2kdir/dir.tracking"
+      [[ "$TRACKING" = 'Enabled' ]] && printf '%s\n' "$MoveDir" >> "$m2kdir/dir.tracking"
       mkdir "$MoveDir"
       chmod 775 "$MoveDir"
       [[ "$RequiresNFO" = "1" ]] && generate_series_nfo
@@ -3332,7 +3350,7 @@ make_show_dir(){
         inform "CREATING SEASON FOLDER: $MoveDir"
         mkdir "$MoveDir"
         chmod 775 "$MoveDir"
-        echo "$MoveDir" >> "$m2kdir/dir.tracking"
+        [[ "$TRACKING" = 'Enabled' ]] && printf '%s\n' "$MoveDir" >> "$m2kdir/dir.tracking"
       fi
     fi
   fi
@@ -3448,7 +3466,9 @@ generate_episode_nfo(){
     printf '%s\n' "</episodedetails>"
   } >> "$MoveDir/$ShowFileName.nfo"
 
-  echo "'$MoveDir/$ShowFileName.nfo'" "'$MoveDir/$ShowFileName.$OriginalExt'" >> "$m2kdir/created.tracking"
+  if [[ "$TRACKING" = 'Enabled' ]]; then
+    printf '%s\n' "'$MoveDir/$ShowFileName.nfo' '$MoveDir/$ShowFileName.$OriginalExt'" >> "$m2kdir/created.tracking"
+  fi
   inform "Generated episode NFO file: $MoveDir/$ShowFileName.nfo"
   return 0
 }
@@ -4981,10 +5001,12 @@ recording_log(){
 success_postprocessing(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
 
-  #Move comskip data to proper folder
+  #Move comskip data to proper folder and add created.tracking entry.
   if [[ "$CommercialMarkup" = "Created" ]]; then
     mv "$MARKUPFRAMES_TMP" "$MoveDir/$ShowFileName.txt"
-    printf '%s\n' "'$MoveDir/$ShowFileName.txt' '$MoveDir/$ShowFileName.$OriginalExt'" >> "$m2kdir/created.tracking"
+    if [[ "$TRACKING" = 'Enabled' ]]; then
+      printf '%s\n' "'$MoveDir/$ShowFileName.txt' '$MoveDir/$ShowFileName.$OriginalExt'" >> "$m2kdir/created.tracking"
+    fi
   fi
 
   #Additional features, notifications, rss, daily report.
@@ -4993,7 +5015,7 @@ success_postprocessing(){
   add_undo
   [[ "$RequiresDoover" = "1" ]] && add_doover
   dailyreport
-  generaterss
+  [[ "$CREATE_RSS" == 'Enabled' ]] && generaterss
   if [[ "$PROCESS_RECORDING_MODE" = 'MOVE' && "$SYMLINK" = 'Disabled' ]]; then
     set_group_permission
   fi
@@ -5634,7 +5656,9 @@ elif [[ "$PROCESS_RECORDING_MODE" = 'LINK' ]]; then
   #if file was created
   if [ -L "$MoveDir/$ShowFileName.$OriginalExt" ]; then
     inform "Symlink created: $MoveDir/$ShowFileName.$OriginalExt"
-    printf '%s\n' "'$MoveDir/$ShowFileName.$OriginalExt' '$InputPath'" >> "$m2kdir/created.tracking"
+    if [[ "$TRACKING" = 'Enabled' ]]; then
+      printf '%s\n' "'$MoveDir/$ShowFileName.$OriginalExt' '$InputPath'" >> "$m2kdir/created.tracking"
+    fi
 
     success_postprocessing
 

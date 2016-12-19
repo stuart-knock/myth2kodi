@@ -196,11 +196,6 @@ Librarian='mythtv'                           #<------THIS VALUE MUST BE SET-----
 
 ############################ Processing settings #############################
 
-#TODO: Should also add a 'COPY' mode... Useful for dumping recordings to a removable media. It would behave like 'MOVE' with
-#      'SYMLINK'ing 'Disabled', but wouldn't delete the original file or remove the MythTV-DB entry. It should happily process
-#      recordings that we've already processed, so, when implementing, will need to check abort on identification of
-#      previously-run logic throughout the script.
-
 # There are 3 modes for the processing of a recording:
 #   'MOVE' -- Move the recording. And, by default: create a symlink at InputPath;
 #   'LINK' -- Do not move, just create a sym'LINK'; and
@@ -760,6 +755,11 @@ m2k_init(){
    inform "Previous LOGFILE moved to: $m2kdir/${LogFileName}_${FileNameNow}.log"
   fi
 
+  #Do some basic validation of the settings
+  validate_settings
+  settings_status="$?"
+  [[ "$settings_status" != '0' ]] && exit "$settings_status"
+
   #Set defaults for searching Series information
   SeriesID=""
   NewShowName=""
@@ -780,47 +780,27 @@ m2k_init(){
   ((LOGLEVEL>=42)) && set | err_pipe 'set:  '
 }
 
-#TODO: Consider adding a validate_settings function, it should check for
-#      incompatible or inadvisable setting combinations, or just wrong settings,
-#      such as directory settings that aren't directories and then warn or err
-#      and abort as appropriate.
+#Check for incompatible or inadvisable setting combinations, or just wrong
+#settings, such as directory settings that aren't directories and then warn or
+#err and abort as appropriate.
 validate_settings(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  err "${FUNCNAME[0]}(): NotImplemented."
-  return 1
 
   #A local reusable message variable
   local msg
 
   #Check all Enabled|Disabled switches are set correctly.
   msg="is expected to be set as either 'Enabled' or 'Disabled'."
-  [[ "$SYMLINK"                 =~ ^(Enabled|Disabled)$ ]] || err "SYMLINK $msg"
-  [[ "$TRACKING"                =~ ^(Enabled|Disabled)$ ]] || err "TRACKING $msg"
-  [[ "$TargetPathIsInputPath"   =~ ^(Enabled|Disabled)$ ]] || err "TargetPathIsInputPath $msg"
-  [[ "$FailSafeMode"            =~ ^(Enabled|Disabled)$ ]] || err "FailSafeMode $msg"
-  [[ "$DirTracking"             =~ ^(Enabled|Disabled)$ ]] || err "DirTracking $msg"
-  [[ "$StorageGroupFallback"    =~ ^(Enabled|Disabled)$ ]] || err "StorageGroupFallback $msg"
-  [[ "$PlotMatchFallback"       =~ ^(Enabled|Disabled)$ ]] || err "PlotMatchFallback $msg"
-  [[ "$Database"                =~ ^(Enabled|Disabled)$ ]] || err "Database $msg"
-  [[ "$ShowStopper"             =~ ^(Enabled|Disabled)$ ]] || err "ShowStopper $msg"
-  [[ "$CommercialMarkup"        =~ ^(Enabled|Disabled)$ ]] || err "CommercialMarkup $msg"
-  [[ "$CommercialMarkupCleanup" =~ ^(Enabled|Disabled)$ ]] || err "CommercialMarkupCleanup $msg"
-  [[ "$DailyReport"             =~ ^(Enabled|Disabled)$ ]] || err "DailyReport $msg"
-  [[ "$Notify"                  =~ ^(Enabled|Disabled)$ ]] || err "Notify $msg"
-  [[ "$KODIUpdate"              =~ ^(Enabled|Disabled)$ ]] || err "KODIUpdate $msg"
-  [[ "$KODIClean"               =~ ^(Enabled|Disabled)$ ]] || err "KODIClean $msg"
-  [[ "$KODINotify"              =~ ^(Enabled|Disabled)$ ]] || err "KODINotify $msg"
-  #Or
-  # local -a switch_user_settings
-  # switch_user_settings=('SYMLINK' 'TRACKING' 'TargetPathIsInputPath'        \
-  #                       'FailSafeMode' 'DirTracking' 'StorageGroupFallback' \
-  #                       'PlotMatchFallback' 'Database' 'ShowStopper'        \
-  #                       'CommercialMarkup' 'CommercialMarkupCleanup'        \
-  #                       'DailyReport' 'Notify'                              \
-  #                       'KODIUpdate' 'KODIClean' 'KODINotify' )
-  # for var in switch_user_settings ; do
-  #   [[ "${!var}" =~ ^(Enabled|Disabled)$ ]] || err "$var $msg"
-  # done
+  local -a switch_user_settings
+  switch_user_settings=( 'SYMLINK' 'TRACKING' 'TargetPathIsInputPath'        \
+                         'FailSafeMode' 'DirTracking' 'StorageGroupFallback' \
+                         'PlotMatchFallback' 'Database' 'ShowStopper'        \
+                         'CommercialMarkup' 'CommercialMarkupCleanup'        \
+                         'DailyReport' 'Notify' 'KODIUpdate' 'KODIClean'     \
+                         'KODINotify' )
+  for var in switch_user_settings ; do
+    [[ "${!var}" =~ ^(Enabled|Disabled)$ ]] || err "${!var} $msg"
+  done
 
   msg="is expected to be set as either 'PythonBindings' or 'MySQL'."
   [[ "$DATABASE_ACCESS" =~ ^(PythonBindings|MySQL)$ ]] || err "DATABASE_ACCESS  $msg"

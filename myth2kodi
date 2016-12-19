@@ -483,6 +483,10 @@ LOGTYPE='both'
 #      needs to be locked to prevent deleting by subsequent call that triggers
 #      logrotate... maybe GUID log files on a per-call basis???
 
+#
+#TODO: ?Would it be neater to just have undo and doover as lists of MythTV
+#      recording file names, then just have functions to process them???
+
 ################################################################################
 ##################### Abandon all hope, ye who enter here. #####################
 ################################################################################
@@ -914,8 +918,15 @@ parse_command_flags(){
       debug "Recognised command line switch '--undo'"
       #TODO: Enable undo for a specific file, eg: myth2kodi --undo '/path/to/recordings/1070_20160331073100.mpg'
       #      Ideally we'd alternatively be able to provide the moved file name and it would still work.
-      m2k_undo_all
-      return $?
+      if ((m2karg_count > 1)); then
+        err "${FUNCNAME[0]}(): NotImplemented: file specific --undo."
+        return 1
+        #m2k_undo_rec "$m2karg2"
+        #return $?
+      else
+        m2k_undo_all
+        return $?
+      fi
     ;;
     --series-info) #ShowName
       debug "Recognised command line switch '--series-info'"
@@ -4360,6 +4371,18 @@ m2k_undo_all(){
   return 1
 }
 
+#This function provides the mechanism to undo a specified myth2kodi jobs
+m2k_undo_all(){
+  debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
+
+  #Check the provided file has been processed by myth2kodi.
+  #Check that our MythTV-DB still contains entry for the recording.
+  #Try and extract the undo entry from undo.sh
+  #  ?Or, failing that, generate an undo command for this recording?
+  #undo the myth2kodi processing
+  #return status
+}
+
 ##### HELP MESSAGES #####
 #A message about what myth2kodi is, including current version and authors.
 msg_about(){
@@ -4966,10 +4989,11 @@ success_postprocessing(){
 main(){
 
   #Capture args the script was called with.
+  m2karg_count="$#"
   m2karg1="$1" ; m2karg2="$2" ; m2karg3="$3" ; m2karg4="$4"
 
   #Make them read-only so we can't accidentally modify them.
-  declare -gr m2karg1 m2karg2 m2karg3 m2karg4
+  declare -gr m2karg_count m2karg1 m2karg2 m2karg3 m2karg4
 
   #Initial setup: override defaults with myth2kodi.conf; initialise logging system.
   m2k_init
@@ -5008,9 +5032,10 @@ main(){
 }
 
 #Capture args the script was called with.
+m2karg_count="$#"
 m2karg1="$1" ; m2karg2="$2" ; m2karg3="$3" ; m2karg4="$4"
 #Make them read-only so we can't accidentally modify them.
-declare -r m2karg1 m2karg2 m2karg3 m2karg4
+declare -r m2karg_count m2karg1 m2karg2 m2karg3 m2karg4
 
 #Do initial setup: override defaults with myth2kodi.conf; initialise logging system.
 m2k_init

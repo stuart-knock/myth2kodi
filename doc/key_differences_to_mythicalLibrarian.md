@@ -44,6 +44,8 @@ only increased. So, it seemed safer, and easier, just to drop them.*
 ## Configuration Options
 ### Added:
 **Librarian**: *Name of the user who will run myth2kodi.*  
+**PROCESS_RECORDING_MODE**: *Whether to move the original recording file or just link to it.*  
+**SYMLINK**: *Whether symlinking is Enabled. NOTE: different to previous parameter with same name, see PROCESS_RECORDING_MODE.*  
 **StorageGroupFallback**: *Use StorageGroup to determine if recording is a movie.*  
 **PlotMatchFallback**: *Use fuzzy matching the Plot field to determine episode info.*  
 **binpath**: *Directory containing myth2kodi and associated scripts.*  
@@ -58,6 +60,7 @@ only increased. So, it seemed safer, and easier, just to drop them.*
 
 ### Renamed:
 *mythicalLibrarian* ==> **m2kdir**  
+*SYMLINK* ==> **PROCESS_RECORDING_MODE** (see entries in the **Added** section above.)  
 *DatabaseType* ==> **DATABASE_ACCESS**  
 *XBMCIPs* ==> **KODIIPs**  
 *XBMCUpdate* ==> **KODIUpdate**  
@@ -66,6 +69,7 @@ only increased. So, it seemed safer, and easier, just to drop them.*
 *maxItems* ==> **RSSmaxItems**
 
 ### Removed:
+**SYMLINK**: *See the entries in the* **Added** *section above.*  
 **DEBUGMODE**: *Its purpose was superseded by the new logging system.*
 
 ## Logging

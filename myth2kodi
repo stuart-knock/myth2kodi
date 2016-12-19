@@ -69,8 +69,8 @@
 #  file in the same name and location of the old file. In LINK mode,
 #  myth2kodi will not move the file, LINK mode creates a new symlink to
 #  the original file. Both approaches enable Kodi to access the recording
-#  while still allowing MythTV to keep track of it. If Symlinking is set
-#  to "Disabled" then, when myth2kodi moves a recording, it will also
+#  while still allowing MythTV to keep track of it. If 'SYMLINK'ing is set
+#  to 'Disabled' then, when myth2kodi moves a recording, it will also
 #  delete it from MythTV's database.
 #
 #Output-Files:
@@ -196,19 +196,23 @@ Librarian='mythtv'                           #<------THIS VALUE MUST BE SET-----
 
 ############################ Processing settings #############################
 
-#TODO: Rethink naming of 'SYMLINK' variable and modes here as the current may be confusing as to what they actually do...
-#      PROCESS_RECORDING_MODE: LINK(same as orig); MOVE(MOVE in orig if SYMLINK=Enabled; 'Disabled' in orig if SYMLINK=Disabled);
-#      Then SYMLINK: 'Enabled' or 'Disabled'
 #TODO: Should also add a 'COPY' mode... Useful for dumping recordings to a removable media. It would behave like 'MOVE' with
-#      'SYMLINK'ing "Disabled", but wouldn't delete the original file or remove the MythTV-DB entry. It should happily process
+#      'SYMLINK'ing 'Disabled', but wouldn't delete the original file or remove the MythTV-DB entry. It should happily process
 #      recordings that we've already processed, so, when implementing, will need to check abort on identification of
 #      previously-run logic throughout the script.
-#SYMLINK has 3 modes. 'MOVE'(DEFAULT)|'LINK'|'Disabled':
-# 'MOVE' -- Move the recording and Create symlink at InputPath;
+
+# PROCESS_RECORDING_MODE has 2 modes. 'MOVE'(DEFAULT)|'LINK':
+# 'MOVE' -- Move the recording. And, by default: create a symlink at InputPath;
 # 'LINK' -- Do not move, just create a sym'LINK';
-# 'Disabled' -- move the file, DELETE MythTV-DB entry, symlinking is 'Disabled'.
+PROCESS_RECORDING_MODE='MOVE'
+
+#A modifier switch, relevant for PROCESS_RECORDING_MODE='MOVE'. With this
+#setting 'Enabled' a link is created from the original MythTV recording file
+#location to the file just moved into your Kodi library. This enables MythTV
+#to continue tracking and maintain control of the recording.
+#Options: ['Enabled'(DEFAULT)|'Disabled']
 #WARNING: 'Disabled' Mode removes MythTV-DB entry, SO CANNOT BE UNDONE.
-SYMLINK='MOVE'
+SYMLINK='Enabled'
 
 #If TargetPathIsInputPath is Enabled, original dir will override MoveDir. This
 #is useful for multiple recording dirs. TargetPathIsInputPath will separate
@@ -249,7 +253,7 @@ PlotMatchFallback='Enabled'
 #Options: ['Enabled'(DEFAULT)|'Disabled']
 CommercialMarkup='Enabled'
 
-#CommercialMarkupCleanup if "Enabled", when m2k_maintenance() is run, removes
+#CommercialMarkupCleanup if 'Enabled', when m2k_maintenance() is run, removes
 #comskip & NFO files if the associated .mpg file can't be found.
 #Options: ['Enabled'(DEFAULT)|'Disabled']
 CommercialMarkupCleanup='Enabled'
@@ -373,7 +377,7 @@ NotifyUserName="$Librarian"
 #Options: ['Enabled'(DEFAULT)|'Disabled']
 KODIUpdate='Enabled'
 
-#PREVENT CLOBBERING ON RECURSIVE CALLS#[[ -z "$KODIUpdate" ]] && KODIUpdate="Enabled"
+#PREVENT CLOBBERING ON RECURSIVE CALLS#[[ -z "$KODIUpdate" ]] && KODIUpdate='Enabled'
 #Send a notification to KODI to cleanup the library upon Successful move job.
 #Options: ['Enabled'|'Disabled'(DEFAULT)]
 KODIClean='Disabled'
@@ -569,7 +573,7 @@ exit_job(){
   esac
 
   #Send a desktop notification message if appropriate conditions are met.
-  if [[ "$m2kScanMode" != "True" && "$Notify" = "Enabled" && -n "$NOTIFY_MSG" ]]; then
+  if [[ "$m2kScanMode" != 'True' && "$Notify" = 'Enabled' && -n "$NOTIFY_MSG" ]]; then
     debug "NOTIFY_MSG=$NOTIFY_MSG  ;  NOTIFY_ICON=${NOTIFY_ICON[$exitstatus]}"
     sudo -u "$NotifyUserName" "$binpath/m2k_notify" "myth2kodi: $jobtype" "$NOTIFY_MSG" "${NOTIFY_ICON[$exitstatus]}"
   else
@@ -765,6 +769,7 @@ validate_settings(){
 
   #Check all Enabled|Disabled switches are set correctly.
   msg="is expected to be set as either 'Enabled' or 'Disabled'."
+  [[ "$SYMLINK"                 =~ ^(Enabled|Disabled)$ ]] || err "SYMLINK $msg"
   [[ "$TargetPathIsInputPath"   =~ ^(Enabled|Disabled)$ ]] || err "TargetPathIsInputPath $msg"
   [[ "$FailSafeMode"            =~ ^(Enabled|Disabled)$ ]] || err "FailSafeMode $msg"
   [[ "$DirTracking"             =~ ^(Enabled|Disabled)$ ]] || err "DirTracking $msg"
@@ -781,10 +786,11 @@ validate_settings(){
   [[ "$KODINotify"              =~ ^(Enabled|Disabled)$ ]] || err "KODINotify $msg"
   #Or
   # local -a switch_user_settings
-  # switch_user_settings=('TargetPathIsInputPath' 'FailSafeMode' 'DirTracking' \
-  #                       'StorageGroupFallback' 'PlotMatchFallback' 'Database'\
-  #                       'ShowStopper' 'CommercialMarkup' 'CommercialMarkupCleanup' \
-  #                       'DailyReport' 'Notify' 'KODIUpdate' 'KODIClean' 'KODINotify' )
+  # switch_user_settings=('SYMLINK' 'TargetPathIsInputPath' 'FailSafeMode'         \
+  #                       'DirTracking' 'StorageGroupFallback' 'PlotMatchFallback' \
+  #                       'Database' 'ShowStopper' 'CommercialMarkup'              \
+  #                       'CommercialMarkupCleanup' 'DailyReport' 'Notify'         \
+  #                       'KODIUpdate' 'KODIClean' 'KODINotify' )
   # for var in switch_user_settings ; do
   #   [[ "${!var}" =~ ^(Enabled|Disabled)$ ]] || err "$var $msg"
   # done
@@ -838,7 +844,7 @@ validate_args(){
 
   #If the first arg isn't a switch or our testfile, then it must be a file.
   if [[ "${m2karg1:0:1}" != "-" && "$m2karg1" != "testfile.ext" && ! -f "$m2karg1" ]]; then
-    if [[ "$Notify" = "Enabled" ]]; then
+    if [[ "$Notify" = 'Enabled' ]]; then
       NOTIFY_MSG="The specified InputPath is not a file."
     fi
     err "${FUNCNAME[0]}(): InputPath is not a file."
@@ -1136,7 +1142,7 @@ set_show_file_name_categoric(){
 #Appends an entry to today's DailyReport file for the show just processed.
 dailyreport(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  if [ "$DailyReport" = "Enabled" ]; then
+  if [ "$DailyReport" = 'Enabled' ]; then
     [[ ! -d "$m2kdir/DailyReport" ]] && mkdir "$m2kdir/DailyReport"
     local reporttime ; reporttime=$(date +%T) #TODO: This should use a time generated at the same time as $Today otherwise processing near midnight could cause misleading information.
     inform "Writing to DailyReport file: ${Today}"
@@ -1301,7 +1307,7 @@ kodi_cleanup(){
   debugcont "KODIClean: $KODIClean"
   debugcont "$( printf 'KODIIPs: %s' "${KODIIPs[*]/%/ ;}." )"
   if [[ "$m2kScanMode" != "True" ]] ; then
-    if [[ "$KODIClean" = "Enabled" ]] ; then
+    if [[ "$KODIClean" = 'Enabled' ]] ; then
       local data=""
       local curlPOST=""
       curlPOST='curl --silent --max-time 8 --connect-timeout 5 -H "Content-Type: application/json;" --data-binary'
@@ -1335,7 +1341,7 @@ kodi_newshow(){
   curlPOST='curl --silent --max-time 8 --connect-timeout 5 -H "Content-Type: application/json;" --data-binary'
 
   #Send notification to KODI
-  if [[ "$KODINotify" = "Enabled" ]]; then
+  if [[ "$KODINotify" = 'Enabled' ]]; then
     data=\''{"jsonrpc": "2.0",
              "method": "GUI.ShowNotification",
              "params": {"title": "myth2kodi added", "message": "'"$ShowName"'"},
@@ -1350,8 +1356,8 @@ kodi_newshow(){
   fi
 
   #Send Update Library request to KODI
-  if [[ "$m2kScanMode" != "True" ]] ; then
-    if [[ "$KODIUpdate" = "Enabled" ]]; then
+  if [[ "$m2kScanMode" != 'True' ]] ; then
+    if [[ "$KODIUpdate" = 'Enabled' ]]; then
       data=\''{"jsonrpc": "2.0", "method": "VideoLibrary.Scan", "id": "myth2kodi"}'\'
       for KODIIP in "${KODIIPs[@]}" ; do
         inform "Sending VideoLibrary.Scan request to: $KODIIP"
@@ -1501,6 +1507,7 @@ add_doover(){
   debugcont "ShowFileName: $ShowFileName"
   debugcont "OriginalExt: $OriginalExt"
   debugcont "RequiresDoover: $RequiresDoover"
+  debugcont "PROCESS_RECORDING_MODE: $PROCESS_RECORDING_MODE"
   debugcont "SYMLINK: $SYMLINK"
 
   #Create the doover.sh file if it doesn't already exist.
@@ -1511,7 +1518,7 @@ add_doover(){
 
   if [[ "$RequiresDoover" = "1" ]]; then
     inform "Writing job to doover queue: $m2kdir/doover.sh"
-    if [[ "$SYMLINK" = "MOVE" ]]; then
+    if [[ "$PROCESS_RECORDING_MODE" = 'MOVE' && "$SYMLINK" = 'Enabled' ]]; then
       {
         #Write doover.sh line that removes link:
         printf '%s'    "test -f \"$MoveDir/$ShowFileName.$OriginalExt\" &&"
@@ -1522,14 +1529,14 @@ add_doover(){
         printf '%s'    "test -f \"$MoveDir/$ShowFileName.$OriginalExt\" &&"
         printf ' %s\n' "mv \"$MoveDir/$ShowFileName.$OriginalExt\" '$InputPath'"
       } >> "$m2kdir/doover.sh"
-    elif [[ "$SYMLINK" = "LINK" ]]; then
+    elif [[ "$PROCESS_RECORDING_MODE" = 'LINK' ]]; then
       {
         #Write doover.sh lines that removes a link to a recording:
         printf '%s'    "test -L \"$MoveDir/$ShowFileName.$OriginalExt\" &&"
         printf ' %s\n' "rm -f \"$MoveDir/$ShowFileName.$OriginalExt\""
       } >> "$m2kdir/doover.sh"
     else
-      err "${FUNCNAME[0]}(): SYMLINK not equal to 'MOVE' or 'LINK'."
+      err "${FUNCNAME[0]}(): PROCESS_RECORDING_MODE not equal to 'LINK' or 'MOVE' with 'SYMLINK'ing 'Enabled'."
       return 1
     fi
     #Write doover.sh line that recalls myth2kodi in the same way it was originally called:
@@ -1549,6 +1556,7 @@ add_undo(){
   debugcont "MoveDir: $MoveDir"
   debugcont "ShowFileName: $ShowFileName"
   debugcont "OriginalExt: $OriginalExt"
+  debugcont "PROCESS_RECORDING_MODE: $PROCESS_RECORDING_MODE"
   debugcont "SYMLINK: $SYMLINK"
 
   #Create the undo.sh file if it doesn't already exist.
@@ -1557,7 +1565,7 @@ add_undo(){
     chmod 666 "$m2kdir/undo.sh"
   fi
 
-  if [[ "$SYMLINK" = "MOVE" ]] ; then
+  if [[ "$PROCESS_RECORDING_MODE" = 'MOVE' && "$SYMLINK" = 'Enabled' ]]; then
     {
       #Write undo.sh line that removes link:
       printf '%s'    "test -L \"$InputPath\" &&"
@@ -1568,14 +1576,14 @@ add_undo(){
       printf ' %s'   "mv \"$MoveDir/$ShowFileName.$OriginalExt\" \"$InputPath\" &&"
       printf ' %s\n' "echo moved \"$MoveDir/$ShowFileName.$OriginalExt\" to \"$InputPath\""
     } >> "$m2kdir/undo.sh"
-  elif [[ "$SYMLINK" = "LINK" ]]; then
+  elif [[ "$PROCESS_RECORDING_MODE" = 'LINK' ]]; then
     {
       #Write undo.sh line that removes link:
       printf '%s'    "test -L \"$MoveDir/$ShowFileName.$OriginalExt\" &&"
       printf ' %s\n' "rm -f \"$MoveDir/$ShowFileName.$OriginalExt\""
     } >> "$m2kdir/undo.sh"
-  elif [[ "$SYMLINK" = "Disabled" && "$RequiresDoover" != "1" ]]; then
-    debug "SYMLINK=Disabled and doesn't require doover, so MythTV-DB info has been removed."
+  elif [[ "$PROCESS_RECORDING_MODE" = 'MOVE' && "$SYMLINK" = 'Disabled' && "$RequiresDoover" != "1" ]]; then
+    debug "'MOVE' mode with SYMLINK=Disabled and doesn't require doover, so MythTV-DB info has been removed."
     inform "No undo.sh entry will be added for this recording:"
     informcont "File Name: $MoveDir/$ShowFileName.$OriginalExt"
   fi
@@ -1585,7 +1593,7 @@ failsafe(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   warn "FAILSAFE FLAG WAS SET CHECK PERMISSIONS AND FOLDERS"
   warn "PERMISSION ERROR OR DRIVE FULL OR OFFLINE."
-  if [[ "$FailSafeMode" = "Enabled" ]]; then
+  if [[ "$FailSafeMode" = 'Enabled' ]]; then
     warn "ATTEMPTING SYMLINK TO FAILSAFE DIR: $FailSafeDir"
     inform "FailSafe link name set as: $FailSafeDir/$ShowFileName.$OriginalExt"
     ln -s "$InputPath" "$FailSafeDir/$ShowFileName.$OriginalExt"
@@ -1665,7 +1673,7 @@ get_mythtvdb_info_mysql(){
 
   #####COMSKIP DATA#####
   #Set up counter, remove old markup data and generate new markup file from markupstart and stop
-  if [ "$CommercialMarkup" = "Enabled" ]; then
+  if [[ "$CommercialMarkup" = 'Enabled' ]]; then
     MARKUPSTART_TMP="$(mktemp "$M2K_TMPDIR/m2k_markupstart_$FileNameNow"-XXXX)"
     [[ "$?" != 0 ]] && { err "Failed to create temporary file." ; return 1 ; }
     debug "Created a temporary comskip markupstart file: '$MARKUPSTART_TMP'"
@@ -1757,7 +1765,7 @@ get_mythtvdb_info_pythonbindings(){
     [[ "$equals" = "=" ]] && declare "$var=$value" && debugcont "$var$equals$value"
   done < "$MTV_RECINFO_FILE"
 
-  if [ "$CommercialMarkup" = "Enabled" ]; then
+  if [[ "$CommercialMarkup" = 'Enabled' ]]; then
     MARKUPSTART_TMP="$(mktemp "$M2K_TMPDIR/m2k_markupstart_$FileNameNow"-XXXX)"
     [[ "$?" != 0 ]] && { err "Failed to create temporary file." ; return 1 ; }
     debug "Created a temporary comskip markupstart file: '$MARKUPSTART_TMP'"
@@ -1817,7 +1825,7 @@ get_mythtvdb_info_pythonbindings(){
 process_mythtvdb(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
 
-  if [ "$Database" = "Enabled" ]; then
+  if [[ "$Database" = 'Enabled' ]]; then
     #Access the database entry using the requested grabber
     case "$DATABASE_ACCESS" in
       MySQL)
@@ -3015,12 +3023,12 @@ check_path_permission(){
   fi
 
   #If we're moving the file we'll need write permission
-  if [[ "$SYMLINK" = "MOVE" || "$SYMLINK" = "Disabled" ]]; then
+  if [[ "$PROCESS_RECORDING_MODE" = "MOVE" ]]; then
     if [[ ! -w "$PATH_TO_CHECK" ]]; then
       NOTIFY_MSG="Can't write: $PATH_TO_CHECK"
       err "${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}(): $NOTIFY_MSG"
       errcont "USER NAME:$CALLER ATTEMPTED TO MODIFY A $PATH_OWNER OWNED FILE."
-      errcont "To preserve file permissions this has bee prevented."
+      errcont "To preserve file permissions this has been prevented."
       EXIT_JOB_TYPE='PermissionError'
       return 1
     fi
@@ -3058,7 +3066,7 @@ msg_completed_move(){
   inform "Move completed."
   informcont "Moved: $InputPath"
   informcont "To: $MoveDir/$ShowFileName.$OriginalExt"
-  if [[ "$SYMLINK" != "Disabled" ]]; then
+  if [[ "$SYMLINK" != 'Disabled' ]]; then
     informcont "Added symbolic link from: $InputPath"
     informcont "To: $MoveDir/$ShowFileName.$OriginalExt"
   fi
@@ -3219,10 +3227,10 @@ msg_recording_info(){
 #Report the combination of command line input and MythTV-DB data.
 msg_merged_input_mythtvdb(){
   debug "Input and MythTV-DB guide data for $InputFileBasename"
-  [[ "$Database" = "Enabled" ]] && debugcont "RECSTART:$ShowStartTime"
-  [[ "$Database" = "Enabled" ]] && debugcont "DATE:$MovieAirDate $OriginalAirDate"
-  [[ "$Database" = "Enabled" ]] && debugcont "PROGRAMID:$ProgramID"
-  [[ "$Database" = "Enabled" ]] && debugcont "ShowCategory:$ShowCategory"
+  [[ "$Database" = 'Enabled' ]] && debugcont "RECSTART:$ShowStartTime"
+  [[ "$Database" = 'Enabled' ]] && debugcont "DATE:$MovieAirDate $OriginalAirDate"
+  [[ "$Database" = 'Enabled' ]] && debugcont "PROGRAMID:$ProgramID"
+  [[ "$Database" = 'Enabled' ]] && debugcont "ShowCategory:$ShowCategory"
   if [[ -n "$InputTitle" ]]; then
     debugcont "InputTitle:$InputTitle"
   else
@@ -3235,7 +3243,7 @@ msg_merged_input_mythtvdb(){
   fi
   if [[ -n "$Sxx" ]]; then debugcont "Sxx:$Sxx"; else debugcont "Sxx: UNKNOWN"; fi
   if [[ -n "$Exx" ]]; then debugcont "Exx:$Exx"; else debugcont "Exx: UNKNOWN"; fi
-  [[ "$Database" = "Enabled" ]] && debugcont "PLOT: $Plot"
+  [[ "$Database" = 'Enabled' ]] && debugcont "PLOT: $Plot"
 }
 
 #A warning message about performing maintenance that waits on user input
@@ -3334,7 +3342,8 @@ make_show_dir(){
     NOTIFY_MSG="COULD NOT CREATE $MoveDir - failsafe mode activated."
     EXIT_JOB_TYPE='PermissionError'
     err "${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}(): $NOTIFY_MSG"
-    SYMLINK='LINK'
+    PROCESS_RECORDING_MODE='LINK'
+    SYMLINK='Enabled'
     MoveDir="$FailSafeDir"
     FailSafeState=1
     warn "Recordings processed in FAILSAFE MODE will be added to the doover queue."
@@ -3579,7 +3588,7 @@ m2k_maintenance(){
 
   #Check for comskip (.txt) and .nfo files listed in created.tracking and
   #remove them if their associated "main" file (.mpg) is missing.
-  if [[ "$CommercialMarkupCleanup" = "Enabled" && -f "$m2kdir/created.tracking" ]]; then
+  if [[ "$CommercialMarkupCleanup" = 'Enabled' && -f "$m2kdir/created.tracking" ]]; then
     local -i Counter=0
     inform "PERFORMING CLEANUP OF ORPHANED SUPPORT FILES."
     local SupportFile=""
@@ -3630,7 +3639,7 @@ m2k_maintenance(){
   fi
 
   #Check if folders are empty and remove dir if needed and it was created by myth2kodi
-  if [ "$DirTracking" = "Enabled" ] && [ -f "$m2kdir/dir.tracking" ]; then
+  if [[ "$DirTracking" = 'Enabled' && -f "$m2kdir/dir.tracking" ]]; then
     inform "PERFORMING CLEANUP OF EMPTY DIRECTORIES."
     local SORTED_DIR_TRACKING_FILE
     SORTED_DIR_TRACKING_FILE="$(mktemp "$M2K_TMPDIR"/m2k_sorted_dir_tracking-XXXX)"
@@ -3830,6 +3839,7 @@ msg_operation_summary(){
   debugcont  "m2kdir=$m2kdir-"
   debugcont  "Timeout=$Timeout-"
   debugcont  "APIkey=$APIkey-"
+  informcont "PROCESS_RECORDING_MODE=$PROCESS_RECORDING_MODE-"
   informcont "SYMLINK=$SYMLINK-"
   informcont "TargetPathIsInputPath=$TargetPathIsInputPath-"
   informcont "FailSafeMode=$FailSafeMode-"
@@ -3854,7 +3864,7 @@ msg_operation_summary(){
   informcont "MoveFileSize=$MoveFileSize MB"
   informcont "ConfidenceRating=$ConfidenceRating-"
   informcont "ConfidenceReasoning=$ConfidenceReasoning-"
-  if [ "$Database" = "Enabled" ]; then
+  if [ "$Database" = 'Enabled' ]; then
     debugcont  "XMLTVGrabber=$XMLTVGrabber-"
     informcont "ShowStartTime=$ShowStartTime-"
     debugcont  "MovieAirDate=$MovieAirDate-"
@@ -4161,7 +4171,7 @@ m2k_diagnostics(){
 
   #Set originaldir name if none was supplied
   [[ "$originaldirname" =~ ^('./'|'.'|'')$ ]] && originaldirname="$(pwd)"
-  if [ "$TargetPathIsInputPath" = "Enabled" ]; then
+  if [[ "$TargetPathIsInputPath" = 'Enabled' ]]; then
     inform "TargetPathIsInputPath is selected. Testing with current folder"
     set_target_dir_as_input_path_dir
   fi
@@ -4766,6 +4776,8 @@ delete_recording(){
   InputPath="$RECORDING_PATH"
   InputFileBasename="$RECORDING_NAME"
 
+  #TODO: Consider moving the DATABASE_ACCESS method logic below into the function
+  #      delete_mythtv_database_entry(), so all calls respect DATABASE_ACCESS.
   #Delete the recording file and its associated DB entry
   case "$DATABASE_ACCESS" in
     MySQL)
@@ -4982,7 +4994,9 @@ success_postprocessing(){
   [[ "$RequiresDoover" = "1" ]] && add_doover
   dailyreport
   generaterss
-  test "$SYMLINK" = "Disabled" && set_group_permission
+  if [[ "$PROCESS_RECORDING_MODE" = 'MOVE' && "$SYMLINK" = 'Disabled' ]]; then
+    set_group_permission
+  fi
 }
 
 ########################### END FUNCTION DEFINITIONS ###########################
@@ -5097,8 +5111,8 @@ if [[ "$m2kDiagnosticsMode" != "True" ]]; then
   process_mythtvdb
   [[ "$?" != 0 ]] && exit_job "$EXIT_JOB_TYPE"
 else
-  [[ "$Database" = "Enabled" ]] && inform "Temporarily disabling access to MythTV-DB -- for diagnostics."
-  Database="Disabled"
+  [[ "$Database" = 'Enabled' ]] && inform "Temporarily disabling access to MythTV-DB -- for diagnostics."
+  Database='Disabled'
 fi
 msg_merged_input_mythtvdb
 
@@ -5134,7 +5148,7 @@ SafeShowName="$(sed -r 's/[^[:alnum:] &,.)(-]//g' <<< "$SafeShowName")"
 tvdbshowname=$(sed 's/ /%20/g' <<< "$ShowName" | sed 's/&/%26/g')
 
 #Reset move paths if TargetPathIsInputPath is active, creating dirs as needed.
-if [[ "$TargetPathIsInputPath" = "Enabled" ]]; then
+if [[ "$TargetPathIsInputPath" = 'Enabled' ]]; then
   inform "TargetPathIsInputPath=Enabled. Resetting paths, creating directories."
   set_target_dir_as_input_path_dir
 fi
@@ -5229,7 +5243,7 @@ elif [ -z "$SeriesID" ] && [ "$m2kProgramIDCheck" != "SH" ] && [ "$m2kProgramIDC
   ConfidenceReasoning="$ConfidenceReasoning Failed; "
   warn "SERIES ID WAS NOT FOUND. TheTVDB MAY BE DOWN. IF NOT TRY USING A showTranslations FILE."
   printf '%s\n' "$InputTitle" >> "$UnrecognizedSeriesFile"
-  if [ "$Database" = "Enabled" ]; then
+  if [[ "$Database" = 'Enabled' ]]; then
     warncont "RECSTART:$ShowStartTime-"
     warncont "Movie Air Date:$MovieAirDate-"
     warncont "Original Air Date:$OriginalAirDate-"
@@ -5371,7 +5385,7 @@ else
 fi
 
 #If it's not tagged as a Movie but lacking SxxExx and then as a fallback check storagegroup in case it's a Movie we missed
-if [ "$StorageGroupFallback" = "Enabled" ] ; then
+if [[ "$StorageGroupFallback" = 'Enabled' ]]; then
   debug "StorageGroupFallback is Enabled"
   #TODO: Make a HasSxxExx variable that is set and used consistently, #NOTE: there is already one but it's weirdly used
   #      if [[ -z "$Sxx" || "$Sxx" =~ ^(S00|S)$ || -z "$Exx" || "$Exx" =~ ^(E00|E)$ ]]; then HasSxxExx=0; else HasSxxExx=1; fi
@@ -5392,7 +5406,7 @@ fi
 
 #TODO: If this works reliably, then consider moving it up to directly below fuzzy match on subtitle
 #As a last resort, if we still think it's an episode but have no episode info, try fuzzy match on plot
-if [ "$PlotMatchFallback" = "Enabled" ] ; then
+if [[ "$PlotMatchFallback" = 'Enabled' ]]; then
   debug "PlotMatchFallback is Enabled" #[[ -z "$Sxx" || "$Sxx" =~ ^(S00|S)$ || -z "$Exx" || "$Exx" =~ ^(E00|E)$ ]]
   if [ "$m2kProgramIDCheck" = "EP" ] && [[ "$Sxx" = "S" || -z "$Sxx" || "$Sxx" = "S00" || "$Exx" = "E" || -z "$Exx" || "$Exx" = "E00" ]] ; then
     getAbsoluteEpisodeNumberWithFuzzyPlotMatch
@@ -5429,13 +5443,16 @@ fi
 ((ConfidenceRating <= -4)) && RequiresDoover=1 && warn "ConfidenceRating low. Requiring doover."
 
 #If file is a link then activate link mode so the original link is not screwed up.
-if [ -L "$InputPath" ]; then
-  warn "FILE IS A LINK FORCING SYMLINK LINK MODE"
-  SYMLINK='LINK'
+if [[ -L "$InputPath" ]]; then
+  warn "FILE IS A LINK FORCING PROCESS_RECORDING_MODE='LINK'."
+  PROCESS_RECORDING_MODE='LINK'
+  SYMLINK='Enabled'
 fi
 
 #If user wants database data deleted, then we will do that if the match was a good confidence level
-[[ "$SYMLINK" = "Disabled" ]] && ((ConfidenceRating > -4)) && RequiresDoover=0
+if [[ "$PROCESS_RECORDING_MODE" = 'MOVE' && "$SYMLINK" = 'Disabled' ]]; then
+  ((ConfidenceRating > -4)) && RequiresDoover=0
+fi
 
 #####INVALID FILE HANDLING#### #TODO: This should come straight after arg parse and the Initial log entry for the processing of recording
 #If file to be moved does not exist, then report
@@ -5462,7 +5479,7 @@ if [[ -z "$Exx" && "$InputPath" != "testfile.ext" ]]; then
     RequiresDoover=0
     NewShowName="$SafeShowName"
   #If user has determined that they do not want unrecognisable tv shows in their library
-  elif [ "$ShowStopper" = "Enabled" ]; then
+  elif [[ "$ShowStopper" = 'Enabled' ]]; then
     #msg_unable_to_identify_recording
     msg_tvdb_incomplete
     exit_job 'NameCouldNotBeAssigned'
@@ -5555,27 +5572,25 @@ check_path_permission "$InputPath"
 [[ "$m2kProgramIDCheck" = "SH" ]] && msg_show_warning
 
 #####MOVE MODE HANDLING#####
-#If symlink is not in LINK mode, Move and rename the file.
-if [[ "$SYMLINK" != "LINK" ]]; then
+#If processing recording in 'MOVE' mode, move and rename the file.
+if [[ "$PROCESS_RECORDING_MODE" = 'MOVE' ]]; then
   #Send notifications, Move the file and rename
   debug "MOVING FILE: '$InputPath' to '$MoveDir/$ShowFileName.$OriginalExt'"
   mv "$InputPath" "$MoveDir/$ShowFileName.$OriginalExt"
 
   #Check and report if file was moved
-  if [ -e "$MoveDir/$ShowFileName.$OriginalExt" ]; then
-    if [ -f "$MoveDir/$ShowFileName.$OriginalExt" ]; then
+  if [[ -e "$MoveDir/$ShowFileName.$OriginalExt" ]]; then
+    if [[ -f "$MoveDir/$ShowFileName.$OriginalExt" ]]; then
       #Make symlink back to original file
-      if [ "$SYMLINK" = "MOVE" ]; then
+      if [[ "$SYMLINK" = 'Enabled' ]]; then
         inform "Creating symlink in move mode."
         ln -s "$MoveDir/$ShowFileName.$OriginalExt" "$InputPath"
-        test ! -L "$InputPath" && err "ERROR CREATING SYMLINK: FILESYSTEM MAY NOT SUPPORT SYMLINKS"
-      fi
-
+        [[ -L "$InputPath" ]] || err "Failed to Create symlink: FILESYSTEM MAY NOT SUPPORT SYMLINKS"
       #If SYMLINK=Disabled, remove database entries
-      if [ "$SYMLINK" = "Disabled" ]; then
+      elif [[ "$SYMLINK" = 'Disabled' ]]; then
         chmod 775 "$MoveDir/$ShowFileName.$OriginalExt"
-        if [ "$RequiresDoover" != "1" ]; then
-          debug "SYMLINK=Disabled and doesn't require doover, so MythTV-DB info will be removed."
+        if [[ "$RequiresDoover" != '1' ]]; then
+          debug "SYMLINK='Disabled' and doesn't require doover, so MythTV-DB info will be removed."
           delete_mythtv_database_entry
         else
           warn "Job requires doover, so attempting to create symlink in SYMLINK='Disabled' mode."
@@ -5584,10 +5599,12 @@ if [[ "$SYMLINK" != "LINK" ]]; then
             err "Failed to Create symlink: FILESYSTEM MAY NOT SUPPORT SYMLINKS"
           elif [[ -L "$InputPath" ]]; then
             debug "Symlink Successfully created."
-            warn "Setting SYMLINK='MOVE' for subsequent processing."
-            SYMLINK='MOVE'
+            warn "Setting SYMLINK='Enabled' for subsequent processing."
+            SYMLINK='Enabled'
           fi
         fi
+      else
+        err "SYMLINK must be set as 'Enabled' or 'Disabled', but SYMLINK='$SYMLINK'"
       fi
 
       success_postprocessing
@@ -5609,7 +5626,7 @@ if [[ "$SYMLINK" != "LINK" ]]; then
 
 #####LINK MODE HANDLING#####
 #If symlink is in LINK mode then create symlink
-elif [ "$SYMLINK" = "LINK" ]; then
+elif [[ "$PROCESS_RECORDING_MODE" = 'LINK' ]]; then
   inform "CREATING LINK IN LINK MODE WITH CONFIDENCE:$ConfidenceRating"
 
   ln -s "$InputPath" "$MoveDir/$ShowFileName.$OriginalExt"

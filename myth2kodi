@@ -788,7 +788,7 @@ validate_settings(){
   msg="is expected to be set as either 'PythonBindings' or 'MySQL'."
   [[ "$DATABASE_ACCESS" =~ ^(PythonBindings|MySQL)$ ]] || err "DATABASE_ACCESS  $msg"
 
-PythonBindings MySQL all user set directories are, in fact, directories.
+  #Check that all user set directories are, in fact, directories.
   msg='is not a directory:'
   [[ -d "$m2kdir" ]]            || err "'m2kdir' $msg $m2kdir"
   [[ -d "$binpath" ]]           || err "'binpath' $msg $binpath"

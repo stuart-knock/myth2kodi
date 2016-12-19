@@ -225,7 +225,7 @@ FailSafeMode='Disabled'
 
 #StorageGroupFallback can enable/disable a bit of code that, if Guide Data
 #identified the input file as a show or episode, but no episode or series
-#information was found, then it checks if the MythTV DB's storagegroup is
+#information was found, then it checks if the MythTV-DB's storagegroup is
 #movie[s] or film[s] and uses this to reset the recording type as Movie.
 #To function it requires that you have created a MythTV storagegroup called
 #something like 'Movies' and selected that storagegroup when making the rule
@@ -236,7 +236,7 @@ StorageGroupFallback='Disabled'
 #PlotMatchFallback can be used to enable/disable a bit of code that, if a
 #SeriesID has been determined but no subtitle nor Season & Episode numbers
 #have been identified, falls back to fuzzy matching the Plot field from the
-#Guide data in MythTV DB against the Plot data for the series, which we
+#Guide data in MythTV-DB against the Plot data for the series, which we
 #retrieved from TheTVDB and tvmaze.
 #Options: ['Enabled'(DEFAULT)|'Disabled']
 PlotMatchFallback='Enabled'
@@ -317,12 +317,12 @@ UpdateDatabase=264920
 
 ########################## MythTV Database Settings ##########################
 
-#MythTV MYSQL access allows addition of movies, comskip data, and improves
+#MythTV database access allows addition of movies, comskip data, and improves
 #accuracy of episode recognition. Options: ['Enabled'(DEFAULT)|'Disabled']
 Database='Enabled'  #TODO: Review this: I'm not clear on the purpose/function in the absence of MythTV-DB...
 
-#Database Type MythTV|MythTVPythonBindings Default=MythTVPythonBinding
-DatabaseType='MythTVPythonBindings' #TODO: would seem more consistent here to have 'MySQL' and 'PythonBindings' as the options, and maybe rename DATABASE_ACCESS.
+#Database access method for MythTV-DB ['PythonBindings'(DEFAULT)|'MySQL']
+DATABASE_ACCESS='PythonBindings'
 
 #MySQL Myth Database: Default: 'mythconverg'
 MySQLMythDb='mythconverg'
@@ -785,7 +785,10 @@ validate_settings(){
   #   [[ "${!var}" =~ ^(Enabled|Disabled)$ ]] || err "$var $msg"
   # done
 
-  #Check that all user set directories are, in fact, directories.
+  msg="is expected to be set as either 'PythonBindings' or 'MySQL'."
+  [[ "$DATABASE_ACCESS" =~ ^(PythonBindings|MySQL)$ ]] || err "DATABASE_ACCESS  $msg"
+
+PythonBindings MySQL all user set directories are, in fact, directories.
   msg='is not a directory:'
   [[ -d "$m2kdir" ]]            || err "'m2kdir' $msg $m2kdir"
   [[ -d "$binpath" ]]           || err "'binpath' $msg $binpath"
@@ -1806,21 +1809,21 @@ process_mythtvdb(){
 
   if [ "$Database" = "Enabled" ]; then
     #Access the database entry using the requested grabber
-    case "$DatabaseType" in
-      MythTV)
+    case "$DATABASE_ACCESS" in
+      MySQL)
         get_mythtvdb_info_mysql
         ;;
-      MythTVPythonBindings)
+      PythonBindings)
         get_mythtvdb_info_pythonbindings
         returnstatus="$?"
         if [[ "$returnstatus" != 0 ]]; then
-          NOTIFY_MSG="Call to MythTV-Database python bindings failed."
+          NOTIFY_MSG="Call to MythTV-DB Python bindings failed."
           EXIT_JOB_TYPE='MythTVdatabaseFailure'
           return 1
         fi
         ;;
       *)
-        NOTIFY_MSG="DatabaseType incorrectly specified."
+        NOTIFY_MSG="DATABASE_ACCESS incorrectly specified."
         err "${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}(): $NOTIFY_MSG"
         EXIT_JOB_TYPE='UserSettingError'
         return 1
@@ -1934,7 +1937,7 @@ get_sxxexx_from_plot(){
     SeasonEpisode="$(grep -E -i --only-matching '(s\.?[0-9]?[0-9]\,?\s?(e|ep)\.?[0-9][0-9]?)|([0-9]?[0-9]x[0-9][0-9]?)' <<< "$Plot")"
   fi
   if [[ -n "$InputSeasonNum" && -n "$InputEpisodeNum" ]]; then
-    debug 'Using season & episode information from MythTV DB season & episode fields.'
+    debug 'Using season & episode information from MythTV-DB season & episode fields.'
     Sxx="$InputSeasonNum"
     Exx="$InputEpisodeNum"
   elif [[ -n "$SeasonEpisode" ]]; then
@@ -2068,7 +2071,7 @@ process_mythtvdb_sydfta(){
   if (( $(wc --chars <<< "$InputSubtitle") > 88 )) ; then #Probably not a subtitle.
     local PossiblePlot
     PossiblePlot="$InputSubtitle"
-    warn "${FUNCNAME[0]}() InputSubtitle field from MythTV DB appears to contain Plot information."
+    warn "${FUNCNAME[0]}() InputSubtitle field from MythTV-DB appears to contain Plot information."
     debug "Plot: $Plot"
     debug "PossiblePlot: $PossiblePlot"
     warn "Resetting InputSubtitle to ''"
@@ -2098,7 +2101,7 @@ process_mythtvdb_sydfta(){
     m2kProgramIDCheck="EP"
   fi
 
-  #TODO: Check the SeriesID field in MythTV DB & see if we can make more
+  #TODO: Check the SeriesID field in MythTV-DB & see if we can make more
   #  sensible use of whatever it contains...
 
   #If the information is already available, set the Sxx & Exx variables
@@ -3128,7 +3131,7 @@ msg_tvdb_incomplete(){
 #   informcont "If you know the correct information, provide it at the command line,"
 #   informcont "see myth2kodi --usage"
 #   informcont "Normally myth2kodi can determine this information from:"
-#   informcont "    your MythTV DB; TheTVDB; or tvmaze."
+#   informcont "    your MythTV-DB; TheTVDB; or tvmaze."
 #   informcont "Check that information on www.TheTVDB.com is complete for this series."
 #   informcont "If not, Please consider helping out and adding to TheTVDB."
 #   [[ -n "$SeriesID" ]] && informcont "http://www.thetvdb.com/?tab=series&amp;id=$SeriesID"
@@ -3991,7 +3994,7 @@ m2k_diagnostics(){
   PKGPATH_AGREP=$(command -v agrep)           || PKGNAME_AGREP="agrep or tre-agrep"
   PKGPATH_LIBNOTIFY=$(command -v notify-send) || PKGNAME_LIBNOTIFY="libnotify-bin"
   PKGPATH_JQ=$(command -v jq)                 || PKGNAME_JQ="jq"
-  if [ "$DatabaseType" = "MythTVPythonBindings" ]; then
+  if [ "$DATABASE_ACCESS" = "PythonBindings" ]; then
     PKGPATH_PYTHON=$(command -v python) || PKGNAME_PYTHON="python"
     if [[ -z "$PKGNAME_PYTHON" ]]; then
       python_version="$(python --version 2>&1)"  #Python returns version info to stderr
@@ -4010,12 +4013,12 @@ m2k_diagnostics(){
   [[ -n "$PKGPATH_AGREP" ]]     && inform "package 'agrep' or 'tre-agrep' found: $PKGPATH_AGREP"
   [[ -n "$PKGPATH_LIBNOTIFY" ]] && inform "package 'libnotify-bin' found: $PKGPATH_LIBNOTIFY"
   [[ -n "$PKGPATH_JQ" ]]        && inform "package 'jq' found: $PKGPATH_JQ"
-  if [ "$DatabaseType" = "MythTVPythonBindings" ]; then
+  if [ "$DATABASE_ACCESS" = "PythonBindings" ]; then
     packagecheck="$packagecheck$PKGNAME_PYTHON$PKGNAME_LIBMYTH_PYTHON$PKGNAME_PYTHON_LXML"
     [[ -n "$PKGPATH_PYTHON" ]] && inform "package 'python' found: $PKGPATH_PYTHON"
     if [[ -z "$PKGNAME_PYTHON" ]] && ((pyver < 27 || pyver >= 30)); then
       warn "Python 3 and Python older than 2.7 aren't supported."
-      warncont "You'll need to set: DatabaseType='MythTV' in user settings."
+      warncont "You'll need to set: DATABASE_ACCESS='MySQL' in user settings."
     fi
     [[ -z "$PKGNAME_LIBMYTH_PYTHON" ]] && inform "package 'libmyth-python' found."
     [[ -z "$PKGNAME_PYTHON_LXML" ]] && inform "package 'python-lxml' found."
@@ -4056,7 +4059,7 @@ m2k_diagnostics(){
   fi
 
   #If we'll be using MythTV python bindings, check that they're functioning.
-  if [ "$DatabaseType" = "MythTVPythonBindings" ]; then
+  if [ "$DATABASE_ACCESS" = "PythonBindings" ]; then
     read -r -n1 -p "Press any key to perform a test of the MythTV Database python bindings..."
     printf '\n'
     inform "Performing MythTV Python Bindings database test."
@@ -4197,7 +4200,7 @@ m2k_diagnostics(){
   read -r -n1 -p "press any key to continue on to the final results..."
   printf '\n'
   inform "RESULTS SUMMARY:"
-  [[ "$DatabaseType" = "MythTVPythonBindings" ]] && informcont "MythTV Database Test: $DBTest"
+  [[ "$DATABASE_ACCESS" = "PythonBindings" ]] && informcont "MythTV Database Test: $DBTest"
   informcont "Installed Packages:   $packagecheck $PKGNAME_LIBMYTH_PYTHON $PKGNAME_PYTHON_LXML $PKGNAME_CURL $PKGNAME_AGREP $PKGNAME_LIBNOTIFY $PKGNAME_JQ"
   informcont "Notifications Test:   $notifytest"
   informcont "KODI Communications:  $KODIcomm"
@@ -4732,7 +4735,7 @@ delete_recording(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   warn "Attempting to delete recording: $1"
   warncont "This will PERMANENTLY delete the recording, associated files"
-  warncont "and the associated MythTV-Database entry."
+  warncont "and the associated MythTV database entry."
   warncont "Are you sure you want to continue?"
   local yesorno=""
   read -r -n1 -p "  Requested permanent deletion: 'y' to continue or 'n' to exit... y/(n):>" yesorno
@@ -4754,8 +4757,8 @@ delete_recording(){
   InputFileBasename="$RECORDING_NAME"
 
   #Delete the recording file and its associated DB entry
-  case "$DatabaseType" in
-    MythTV)
+  case "$DATABASE_ACCESS" in
+    MySQL)
       #Delete the recording file and any link to it.
       [[ -f "$RECORDING_LINK" ]] && rm -f "$RECORDING_LINK"
       [[ -f "$RECORDING_FILE" ]] && rm -f "$RECORDING_FILE"
@@ -4763,7 +4766,7 @@ delete_recording(){
       #Delete the associated database entry and thumbnails.
       delete_mythtv_database_entry
       ;;
-    MythTVPythonBindings)
+    PythonBindings)
       local MTV_RECINFO_FILE
       MTV_RECINFO_FILE="$(mktemp "$M2K_TMPDIR/m2k_delrecinfo_$FileNameNow"-XXXX)"
       [[ "$?" != 0 ]] && { err "Failed to create temporary file." ; return 1 ; }
@@ -4782,7 +4785,7 @@ delete_recording(){
                                --delete 2>&1 | err_pipe "mythdb_access: "
       ;;
     *)
-      NOTIFY_MSG="DatabaseType incorrectly specified."
+      NOTIFY_MSG="DATABASE_ACCESS incorrectly specified."
       err "${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}(): $NOTIFY_MSG"
       EXIT_JOB_TYPE='UserSettingError'
       return 1
@@ -4828,7 +4831,7 @@ disconnect_recording(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   warn "Attempting to disconnect recording: $1"
   warncont "This will PERMANENTLY disconnect the recording from MythTV,"
-  warncont "deleting the associated MythTV-Database entry."
+  warncont "deleting the associated MythTV database entry."
   warncont "Are you sure you want to continue?"
   local yesorno=""
   read -r -n1 -p "  Requested permanent disconnection: 'y' to continue or 'n' to exit... y/(n):>" yesorno
@@ -5084,7 +5087,7 @@ if [[ "$m2kDiagnosticsMode" != "True" ]]; then
   process_mythtvdb
   [[ "$?" != 0 ]] && exit_job "$EXIT_JOB_TYPE"
 else
-  [[ "$Database" = "Enabled" ]] && inform "Temporarily disabling access to MythTV-Database -- for diagnostics."
+  [[ "$Database" = "Enabled" ]] && inform "Temporarily disabling access to MythTV-DB -- for diagnostics."
   Database="Disabled"
 fi
 msg_merged_input_mythtvdb
@@ -5323,13 +5326,13 @@ fi
 #TODO: The following few blocks will run even if we haven't properly identified the series, which doesn't make
 #      sense for the things trying to set SxxExx...
 
-#If we already have Sxx and Exx from MythTV DB, use them. If we also had a Subtitle, then do some verification.
+#If we already have Sxx and Exx from MythTV-DB, use them. If we also had a Subtitle, then do some verification.
 # Reversed sense of match: [[ -z "$Sxx" || "$Sxx" =~ ^(S00|S)$ || -z "$Exx" || "$Exx" =~ ^(E00|E)$ ]]
 if [[ "$Sxx" != "S" && -n "$Sxx" && "$Sxx" != "S00" && "$Exx" != "E" && -n "$Exx" && "$Exx" != "E00" ]] ; then
   #TODO: If the confidence rating from the above is good, and we have an
   #  AbsoluteEpisodeNumber then use it to validate the Sxx, Exx & Subtitle from
-  #  the MythTV DB.
-  inform "Using episode number: $Sxx$Exx, extracted from the MythTV DB."
+  #  the MythTV-DB.
+  inform "Using episode number: $Sxx$Exx, extracted from the MythTV-DB."
   #TODO: Probably should only do the following if the Series confidence rating
   #  is ok.
   #If we don't have a Subtitle, then use Sxx & Exx to get it from the TVDb info.
@@ -5338,7 +5341,7 @@ if [[ "$Sxx" != "S" && -n "$Sxx" && "$Sxx" != "S00" && "$Exx" != "E" && -n "$Exx
     set_absolute_episode_number_by_sxxexx
     if [ "$?" = "0" ]; then
       EpisodeSubtitle=$(sed -n "$AbsoluteEpisodeNumber"'p' "$m2kdir/$NewShowName/$NewShowName.actualEname.txt")
-      inform "MythTV DB didn't have an EpisodeSubtitle, using '$EpisodeSubtitle' from TheTVDB."
+      inform "MythTV-DB didn't have an EpisodeSubtitle, using '$EpisodeSubtitle' from TheTVDB."
     else
       AbsoluteEpisodeNumber=$AbsoluteEpisodeNumberBackup
     fi

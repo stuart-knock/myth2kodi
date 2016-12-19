@@ -58,6 +58,7 @@ only increased. So, it seemed safer, and easier, just to drop them.*
 
 ### Renamed:
 *mythicalLibrarian* ==> **m2kdir**  
+*DatabaseType* ==> **DATABASE_ACCESS**  
 *XBMCIPs* ==> **KODIIPs**  
 *XBMCUpdate* ==> **KODIUpdate**  
 *XBMCNotify* ==> **KODINotify**  

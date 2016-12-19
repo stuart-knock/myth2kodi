@@ -199,6 +199,10 @@ Librarian='mythtv'                           #<------THIS VALUE MUST BE SET-----
 #TODO: Rethink naming of 'SYMLINK' variable and modes here as the current may be confusing as to what they actually do...
 #      PROCESS_RECORDING_MODE: LINK(same as orig); MOVE(MOVE in orig if SYMLINK=Enabled; 'Disabled' in orig if SYMLINK=Disabled);
 #      Then SYMLINK: 'Enabled' or 'Disabled'
+#TODO: Should also add a 'COPY' mode... Useful for dumping recordings to a removable media. It would behave like 'MOVE' with
+#      'SYMLINK'ing "Disabled", but wouldn't delete the original file or remove the MythTV-DB entry. It should happily process
+#      recordings that we've already processed, so, when implementing, will need to check abort on identification of
+#      previously-run logic throughout the script.
 #SYMLINK has 3 modes. 'MOVE'(DEFAULT)|'LINK'|'Disabled':
 # 'MOVE' -- Move the recording and Create symlink at InputPath;
 # 'LINK' -- Do not move, just create a sym'LINK';
@@ -801,9 +805,15 @@ validate_settings(){
   [[ -d "$AlternateShowDir" ]]  || err "'AlternateShowDir' $msg $AlternateShowDir"
   [[ -d "$FailSafeDir" ]]       || err "'FailSafeDir' $msg $FailSafeDir"
 
-  #
+  #Discourage excessive load on TheTVDB.
   msg="Don't update from TheTVDB more than once per day, ie set UpdateDatabase>=86400."
   ((UpdateDatabase < 86400)) && err "$msg"
+
+  #PROCESS_RECORDING_MODE='LINK' and SYMLINK='Disabled' are incompatible
+  if [[ "$PROCESS_RECORDING_MODE" = 'LINK' && "$SYMLINK" != 'Enabled' ]]; then
+    err "Using LINK mode processing without 'SYMLINK'ing set as 'Enabled' doesn't make sense."
+    return 1
+  fi
 
 }
 

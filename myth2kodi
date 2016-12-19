@@ -201,9 +201,16 @@ Librarian='mythtv'                           #<------THIS VALUE MUST BE SET-----
 #      recordings that we've already processed, so, when implementing, will need to check abort on identification of
 #      previously-run logic throughout the script.
 
-# PROCESS_RECORDING_MODE has 2 modes. 'MOVE'(DEFAULT)|'LINK':
-# 'MOVE' -- Move the recording. And, by default: create a symlink at InputPath;
-# 'LINK' -- Do not move, just create a sym'LINK';
+# There are 3 modes for the processing of a recording:
+#   'MOVE' -- Move the recording. And, by default: create a symlink at InputPath;
+#   'LINK' -- Do not move, just create a sym'LINK'; and
+#   'COPY' -- Copy the recording to the target location.
+#NOTE: The 'COPY' mode is primarily meant for supporting the copying of MythTV
+#      recording files to removable media with nice human readable file names.
+#      It is not yet intended or tested as a mode for generating a local Kodi
+#      library. See, 'example_copy_to_removable_media_myth2kodi.conf' for an
+#      example of temporarily enabling 'COPY' mode for this purpose.
+#Options: ['MOVE'(DEFAULT)|'LINK'|'COPY']
 PROCESS_RECORDING_MODE='MOVE'
 
 #A modifier switch, relevant for PROCESS_RECORDING_MODE='MOVE'. With this
@@ -539,7 +546,7 @@ exit_job(){
       exitstatus=0
       ;;
     #Successful Completion of myth2kodi
-    LinkModeSuccessful|MoveModeSuccessful)
+    LinkModeSuccessful|MoveModeSuccessful|CopyModeSuccessful)
       inform "SUCCESSFUL COMPLETION TYPE: $jobtype"
       exitstatus=0
       ;;
@@ -549,7 +556,7 @@ exit_job(){
       exitstatus=0
       ;;
     #File system error occurred #TODO: clean-up...
-    PermissionError|ZeroLengthFile|FileOrPathDoesNotExist|MoveFailed|FailSafeModeComplete|LinkingFailed)
+    PermissionError|ZeroLengthFile|FileOrPathDoesNotExist|MoveFailed|CopyFailed|FailSafeModeComplete|LinkingFailed)
       err "$ERR_HEADER FILE SYSTEM ERROR: $jobtype"
       exitstatus=1
       ;;
@@ -788,6 +795,7 @@ validate_settings(){
   #Check all Enabled|Disabled switches are set correctly.
   msg="is expected to be set as either 'Enabled' or 'Disabled'."
   [[ "$SYMLINK"                 =~ ^(Enabled|Disabled)$ ]] || err "SYMLINK $msg"
+  [[ "$TRACKING"                =~ ^(Enabled|Disabled)$ ]] || err "TRACKING $msg"
   [[ "$TargetPathIsInputPath"   =~ ^(Enabled|Disabled)$ ]] || err "TargetPathIsInputPath $msg"
   [[ "$FailSafeMode"            =~ ^(Enabled|Disabled)$ ]] || err "FailSafeMode $msg"
   [[ "$DirTracking"             =~ ^(Enabled|Disabled)$ ]] || err "DirTracking $msg"
@@ -804,10 +812,11 @@ validate_settings(){
   [[ "$KODINotify"              =~ ^(Enabled|Disabled)$ ]] || err "KODINotify $msg"
   #Or
   # local -a switch_user_settings
-  # switch_user_settings=('SYMLINK' 'TargetPathIsInputPath' 'FailSafeMode'         \
-  #                       'DirTracking' 'StorageGroupFallback' 'PlotMatchFallback' \
-  #                       'Database' 'ShowStopper' 'CommercialMarkup'              \
-  #                       'CommercialMarkupCleanup' 'DailyReport' 'Notify'         \
+  # switch_user_settings=('SYMLINK' 'TRACKING' 'TargetPathIsInputPath'        \
+  #                       'FailSafeMode' 'DirTracking' 'StorageGroupFallback' \
+  #                       'PlotMatchFallback' 'Database' 'ShowStopper'        \
+  #                       'CommercialMarkup' 'CommercialMarkupCleanup'        \
+  #                       'DailyReport' 'Notify'                              \
   #                       'KODIUpdate' 'KODIClean' 'KODINotify' )
   # for var in switch_user_settings ; do
   #   [[ "${!var}" =~ ^(Enabled|Disabled)$ ]] || err "$var $msg"
@@ -1178,11 +1187,11 @@ check_write(){
   local -i i=0 ; local var ; for var in "$@"; do ((++i)) ; debugcont "arg $i = ${var}" ; done
   if [[ -n "$2" ]]; then
     if [[ -n "$1" ]]; then
-      if [ -d "$3" ]; then
+      if [[ -d "$3" ]]; then
         if (($1 < $2)); then
           printf '%s\n' "Testing write permission on $3" > "$3/arbitraryfile.ext"
-          if [ -f "$3/arbitraryfile.ext" ] ; then
-            if [ -s "$3/arbitraryfile.ext" ]; then
+          if [[ -f "$3/arbitraryfile.ext" ]]; then
+            if [[ -s "$3/arbitraryfile.ext" ]]; then
               rm -f "$3/arbitraryfile.ext"
               if [[ ! -f "$3/arbitraryfile.ext" ]]; then return 0 ; else return 1; fi
             else
@@ -1195,7 +1204,7 @@ check_write(){
             [[ ! -w "$3" ]] && inform "QUICK FIX: sudo chmod a+w '$3'"
             inform "QUICK FIX: sudo chown $CALLER '$3'"
           fi
-        elif [ -z "$2" ] || (( $1 >= $2 )); then
+        elif [[ -z "$2" ]] || (( $1 >= $2 )); then
           err "${FUNCNAME[0]}() INSUFFICIENT FREE SPACE ON '$3'"
           inform "QUICK FIX: Remove unnecessary files"
           return 1
@@ -3040,8 +3049,12 @@ check_path_permission(){
     return 1
   fi
 
+  #TODO: At the moment we only use this function for source paths, not target
+  #      paths, but if at some point we use it more widely then we'll need to
+  #      handle the case that 'COPY' doesn't require write permissions for
+  #      the source directory but does for the target directory...
   #If we're moving the file we'll need write permission
-  if [[ "$PROCESS_RECORDING_MODE" = "MOVE" ]]; then
+  if [[ "$PROCESS_RECORDING_MODE" = 'MOVE' ]]; then
     if [[ ! -w "$PATH_TO_CHECK" ]]; then
       NOTIFY_MSG="Can't write: $PATH_TO_CHECK"
       err "${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}(): $NOTIFY_MSG"
@@ -3089,6 +3102,16 @@ msg_completed_move(){
     informcont "To: $MoveDir/$ShowFileName.$OriginalExt"
   fi
   NOTIFY_MSG="myth2kodi Success $ShowFileName moved to $MoveDir"
+  return 0
+}
+
+#A message for when we've successfully copied a recording.
+msg_completed_copy(){
+  debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
+  inform "Copy completed."
+  informcont "Copied: $InputPath"
+  informcont "To: $MoveDir/$ShowFileName.$OriginalExt"
+  NOTIFY_MSG="myth2kodi Success $ShowFileName copied to $MoveDir"
   return 0
 }
 
@@ -3185,6 +3208,9 @@ msg_wrote_zero_length_file(){
   EXIT_JOB_TYPE='ZeroLengthFile'
 }
 
+#TODO: Consider merging the following three message functions into one function,
+#      they're highly redundant.
+
 #An error message for when issues are encountered during moving
 msg_permission_error_while_moving(){
   #TODO: review this message, see also check_path_permission()
@@ -3193,6 +3219,16 @@ msg_permission_error_while_moving(){
   err "${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}(): $NOTIFY_MSG"
   errcont "Possible permission error while moving $ShowFileName"
   EXIT_JOB_TYPE='MoveFailed'
+}
+
+#An error message for when issues are encountered during copying
+msg_permission_error_while_copying(){
+  #TODO: review this message, see also check_path_permission()
+  debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
+  NOTIFY_MSG="COPY FAILED: $ShowFileName could not be copied to $MoveDir"
+  err "${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}(): $NOTIFY_MSG"
+  errcont "Possible permission error while copying $ShowFileName"
+  EXIT_JOB_TYPE='CopyFailed'
 }
 
 #An error message for when we've failed to create a symlink
@@ -3337,7 +3373,7 @@ make_show_dir(){
     MoveDir="$MoveDir/$NewShowName"
     if [ ! -d "$MoveDir" ]; then
       inform "CREATING SERIES FOLDER: $MoveDir"
-      [[ "$TRACKING" = 'Enabled' ]] && printf '%s\n' "$MoveDir" >> "$m2kdir/dir.tracking"
+      [[ "$TRACKING" != 'Disabled' ]] && printf '%s\n' "$MoveDir" >> "$m2kdir/dir.tracking"
       mkdir "$MoveDir"
       chmod 775 "$MoveDir"
       [[ "$RequiresNFO" = "1" ]] && generate_series_nfo
@@ -3350,7 +3386,7 @@ make_show_dir(){
         inform "CREATING SEASON FOLDER: $MoveDir"
         mkdir "$MoveDir"
         chmod 775 "$MoveDir"
-        [[ "$TRACKING" = 'Enabled' ]] && printf '%s\n' "$MoveDir" >> "$m2kdir/dir.tracking"
+        [[ "$TRACKING" != 'Disabled' ]] && printf '%s\n' "$MoveDir" >> "$m2kdir/dir.tracking"
       fi
     fi
   fi
@@ -3434,6 +3470,7 @@ generate_episode_nfo(){
     printf '%s\n' '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
     printf '%s\n' '<episodedetails>'
   } > "$MoveDir/$ShowFileName.nfo"
+  #TODO: reconsider this title specification.
   local basetitle="<title>$EpisodeSubtitle Recorded $datehour"
   if [[ -z "$NamingConvention" ]]; then
     if [ "$GoForDoover" = "1" ]; then
@@ -3466,7 +3503,7 @@ generate_episode_nfo(){
     printf '%s\n' "</episodedetails>"
   } >> "$MoveDir/$ShowFileName.nfo"
 
-  if [[ "$TRACKING" = 'Enabled' ]]; then
+  if [[ "$TRACKING" != 'Disabled' ]]; then
     printf '%s\n' "'$MoveDir/$ShowFileName.nfo' '$MoveDir/$ShowFileName.$OriginalExt'" >> "$m2kdir/created.tracking"
   fi
   inform "Generated episode NFO file: $MoveDir/$ShowFileName.nfo"
@@ -3951,8 +3988,12 @@ check_filesystem(){
   ShowDirWritable="$?"
   check_write "$MoveFileSize" "$AltShowDirFreeSpace"  "$AlternateShowDir"
   AltShowDirWritable="$?"
-  check_write "1"             "$OriginalDirFreeSpace" "$originaldirname"
-  OriginalDirWritable="$?"
+  if [[ "$PROCESS_RECORDING_MODE" = 'MOVE' ]]; then
+    check_write "1"             "$OriginalDirFreeSpace" "$originaldirname"
+    OriginalDirWritable="$?"
+  else #Unknown as we won't check, the other modes don't require it.
+    OriginalDirWritable='?' #This is intentionally the '?' symbol and not "$?".
+  fi
   check_write "5"             "$WorkingDirFreeSpace"  "$m2kdir"
   WorkingDirWritable="$?"
 }
@@ -4080,13 +4121,15 @@ m2k_diagnostics(){
   fi
 
   #If we're not on Mac OS X, check that user notification is working.
-  if [ "$m2kPlatform" != "Darwin" ]; then
+  if [[ "$m2kPlatform" != "Darwin" ]]; then
     read -r -n1 -p "Press any key to perform Desktop Message test..."
     printf '\n'
     inform "Performing m2k_notify test"
     informcont "This test verifies that the message was sent to the DBUS."
     informcont "This test does not verify the user has a valid desktop open."
-    sudo -u "$NotifyUserName" "$binpath/m2k_notify" "myth2kodi test" "Testing Desktop Communications" "info"
+    [[ -f "$m2kdir/myth2kodi.png" ]] || informcont "Remember to copy myth2kodi.png into $m2kdir/"
+    [[ -f "$m2kdir/myth2kodi_failed.png" ]] || informcont "Remember to copy myth2kodi_failed.png into $m2kdir/"
+    sudo -u "$NotifyUserName" "$binpath/m2k_notify" "myth2kodi test" "Testing Desktop Communications" "$m2kdir/myth2kodi.png"
     if [ "$?" = "0" ] ; then
       notifytest="***PASSED***"
       inform "Desktop Notifications test $notifytest"
@@ -5004,7 +5047,7 @@ success_postprocessing(){
   #Move comskip data to proper folder and add created.tracking entry.
   if [[ "$CommercialMarkup" = "Created" ]]; then
     mv "$MARKUPFRAMES_TMP" "$MoveDir/$ShowFileName.txt"
-    if [[ "$TRACKING" = 'Enabled' ]]; then
+    if [[ "$TRACKING" != 'Disabled' ]]; then
       printf '%s\n' "'$MoveDir/$ShowFileName.txt' '$MoveDir/$ShowFileName.$OriginalExt'" >> "$m2kdir/created.tracking"
     fi
   fi
@@ -5015,7 +5058,7 @@ success_postprocessing(){
   add_undo
   [[ "$RequiresDoover" = "1" ]] && add_doover
   dailyreport
-  [[ "$CREATE_RSS" == 'Enabled' ]] && generaterss
+  [[ "$CREATE_RSS" = 'Enabled' && "$TRACKING" != 'Disabled' ]] && generaterss
   if [[ "$PROCESS_RECORDING_MODE" = 'MOVE' && "$SYMLINK" = 'Disabled' ]]; then
     set_group_permission
   fi
@@ -5465,7 +5508,7 @@ fi
 ((ConfidenceRating <= -4)) && RequiresDoover=1 && warn "ConfidenceRating low. Requiring doover."
 
 #If file is a link then activate link mode so the original link is not screwed up.
-if [[ -L "$InputPath" ]]; then
+if [[ -L "$InputPath" && "$PROCESS_RECORDING_MODE" != 'COPY' ]]; then
   warn "FILE IS A LINK FORCING PROCESS_RECORDING_MODE='LINK'."
   PROCESS_RECORDING_MODE='LINK'
   SYMLINK='Enabled'
@@ -5478,7 +5521,7 @@ fi
 
 #####INVALID FILE HANDLING#### #TODO: This should come straight after arg parse and the Initial log entry for the processing of recording
 #If file to be moved does not exist, then report
-if [ ! -f "$InputPath" ] && [ "$InputPath" != "testfile.ext" ]; then
+if [[ ! -f "$InputPath" && "$InputPath" != "testfile.ext" ]]; then
   msg_invalid_path_error "$InputPath"
   NOTIFY_MSG="InputPath not a file: '$InputPath'"
   exit_job 'FileOrPathDoesNotExist'
@@ -5636,14 +5679,14 @@ if [[ "$PROCESS_RECORDING_MODE" = 'MOVE' ]]; then
       exit_job 'MoveModeSuccessful'
 
     #if file was not moved (has zero size), then fail
-    elif [ ! -s "$MoveDir/$ShowFileName.$OriginalExt" ]; then
+    elif [[ ! -s "$MoveDir/$ShowFileName.$OriginalExt" ]]; then
       rm -f "$MoveDir/$ShowFileName.$OriginalExt"
       msg_wrote_zero_length_file
       exit_job 'ZeroLengthFile'
     fi
-  elif [ ! -f "$MoveDir/$ShowFileName.$OriginalExt" ]; then
+  elif [[ ! -f "$MoveDir/$ShowFileName.$OriginalExt" ]]; then
     msg_permission_error_while_moving
-    exit_job 'MoveFailed'
+    exit_job "$EXIT_JOB_TYPE"
   fi
 
 #####LINK MODE HANDLING#####
@@ -5656,7 +5699,7 @@ elif [[ "$PROCESS_RECORDING_MODE" = 'LINK' ]]; then
   #if file was created
   if [ -L "$MoveDir/$ShowFileName.$OriginalExt" ]; then
     inform "Symlink created: $MoveDir/$ShowFileName.$OriginalExt"
-    if [[ "$TRACKING" = 'Enabled' ]]; then
+    if [[ "$TRACKING" != 'Disabled' ]]; then
       printf '%s\n' "'$MoveDir/$ShowFileName.$OriginalExt' '$InputPath'" >> "$m2kdir/created.tracking"
     fi
 
@@ -5669,7 +5712,33 @@ elif [[ "$PROCESS_RECORDING_MODE" = 'LINK' ]]; then
   #If link failure, send notification and fail
   elif [ ! -L "$MoveDir/$ShowFileName.$OriginalExt" ]; then
     msg_symlink_not_created
-    exit_job 'LinkingFailed'
+    exit_job "$EXIT_JOB_TYPE"
+  fi
+
+#####COPY MODE HANDLING#####
+elif [[ "$PROCESS_RECORDING_MODE" = 'COPY' ]]; then
+  #Send notifications, Move the file and rename
+  debug "COPYING FILE: '$InputPath' to '$MoveDir/$ShowFileName.$OriginalExt'"
+  cp -L "$InputPath" "$MoveDir/$ShowFileName.$OriginalExt"
+  #Check and report if file was moved
+  if [[ -e "$MoveDir/$ShowFileName.$OriginalExt" ]]; then
+    if [[ -f "$MoveDir/$ShowFileName.$OriginalExt" ]]; then
+
+      success_postprocessing
+
+      #We've successfully copied the recording -- notify then exit.
+      msg_completed_copy
+      exit_job 'CopyModeSuccessful'
+
+    #if file was not moved (has zero size), then fail
+    elif [[ ! -s "$MoveDir/$ShowFileName.$OriginalExt" ]]; then
+      rm -f "$MoveDir/$ShowFileName.$OriginalExt"
+      msg_wrote_zero_length_file
+      exit_job 'ZeroLengthFile'
+    fi
+  elif [[ ! -f "$MoveDir/$ShowFileName.$OriginalExt" ]]; then
+    msg_permission_error_while_copying
+    exit_job "$EXIT_JOB_TYPE"
   fi
 fi
 

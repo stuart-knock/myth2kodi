@@ -1770,16 +1770,17 @@ get_mythtvdb_info_pythonbindings(){
   #GuideEpisodeNum InputEpisodeNum LogicSubtitleEpisodeNum FuzzySubtitleEpisodeNum FuzzyPlotEpisodeNum nlpPlotEpisodeNum => EpisodeEpisodeNum
 
   debug 'Setting the following variables based on MythTV-DB guide data:'
-  #Import mythtv values into myth2kodi values, don't clobber title, subtitle, season-number, or episode-number.
+  #Import mythtv values into myth2kodi values, don't clobber myth2kodi args title, subtitle, season-number, or episode-number.
   [[ -z "$InputTitle" ]]      && InputTitle="$title"        && debugcont "InputTitle=$title"
   [[ -z "$InputSubtitle" ]]   && InputSubtitle="$subtitle"  && debugcont "InputSubtitle=$subtitle"
   [[ -z "$InputSeasonNum" ]]  && InputSeasonNum="$season"   && debugcont "InputSeasonNum=$season"
   [[ -z "$InputEpisodeNum" ]] && InputEpisodeNum="$episode" && debugcont "InputEpisodeNum=$episode"
+  #Support for the --movie flag
+  [[ -z "$ShowCategory" ]]    && ShowCategory="$category"   && debugcont "ShowCategory=$category"
 
   #redefine database var names into myth2kodi var names
   MovieAirDate="$airdate"            && debugcont "MovieAirDate=$airdate"
   OriginalAirDate="$originalairdate" && debugcont "OriginalAirDate=$originalairdate"
-  [[ -z "$ShowCategory" ]] && ShowCategory="$category"           && debugcont "ShowCategory=$category"
   StorageGroup="$storagegroup"       && debugcont "StorageGroup=$storagegroup"
   Stars="$stars"                     && debugcont "Stars=$stars"
   Plot="$description"                && debugcont "Plot=$description"

@@ -667,6 +667,7 @@ log_rotation(){
 #of this file. It initialises the state of the script and the logging system.
 m2k_init(){
   #Override default settings with anything in myth2kodi.conf
+  # shellcheck source=./myth2kodi.conf
   [[ -f "$m2kdir/myth2kodi.conf" ]] && source "$m2kdir/myth2kodi.conf"
 
   #What am I...
@@ -741,6 +742,7 @@ m2k_init(){
   #Initialise logging system
   if [ -f "$binpath/bashlogging" ] ; then
     local bashloggingstatus
+    # shellcheck source=../bash-tools/bashlogging
     source "$binpath/bashlogging"
     bashloggingstatus="$?"
     [[ "$bashloggingstatus" != "0" ]] && exit "$bashloggingstatus"

@@ -3203,7 +3203,9 @@ msg_unable_to_identify_recording(){
   informcont "    your MythTV-DB; TheTVDB; or tvmaze."
   informcont "Check that information on www.TheTVDB.com is complete for this series."
   informcont "#### If not, Please consider helping out and adding to TheTVDB. ####"
-  [[ -n "$SeriesID" ]] && informcont "#### http://www.thetvdb.com/?tab=series&amp;id=$SeriesID ####"
+  if [[ -n "$SeriesID" ]]; then
+    informcont "#### http://www.thetvdb.com/?tab=series&amp;id=$SeriesID           ####"
+  fi
   informcont "To force processing of unrecognised recordings, disable ShowStopper."
   NOTIFY_MSG="Could not fully identify: $InputTitle."
 }

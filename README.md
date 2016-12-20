@@ -35,7 +35,7 @@ need to be placed in `binpath` along with this script. The three supporting
 scripts to myth2kodi are:  
 **mythdb_access** -- Uses MythTV python bindings to access database information.  
 **m2k_notify** -- A script for sending notifications to Gnome Desktop.  
-[**bashlogging**](https://github.com/stuart-knock/bash-tools/blob/master/bashlogging) --
+[**bashlogging**](https://github.com/stuart-knock/bash-tools) --
                 A set of bash functions that provide the logging mechanism used
                 throughout myth2kodi.
 

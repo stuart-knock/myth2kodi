@@ -1300,7 +1300,7 @@ recreate_comskip(){
       return 0
     fi
   else
-    [[ -f "$InputPath" && ! -L "$InputPath" ]] && err "#TODO: --comskip can't deal with link mode moving yet..."
+    [[ -f "$InputPath" && ! -L "$InputPath" ]] && err "#TODO: --comskip can't deal with 'LINK' mode moving yet..."
     err "The argument '$InputPath' is neither an already moved recording nor a directory to scan for them."
     return 1
   fi
@@ -4816,6 +4816,8 @@ delete_recording(){
   #Find the MythTV recording file name and its path.
   set_recording_name "$1"
   [[ "$?" != 0 ]] && return "$?"
+  debug "RECORDING_PATH: $RECORDING_PATH"
+  debug "RECORDING_NAME: $RECORDING_NAME"
   InputPath="$RECORDING_PATH"
   InputFileBasename="$RECORDING_NAME"
 
@@ -4923,7 +4925,9 @@ disconnect_recording(){
   #MythTV name ('moved' in LINK mode) then actually move it to myth2kodi name.
   [[ -L "$RECORDING_LINK" ]] && rm -f "$RECORDING_LINK"
   if [[ "$RECORDING_FILE_OWNER" = 'MythTV' ]]; then
-    mv "$RECORDING_FILE" "$RECORDING_LINK"
+    inform "Recording was processed in 'LINK' mode, actually moving file now..."
+    mv "$RECORDING_FILE" "$RECORDING_LINK" 2>&1 | err_pipe "${FUNCNAME[0]}(): "
+    [[ "$?" != 0 ]] && { err "FAILED: mv '$RECORDING_FILE' '$RECORDING_LINK'"; return "$?"; }
   fi
 
   #Delete the associated database entry and thumbnail
@@ -4946,7 +4950,7 @@ disconnect_recording(){
     sed -i.bak "\#$RECORDING_FILE#d" "$m2kdir/created.tracking"
   elif [[ "$RECORDING_LINK_OWNER" = 'myth2kodi' && -n "$RECORDING_LINK" ]]; then
     debug "Link tracked by myth2kodi."
-    debug "Removing lines mentio ning '$RECORDING_LINK' from $m2kdir/created.tracking"
+    debug "Removing lines mentioning '$RECORDING_LINK' from $m2kdir/created.tracking"
     sed -i.bak "\#$RECORDING_LINK#d" "$m2kdir/created.tracking"
   fi
   (( LOGLEVEL < 3 )) && rm -f "$m2kdir/created.tracking.bak"

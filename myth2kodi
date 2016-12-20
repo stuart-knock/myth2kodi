@@ -3193,7 +3193,8 @@ msg_invalid_path_error(){
 #An error message for when information can't be obtained about a recording.
 msg_unable_to_identify_recording(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  err "Operation failed, unable to identify episode info for recording: $InputPath"
+  err     "Operation failed, unable to identify episode info for recording:"
+  errcont "     $InputPath"
   informcont "This means that insufficient information was provided to myth2kodi"
   informcont "and the missing information couldn't be determined by other means."
   informcont "If you know the correct information, provide it at the command line,"
@@ -3201,8 +3202,8 @@ msg_unable_to_identify_recording(){
   informcont "Normally myth2kodi can determine this information from:"
   informcont "    your MythTV-DB; TheTVDB; or tvmaze."
   informcont "Check that information on www.TheTVDB.com is complete for this series."
-  informcont "If not, Please consider helping out and adding to TheTVDB."
-  [[ -n "$SeriesID" ]] && informcont "http://www.thetvdb.com/?tab=series&amp;id=$SeriesID"
+  informcont "#### If not, Please consider helping out and adding to TheTVDB. ####"
+  [[ -n "$SeriesID" ]] && informcont "#### http://www.thetvdb.com/?tab=series&amp;id=$SeriesID ####"
   informcont "To force processing of unrecognised recordings, disable ShowStopper."
   NOTIFY_MSG="Could not fully identify: $InputTitle."
 }

@@ -3,8 +3,6 @@
 # myth2kodi
 *myth2kodi is a modified version of [mythicalLibrarian](https://github.com/adamoutler/mythicallibrarian) by Adam Outler.*
 
-**WARNING:** Still a work in progress...
-
 The myth2kodi script automates the mapping of MythTV recordings to a Kodi
 library. It is designed to be a user job in MythTV. It can also be run
 manually from a command line. It must have access to your MythTV recordings.
@@ -49,7 +47,8 @@ The MythTV user job should be called as follows:
     $binpath/myth2kodi "%DIR%/%FILE%"
 
 where `$binpath` is replaced by the full explicit path from USER SETTINGS.
-To process a recording at the command line, the script can be called with the following form:
+To process a recording at the command line, the script can be called with the
+following form:
     
     myth2kodi "Input File" "show name" "episode name"
 

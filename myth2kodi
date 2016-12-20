@@ -3600,6 +3600,10 @@ m2k_cleanse(){
   #TODO: Consider making the cleanup_logs file more modular, so we can set different
   #      lifetimes for the archived main logs, doover scripts, undo scripts, etc.
   #      Maybe make an archived_logs directory with sub directories: main; diagnostics; etc.
+  #      In the interim, you can get a cleaner view of the working directory with:
+  #          ls ~/.myth2kodi/ --ignore=*20[0-9][0-9]-[0-1][0-9]-[0-3][0-9]*
+  #      or
+  #          ls -Fltrh ~/.myth2kodi/ --ignore=*20[0-9][0-9]-[0-1][0-9]-[0-3][0-9]*
 
   #Create cleanup files for archived logs, myth2kodi database, and daily report files.
   local CLEANUP_LOGS CLEANUP_M2K_DB CLEANUP_DAILYREPORT

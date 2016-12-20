@@ -834,7 +834,7 @@ validate_settings(){
     err "Using LINK mode processing without 'SYMLINK'ing set as 'Enabled' doesn't make sense."
     return 1
   fi
-
+  return 0
 }
 
 #Do some basic tests to make sure we were called correctly
@@ -1025,9 +1025,9 @@ parse_command_flags(){
       printf '%s\n' "$m2kVersion"
       return 0
     ;;
-    --comskip) #/path/to/recording/filename.mpg | /path/to/recordings
+    --comskip) #/path/to/recording/filename.mpg | /path/to/recordings & [ext]
       debug "Recognised command line switch '--comskip'"
-      recreate_comskip "$m2karg2"
+      recreate_comskip "$m2karg2" "$m2karg3"
       return $?
     ;;
   esac
@@ -1238,7 +1238,7 @@ generate_comskip(){
 #Assuming the provided argument is a recording file successfully processed in
 #LINK mode or MOVE mode with SYMLINKing Enabled, identify the file, the link,
 #who owns what, and the MythTV recording path and name.
-identify_recording(){
+identify_recording_files(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   local inputarg="$1"
   if [[ -f "$inputarg" ]]; then
@@ -1271,11 +1271,12 @@ identify_recording(){
 recreate_comskip(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   local inputarg="$1"
+  local checkext="$2"
   if [[ -f "$inputarg" ]]; then
     inform "Regenerating comskip file for $inputarg"
 
     #Identify file, link, who owns what, and the MythTV path and basename.
-    identify_recording "$inputarg"
+    identify_recording_files "$inputarg"
     [[ "$?" != 0 ]] && return "$?"
 
     #Identify the target for the comskip file
@@ -1306,8 +1307,9 @@ recreate_comskip(){
     printf '\n'
     #Default to safety, ie do nothing.
     if [ "$yesorno" = "y" ]; then
-      local checkext scanpath
-      checkext="mpg" #TODO: Make this user/caller specifiable
+      local scanpath
+      [[ -z "$checkext" ]] && checkext="mpg"
+      debug "Checking for files with names of the form: '$scanpath/filename.$checkext'"
       scanpath="$inputarg"
       local COMSKIP_SCAN_FILE
       COMSKIP_SCAN_FILE="$(mktemp "$M2K_TMPDIR/m2k_comskip_scan_$FileNameNow"-XXXX)"
@@ -1317,13 +1319,7 @@ recreate_comskip(){
       inform "Scanning $scanpath for already moved $checkext files"
       while read -r line ; do
         debug "Attempting to regenerate comskip file for $line"
-        #TODO: This check is too strict, works in move mode but won't process for a recording where we used LINK mode
-        #      just do [[ -f "$line" ]] then check dir exists for move of comskip and error if not, rather than creating a directory for a show that hasn't been processed already...
-        if [[ -f "$line" && -L "$line" ]]; then
-          myth2kodi --comskip "$line"
-        else
-          debug "Not a File and Link, so not moved with symlinking enabled... Not regenerating comskip. #TODO: HANDLE ALL MOVE MODES PROPERLY HERE."
-        fi
+        myth2kodi --comskip "$line"
       done < "$COMSKIP_SCAN_FILE"
 
       #If we're not in debug mode then remove the comskip scan file we just processed.
@@ -3194,36 +3190,22 @@ msg_invalid_path_error(){
   errcont "'$PATH_TO_CHECK'"
 }
 
-#An error message for when information can't be obtained from TheTVDB.
-msg_tvdb_incomplete(){
-  #TODO: review this message, see new msg_unable_to_identify_recording function below.
+#An error message for when information can't be obtained about a recording.
+msg_unable_to_identify_recording(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  err     "%% OPERATION FAILED, INFORMATION COULD NOT BE OBTAINED %%"
-  errcont "%% TheTVDB information is incomplete for $InputTitle, ${InputSubtitle}."
-  errcont "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%"
-  errcont "%% Please consider helping out and adding to TheTVDB %%"
-  errcont "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%"
-  errcont "TO PROCESS THIS FILE & PREVENT THIS ERROR IN THE FUTURE, ENABLE HANDLING OF UNRECOGNIZED SHOWS."
-  NOTIFY_MSG="Could not obtain information from server about: $InputTitle. TheTVDB is incomplete"
-
+  err "Operation failed, unable to identify episode info for recording: $InputPath"
+  informcont "This means that insufficient information was provided to myth2kodi"
+  informcont "and the missing information couldn't be determined by other means."
+  informcont "If you know the correct information, provide it at the command line,"
+  informcont "    see: myth2kodi --usage"
+  informcont "Normally myth2kodi can determine this information from:"
+  informcont "    your MythTV-DB; TheTVDB; or tvmaze."
+  informcont "Check that information on www.TheTVDB.com is complete for this series."
+  informcont "If not, Please consider helping out and adding to TheTVDB."
+  [[ -n "$SeriesID" ]] && informcont "http://www.thetvdb.com/?tab=series&amp;id=$SeriesID"
+  informcont "To force processing of unrecognised recordings, disable ShowStopper."
+  NOTIFY_MSG="Could not fully identify: $InputTitle."
 }
-
-# msg_unable_to_identify_recording(){
-#   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-#   err "Operation failed, unable to identify recording: $InputPath"
-#   informcont "This means that insufficient information was provided to myth2kodi"
-#   informcont "and the missing information couldn't be determined by other means."
-#   informcont "If you know the correct information, provide it at the command line,"
-#   informcont "see myth2kodi --usage"
-#   informcont "Normally myth2kodi can determine this information from:"
-#   informcont "    your MythTV-DB; TheTVDB; or tvmaze."
-#   informcont "Check that information on www.TheTVDB.com is complete for this series."
-#   informcont "If not, Please consider helping out and adding to TheTVDB."
-#   [[ -n "$SeriesID" ]] && informcont "http://www.thetvdb.com/?tab=series&amp;id=$SeriesID"
-#   informcont "To force processing of unrecognised recordings, disable ShowStopper."
-#   msg_tvdb_incomplete
-#   NOTIFY_MSG="Could not fully identify: $InputTitle."
-# }
 
 #An error message for when the moved file has zero length (either the
 #original had zero length or we failed to move it).
@@ -3418,7 +3400,7 @@ make_show_dir(){
   fi
 
   #Error message if folder was not created
-  if [ ! -d "$MoveDir" ]; then
+  if [[ ! -d "$MoveDir" ]]; then
     NOTIFY_MSG="COULD NOT CREATE $MoveDir - failsafe mode activated."
     EXIT_JOB_TYPE='PermissionError'
     err "${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}(): $NOTIFY_MSG"
@@ -3682,23 +3664,7 @@ m2k_maintenance(){
       debug "Support file (record $Counter): ${SupportFile}"
       MainFile="$(cut -d"'" -f4 <<< "$line")"
       debug "Main file (record $Counter): ${MainFile}"
-      #TODO: Why the ls rather than [[ ! -e "$MainFile" ]]
-      ls "$MainFile" > /dev/null 2>&1
-      if [ "$?" != "0" ]; then
-        if [ -d "$(dirname "$SupportFile")" ]; then
-          inform "REMOVING ORPHAN FILE: $SupportFile"
-          rm -f "$SupportFile"
-          printf '%s\n' "$line" >> "$m2kdir/created.tracking.old"
-        else
-          warn "${FUNCNAME[0]}() FOLDER DISCONNECTED: $SupportFile"
-          if (( removedead != 1 )); then
-            printf '%s\n' "$line" >> "$m2kdir/created.tracking2"
-          else
-            inform "REMOVING FROM FUTURE SEARCHES: $line"
-            printf '%s\n' "$line" >> "$m2kdir/created.tracking.old"
-          fi
-        fi
-      else
+      if [[ -e "$MainFile" ]]; then
         #If the MainFile is actually the original MythTV recording file (it was
         #processed in LINK mode) and the SupportFile no longer exists, then
         #'[0-9]{4}_20[0-9]{2}[0-1][0-9][0-3][0-9][0-2][0-9][0-5][0-9]{3}'
@@ -3714,6 +3680,20 @@ m2k_maintenance(){
         else
           #Not LINK mode and main file still exists, so continue to track
           printf '%s\n' "$line" >> "$m2kdir/created.tracking2"
+        fi
+      else
+        if [[ -d "$(dirname "$SupportFile")" ]]; then
+          inform "REMOVING ORPHAN FILE: $SupportFile"
+          rm -f "$SupportFile"
+          printf '%s\n' "$line" >> "$m2kdir/created.tracking.old"
+        else
+          warn "${FUNCNAME[0]}() FOLDER DISCONNECTED: $SupportFile"
+          if (( removedead != 1 )); then
+            printf '%s\n' "$line" >> "$m2kdir/created.tracking2"
+          else
+            inform "REMOVING FROM FUTURE SEARCHES: $line"
+            printf '%s\n' "$line" >> "$m2kdir/created.tracking.old"
+          fi
         fi
       fi
     done < "$m2kdir/created.tracking"
@@ -4585,12 +4565,15 @@ msg_options(){
   printf '\n%s\n' "  --log 'filename'"
   printf '%s\n'   "    Identify and display the log entries for the recording."
   printf '%s\n'   "    eg. myth2kodi --log '1099_20151210093000.mpg'"
-  printf '\n%s\n' "  --comskip /path/to/folder/or/file"
+  printf '\n%s\n' "  --comskip /path/to/folder/or/file [extention]"
   printf '%s\n'   "    Regenerates the comskip file for recordings that have"
-  printf '%s\n'   "    already been moved. Argument can be either a single"
+  printf '%s\n'   "    already been moved. First argument can be either a single"
   printf '%s\n'   "    recording or a directory containing already moved recordings."
+  printf '%s\n'   "    The optional second argument applies when the first arg is a"
+  printf '%s\n'   "    directory and specifies file extension to process (DEFAULT: 'mpg')."
   printf '%s\n'   "    eg. myth2kodi --comskip '/home/mythtv/recordings/1099_20151210093000.mpg'"
   printf '%s\n'   "    eg. myth2kodi --comskip '/home/mythtv/recordings'"
+  printf '%s\n'   "    eg. myth2kodi --comskip '/home/mythtv/recordings' 'mpg'"
   printf '\n%s\n' "  -?|-h|--help"
   printf '%s\n'   "    Displays this message"
   printf '%s\n'   "    example: myth2kodi --help"
@@ -4674,7 +4657,7 @@ msg_rss(){
   printf '%s\n\n' "    <feed updateinterval=\"30\">http://[youripaddress]/myth2kodi-rss/rss.xml</feed>"
 }
 
-#A message explaining how to improve confidence ratings for you recordings.
+#A message explaining how to improve confidence ratings for your recordings.
 msg_improve_confidence(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   printf '%s\n\n' "About Confidence ratings:"
@@ -4854,7 +4837,7 @@ delete_recording(){
   local inputarg="$1"
 
   #Identify file, link, who owns what, and the MythTV path and basename.
-  identify_recording "$inputarg"
+  identify_recording_files "$inputarg"
   [[ "$?" != 0 ]] && return "$?"
 
   #TODO: Consider moving the DATABASE_ACCESS method logic below into the function
@@ -4944,7 +4927,7 @@ disconnect_recording(){
   local inputarg="$1"
 
   #Identify file, link, who owns what, and the MythTV path and basename.
-  identify_recording "$inputarg"
+  identify_recording_files "$inputarg"
   [[ "$?" != 0 ]] && return "$?"
 
   #Remove link associated with recording, and if recording file still has a
@@ -5051,6 +5034,9 @@ recording_log(){
   fi
 }
 
+#On successful processing this function is called to: move any comskip file
+#into place; generate NFO; communicate with Kodi; add undo and doover entries;
+#generate a dailyreport entry; and generate an RSS entry.
 success_postprocessing(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
 
@@ -5314,7 +5300,7 @@ if [[ -n "$SeriesID" ]]; then
     fi
   fi
 #if series id is not obtained send failure message
-elif [ -z "$SeriesID" ] && [ "$m2kProgramIDCheck" != "SH" ] && [ "$m2kProgramIDCheck" != "MV" ]; then
+elif [[ -z "$SeriesID" && "$m2kProgramIDCheck" != "SH" && "$m2kProgramIDCheck" != "MV" ]]; then
   ConfidenceReasoning="$ConfidenceReasoning Failed; "
   warn "SERIES ID WAS NOT FOUND. TheTVDB MAY BE DOWN. IF NOT TRY USING A showTranslations FILE."
   printf '%s\n' "$InputTitle" >> "$UnrecognizedSeriesFile"
@@ -5517,6 +5503,7 @@ fi
 #if the confidence was low, then show requires a doover
 ((ConfidenceRating <= -4)) && RequiresDoover=1 && warn "ConfidenceRating low. Requiring doover."
 
+#TODO: review this, is it still necessary now that we abort when target already exists???
 #If file is a link then activate link mode so the original link is not screwed up.
 if [[ -L "$InputPath" && "$PROCESS_RECORDING_MODE" != 'COPY' ]]; then
   warn "FILE IS A LINK FORCING PROCESS_RECORDING_MODE='LINK'."
@@ -5549,16 +5536,15 @@ if [[ -z "$Exx" && "$InputPath" != "testfile.ext" ]]; then
     NOTIFY_MSG="Episode could not be matched based on supplied Title and SubTitle."
     warn "$NOTIFY_MSG"
     exit_job 'NameCouldNotBeAssigned'
-  elif [ "$m2kProgramIDCheck" = "MV" ]; then
+  elif [[ "$m2kProgramIDCheck" = "MV" ]]; then
     #Ensures the doover value was not set for the movie and use safe show name
     RequiresDoover=0
     NewShowName="$SafeShowName"
   #If user has determined that they do not want unrecognisable tv shows in their library
   elif [[ "$ShowStopper" = 'Enabled' ]]; then
-    #msg_unable_to_identify_recording
-    msg_tvdb_incomplete
+    msg_unable_to_identify_recording
     exit_job 'NameCouldNotBeAssigned'
-  elif [ "$m2kProgramIDCheck" = "SH" ]; then
+  elif [[ "$m2kProgramIDCheck" = "SH" ]]; then
     #Ensures the doover value was not set for the show and use safe show name
     NewShowName="$SafeShowName"
     msg_show_warning
@@ -5651,7 +5637,7 @@ check_path_permission "$InputPath"
 if [[ "$PROCESS_RECORDING_MODE" = 'MOVE' ]]; then
   #Send notifications, Move the file and rename
   debug "MOVING FILE: '$InputPath' to '$MoveDir/$ShowFileName.$OriginalExt'"
-  mv "$InputPath" "$MoveDir/$ShowFileName.$OriginalExt"
+  mv "$InputPath" "$MoveDir/$ShowFileName.$OriginalExt" 2>&1 | err_pipe "'MOVE' mode: "
 
   #Check and report if file was moved
   if [[ -e "$MoveDir/$ShowFileName.$OriginalExt" ]]; then
@@ -5663,6 +5649,7 @@ if [[ "$PROCESS_RECORDING_MODE" = 'MOVE' ]]; then
         [[ -L "$InputPath" ]] || err "Failed to Create symlink: FILESYSTEM MAY NOT SUPPORT SYMLINKS"
       #If SYMLINK=Disabled, remove database entries
       elif [[ "$SYMLINK" = 'Disabled' ]]; then
+        #Set permissions as rwxrwxr-x (775) #TODO: probably should just be rw-rw-r-- (664)
         chmod 775 "$MoveDir/$ShowFileName.$OriginalExt"
         if [[ "$RequiresDoover" != '1' ]]; then
           debug "SYMLINK='Disabled' and doesn't require doover, so MythTV-DB info will be removed."
@@ -5682,6 +5669,7 @@ if [[ "$PROCESS_RECORDING_MODE" = 'MOVE' ]]; then
         err "SYMLINK must be set as 'Enabled' or 'Disabled', but SYMLINK='$SYMLINK'"
       fi
 
+      #Generate supporting files, add undo and doover entries, notify Kodi.
       success_postprocessing
 
       #We've successfully moved the recording -- notify then exit.
@@ -5702,17 +5690,18 @@ if [[ "$PROCESS_RECORDING_MODE" = 'MOVE' ]]; then
 #####LINK MODE HANDLING#####
 #If symlink is in LINK mode then create symlink
 elif [[ "$PROCESS_RECORDING_MODE" = 'LINK' ]]; then
-  inform "CREATING LINK IN LINK MODE WITH CONFIDENCE:$ConfidenceRating"
+  debug "Creating link in LINK mode with CONFIDENCE:$ConfidenceRating"
 
   ln -s "$InputPath" "$MoveDir/$ShowFileName.$OriginalExt"
 
   #if file was created
-  if [ -L "$MoveDir/$ShowFileName.$OriginalExt" ]; then
+  if [[ -L "$MoveDir/$ShowFileName.$OriginalExt" ]]; then
     inform "Symlink created: $MoveDir/$ShowFileName.$OriginalExt"
     if [[ "$TRACKING" != 'Disabled' ]]; then
       printf '%s\n' "'$MoveDir/$ShowFileName.$OriginalExt' '$InputPath'" >> "$m2kdir/created.tracking"
     fi
 
+    #Generate supporting files, add undo and doover entries, notify Kodi.
     success_postprocessing
 
     #We've successfully linked the recording -- notify then exit.
@@ -5720,7 +5709,7 @@ elif [[ "$PROCESS_RECORDING_MODE" = 'LINK' ]]; then
     exit_job 'LinkModeSuccessful'
 
   #If link failure, send notification and fail
-  elif [ ! -L "$MoveDir/$ShowFileName.$OriginalExt" ]; then
+  elif [[ ! -L "$MoveDir/$ShowFileName.$OriginalExt" ]]; then
     msg_symlink_not_created
     exit_job "$EXIT_JOB_TYPE"
   fi
@@ -5734,6 +5723,7 @@ elif [[ "$PROCESS_RECORDING_MODE" = 'COPY' ]]; then
   if [[ -e "$MoveDir/$ShowFileName.$OriginalExt" ]]; then
     if [[ -f "$MoveDir/$ShowFileName.$OriginalExt" ]]; then
 
+      #Generate supporting files, add undo and doover entries, notify Kodi.
       success_postprocessing
 
       #We've successfully copied the recording -- notify then exit.

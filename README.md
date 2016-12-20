@@ -66,6 +66,7 @@ for additional functionality type:
   ├── <a href="./myth2kodi">myth2kodi</a> (The main script.) <br>
   ├── <a href="./mythdb_access">mythdb_access</a> (Accesses MythTV-DB using Python bindings.) <br>
   ├── <a href="./m2k_notify">m2k_notify</a> (Sends desktop notifications.) <br>
+  ├── <a href="./bashlogging">bashlogging</a> (Provides a configurable logging mechanism.) <br>
   ├── <a href="./myth2kodi.conf">myth2kodi.conf</a> (A complete configuration template.) <br>
   ├── <a href="./myth2kodi.png">myth2kodi.png</a> (The icon displayed with desktop notifications on successful processing.) <br>
   ├── <a href="./myth2kodi_failed.png">myth2kodi_failed.png</a> (The icon displayed with desktop notifications on failed processing.) <br>

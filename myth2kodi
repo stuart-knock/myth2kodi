@@ -742,7 +742,7 @@ m2k_init(){
   #Initialise logging system
   if [ -f "$binpath/bashlogging" ] ; then
     local bashloggingstatus
-    # shellcheck source=../bash-tools/bashlogging
+    # shellcheck source=./bashlogging
     source "$binpath/bashlogging"
     bashloggingstatus="$?"
     [[ "$bashloggingstatus" != "0" ]] && exit "$bashloggingstatus"

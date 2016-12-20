@@ -4470,7 +4470,7 @@ m2k_undo_all(){
 }
 
 #This function provides the mechanism to undo a specified myth2kodi jobs
-m2k_undo_all(){
+m2k_undo_rec(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
 
   #Check the provided file has been processed by myth2kodi.

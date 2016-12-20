@@ -1020,20 +1020,7 @@ parse_command_flags(){
     ;;
     --comskip) #/path/to/recording/filename.mpg | /path/to/recordings
       debug "Recognised command line switch '--comskip'"
-      #eg: myth2kodi --comskip '/path/to/recordings/1070_20160331073100.mpg'
-      InputPath="$m2karg2"
-      if [[ ! -e "$InputPath" ]]; then
-        EXIT_JOB_TYPE='FileOrPathDoesNotExist'
-        NOTIFY_MSG="InputPath does not exist: '$InputPath'"
-        err "${FUNCNAME[0]}(): --comskip: $NOTIFY_MSG"
-        return 1
-      elif [[ ! -f "$InputPath" && ! -d "$InputPath" ]]; then
-        EXIT_JOB_TYPE='FileOrPathDoesNotExist'
-        NOTIFY_MSG="InputPath is neither a file nor a directory: '$InputPath'"
-        err "${FUNCNAME[0]}(): --comskip: $NOTIFY_MSG"
-        return 1
-      fi
-      recreate_comskip
+      recreate_comskip "$m2karg2"
       return $?
     ;;
   esac
@@ -1245,24 +1232,49 @@ generate_comskip(){
 #Actual file generation is done by generate_comskip()
 recreate_comskip(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  if [[ -f "$InputPath" && -L "$InputPath" ]]; then
-    inform "Regenerating comskip file for $InputPath"
-    InputFileBasename="$(basename "$InputPath")"
-    get_mythtvdb_info_pythonbindings
-    [[ "$?" != 0 ]] && return $?
-    #TODO: Find the file that $InputPath points to or is pointed to by and use that for the move location below, otherwise we have to run full identification of Episode/etc.
-    #[[ -L "$InputPath" ]] && movedrecordingname="$(readlink "$InputPath")"
-    local movedrecordingname
-    movedrecordingname="$(readlink "$InputPath")"
-    #TODO: need to deal with link mode case, something like: movedrecordingname="$(find -L "$MoveDir/" -samefile "$InputPath")" #Actually, this form should work for both cases... with the problem that multiple links can be returned in link mode if there are multiple links...
-    local ShowComSkip
-    ShowComSkip="${movedrecordingname%.*}.txt"
-    mv "$MARKUPFRAMES_TMP" "${ShowComSkip}" 2>&1 | err_pipe "${FUNCNAME[0]}(): "
+  local inputarg="$1"
+  if [[ -f "$inputarg" ]]; then
+    inform "Regenerating comskip file for $inputarg"
+
+    #Find the recording file and any link to it.
+    find_file_link_pairs "$inputarg"
+    [[ "$?" != 0 ]] && return "$?"
+    debug "RECORDING_LINK: $RECORDING_LINK"
+    debug "RECORDING_LINK_OWNER: $RECORDING_LINK_OWNER"
+    debug "RECORDING_FILE: $RECORDING_FILE"
+    debug "RECORDING_FILE_OWNER: $RECORDING_FILE_OWNER"
+
+    #Find the MythTV recording file name and its path.
+    set_recording_name "$inputarg"
+    [[ "$?" != 0 ]] && return "$?"
+    debug "RECORDING_PATH: $RECORDING_PATH"
+    debug "RECORDING_NAME: $RECORDING_NAME"
+    InputPath="$RECORDING_PATH"
+    InputFileBasename="$RECORDING_NAME"
+
+    #Identify the target for the comskip file
+    if [[ "$RECORDING_FILE_OWNER" = 'myth2kodi' ]]; then
+      ShowComSkip="${RECORDING_FILE%.*}.txt"
+    elif [[ "$RECORDING_LINK_OWNER" = 'myth2kodi' ]]; then
+      ShowComSkip="${RECORDING_LINK%.*}.txt"
+    else
+      err "${FUNCNAME[0]}(): Neither the identified link nor file are owned by myth2kodi."
+      return 1
+    fi
+
+    #Get the MythTV-DB info, which includes the comskip info.
+    get_mythtvdb_info
+    [[ "$?" != 0 ]] && return "$?"
+
+    #Move the comskip file into place
+    inform "Moving new comskip file to: ${ShowComSkip}"
+    mv "$MARKUPFRAMES_TMP" "$ShowComSkip" 2>&1 | err_pipe "${FUNCNAME[0]}(): "
     return "${PIPESTATUS[0]}"
-  elif [[ -d "$InputPath" ]]; then
+
+  elif [[ -d "$inputarg" ]]; then
     local yesorno='no' #Default to safety, ie do nothing.
-    #TODO: confirm InputPath doesn't end in a /
-    warn "YOU ARE ABOUT TO SCAN THE DIRECTORY: $InputPath"
+    #TODO: confirm inputarg doesn't end in a /
+    warn "YOU ARE ABOUT TO SCAN THE DIRECTORY: $inputarg"
     warncont "AND REGENERATE COMSKIP FILES FOR ALL PREVIOUSLY MOVED RECORDINGS."
     read -r -n1 -p "  Do you want myth2kodi to regenerate comskip files? y/(n)>" yesorno
     printf '\n'
@@ -1270,7 +1282,7 @@ recreate_comskip(){
     if [ "$yesorno" = "y" ]; then
       local checkext scanpath
       checkext="mpg" #TODO: Make this user/caller specifiable
-      scanpath="$InputPath"
+      scanpath="$inputarg"
       local COMSKIP_SCAN_FILE
       COMSKIP_SCAN_FILE="$(mktemp "$M2K_TMPDIR/m2k_comskip_scan_$FileNameNow"-XXXX)"
       [[ "$?" != 0 ]] && { err "Failed to create temporary file." ; return 1 ; }
@@ -1300,8 +1312,9 @@ recreate_comskip(){
       return 0
     fi
   else
-    [[ -f "$InputPath" && ! -L "$InputPath" ]] && err "#TODO: --comskip can't deal with 'LINK' mode moving yet..."
-    err "The argument '$InputPath' is neither an already moved recording nor a directory to scan for them."
+    EXIT_JOB_TYPE='FileOrPathDoesNotExist'
+    NOTIFY_MSG="Provided arg is neither a file nor a directory: '$inputarg'"
+    err "${FUNCNAME[0]}(): $NOTIFY_MSG"
     return 1
   fi
 }
@@ -1826,6 +1839,31 @@ get_mythtvdb_info_pythonbindings(){
   fi
 }
 
+get_mythtvdb_info(){
+  debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
+  #Access the database entry using the requested grabber
+  case "$DATABASE_ACCESS" in
+    MySQL)
+      get_mythtvdb_info_mysql
+      ;;
+    PythonBindings)
+      get_mythtvdb_info_pythonbindings
+      returnstatus="$?"
+      if [[ "$returnstatus" != 0 ]]; then
+        NOTIFY_MSG="Call to MythTV-DB Python bindings failed."
+        EXIT_JOB_TYPE='MythTVdatabaseFailure'
+        return 1
+      fi
+      ;;
+    *)
+      NOTIFY_MSG="DATABASE_ACCESS incorrectly specified."
+      err "${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}(): $NOTIFY_MSG"
+      EXIT_JOB_TYPE='UserSettingError'
+      return 1
+      ;;
+  esac
+}
+
 #####PROCESS MythTV DATABASE INFORMATION#####
 
 #Gather information from the MythTV database based on user settings.
@@ -1834,26 +1872,8 @@ process_mythtvdb(){
 
   if [[ "$Database" = 'Enabled' ]]; then
     #Access the database entry using the requested grabber
-    case "$DATABASE_ACCESS" in
-      MySQL)
-        get_mythtvdb_info_mysql
-        ;;
-      PythonBindings)
-        get_mythtvdb_info_pythonbindings
-        returnstatus="$?"
-        if [[ "$returnstatus" != 0 ]]; then
-          NOTIFY_MSG="Call to MythTV-DB Python bindings failed."
-          EXIT_JOB_TYPE='MythTVdatabaseFailure'
-          return 1
-        fi
-        ;;
-      *)
-        NOTIFY_MSG="DATABASE_ACCESS incorrectly specified."
-        err "${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}(): $NOTIFY_MSG"
-        EXIT_JOB_TYPE='UserSettingError'
-        return 1
-        ;;
-    esac
+    get_mythtvdb_info
+    [[ "$?" != 0 ]] && return "$?"
 
     #Do appropriate, guide-data specific, processing.
     case "$GuideDataType" in

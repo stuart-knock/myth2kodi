@@ -64,14 +64,15 @@
 #    Show Title - SxxExx (Episode Title).ext
 #
 #Symlinking:
-#  When Symlinking is enabled, myth2kodi will follow its normal mode of
-#  operation. In MOVE mode, myth2kodi will create a symlink from the new
-#  file in the same name and location of the old file. In LINK mode,
-#  myth2kodi will not move the file, LINK mode creates a new symlink to
-#  the original file. Both approaches enable Kodi to access the recording
-#  while still allowing MythTV to keep track of it. If 'SYMLINK'ing is set
-#  to 'Disabled' then, when myth2kodi moves a recording, it will also
-#  delete it from MythTV's database.
+#  In MOVE mode, with SYMLINKing Enabled, myth2kodi will create a symbolic
+#  link to the new file (in your Kodi library directory) with the same name and
+#  location of the original file (The MythTV recordings directory). In LINK mode,
+#  myth2kodi will not move the recording file, LINK mode creates a new symbolic
+#  link to the original file. Both approaches enable Kodi to access the recording
+#  while still allowing MythTV to keep track of it. In MOVE mode, with
+#  SYMLINKing Disabled, after a successful move, myth2kodi will delete the
+#  recording from MythTV's database -- MythTV can no longer track/control
+#  recordings processed in this mode, and myth2kodi cannot undo them.
 #
 #Output-Files:
 #  myth2kodi will create several files in it's working folder. This is a
@@ -198,7 +199,7 @@ Librarian='mythtv'                           #<------THIS VALUE MUST BE SET-----
 
 # There are 3 modes for the processing of a recording:
 #   'MOVE' -- Move the recording. And, by default: create a symlink at InputPath;
-#   'LINK' -- Do not move, just create a sym'LINK'; and
+#   'LINK' -- Do not move, just create a symbolic 'LINK'; and
 #   'COPY' -- Copy the recording to the target location.
 #NOTE: The 'COPY' mode is primarily meant for supporting the copying of MythTV
 #      recording files to removable media with nice human readable file names.
@@ -818,6 +819,12 @@ validate_settings(){
   [[ -d "$AlternateShowDir" ]]  || err "'AlternateShowDir' $msg $AlternateShowDir"
   [[ -d "$FailSafeDir" ]]       || err "'FailSafeDir' $msg $FailSafeDir"
 
+  #TODO: Consider running check_path_permission() here for all configured directories...
+  #      might be best to add second arg containing required permissions, so, either
+  #      'r', 'w', or 'rw'. Eg, binpath only ever needs read, but m2kdir always needs rw,
+  #      while scanpath in m2k_scan() or InputPath require rw in MOVE mode but only
+  #      r in LINK and COPY modes...
+
   #Discourage excessive load on TheTVDB.
   msg="Don't update from TheTVDB more than once per day, ie set UpdateDatabase>=86400."
   ((UpdateDatabase < 86400)) && err "$msg"
@@ -1228,14 +1235,13 @@ generate_comskip(){
   return 0
 }
 
-#Creates a comskip file for a recording or all recordings in a directory.
-#Actual file generation is done by generate_comskip()
-recreate_comskip(){
+#Assuming the provided argument is a recording file successfully processed in
+#LINK mode or MOVE mode with SYMLINKing Enabled, identify the file, the link,
+#who owns what, and the MythTV recording path and name.
+identify_recording(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   local inputarg="$1"
   if [[ -f "$inputarg" ]]; then
-    inform "Regenerating comskip file for $inputarg"
-
     #Find the recording file and any link to it.
     find_file_link_pairs "$inputarg"
     [[ "$?" != 0 ]] && return "$?"
@@ -1251,6 +1257,26 @@ recreate_comskip(){
     debug "RECORDING_NAME: $RECORDING_NAME"
     InputPath="$RECORDING_PATH"
     InputFileBasename="$RECORDING_NAME"
+  else
+    EXIT_JOB_TYPE='FileOrPathDoesNotExist'
+    NOTIFY_MSG="Provided argument is not a file: '$inputarg'"
+    err "${FUNCNAME[0]}(): $NOTIFY_MSG"
+    return 1
+  fi
+  return 0
+}
+
+#Creates a comskip file for a recording or all recordings in a directory.
+#Actual file generation is done by generate_comskip()
+recreate_comskip(){
+  debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
+  local inputarg="$1"
+  if [[ -f "$inputarg" ]]; then
+    inform "Regenerating comskip file for $inputarg"
+
+    #Identify file, link, who owns what, and the MythTV path and basename.
+    identify_recording "$inputarg"
+    [[ "$?" != 0 ]] && return "$?"
 
     #Identify the target for the comskip file
     if [[ "$RECORDING_FILE_OWNER" = 'myth2kodi' ]]; then
@@ -4825,21 +4851,11 @@ delete_recording(){
   printf '\n'
   [[ "$yesorno" != 'y' ]] && { inform "You must press 'y' to continue, aborting."; return 1 ; }
 
-  #Find the recording file and any link to it.
-  find_file_link_pairs "$1"
-  [[ "$?" != 0 ]] && return "$?"
-  debug "RECORDING_LINK: $RECORDING_LINK"
-  debug "RECORDING_LINK_OWNER: $RECORDING_LINK_OWNER"
-  debug "RECORDING_FILE: $RECORDING_FILE"
-  debug "RECORDING_FILE_OWNER: $RECORDING_FILE_OWNER"
+  local inputarg="$1"
 
-  #Find the MythTV recording file name and its path.
-  set_recording_name "$1"
+  #Identify file, link, who owns what, and the MythTV path and basename.
+  identify_recording "$inputarg"
   [[ "$?" != 0 ]] && return "$?"
-  debug "RECORDING_PATH: $RECORDING_PATH"
-  debug "RECORDING_NAME: $RECORDING_NAME"
-  InputPath="$RECORDING_PATH"
-  InputFileBasename="$RECORDING_NAME"
 
   #TODO: Consider moving the DATABASE_ACCESS method logic below into the function
   #      delete_mythtv_database_entry(), so all calls respect DATABASE_ACCESS.
@@ -4925,21 +4941,11 @@ disconnect_recording(){
   printf '\n'
   [[ "$yesorno" != 'y' ]] && { inform "You must press 'y' to continue, aborting."; return 1 ; }
 
-  #Find the recording file and any link to it.
-  find_file_link_pairs "$1"
-  [[ "$?" != 0 ]] && return "$?"
-  debug "RECORDING_LINK: $RECORDING_LINK"
-  debug "RECORDING_LINK_OWNER: $RECORDING_LINK_OWNER"
-  debug "RECORDING_FILE: $RECORDING_FILE"
-  debug "RECORDING_FILE_OWNER: $RECORDING_FILE_OWNER"
+  local inputarg="$1"
 
-  #Find the MythTV recording file name and its path.
-  set_recording_name "$1"
+  #Identify file, link, who owns what, and the MythTV path and basename.
+  identify_recording "$inputarg"
   [[ "$?" != 0 ]] && return "$?"
-  debug "RECORDING_PATH: $RECORDING_PATH"
-  debug "RECORDING_NAME: $RECORDING_NAME"
-  InputPath="$RECORDING_PATH"
-  InputFileBasename="$RECORDING_NAME"
 
   #Remove link associated with recording, and if recording file still has a
   #MythTV name ('moved' in LINK mode) then actually move it to myth2kodi name.

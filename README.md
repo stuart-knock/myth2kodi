@@ -1,7 +1,7 @@
 <img align="right" src="myth2kodi.png" alt="myth2kodi icon" />
 
 # myth2kodi
-*myth2kodi is a modified version of [mythicalLibrarian](https://github.com/adamoutler/mythicallibrarian) by Adam Outler.*
+*myth2kodi is a modified version of [mythicalLibrarian by Adam Outler](https://github.com/adamoutler/mythicallibrarian).*
 
 The myth2kodi script automates the mapping of MythTV recordings to a Kodi
 library. It is designed to be a user job in MythTV. It can also be run

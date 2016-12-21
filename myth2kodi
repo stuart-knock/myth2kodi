@@ -2810,7 +2810,7 @@ getAbsoluteEpisodeNumberWithFuzzyPlotMatch(){
       ChunkLengths[i]=$(wc --chars <<< "$chunk")
       debugcont "ChunkLengths[$i]=${ChunkLengths[i]}"
       len10per=$(( ChunkLengths[i] / 10 ))
-      fuzzychunk=($(agrep -ikByns "$chunk" "$m2kdir/$NewShowName/$NewShowName.Plot.txt"))
+      fuzzychunk=($(agrep -ikByns -e "$chunk" "$m2kdir/$NewShowName/$NewShowName.Plot.txt"))
       FuzzyChunks[i]="${fuzzychunk[0]}"
       debugcont "FuzzyChunks[$i]=${FuzzyChunks[i]}"
       ChunkGuesses[i]=$(cut -f1 -d":" <<< "${FuzzyChunks[i]}")

@@ -2999,8 +2999,9 @@ download_series_identification(){
 
 #A special exit point for when we're processing testfile.ext
 testfile_exit(){
-  #TODO: Review this function
+  #TODO: Consider using [[ -n "$(find ./dir -prune -empty)" ]] instead...
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
+  printf '%s\n' "@@@@ COMPLETE: $(date --rfc-3339=seconds) @@@@" >> "$LOGFILE"
   [[ "$Exx" != "E07" ]] && err 'FUZZY FAILURE' && exit 1
   [[ -d ./Episodes ]] && [[ ! "$(ls -A ./Episodes)" ]] && rmdir ./Episodes
   [[ -d ./Movies ]]   && [[ ! "$(ls -A ./Movies)" ]]   && rmdir ./Movies

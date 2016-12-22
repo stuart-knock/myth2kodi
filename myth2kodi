@@ -457,9 +457,10 @@ LOGLEVEL=2
 #NOTE: LOGFILE is overridden in special contexts, such as running Diagnostics.
 LogFileName='myth2kodi'
 
-#LOGTYPE defines where to direct logging messages ['stdout|'logfile'|'both'(DEFAULT)]:
+#LOGTYPE defines where to direct logging messages.
+#Options: ['filestderr'(DEFAULT)|'stderr'|'file'|'stdout'|'filestdout']:
 #NOTE: This is made read only within the bashlogging script.
-LOGTYPE='both'
+LOGTYPE='filestderr'
 
 ##############################################################################
 ######################### END USER SETTINGS ##################################
@@ -2914,7 +2915,7 @@ set_absolute_episode_number_by_ename_fuzzy(){
   #  currently, the former would be associated with 'The Delivery (1)'
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   AbsoluteEpisodeNumber=""
-  AbsoluteEpisodeNumber=$(agrep -Byn "${EpisodeSubtitle:0:29}" "$m2kdir/$NewShowName/$NewShowName.Ename.txt" | grep -m1 ^ | sed 's/:.*//')
+  AbsoluteEpisodeNumber=$(agrep -Byn "^${EpisodeSubtitle:0:29}" "$m2kdir/$NewShowName/$NewShowName.Ename.txt" | grep -m1 ^ | sed 's/:.*//')
   if [[ -n "$AbsoluteEpisodeNumber" ]] && ((AbsoluteEpisodeNumber > 0)); then
     return 0
   fi

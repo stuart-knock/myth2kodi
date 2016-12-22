@@ -2585,7 +2585,7 @@ get_serieslinenumber_zap2itid(){
 get_serieslinenumber_showname_fuzzy(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   #TODO: Why the restriction to the first 27 characters for matching here???
-  serieslinenumber=$(agrep -Byn "${ShowName:0:27}" "$TMP_SHN_FILE" | sed 's/:.*//' | grep -m1 ^)
+  serieslinenumber=$(agrep -ikByn "${ShowName:0:27}" "$TMP_SHN_FILE" | sed 's/:.*//' | grep -m1 ^)
   #Correct for serieslinenumber = ""
   [[ -z "$serieslinenumber" ]] && serieslinenumber=0
 
@@ -2640,7 +2640,7 @@ resolve_multiple_matches_airdate(){
   else
     ConfidenceReasoning="$ConfidenceReasoning Failed; Attempted to resolve conflict with Fuzzy Logic:"
     #get instance line number
-    IntermediateEpisodeNumber=$(agrep -Byn "${EpisodeSubtitle:0:29}" "$NewShowBasename.InstanceEnames.txt" | grep -m1 ^ | sed 's/:.*//')
+    IntermediateEpisodeNumber=$(agrep -iByn "^$EpisodeSubtitle" "$NewShowBasename.InstanceEnames.txt" | grep -m1 ^ | sed 's/:.*//')
     #translate instance line number to actual line number
     if [[ -n "$IntermediateEpisodeNumber" ]]; then
       AbsoluteEpisodeNumber=$(sed -n "$IntermediateEpisodeNumber"'p' "$NewShowBasename.InstanceLineNumbers.txt")
@@ -2915,7 +2915,7 @@ set_absolute_episode_number_by_ename_fuzzy(){
   #  currently, the former would be associated with 'The Delivery (1)'
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   AbsoluteEpisodeNumber=""
-  AbsoluteEpisodeNumber=$(agrep -Byn "^${EpisodeSubtitle:0:29}" "$m2kdir/$NewShowName/$NewShowName.Ename.txt" | grep -m1 ^ | sed 's/:.*//')
+  AbsoluteEpisodeNumber=$(agrep -iByn "^$EpisodeSubtitle" "$m2kdir/$NewShowName/$NewShowName.Ename.txt" | grep -m1 ^ | sed 's/:.*//')
   if [[ -n "$AbsoluteEpisodeNumber" ]] && ((AbsoluteEpisodeNumber > 0)); then
     return 0
   fi

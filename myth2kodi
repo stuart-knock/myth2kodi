@@ -903,10 +903,10 @@ parse_command_flags(){
       local PreCallLogFile="$LOGFILE"
       local PreCallLogLevel="$LOGLEVEL"
       (( LOGLEVEL < 2 )) && LOGLEVEL=2 && inform "Escalating LOGLEVEL to Info (2)."
-      if [[ "$LOGTYPE" != "stdout" ]] ; then
-        inform "Running diagnostics, so redirecting subsequent messages to $DiagnosticsFile"
+      if [[ "$LOGTYPE" =~ ^(stdout|stderr)$ ]] ; then
+        warn "Running diagnostics without any logging to file, consider using LOGTYPE 'filestderr' or 'filestdout'."
       else
-        warn "Running diagnostics without any logging to file, consider using LOGTYPE 'logfile' or 'both'"
+        inform "Running diagnostics, so redirecting subsequent messages to $DiagnosticsFile"
       fi
       LOGFILE="$DiagnosticsFile"
       m2k_diagnostics
@@ -915,7 +915,7 @@ parse_command_flags(){
       # myth2kodi --diagnostics from within myth2kodi
       LOGFILE="$PreCallLogFile"
       LOGLEVEL="$PreCallLogLevel"
-      [[ "$LOGTYPE" != "stdout" ]] && inform 'Finished running diagnostics.'
+      [[ "$LOGTYPE" =~ ^(stdout|stderr)$ ]] || inform 'Finished running diagnostics.'
       unset m2kDiagnosticsMode
       return $diagnosticsreturnstatus
     ;;
@@ -3775,7 +3775,7 @@ msg_scan_usage(){
 #This function will scan a folder and process the entire library
 m2k_scan(){
   #TODO: Need to go through this function line-by-line and make sure it can be run without causing damage.
-  [[ "$LOGTYPE" = "logfile" ]] && printf '%s\n' "WARNING: Recommend setting LOGTYPE='both', before proceeding.."
+  [[ "$LOGTYPE" =~ ^(file|logfile)$ ]] && printf '%s\n' "WARNING: Recommend setting LOGTYPE='filestderr', before proceeding.."
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   local yesorno=""
   local dooverstatus
@@ -4388,7 +4388,7 @@ m2k_diagnostics(){
 #This function provides an easy way to redo failed jobs.
 m2k_doover(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  [[ "$LOGTYPE" = "logfile" ]] && printf '%s\n' "WARNING: Recommend setting LOGTYPE='both', before proceeding.."
+  [[ "$LOGTYPE" =~ ^(file|logfile)$ ]] && printf '%s\n' "WARNING: Recommend setting LOGTYPE='filestderr', before proceeding.."
   local yesorno=""
   local dooverstatus
 
@@ -4430,7 +4430,7 @@ m2k_doover(){
 #This function provides an easy way to undo all myth2kodi jobs
 m2k_undo_all(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  [[ "$LOGTYPE" = "logfile" ]] && printf '%s\n' "WARNING: Recommend setting LOGTYPE='both', before proceeding..."
+  [[ "$LOGTYPE" =~ ^(file|logfile)$ ]] && printf '%s\n' "WARNING: Recommend setting LOGTYPE='filestderr', before proceeding..."
   #TODO: Add permission checking.
   warn "--You have entered undo mode."
   warncont " In this mode of operation, myth2kodi will reverse"

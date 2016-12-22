@@ -27,7 +27,9 @@
                    MythTV-DB entry.*  
 **--cleanse**: *Delete archived log files, myth2kodi database files, and daily
                 report files that are older than the lifetime specified by
-                their associated user setting.*
+                their associated user setting. (This is a subset of --maintenance,
+                intended for when you want to clean-up myth2kodi's working files
+                but not files associated with your processed recordings.)*
 
 ### Renamed:
 *--mythicalDiagnostics* ==> **--diagnostics**  

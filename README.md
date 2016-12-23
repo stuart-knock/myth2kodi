@@ -12,7 +12,7 @@ from your MythTV database, as required, so that Kodi can make use of them.
 For usage and command line options see: `myth2kodi --help`
 
 ### Quick Start Guide
-  + Download the release tarball.
+  + Download the [release tarball](https://github.com/stuart-knock/myth2kodi/releases/latest).
   + Make sure you have the dependencies installed, see below.
   + Copy the four scripts (*myth2kodi*, *mythdb_access*, *m2k_notify*, and
     *bashlogging*) into the appropriate directory, these first three steps

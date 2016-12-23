@@ -1,5 +1,7 @@
 # Overview
 
+###### TODO: *add Kodi forum thread link here*
+
 ## Installation
 More detail can be found in: [INSTALL.md](INSTALL.md)
 

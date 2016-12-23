@@ -100,7 +100,7 @@ declare -gr STRIP_CLR='s/\x1B\[([0-1];)?[0-4]{1,2}m//g' #A regex to strip colour
 
 #Return an error message if LOGTYPE isn't set correctly.
 if [[ ! "$LOGTYPE" =~ ^(logfile|file|stdout|stderr|both|filestdout|filestderr)$ ]]; then
-  printf "$ERROR_CLR %s\n" "For ${BASH_SOURCE[0]} LOGTYPE must be 'logfile'|'stdout'|'both'."
+  printf "$ERROR_CLR %s\n" "For ${BASH_SOURCE[0]} LOGTYPE must be 'file'|'stdout'|'stderr'|'filestdout'|'filestderr'."
   return 1
 fi
 

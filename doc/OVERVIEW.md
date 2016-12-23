@@ -1,7 +1,5 @@
 # Overview
 
-###### TODO: *add Kodi forum thread link here*
-
 ## Installation
 More detail can be found in: [INSTALL.md](INSTALL.md)
 
@@ -14,6 +12,8 @@ More detail can be found in: [USAGE.md](USAGE.md)
 ## Testing
 More detail can be found in: [create_a_dummy_system_for_testing.md](create_a_dummy_system_for_testing.md)
 
+## Issues
+Check if someone else has already had and solved it here: http://forum.kodi.tv/showthread.php?tid=301925
 
 ## mythicalLibrarian
 As myth2kodi is a derivative of [mythicalLibrarian](https://github.com/adamoutler/mythicallibrarian)

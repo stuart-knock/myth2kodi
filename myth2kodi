@@ -8,14 +8,14 @@
 # email: adamoutler gmail.com
 # mythicalLibrarian Originally Written: 2009ish
 # https://github.com/adamoutler/mythicallibrarian
+# http://forum.kodi.tv/showthread.php?pid=470402
 #
 # myth2kodi Author: Stuart A. Knock
 # myth2kodi Originally Written: 2015-2016ish
 # https://github.com/stuart-knock/myth2kodi
+# http://forum.kodi.tv/showthread.php?tid=301925
 #
 #Software the way it should be: Free and Open Source
-#
-#mythicalLibrarian Tech Support: http://forum.kodi.tv/showthread.php?pid=470402
 #
 
 #Intention:
@@ -3264,7 +3264,7 @@ msg_generic_unspecified_error(){
   errcont "CHECK EPISODE NAME $InputSubtitle. CHECK INTERNET CONNECTION. CHECK API KEY."
   errcont "NOT ENOUGH INFORMATION PULLED FROM DATABASE TO IDENTIFY FILE AS MOVIE OR EPISODE"
   errcont "CHECK www.TheTVDB.com RUN myth2kodi LINK COMMAND PROMPT."
-  errcont "FOR MORE INFORMATION SEE http://kodi.wiki/index.php?title=mythicalLibrarian" #TODO: If I ever make this public, remember to make a thread.
+  errcont "FOR MORE INFORMATION SEE http://forum.kodi.tv/showthread.php?tid=301925"
   errcont "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%"
 }
 
@@ -4370,7 +4370,7 @@ m2k_diagnostics(){
     err "Test run of myth2kodi failed."
     errcont "myth2kodi has encountered an error. This may be due to a"
     errcont "lack of network connection. If the problem persists, try"
-    errcont "reading then asking at: http://forum.kodi.tv/showthread.php?tid=65644" #TODO: If make public, change to new thread that I should've started.
+    errcont "reading then asking at: http://forum.kodi.tv/showthread.php?tid=301925"
     printf '\n' | tee -a "$DiagnosticsFile"
   fi
   if [ "$overallchecks" = "***FAILED***" ]; then

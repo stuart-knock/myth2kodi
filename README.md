@@ -80,5 +80,7 @@ for additional functionality type:
       ├── <a href="./doc/key_differences_to_mythicalLibrarian.md">key_differences_to_mythicalLibrarian.md</a> (How is myth2kodi different from mythicalLibrarian?) <br>
       ├── <a href="./doc/create_a_dummy_system_for_testing.md">create_a_dummy_system_for_testing.md</a> (Rough guide to building a test system that mirrors your actual system.) <br>
       └── <a href="./doc/example_myth2kodi.conf">example_myth2kodi.conf</a> (A minimal example configuration file.) <br>
+  ├── <a href="./doc/">tools</a> (Simple scripts that do something useful using myth2kodi.) <br>
+      └── <a href="./tools/manual_process">manual_process</a> (Helps manually processing failed episode identification.) <br>
   └── <a href="./attic/">attic</a> (Old stuff I just haven't thrown away yet.) <br>
 </p>

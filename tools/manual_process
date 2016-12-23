@@ -13,7 +13,7 @@
 # This script provides an interactive mechanism to reprocess recordings
 # that myth2kodi failed to processes automagically.
 # Given a file containing a list of unmoved files (full-path), prints the 
-# recording information to stdout (using: 'myth2kodi --recording-info'),
+# recording information to stderr (using: 'myth2kodi --recording-info'),
 # then provides the option of inputting an appropriate subtitle, then uses
 # that subtitle to call myth2kodi. Any process calls to myth2kodi are
 # appended to a file named ./manual_moves.txt.

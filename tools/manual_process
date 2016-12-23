@@ -59,8 +59,8 @@ process_list(){
 
 ######################### BEGIN MAIN PROGRAM ###################################
 #Basic checks on how we were called.
-(( $# == 1 )) || printf '%s\n' "${BASH_SOURCE[0]} takes only one argument."
-[[ -f "$1" ]] || printf '%s\n' "${BASH_SOURCE[0]} argument must be a file name."
+(( $# == 1 )) || { printf '%s\n' "${BASH_SOURCE[0]} takes one argument."; exit 1; }
+[[ -f "$1" ]] || { printf '%s\n' "${BASH_SOURCE[0]} argument must be a file name."; exit 1; }
 
 #Do the stuff...
 process_list "$1"

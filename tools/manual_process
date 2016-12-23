@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+
+#USAGE:  manual_process list-of-unmoved_files-filename
+# The command displays available info on each recording in the list, giving
+# you the possibility, after each recording, to enter a correct subtitle.
+# Typically, the process involves copy-pasting the Description field to
+# your favourite web search engine to determine the correct episode, then,
+# assuming you find it, entering 'y', and entering that episode-subtitle
+# back into the terminal and pressing <enter> to initiate processing of
+# the recording.
+#
+#DESCRIPTION:
+# This script provides an interactive mechanism to reprocess recordings
+# that myth2kodi failed to processes automagically.
+# Given a file containing a list of unmoved files (full-path), prints the 
+# recording information to stdout (using: 'myth2kodi --recording-info'),
+# then provides the option of inputting an appropriate subtitle, then uses
+# that subtitle to call myth2kodi. Any process calls to myth2kodi are
+# appended to a file named ./manual_moves.txt.
+#
+# Author: Stuart A. Knock
+# Originally Written: 2016-12-22
+#
+
+#TODO: support list generation that works across processing modes...
+#generate_unmoved_list_file(){
+#  local scandir='/media/video/recordings/TVShows'
+#  local scanext='mpg'
+#
+#  #For MOVE mode with SYMLINKing Enabled, the following monstrosity works...
+#  ls --color=never -l1 "$scandir"/*."$scanext" | grep -v -e '->' | cut --complement -f1 -d'/' | xargs printf '/%s\n' > list-of-unmoved_files.txt
+#}
+
+######################### BEGIN FUNCTION DEFINITIONS ###########################
+
+#Process a file containing a list of unmoved files, displays recording info
+#and provides an opportunity to manually enter the correct subtitle for
+#subsequent processing
+process_list(){
+  local rec=''
+  local yesorno=''
+  local subtitle=''
+  local unmoved_list_file="$1"
+
+  while read -r rec ; do
+    myth2kodi --recording-info "$rec" 1>&2
+
+    read -r -n1 -p '  Do you want to input a subtitle? y|(n):>' yesorno </dev/tty
+    printf '\n'
+    if [[ "$yesorno" = 'y' ]]; then
+      read -r -p '  Enter subtitle:' subtitle </dev/tty
+      myth2kodi "$rec" '' "$subtitle"
+      [[ "$?" = '0' ]] && printf '%s\n' "myth2kodi '$rec' '' '$subtitle'" >> ./manual_moves.txt
+    fi
+  done < "$unmoved_list_file"
+}
+
+########################### END FUNCTION DEFINITIONS ###########################
+
+######################### BEGIN MAIN PROGRAM ###################################
+#Basic checks on how we were called.
+(( $# == 1 )) || printf '%s\n' "${BASH_SOURCE[0]} takes only one argument."
+[[ -f "$1" ]] || printf '%s\n' "${BASH_SOURCE[0]} argument must be a file name."
+
+#Do the stuff...
+process_list "$1"

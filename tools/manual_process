@@ -22,6 +22,10 @@
 # Originally Written: 2016-12-22
 #
 
+#TODO: LAUNCH_BROWSER='Enabled' ; BROWSER=firefox ; [[ "$LAUNCH_BROWSER" = 'Enabled' ]] $BROWSER -search "$subtitle"
+
+#TODO: printf '%s\n' "ls: $(ls -lh "$rec")"
+
 #TODO: support list generation that works across processing modes...
 #generate_unmoved_list_file(){
 #  local scandir='/media/video/recordings/TVShows'
@@ -50,7 +54,7 @@ process_list(){
     if [[ "$yesorno" = 'y' ]]; then
       read -r -p '  Enter subtitle:' subtitle </dev/tty
       myth2kodi "$rec" '' "$subtitle"
-      [[ "$?" = '0' ]] && printf '%s\n' "myth2kodi '$rec' '' '$subtitle'" >> ./manual_moves.txt
+      [[ "$?" = '0' ]] && printf '%s\n' "myth2kodi '$rec' '' \"$subtitle\"" >> ./manual_moves.txt
     fi
   done < "$unmoved_list_file"
 }

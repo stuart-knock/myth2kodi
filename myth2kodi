@@ -3559,7 +3559,7 @@ process_ignore_lists(){
 show_translation(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   if [[ -f "$m2kdir/showTranslations" && -n "$ShowName" ]]; then
-    showtranslation="$(grep "$ShowName = " "$m2kdir/showTranslations" | sed "s/$ShowName = //g")"
+    showtranslation="$(grep "^$ShowName = " "$m2kdir/showTranslations" | sed "s/$ShowName = //g")"
     if [[ -n "$showtranslation" ]]; then
       ShowName="$showtranslation"
       inform "USER TRANSLATION: $InputTitle = $ShowName"
@@ -4474,8 +4474,8 @@ m2k_undo_all(){
     #routine should clean-up all files and dirs we were tracking.
     myth2kodi --maintenance
 
-    #Our Kodi instances will still show entries their video libraries for all
-    #the shows we just 'unmoved', so request them to perform cleanup.
+    #Our Kodi instances will still show entries in their video libraries for
+    #all the shows we just 'unmoved', so request them to perform cleanup.
     kodi_cleanup
 
     return 0

@@ -934,6 +934,12 @@ parse_command_flags(){
       delete_recording "$m2karg2"
       return $?
     ;;
+    --rerecord)
+      debug "Recognised command line switch '--rerecord'"
+      RERECORD='Enabled'
+      delete_recording "$m2karg2"
+      return $?
+    ;;
     --disconnect)
       debug "Recognised command line switch '--disconnect'"
       disconnect_recording "$m2karg2"
@@ -4567,6 +4573,10 @@ msg_options(){
   printf '\n%s\n' "  --delete '/path/to/file'"
   printf '%s\n'   "    Delete the file, any links to it and the associated database entry."
   printf '%s\n'   "    eg. myth2kodi --delete '/home/mythtv/recordings/1099_20151210093000.mpg'"
+  printf '\n%s\n' "  --rerecord '/path/to/file'"
+  printf '%s\n'   "    Same as --delete, but, a 'rerecord' flag is added to the"
+  printf '%s\n'   "    associated oldrecorded entry."
+  printf '%s\n'   "    eg. myth2kodi --rerecord '/home/mythtv/recordings/1099_20151210093000.mpg'"
   printf '\n%s\n' "  --disconnect '/path/to/file'"
   printf '%s\n'   "    removes file & links from undo, doover, created.tracking,"
   printf '%s\n'   "    removes links from mythtv filename to moved filename, or"
@@ -4841,7 +4851,11 @@ delete_recording(){
   warncont "and the associated MythTV database entry."
   warncont "Are you sure you want to continue?"
   local yesorno=""
-  read -r -n1 -p "  Requested permanent deletion: 'y' to continue or 'n' to exit... y/(n):>" yesorno
+  if [[ "$RERECORD" = 'Enabled' ]]; then
+    read -r -n1 -p "  Requested deletion with rerecord: 'y' to continue or 'n' to exit... y/(n):>" yesorno
+  else
+    read -r -n1 -p "  Requested permanent deletion: 'y' to continue or 'n' to exit... y/(n):>" yesorno
+  fi
   printf '\n'
   [[ "$yesorno" != 'y' ]] && { inform "You must press 'y' to continue, aborting."; return 1 ; }
 
@@ -4856,12 +4870,17 @@ delete_recording(){
   #Delete the recording file and its associated DB entry
   case "$DATABASE_ACCESS" in
     MySQL)
-      #Delete the recording file and any link to it.
-      [[ -f "$RECORDING_LINK" ]] && rm -f "$RECORDING_LINK"
-      [[ -f "$RECORDING_FILE" ]] && rm -f "$RECORDING_FILE"
+      if [[ "$RERECORD" = 'Enabled' ]]; then
+        err "NotImplemented: You need to use PythonBindings for --rerecord."
+        return 1
+      else
+        #Delete the recording file and any link to it.
+        [[ -f "$RECORDING_LINK" ]] && rm -f "$RECORDING_LINK"
+        [[ -f "$RECORDING_FILE" ]] && rm -f "$RECORDING_FILE"
 
-      #Delete the associated database entry and thumbnails.
-      delete_mythtv_database_entry
+        #Delete the associated database entry and thumbnails.
+        delete_mythtv_database_entry
+      fi
       ;;
     PythonBindings)
       local MTV_RECINFO_FILE
@@ -4869,17 +4888,31 @@ delete_recording(){
       [[ "$?" != 0 ]] && { err "Failed to create temporary file." ; return 1 ; }
       debug "Deleted recording info will be stored temporary file: '$MTV_RECINFO_FILE'"
 
-      #Ask mythbackend to delete the recording (ther is typically a delay of 5-10 min).
-      "$binpath"/mythdb_access --verbosity="$((LOGLEVEL<3?LOGLEVEL:3))" \
-                               --filename="$InputFileBasename"          \
-                               --SecurityPin="$DBPin"                   \
-                               --DBHostName="$DBHostName"               \
-                               --DBName="$MySQLMythDb"                  \
-                               --DBUserName="$MySQLuser"                \
-                               --DBPassword="$MySQLpass"                \
-                               --output="$MTV_RECINFO_FILE"             \
-                               --writeFile                              \
-                               --delete 2>&1 | err_pipe "mythdb_access: "
+      if [[ "$RERECORD" = 'Enabled' ]]; then
+        #Ask mythbackend to delete and rerecord the recording.
+        "$binpath"/mythdb_access --verbosity="$((LOGLEVEL<3?LOGLEVEL:3))" \
+                                 --filename="$InputFileBasename"          \
+                                 --SecurityPin="$DBPin"                   \
+                                 --DBHostName="$DBHostName"               \
+                                 --DBName="$MySQLMythDb"                  \
+                                 --DBUserName="$MySQLuser"                \
+                                 --DBPassword="$MySQLpass"                \
+                                 --output="$MTV_RECINFO_FILE"             \
+                                 --writeFile                              \
+                                 --rerecord 2>&1 | err_pipe "mythdb_access: "
+      else
+        #Ask mythbackend to delete the recording (there can be a delay of 5-10 min).
+        "$binpath"/mythdb_access --verbosity="$((LOGLEVEL<3?LOGLEVEL:3))" \
+                                 --filename="$InputFileBasename"          \
+                                 --SecurityPin="$DBPin"                   \
+                                 --DBHostName="$DBHostName"               \
+                                 --DBName="$MySQLMythDb"                  \
+                                 --DBUserName="$MySQLuser"                \
+                                 --DBPassword="$MySQLpass"                \
+                                 --output="$MTV_RECINFO_FILE"             \
+                                 --writeFile                              \
+                                 --delete 2>&1 | err_pipe "mythdb_access: "
+      fi
       ;;
     *)
       NOTIFY_MSG="DATABASE_ACCESS incorrectly specified."
@@ -5489,8 +5522,8 @@ if [[ "$PlotMatchFallback" = 'Enabled' ]]; then
       ((--ConfidenceRating)) #Decrement confidence, because this is a guess.
       ConfidenceReasoning="$ConfidenceReasoning Found AbsoluteEpisodeNumber with fuzzy plot match, Guess; "
     else
-      err "Failed in last ditch attempt to identify episode with fuzzy plot match, we have no SxxExx."
-      #TODO: Probably should exit here...
+      warn "Failed in last ditch attempt to identify episode with fuzzy plot match, we have no SxxExx."
+      #TODO: Probably should exit here... If/when tis is done change message back to err
     fi
   fi
 fi

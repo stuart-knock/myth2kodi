@@ -23,6 +23,7 @@
             processing of a specified recording and displays them in a pager.*  
 **--series-info**: *Updates our local database tables for a specified series.*  
 **--delete**: *Deletes a specified recording and its associated database entry.*  
+**--rerecord**: *Same as --delete, but, also requests mythbackend to rerecord.*
 **--disconnect**: *Disconnects a specified recording from MythTV, deleting the
                    MythTV-DB entry.*  
 **--cleanse**: *Delete archived log files, myth2kodi database files, and daily

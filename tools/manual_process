@@ -33,7 +33,7 @@ BROWSER='firefox -search '
 
 #TODO: support list generation that works across processing modes...
 #generate_unmoved_list_file(){
-#  local scandir='/media/video/recordings/TVShows'
+#  local scandir='/media/video/recordings/TVshows'
 #  local scanext='mpg'
 #
 #  #For MOVE mode with SYMLINKing Enabled, the following monstrosity works...
@@ -56,8 +56,9 @@ process_list(){
     printf '%s\n\n' "ls: $(ls -lh "$rec")" 1>&2
 
     #TODO: need access to Plot here... Either add --manual-process to myth2kodi, or have --recording-info export key fields, say as M2K_<fieldname>, here we'd be interested in M2K_Plot
-    #[[ "$LAUNCH_BROWSER" = 'Enabled' && -n "$subtitle" ]] && ${BROWSER}"$Plot" 1>&2 &
+    #[[ "$LAUNCH_BROWSER" = 'Enabled' && -n "$Plot" ]] && ${BROWSER}"$Plot" 1>&2 &
 
+    #Allow user to input subtitle
     read -r -n1 -p '  Do you want to input a subtitle? y|(n):>' yesorno </dev/tty
     printf '\n'
     if [[ "$yesorno" = 'y' ]]; then

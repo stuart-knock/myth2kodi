@@ -24,8 +24,6 @@
 
 #TODO: LAUNCH_BROWSER='Enabled' ; BROWSER=firefox ; [[ "$LAUNCH_BROWSER" = 'Enabled' ]] $BROWSER -search "$subtitle"
 
-#TODO: printf '%s\n' "ls: $(ls -lh "$rec")"
-
 #TODO: support list generation that works across processing modes...
 #generate_unmoved_list_file(){
 #  local scandir='/media/video/recordings/TVShows'
@@ -48,6 +46,7 @@ process_list(){
 
   while read -r rec ; do
     myth2kodi --recording-info "$rec" 1>&2
+    printf '%s\n\n' "ls: $(ls -lh "$rec")" 1>&2
 
     read -r -n1 -p '  Do you want to input a subtitle? y|(n):>' yesorno </dev/tty
     printf '\n'

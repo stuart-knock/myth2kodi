@@ -22,7 +22,14 @@
 # Originally Written: 2016-12-22
 #
 
-#TODO: LAUNCH_BROWSER='Enabled' ; BROWSER=firefox ; [[ "$LAUNCH_BROWSER" = 'Enabled' ]] $BROWSER -search "$subtitle"
+########################## BEGIN USER SETTINGS ###############################
+#Option to launch a browser and search for the Plot.
+LAUNCH_BROWSER='Enabled'
+#The browser command to use if LAUNCH_BROWSER is Enabled.
+BROWSER='firefox -search '
+#BROWSER="google-chrome https://google.com/search?q="
+######################### END USER SETTINGS ##################################
+
 
 #TODO: support list generation that works across processing modes...
 #generate_unmoved_list_file(){
@@ -47,6 +54,9 @@ process_list(){
   while read -r rec ; do
     myth2kodi --recording-info "$rec" 1>&2
     printf '%s\n\n' "ls: $(ls -lh "$rec")" 1>&2
+
+    #TODO: need access to Plot here... Either add --manual-process to myth2kodi, or have --recording-info export key fields, say as M2K_<fieldname>, here we'd be interested in M2K_Plot
+    #[[ "$LAUNCH_BROWSER" = 'Enabled' && -n "$subtitle" ]] && ${BROWSER}"$Plot" 1>&2 &
 
     read -r -n1 -p '  Do you want to input a subtitle? y|(n):>' yesorno </dev/tty
     printf '\n'

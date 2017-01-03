@@ -25,9 +25,10 @@
 ########################## BEGIN USER SETTINGS ###############################
 #Option to launch a browser and search for the Plot.
 LAUNCH_BROWSER='Enabled'
-#The browser command to use if LAUNCH_BROWSER is Enabled.
-BROWSER='firefox -search '
-#BROWSER="google-chrome https://google.com/search?q="
+#The browser to use if LAUNCH_BROWSER is Enabled. This selected BROWSER mapped
+#to an appropriate BROWSER_CMD in the  set_browser_cmd() function.
+#Options: firefox(DEFAULT)|chrome|chromium
+BROWSER='firefox'
 ######################### END USER SETTINGS ##################################
 
 
@@ -41,6 +42,28 @@ BROWSER='firefox -search '
 #}
 
 ######################### BEGIN FUNCTION DEFINITIONS ###########################
+
+
+# #Set the command for searching against a Plot based on user-setting BROWSER.
+# set_browser_cmd(){
+#   case "$BROWSER" in
+#     firefox)
+#       BROWSER_CMD='firefox -search '
+#       ;;
+#     chrome)
+#       BROWSER_CMD='google-chrome https://google.com/search?q='
+#       ;;
+#     chromium)
+#       BROWSER_CMD='chromium https://google.com/search?q='
+#       ;;
+#     *)
+#       printf '%s\n' "${BASH_SOURCE[0]}:${FUNCNAME[0]}() unrecognised BROWSER=$BROWSER."
+#       return 1
+#       ;;
+#   esac
+#   return 0
+# }
+
 
 #Process a file containing a list of unmoved files, displays recording info
 #and provides an opportunity to manually enter the correct subtitle for
@@ -56,7 +79,10 @@ process_list(){
     printf '%s\n\n' "ls: $(ls -lh "$rec")" 1>&2
 
     #TODO: need access to Plot here... Either add --manual-process to myth2kodi, or have --recording-info export key fields, say as M2K_<fieldname>, here we'd be interested in M2K_Plot
-    #[[ "$LAUNCH_BROWSER" = 'Enabled' && -n "$Plot" ]] && ${BROWSER}"$Plot" 1>&2 &
+    #if [[ "$LAUNCH_BROWSER" = 'Enabled' && -n "$Plot" ]]; then
+    #  set_browser_cmd
+    #  ${BROWSER_CMD}"$Plot" 1>&2 &
+    #fi
 
     #Allow user to input subtitle
     read -r -n1 -p '  Do you want to input a subtitle? y|(n):>' yesorno </dev/tty

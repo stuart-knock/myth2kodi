@@ -72,15 +72,15 @@ process_list(){
   local rec=''
   local yesorno='n'
   local subtitle=''
-  # local season=''
-  # local episode=''
+  local season=''
+  local episode=''
   local unmoved_list_file="$1"
 
   while read -r rec ; do
     #Reset variables
     subtitle=''
-    # season=''
-    # episode=''
+    season=''
+    episode=''
 
     #Display info for the current recording
     myth2kodi --recording-info "$rec" 1>&2
@@ -98,28 +98,28 @@ process_list(){
     printf '\n'
     if [[ "$yesorno" = 'y' ]]; then
       read -r -p '  Enter subtitle:' subtitle </dev/tty
+      printf '\n'
       #TODO: remember to delete the following and add a printf '\n' when enabling season&episode...
-      myth2kodi "$rec" '' "$subtitle"
-      [[ "$?" = '0' ]] && printf '%s\n' "myth2kodi '$rec' '' \"$subtitle\"" >> ./manual_moves.txt
+      # myth2kodi "$rec" '' "$subtitle"
+      # [[ "$?" = '0' ]] && printf '%s\n' "myth2kodi '$rec' '' \"$subtitle\"" >> ./manual_moves.txt
     fi
 
-    # #Allow user to input season and episode numbers
-    # yesorno='n'
-    # read -r -n1 -p '  What about season and episode numbers? y|(n):>' yesorno </dev/tty
-    # printf '\n'
-    # if [[ "$yesorno" = 'y' ]]; then
-    #   read -r -p '  Enter season number:' season </dev/tty
-    #   printf '\n'
-    #   read -r -p '  Enter episode number:' episode </dev/tty
-    #   printf '\n'
-    # fi
+    #Allow user to input season and episode numbers
+    yesorno='n'
+    read -r -n1 -p '  What about season and episode numbers? y|(n):>' yesorno </dev/tty
+    printf '\n'
+    if [[ "$yesorno" = 'y' ]]; then
+      read -r -p '  Enter season number:' season </dev/tty
+      read -r -p '  Enter episode number:' episode </dev/tty
+      printf '\n'
+    fi
 
-    # #If we were provided with subtitle or season & episode numbers, then run myth2kodi
-    # if [[ -n "$subtitle" || { -n "$season" && -n "$episode" ; } ]]; then
-    #   #TODO: do checks of season and episode...
-    #   myth2kodi "$rec" '' "$subtitle" "$season" "$episode"
-    #   [[ "$?" = '0' ]] && printf '%s\n' "myth2kodi '$rec' '' \"$subtitle\" '$season' '$episode'" >> ./manual_moves.txt
-    # fi
+    #If we were provided with subtitle or season & episode numbers, then run myth2kodi
+    if [[ -n "$subtitle" || ( -n "$season" && -n "$episode" ) ]]; then
+      #TODO: do checks of season and episode...
+      myth2kodi "$rec" '' "$subtitle" "$season" "$episode"
+      [[ "$?" = '0' ]] && printf '%s\n' "myth2kodi '$rec' '' \"$subtitle\" '$season' '$episode'" >> ./manual_moves.txt
+    fi
   done < "$unmoved_list_file"
 }
 

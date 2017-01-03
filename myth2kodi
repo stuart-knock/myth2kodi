@@ -672,7 +672,7 @@ m2k_init(){
   [[ -f "$m2kdir/myth2kodi.conf" ]] && source "$m2kdir/myth2kodi.conf"
 
   #What am I...
-  m2kVersion="myth2kodi Version 1.1.0" ; declare -gr m2kVersion
+  m2kVersion="myth2kodi Version 1.2.0" ; declare -gr m2kVersion
   m2kPlatform="$(uname)" ; declare -gr m2kPlatform
 
   #Who called me...
@@ -870,7 +870,7 @@ validate_args(){
     return 1
   fi
 
-  debug "Call seems correct: myth2kodi '$m2karg1' '$m2karg2' '$m2karg3' '$m2karg4'"
+  debug "Call seems correct: myth2kodi '$m2karg1' \"$m2karg2\" \"$m2karg3\" \"$m2karg4\" '$m2karg5' '$m2karg6'"
   return 0
 }
 
@@ -892,6 +892,7 @@ parse_command_flags(){
     --movie) #/path/to/recording/filename.mpg
       debug "Recognised command line switch '--movie'"
       export ShowCategory="Movie"
+      #TODO: We shouldn't ever have a subtitle for a movie, so abort/err if -n "$m2karg4" and only call myth2kodi "$m2karg2" "$m2karg3" below.
       myth2kodi "$m2karg2" "$m2karg3" "$m2karg4"
       declare -i m2kreturnstatus="$?"
       unset ShowCategory
@@ -1552,6 +1553,8 @@ add_doover(){
   debugcont "m2karg2: $m2karg2"
   debugcont "m2karg3: $m2karg3"
   debugcont "m2karg4: $m2karg4"
+  debugcont "m2karg5: $m2karg5"
+  debugcont "m2karg6: $m2karg6"
   debugcont "m2kdir: $m2kdir"
   debugcont "InputPath: $InputPath"
   debugcont "MoveDir: $MoveDir"
@@ -1591,7 +1594,7 @@ add_doover(){
       return 1
     fi
     #Write doover.sh line that recalls myth2kodi in the same way it was originally called:
-    printf '%s\n' "myth2kodi '$m2karg1' '$m2karg2' '$m2karg3' '$m2karg4'" >> "$m2kdir/doover.sh"
+    printf '%s\n' "myth2kodi '$m2karg1' \"$m2karg2\" \"$m2karg3\" \"$m2karg4\" '$m2karg5' '$m2karg6'" >> "$m2kdir/doover.sh"
   else
     err "${FUNCNAME[0]}() should only be called if job requires doover."
     errcont "RequiresDoover: $RequiresDoover"
@@ -1995,6 +1998,7 @@ process_mythtvdb_schedulesdirect(){
 #Use regex to check for and make use of SxxExx info in Plot.
 get_sxxexx_from_plot(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
+  #TODO: localise the SeasonEpisode variable, considerrefactor the *_sxxexx_from_plot() functions.
   debugcont "SeasonEpisode: $SeasonEpisode"
   debugcont "InputSeasonNum: $InputSeasonNum"
   debugcont "InputEpisodeNum: $InputEpisodeNum"
@@ -3117,7 +3121,7 @@ msg_userjob_outside_mythtv_error(){
 #A warning message for when m2kProgramIDCheck="SH"
 msg_show_warning(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  inform     "Recording was tagged as a show, ie, not a movie or a."
+  inform     "Recording was tagged as a show, ie, not a movie or a"
   informcont "recognised episode of a series."
   informcont "TYPE: $ProgramIDType- $InputTitle, $InputSubtitle"
   warn "m2kProgramIDCheck='SH', this can occur due to incomplete guide data."
@@ -3278,8 +3282,8 @@ msg_generic_unspecified_error(){
 msg_recording_info(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   printf '\n%s\n\n' "MythTV-DB information for: $InputFileBasename"
-  printf '%s\n' "  Title='$InputTitle'"
-  printf '%s\n' "  Subtitle='$InputSubtitle'"
+  printf '%s\n' "  Title=\"$InputTitle\""
+  printf '%s\n' "  Subtitle=\"$InputSubtitle\""
   printf '%s\n' "  Season='$InputSeasonNum'"
   printf '%s\n' "  Episode='$InputEpisodeNum'"
   printf '%s\n' "  Airdate='$MovieAirDate'"
@@ -3287,7 +3291,7 @@ msg_recording_info(){
   printf '%s\n' "  Category='$ShowCategory'"
   printf '%s\n' "  Storagegroup='$StorageGroup'"
   printf '%s\n' "  Stars='$Stars'"
-  printf '%s\n' "  Description='$Plot'"
+  printf '%s\n' "  Description=\"$Plot\""
   printf '%s\n' "  Seriesid='$SeriesID'"
   printf '%s\n' "  Programid='$ProgramID'"
   printf '%s\n' "  Chanid='$ChanID'"
@@ -3913,7 +3917,7 @@ msg_dir_summary(){
 msg_operation_summary(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   inform "################ OPERATION SUMMARY ################"
-  informcont "JOB: myth2kodi '$m2karg1' '$m2karg2' '$m2karg3' '$m2karg4'"
+  informcont "JOB: myth2kodi '$m2karg1' \"$m2karg2\" \"$m2karg3\" \"$m2karg4\" '$m2karg5' '$m2karg6'"
   debugcont  "m2kVersion=$m2kVersion-"
   informcont "CALLER=$CALLER-"
   debugcont  "m2kdir=$m2kdir-"
@@ -3932,6 +3936,8 @@ msg_operation_summary(){
   informcont "InputPath=$InputPath-"
   informcont "InputTitle=$InputTitle-"
   informcont "InputSubtitle=$InputSubtitle-"
+  informcont "InputSeasonNum=$InputSeasonNum-"
+  informcont "InputEpisodeNum=$InputEpisodeNum-"
   informcont "showtranslation=$showtranslation-"
   informcont "ShowName=$ShowName-"
   debugcont  "LastUpdatedTVDB=$LastUpdatedTVDB-"
@@ -3958,8 +3964,6 @@ msg_operation_summary(){
     debugcont  "rating=$rating-"
     informcont "Zap2itSeriesID=$Zap2itSeriesID-"
     debugcont  "LocalSeriesID=$LocalSeriesID-"
-    informcont "InputSeasonNum=$InputSeasonNum-"
-    informcont "InputEpisodeNum=$InputEpisodeNum-"
     informcont "Plot=$Plot-"
     if [[ -n "$AbsoluteEpisodeNumber" ]]; then
       informcont "Matched Plot=$(sed -n "$AbsoluteEpisodeNumber"'p' "$m2kdir/$NewShowName/$NewShowName.Plot.txt")-"
@@ -5128,10 +5132,10 @@ main(){
 
   #Capture args the script was called with.
   m2karg_count="$#"
-  m2karg1="$1" ; m2karg2="$2" ; m2karg3="$3" ; m2karg4="$4"
+  m2karg1="$1" ; m2karg2="$2" ; m2karg3="$3" ; m2karg4="$4" ; m2karg5="$5" ; m2karg6="$6"
 
   #Make them read-only so we can't accidentally modify them.
-  declare -gr m2karg_count m2karg1 m2karg2 m2karg3 m2karg4
+  declare -gr m2karg_count m2karg1 m2karg2 m2karg3 m2karg4 m2karg5 m2karg6
 
   #Initial setup: override defaults with myth2kodi.conf; initialise logging system.
   m2k_init
@@ -5169,11 +5173,11 @@ main(){
 #    #THE END
 }
 
-#Capture args the script was called with.
+#Capture args the script was called with. #NOTE: $6 is a buffer for when we're called all 5 args but a command switch takes $1
 m2karg_count="$#"
-m2karg1="$1" ; m2karg2="$2" ; m2karg3="$3" ; m2karg4="$4"
+m2karg1="$1" ; m2karg2="$2" ; m2karg3="$3" ; m2karg4="$4" ; m2karg5="$5" ; m2karg6="$6"
 #Make them read-only so we can't accidentally modify them.
-declare -r m2karg_count m2karg1 m2karg2 m2karg3 m2karg4
+declare -r m2karg_count m2karg1 m2karg2 m2karg3 m2karg4 m2karg5 m2karg6
 
 #Do initial setup: override defaults with myth2kodi.conf; initialise logging system.
 m2k_init
@@ -5183,6 +5187,8 @@ m2k_init
 InputPath="$1"
 InputTitle="$2"
 InputSubtitle="$3"
+InputSeasonNum="$4"
+InputEpisodeNum="$5"
 #TODO: Should allow manual input of season and episode numbers in addition to
 #  Title & Subtitle, with full information all searching should be overridden/bypassed...
 #  Issue warnings for any conflicts. but don't override command line arguments...
@@ -5639,9 +5645,11 @@ fi
 if [[ -f "$MoveDir/$ShowFileName.$OriginalExt" ]]; then
   err "FILE NAME ALREADY EXISTS:"
   errcont "FILE NAME:$MoveDir/$ShowFileName.$OriginalExt"
-  errcont "CALLED AS: myth2kodi '$1' '$2' '$3' '$4'"
+  errcont "CALLED AS: myth2kodi '$1' \"$2\" \"$3\" \"$4\" '$5' '$6'"
   errcont "InputTitle: $InputTitle"
   errcont "InputSubtitle: $InputSubtitle"
+  errcont "InputSeasonNum: $InputSeasonNum"
+  errcont "InputEpisodeNum: $InputEpisodeNum"
   errcont "Plot: $Plot"
   errcont "WE'VE EITHER ALREADY PROCESSED THIS RECORDING OR OUR FILE NAME GENERATION IS TOO GENERIC."
   errcont "EITHER WAY, ABORTING."

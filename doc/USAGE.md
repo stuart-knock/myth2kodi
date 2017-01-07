@@ -28,11 +28,15 @@ the USER SETTINGS section of `myth2kodi`.
 To process a recording at the command line, the script can be called with the
 following form:
     
-    myth2kodi "Input File" "show name" "episode name"
+    myth2kodi "Input File" ["show name"] ["episode name"] ["season-number" "episode-number"]
 
-when called as a MythTV user job, the `"%DIR%/%FILE%"` argument is expanded by
-MythTV to provide the `"Input File"` argument. The command line equivalent
-would be, for example:
+where the square brackets [] contain optional arguments. At the moment, only
+add season or episode number if you can add both. For any optional arguments
+not provided, myth2kodi will attempt to fill in missing information from the
+MythTV-DB and myth2kodi's local database, which is generated from TheTVDB and
+tvmaze. When called as a MythTV user job, the `"%DIR%/%FILE%"` argument is
+expanded by MythTV to provide the `"Input File"` argument. The command line
+equivalent would be, for example:
     
      myth2kodi "/home/myth/recordings/2308320472023429837.mpg"
 
@@ -41,6 +45,10 @@ myth2kodi having to figure them out for itself, for example:
 
     myth2kodi "/home/myth/recordings/2308320472023429837.mpg" "South Park" "Here Comes the Neighborhood"
 
+The arguments are positional, meaning that to provided later arguments without
+earlier ones then you need to provide an empty argument, for example:
+    
+    myth2kodi "/home/myth/recordings/4208420472023429842.mpg" "Humans" "" "2" "4"
 
 ### Access support functionality via command line flags.
 Once myth2kodi is installed you can get an overview of additional functionality

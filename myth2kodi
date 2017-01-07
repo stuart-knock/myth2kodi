@@ -47,7 +47,7 @@
 #    $binpath/myth2kodi "%DIR%/%FILE%"
 #  where "$binpath" is replaced by the full explicit path from USER SETTINGS.
 #  At the command line, the script can be called with the following form:
-#    myth2kodi "Input File" "show name" "episode name"
+#    myth2kodi "Input File" "show name" "episode name" "season-number" "episode-number"
 #  for example:
 #    myth2kodi "/home/myth/recordings/2308320472023429837.mpg" "South Park" "Here Comes the Neighborhood"
 #  for additional functionality type:
@@ -4517,7 +4517,7 @@ msg_about(){
 msg_usage(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   printf '\n %s\n' "myth2kodi usage:"
-  printf '   %s\n' "myth2kodi 'path/to/file' ['title'] ['subtitle']"
+  printf '   %s\n' "myth2kodi 'path/to/file' [\"title\"] [\"subtitle\"] ['season-number' 'episode-number']"
   printf '   %s\n' "myth2kodi --mode [parameter] [parameter]"
   printf ' %s\n\n' "items in brackets are [context sensitive]."
   printf ' %s\n' "Before first use, check that myth2kodi's settings are"

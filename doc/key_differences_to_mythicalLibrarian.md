@@ -1,5 +1,11 @@
 #Key Differences to [mythicalLibrarian](https://github.com/adamoutler/mythicallibrarian)
 
+## Call signature
+When processing a recording, optional arguments for providing season and
+episode number have been added. It now has the form:
+    
+    myth2kodi "Input File" ["show name"] ["episode name"] ["season-number" "episode-number"]
+
 ## Scripts
 ### Added:
 **bashlogging**: *Provides configurable logging functionality.*
@@ -59,7 +65,8 @@ only increased. So, it seemed safer, and easier, just to drop them.*
 **LOG_LIFE**: *How long to persist archived log files in months.*  
 **M2K_DB_LIFE**: *How long to persist archived myth2kodi database files in months.*  
 **DAILYREPORT_LIFE**: *How long to persist daily report files in months.*  
-**LOGTYPE**: *Defines where to direct logging messages -- stdout, stderr, file.*
+**LOGTYPE**: *Defines where to direct logging messages -- stdout, stderr, file.*  
+**CREATE_RSS**: *Whether to create an RSS entry.*
 
 ### Renamed:
 *mythicalLibrarian* ==> **m2kdir**  

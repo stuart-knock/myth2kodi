@@ -50,13 +50,10 @@ where `$binpath` is replaced by the full explicit path from USER SETTINGS.
 To process a recording at the command line, the script can be called with the
 following form:
     
-    myth2kodi "Input File" "show name" "episode name"
+    myth2kodi "Input File" ["show name"] ["episode name"] ["season-number" "episode-number"]
 
-for example:
-
-    myth2kodi "/home/myth/recordings/2308320472023429837.mpg" "South Park" "Here Comes the Neighborhood"
-
-for additional functionality type:
+where arguments in the square brackets are optional. For more details and
+additional functionality see [USAGE.md](./doc/USAGE.md) or type:
     
     myth2kodi --help
 

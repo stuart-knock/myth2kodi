@@ -672,7 +672,7 @@ m2k_init(){
   [[ -f "$m2kdir/myth2kodi.conf" ]] && source "$m2kdir/myth2kodi.conf"
 
   #What am I...
-  m2kVersion="myth2kodi Version 1.2.0" ; declare -gr m2kVersion
+  m2kVersion="myth2kodi Version 1.2.1" ; declare -gr m2kVersion
   m2kPlatform="$(uname)" ; declare -gr m2kPlatform
 
   #Who called me...
@@ -1306,6 +1306,7 @@ recreate_comskip(){
     #Move the comskip file into place
     inform "Moving new comskip file to: ${ShowComSkip}"
     mv "$MARKUPFRAMES_TMP" "$ShowComSkip" 2>&1 | err_pipe "${FUNCNAME[0]}(): "
+    chmod go+r "$ShowComSkip" 2>&1 | err_pipe "${FUNCNAME[0]}(): "
     return "${PIPESTATUS[0]}"
 
   elif [[ -d "$inputarg" ]]; then
@@ -5090,7 +5091,8 @@ success_postprocessing(){
 
   #Move comskip data to proper folder and add created.tracking entry.
   if [[ "$CommercialMarkup" = "Created" ]]; then
-    mv "$MARKUPFRAMES_TMP" "$MoveDir/$ShowFileName.txt"
+    mv "$MARKUPFRAMES_TMP" "$MoveDir/$ShowFileName.txt" 2>&1 | err_pipe "${FUNCNAME[0]}(): "
+    chmod go+r "$MoveDir/$ShowFileName.txt" 2>&1 | err_pipe "${FUNCNAME[0]}(): "
     if [[ "$TRACKING" != 'Disabled' ]]; then
       printf '%s\n' "'$MoveDir/$ShowFileName.txt' '$MoveDir/$ShowFileName.$OriginalExt'" >> "$m2kdir/created.tracking"
     fi

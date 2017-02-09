@@ -1070,7 +1070,7 @@ periodic_maintenace(){
       if [[ "$m2k_maintenance_status" = '0' ]]; then
         printf '%s\n' "$CURRENT_TIME" > "$m2kdir/lastmaintenace.time"
       else
-        warn "FUNCNAME[0]}(): maintenance failed to run correctly."
+        warn "${FUNCNAME[0]}(): maintenance failed to run correctly."
         return "$m2k_maintenance_status"
       fi
     fi
@@ -2595,6 +2595,9 @@ get_serieslinenumber_zap2itid(){
 #variable against show names returned by querying TheTVDB.
 get_serieslinenumber_showname_fuzzy(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
+  debugcont "ShowName: $ShowName"
+  debugcont "TMP_SHN_FILE: $TMP_SHN_FILE"
+  debugcont "serieslinenumber: $serieslinenumber"
   #TODO: Why the restriction to the first 27 characters for matching here???
   serieslinenumber=$(agrep -ikByn "${ShowName:0:27}" "$TMP_SHN_FILE" | sed 's/:.*//' | grep -m1 ^)
   #Correct for serieslinenumber = ""
@@ -2602,7 +2605,7 @@ get_serieslinenumber_showname_fuzzy(){
 
   #Get the seriesid based on the showname
   if ((serieslinenumber > 0)); then
-    debug "Determined serieslinenumber for ShowName: $ShowName"
+    debug "Determined serieslinenumber=$serieslinenumber for ShowName: $ShowName"
     return 0
   fi
   err "${FUNCNAME[0]}() FAILED to determine serieslinenumber for ShowName: $ShowName"
@@ -2949,7 +2952,7 @@ download_series_identification(){
   curl -L -s -m"$Timeout" "www.thetvdb.com/api/GetSeries.php?seriesname=$tvdbshowname" > "$WORKING_FILE"
 
   if (( $(wc --bytes < "$WORKING_FILE") == 0 )); then
-    err "FUNCNAME[0]}(): Couldn't access info from TheTVDB."
+    err "${FUNCNAME[0]}(): Couldn't access info from TheTVDB."
     errcont "Check your internet connection."
     errcont "Check www.thetvdb.com for '$tvdbshowname'."
     return 1
@@ -4119,9 +4122,13 @@ m2k_diagnostics(){
   packagecheck="$PKGNAME_CURL$PKGNAME_AGREP$PKGNAME_LIBNOTIFY$PKGNAME_JQ"
   printf '\n' | tee -a "$DiagnosticsFile"
   [[ -n "$PKGPATH_CURL" ]]      && inform "package 'curl' found: $PKGPATH_CURL"
+  [[ -n "$PKGPATH_CURL" ]]      && debug "$("$PKGPATH_CURL" --version)"
   [[ -n "$PKGPATH_AGREP" ]]     && inform "package 'agrep' or 'tre-agrep' found: $PKGPATH_AGREP"
+  [[ -n "$PKGPATH_AGREP" ]]     && debug "$("$PKGPATH_AGREP" --version)"
   [[ -n "$PKGPATH_LIBNOTIFY" ]] && inform "package 'libnotify-bin' found: $PKGPATH_LIBNOTIFY"
+  [[ -n "$PKGPATH_LIBNOTIFY" ]] && debug "$("$PKGPATH_LIBNOTIFY" --version)"
   [[ -n "$PKGPATH_JQ" ]]        && inform "package 'jq' found: $PKGPATH_JQ"
+  [[ -n "$PKGPATH_JQ" ]]        && debug "$("$PKGPATH_JQ" --version)"
   if [ "$DATABASE_ACCESS" = "PythonBindings" ]; then
     packagecheck="$packagecheck$PKGNAME_PYTHON$PKGNAME_LIBMYTH_PYTHON$PKGNAME_PYTHON_LXML"
     [[ -n "$PKGPATH_PYTHON" ]] && inform "package 'python' found: $PKGPATH_PYTHON"

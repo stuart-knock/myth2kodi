@@ -3908,6 +3908,7 @@ msg_dir_summary(){
   informcont "A summary table of writeable directories: 0='WRITEABLE' ; 1='NOT WRITEABLE'"
   informcont "$(printf '%-18s|%-5s|%-12s|%s\n'     "USER SETTING"      "FLAG"                 "Free Space"               "Folder name"       )"
   informcont "$(printf '%-18s|  %s  | %10s | %s\n' "m2kdir"            "$WorkingDirWritable"  "$WorkingDirFreeSpace MB"  "$m2kdir"           )"
+  informcont "$(printf '%-18s|  %s  | %10s | %s\n' "M2K_TMPDIR"        "$TempDirWritable"     "$TempDirFreeSpace MB"     "$M2K_TMPDIR"       )"
   informcont "$(printf '%-18s|  %s  | %10s | %s\n' "originaldirname"   "$OriginalDirWritable" "$OriginalDirFreeSpace MB" "$originaldirname"  )"
   informcont "$(printf '%-18s|  %s  | %10s | %s\n' "MoveDir"           "$MoveDirWritable"     "$MoveDirFreeSpace MB"     "$MoveDir"          )"
   informcont "$(printf '%-18s|  %s  | %10s | %s\n' "AlternateMoveDir"  "$AltMoveDirWritable"  "$AltMoveDirFreeSpace MB"  "$AlternateMoveDir" )"
@@ -3988,6 +3989,7 @@ check_filesystem(){
 
   #Determine the free space available in all the directories we might use.
   WorkingDirFreeSpace=$(df -P "$m2kdir"             | sed -n 2p | awk '{print $4}') || WorkingDirFreeSpace=0
+  TempDirFreeSpace=$(df -P "$M2K_TMPDIR"            | sed -n 2p | awk '{print $4}') || TempDirFreeSpace=0
   OriginalDirFreeSpace=$(df -P "$originaldirname"   | sed -n 2p | awk '{print $4}') || OriginalDirFreeSpace=0
   MoveDirFreeSpace=$(df -P "$MoveDir"               | sed -n 2p | awk '{print $4}') || MoveDirFreeSpace=0
   AltMoveDirFreeSpace=$(df -P "$AlternateMoveDir"   | sed -n 2p | awk '{print $4}') || AltMoveDirFreeSpace=0
@@ -3998,6 +4000,7 @@ check_filesystem(){
 
   #Convert from kB to MB
   WorkingDirFreeSpace="$((WorkingDirFreeSpace/1024))"
+  TempDirFreeSpace="$((TempDirFreeSpace/1024))"
   OriginalDirFreeSpace="$((OriginalDirFreeSpace/1024))"
   MoveDirFreeSpace="$((MoveDirFreeSpace/1024))"
   AltMoveDirFreeSpace="$((AltMoveDirFreeSpace/1024))"
@@ -4027,6 +4030,8 @@ check_filesystem(){
   fi
   check_write "5"             "$WorkingDirFreeSpace"  "$m2kdir"
   WorkingDirWritable="$?"
+  check_write "5"             "$TempDirFreeSpace"  "$M2K_TMPDIR"
+  TempDirWritable="$?"
 }
 
 #This function provides basic testing of myth2kodi's functionality.
@@ -4280,7 +4285,7 @@ m2k_diagnostics(){
   #Print a summary table of writeable directories.
   msg_dir_summary
 
-  if ((MoveDirWritable + AltMoveDirWritable + WorkingDirWritable == 0)) ; then
+  if ((MoveDirWritable + AltMoveDirWritable + WorkingDirWritable + TempDirWritable == 0)) ; then
     folderchecks="***PASSED***"
     inform "Critical Filesystem checks $folderchecks"
   else

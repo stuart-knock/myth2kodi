@@ -2599,7 +2599,7 @@ get_serieslinenumber_showname_fuzzy(){
   debugcont "TMP_SHN_FILE: $TMP_SHN_FILE"
   debugcont "serieslinenumber: $serieslinenumber"
   #TODO: Why the restriction to the first 27 characters for matching here???
-  serieslinenumber=$(agrep -ikByn "${ShowName:0:27}" "$TMP_SHN_FILE" | sed 's/:.*//' | grep -m1 ^)
+  serieslinenumber=$(agrep -iBynk "${ShowName:0:27}" "$TMP_SHN_FILE" | sed 's/:.*//' | grep -m1 ^)
   #Correct for serieslinenumber = ""
   [[ -z "$serieslinenumber" ]] && serieslinenumber=0
 
@@ -2773,7 +2773,7 @@ getAbsoluteEpisodeNumberWithFuzzyPlotMatch(){
   #If Plot length is short this really won't work well, so give up #TODO: figure out what length is genuinely too short...
   ((PlotLength<42)) && warn "${FUNCNAME[0]}() - Plot is too short to attempt fuzzy guess." && return 1
   #Fuzzy guess at plot, prepended with: "AbsoluteEpisodeNumber:cost:"
-  FuzzyPlot=($(agrep -ikByns "$Plot" "$m2kdir/$NewShowName/$NewShowName.Plot.txt"))
+  FuzzyPlot=($(agrep -iBynsk "$Plot" "$m2kdir/$NewShowName/$NewShowName.Plot.txt"))
   [[ -z "${FuzzyPlot[0]}" ]] && warn "${FUNCNAME[0]}() - No fuzzy match on Plot" && return 1
   #Extract our guessed AbsoluteEpisodeNumber
   AENguess=($(cut -f1 -d":" <<< "$(printf '%s\n' "${FuzzyPlot[@]}")"))
@@ -2825,7 +2825,7 @@ getAbsoluteEpisodeNumberWithFuzzyPlotMatch(){
       ChunkLengths[i]=$(wc --chars <<< "$chunk")
       debugcont "ChunkLengths[$i]=${ChunkLengths[i]}"
       len10per=$(( ChunkLengths[i] / 10 ))
-      fuzzychunk=($(agrep -ikByns -e "$chunk" "$m2kdir/$NewShowName/$NewShowName.Plot.txt"))
+      fuzzychunk=($(agrep -iBynsk -e "$chunk" "$m2kdir/$NewShowName/$NewShowName.Plot.txt"))
       FuzzyChunks[i]="${fuzzychunk[0]}"
       debugcont "FuzzyChunks[$i]=${FuzzyChunks[i]}"
       ChunkGuesses[i]=$(cut -f1 -d":" <<< "${FuzzyChunks[i]}")

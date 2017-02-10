@@ -597,7 +597,12 @@ exit_job(){
   #Send a desktop notification message if appropriate conditions are met.
   if [[ "$m2kScanMode" != 'True' && "$Notify" = 'Enabled' && -n "$NOTIFY_MSG" ]]; then
     debug "NOTIFY_MSG=$NOTIFY_MSG  ;  NOTIFY_ICON=${NOTIFY_ICON[$exitstatus]}"
-    sudo -u "$NotifyUserName" "$binpath/m2k_notify" "myth2kodi: $jobtype" "$NOTIFY_MSG" "${NOTIFY_ICON[$exitstatus]}"
+    #Work-around for systems that don't allow users to sudo as themselves (Ubuntu).
+    if [[ "$NotifyUserName" == "$CALLER" ]]; then
+      "$binpath/m2k_notify" "myth2kodi: $jobtype" "$NOTIFY_MSG" "${NOTIFY_ICON[$exitstatus]}"
+    else
+      sudo -u "$NotifyUserName" "$binpath/m2k_notify" "myth2kodi: $jobtype" "$NOTIFY_MSG" "${NOTIFY_ICON[$exitstatus]}"
+    fi
   else
     debug 'Either: Notify=Disabled; scan mode; recording is in an ignore list; or NOTIFY_MSG was not set.'
   fi
@@ -672,7 +677,7 @@ m2k_init(){
   [[ -f "$m2kdir/myth2kodi.conf" ]] && source "$m2kdir/myth2kodi.conf"
 
   #What am I...
-  m2kVersion="myth2kodi Version 1.2.2" ; declare -gr m2kVersion
+  m2kVersion="myth2kodi Version 1.2.2b" ; declare -gr m2kVersion
   m2kPlatform="$(uname)" ; declare -gr m2kPlatform
 
   #Who called me...

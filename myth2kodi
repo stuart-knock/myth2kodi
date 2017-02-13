@@ -5670,12 +5670,30 @@ if [[ -f "$MoveDir/$ShowFileName.$OriginalExt" ]]; then
   errcont "InputSeasonNum: $InputSeasonNum"
   errcont "InputEpisodeNum: $InputEpisodeNum"
   errcont "Plot: $Plot"
-  errcont "WE'VE EITHER ALREADY PROCESSED THIS RECORDING OR OUR FILE NAME GENERATION IS TOO GENERIC."
-  errcont "EITHER WAY, ABORTING."
+
+  #Identify any MythTV file name associated with the already existing move target.
+  set_recording_name "$MoveDir/$ShowFileName.$OriginalExt"
+
+  if [[ "$?" == 0 && -n "$RECORDING_NAME" ]]; then
+    if [[ "$RECORDING_NAME" == "$InputFileBasename" ]]; then
+      err "This is because we've already processed this recording."
+      NOTIFY_MSG="Recording has already been processed: $InputFileBasename"
+      exit_job 'FileAlreadyExists'
+    else
+      inform "The recording we're processing is different to the one associated"
+      informcont "with the already existing file. Meaning, either we've rerecorded"
+      informcont "the same episode/movie or our file name generation is too generic."
+    fi
+  else
+    inform "Can't tell if this is due to reprocessing a recording or there was"
+    informcont "just already a copy of this episode/movie in our media library."
+  fi
+  warn "Adding an entry identifying this recording as a possible duplicate."
   #Write an entry in the duplicates file, for easy check/removal of duplicates.
   printf '"%s" "%s" "%s" "%s"\n' "$InputTitle" "$ShowStartTime" "$InputPath" "$ShowFileName" >> "$DuplicatesFile"
-  NOTIFY_MSG="Recording identified as duplicate of: $MoveDir/$ShowFileName.$OriginalExt"
+  NOTIFY_MSG="Recording identified as possible duplicate of: $MoveDir/$ShowFileName.$OriginalExt"
   exit_job 'FileAlreadyExists'
+
   #TODO: When refactoring main, consider allowing forced move with auto name incrementing when move-to file already exists.
   #If file exists then make a new name for it
   # myth2kodiCounter=0

@@ -3758,6 +3758,7 @@ m2k_maintenance(){
         fi
       else
         warn "Tracked directory doesn't seem to be a directory. Continuing to track, just in case."
+        warncont "$dirtocheck"
         printf '%s\n' "$dirtocheck" >> "$m2kdir/dir.tracking2"
       fi
     done < "$SORTED_DIR_TRACKING_FILE"
@@ -4849,7 +4850,7 @@ set_recording_name(){
       RECORDING_NAME="$(find -L "$sg_dir" -samefile "$1")"
       [[ "$RECORDING_NAME" =~ $RECPATTERN ]] && { found=0 ; break ; }
     done
-    (( found == 0 )) && inform "Mapping myth2kodi file name to $RECORDING_NAME"
+    (( found == 0 )) && debug "$1 <==> $RECORDING_NAME"
   fi
   if (( found == 0 )); then
     RECORDING_PATH="$(realpath --no-symlinks "$RECORDING_NAME")"

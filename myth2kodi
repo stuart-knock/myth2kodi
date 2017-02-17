@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
-# ***** WELCOME! Scroll further down to set the user settings. *****
-
+# **** WELCOME! ****
+#
 #myth2kodi is a modified version of mythicalLibrarian by Adam Outler
 #
 # mythicalLibrarian Author: Adam Outler
@@ -899,7 +899,7 @@ parse_command_flags(){
       local PreCallLogLevel="$LOGLEVEL"
       (( LOGLEVEL < 2 )) && LOGLEVEL=2 && inform "Escalating LOGLEVEL to Info (2)."
       if [[ "$LOGTYPE" =~ ^(stdout|stderr)$ ]] ; then
-        warn "Running diagnostics without any logging to file, consider using LOGTYPE 'filestderr' or 'filestdout'."
+        warn "Running diagnostics without any logging to file, consider using LOGTYPE='filestderr'."
       else
         inform "Running diagnostics, so redirecting subsequent messages to $DiagnosticsFile"
       fi
@@ -909,6 +909,15 @@ parse_command_flags(){
       #Reset the LOGFILE & LOGLEVEL to previous state, in case we ever call
       # myth2kodi --diagnostics from within myth2kodi
       LOGFILE="$PreCallLogFile"
+      #TODO: Move resetting of LOGLEVEL below the finished message, so start
+      #      and finished messages are written to the main log file. Also,
+      #      consider moving the archiving of the diagnostics file from the
+      #      start of m2k_diagnostics to here, so the date time tag is for
+      #      when the diagnostics are run and the initial debug message is
+      #      on calling m2k_diagnostics is written to the start of the current
+      #      diagnostics log and not to the end of the previous one. NOTE: the
+      #      first run after this change will result in two diagnostics reports
+      #      into one file for anyone who has an existing "$DiagnosticsFile".
       LOGLEVEL="$PreCallLogLevel"
       [[ "$LOGTYPE" =~ ^(stdout|stderr)$ ]] || inform 'Finished running diagnostics.'
       unset m2kDiagnosticsMode
@@ -1580,7 +1589,7 @@ add_doover(){
       } >> "$m2kdir/doover.sh"
     elif [[ "$PROCESS_RECORDING_MODE" = 'LINK' ]]; then
       {
-        #Write doover.sh lines that removes a link to a recording:
+        #Write doover.sh line that removes a link to a recording:
         printf '%s'    "test -L \"$MoveDir/$ShowFileName.$OriginalExt\" &&"
         printf ' %s\n' "rm -f \"$MoveDir/$ShowFileName.$OriginalExt\""
       } >> "$m2kdir/doover.sh"
@@ -4332,7 +4341,7 @@ m2k_diagnostics(){
   #Logging for failure messages
   if [ "$DBTest" = "***FAILED***" ]; then
     err "Database tests failed"
-    errcont "When interfacing MythTV/0.24, myth2kodi uses MythTV's Python"
+    errcont "When interfacing MythTV >=0.24, myth2kodi can use MythTV's Python"
     errcont "Bindings. These must be configured and working for proper access"
     errcont "to data required by myth2kodi."
     errcont "Could not connect to the database. Check username and password."
@@ -5128,7 +5137,7 @@ success_postprocessing(){
 #  settings at the start of this file. Probably with the default of
 #  Librarian="mythtv" for maximum compatibility with existing expectations of
 #  the code... Then simply refuse to run with a helpful error message if the
-#  variable $CALLER doesn't equal $Librarain. The requirement would just be
+#  variable $CALLER doesn't equal $Librarian. The requirement would just be
 #  that the user $Librarian be the one running MythTV and that they have write
 #  privileges to the MoveDirs that Kodi can see. Then most/all of the need for
 #  running commands with sudo and the need for undo to be run as root can be

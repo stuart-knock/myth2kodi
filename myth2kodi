@@ -271,6 +271,13 @@ CommercialMarkupCleanup='Enabled'
 #Options: ['Enabled'(DEFAULT)|'Disabled']
 TRACKING='Enabled'
 
+#A string to append to the "ShowFileName" before the suffix. Useful if you want
+#to easily distinguish between recordings moved by myth2kodi and other media.
+#For example, setting SHOW_FILE_NAME_APPEND=' - MYTH2KODI' will produce a
+#processed recording name like 'ShowName S01E01 (EpisodeSubtitle) - MYTH2KODI.mpg'
+#rather than the default which is like 'ShowName S01E01 (EpisodeSubtitle).mpg'.
+#Default: ''
+SHOW_FILE_NAME_APPEND=''
 
 ############################# Directory Settings #############################
 
@@ -1088,7 +1095,7 @@ set_show_file_name(){
   #Format Episodes showname=show name Sxx=season number Exx=episode number EpisodeSubtitle=episode name
   if [[ -n "$Exx" && "$Exx" != "E" ]]; then
     debug "Naming as episode"
-    ShowFileName="$NewShowName $Sxx$Exx ($EpisodeSubtitle)"
+    ShowFileName="$NewShowName $Sxx$Exx ($EpisodeSubtitle)$SHOW_FILE_NAME_APPEND"
   #Format Movies
   elif [ "$m2kProgramIDCheck" = "MV" ]; then
     debug "Naming as movie"
@@ -1097,16 +1104,16 @@ set_show_file_name(){
     #TODO: If adding a year then we really want original release date so the Kodi metadata lookup works reliably.
     if [[ -n "$MovieAirDate" ]]; then
       warn "${FUNCNAME[0]}(): Currently forcing bypass of adding MovieAirDate to Movie file names."
-      ShowFileName="$NewShowName" # ShowFileName="$NewShowName ($MovieAirDate)"
+      ShowFileName="$NewShowName$SHOW_FILE_NAME_APPEND" # ShowFileName="$NewShowName ($MovieAirDate)$SHOW_FILE_NAME_APPEND"
     else
-      ShowFileName="$NewShowName"
+      ShowFileName="$NewShowName$SHOW_FILE_NAME_APPEND"
     fi
   #Format generic Shows
   else
     debug "Naming as generic show"
     Exx="Generic"
     MoveDir="$PrimaryShowDir"
-    ShowFileName="$ShowName S0E0 ($EpisodeSubtitle Recorded $datehour on $ChanID)"
+    ShowFileName="$ShowName S0E0 ($EpisodeSubtitle Recorded $datehour on $ChanID)$SHOW_FILE_NAME_APPEND"
     RequiresNFO=1
     [[ "$m2kProgramIDCheck" = "EP" ]] && RequiresDoover=1
   fi
@@ -1146,7 +1153,9 @@ set_show_file_name_categoric(){
   fi
 
   #Test final result and assign ShowFileName
-  ((EventYear > 1900)) && ((EventMonthDay > 0)) && ShowFileName="$NewShowName S$EventYear""E$EventMonthDay ($InputSubtitle Recorded $datehour)"
+  if ((EventYear > 1900)) && ((EventMonthDay > 0)); then
+    ShowFileName="$NewShowName S$EventYear""E$EventMonthDay ($InputSubtitle Recorded $datehour)$SHOW_FILE_NAME_APPEND"
+  fi
 
   RequiresNFO=1
   HasSxxExx=1
@@ -5234,6 +5243,9 @@ PROCESSING_RECORDING="True"
 inform "Processing: $InputPath"
 
 InputFileBasename="$(basename "$InputPath")" #"${InputPath##*/}"
+
+#TODO: Use find_file_link_pairs() early abort here to prevent reprocessing,
+#      probably need to allow for forced reprocessing...
 
 #As long as we're not in diagnostics mode, gather info from MythTV-DB.
 if [[ "$m2kDiagnosticsMode" != "True" ]]; then

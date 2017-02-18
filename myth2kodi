@@ -3029,7 +3029,7 @@ testfile_exit(){
   #TODO: Consider using [[ -n "$(find ./dir -prune -empty)" ]] instead...
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   printf '%s\n' "@@@@ COMPLETE: $(date --rfc-3339=seconds) @@@@" >> "$LOGFILE"
-  [[ "$Exx" != "E07" ]] && err '${FUNCNAME[0]}(): FUZZY FAILURE' && exit 1
+  [[ "$Exx" != "E07" ]] && err "${FUNCNAME[0]}(): FUZZY FAILURE" && exit 1
   [[ -d ./Episodes ]] && [[ ! "$(ls -A ./Episodes)" ]] && rmdir ./Episodes
   [[ -d ./Movies ]]   && [[ ! "$(ls -A ./Movies)" ]]   && rmdir ./Movies
   [[ -d ./Showings ]] && [[ ! "$(ls -A ./Showings)" ]] && rmdir ./Showings

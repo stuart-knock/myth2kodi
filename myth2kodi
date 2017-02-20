@@ -3235,7 +3235,7 @@ check_path_permission(){
       NOTIFY_MSG="Can't execute: $PATH_TO_CHECK"
       err "${FUNCNAME[0]}() CALLED FROM: ${FUNCNAME[1]}(): $NOTIFY_MSG"
       EXIT_JOB_TYPE='PermissionError'
-    elif [[ -d "$PATH_TO_CHECK" ]];
+    elif [[ -d "$PATH_TO_CHECK" ]]; then
       NOTIFY_MSG="Directories need to be executable for access: $PATH_TO_CHECK"
       err "${FUNCNAME[0]}() CALLED FROM: ${FUNCNAME[1]}(): $NOTIFY_MSG"
       EXIT_JOB_TYPE='PermissionError'
@@ -3521,14 +3521,17 @@ set_move_location(){
 
   #Episode & uncategorised handling: Determine where File will fit
   if [[ -z "$m2kProgramIDCheck" || "$m2kProgramIDCheck" = 'EP' ]]; then
-    if [[ "$MoveDirWritable" != '0' && "$AltMoveDirWritable" = '0' ]]; then
+    if [[ "$MoveDirWritable" = '0' ]]; then
+       #TODO:
+      debug "Nothing to do here as Move dir is writeable, but cannot have an empty then and too tired to figure out how to rearrange the if block"
+    elif [[ "$AltMoveDirWritable" = '0' ]]; then
       MoveDir="$AlternateMoveDir"
     else
       target_directory_not_writeable "Move"
     fi
   #Movie handling: Determine where file will fit
   elif [[ "$m2kProgramIDCheck" = 'MV' ]]; then
-    if [[ "$MovieDirWritable" == '0' ]]; then
+    if [[ "$MovieDirWritable" = '0' ]]; then
       MoveDir="$PrimaryMovieDir"
     elif [[ "$AltMovieDirWritable" = '0' ]]; then
       MoveDir="$AlternateMovieDir"
@@ -3537,7 +3540,7 @@ set_move_location(){
     fi
   #Show Handling: Determining Where File will fit
   elif [[ "$m2kProgramIDCheck" = 'SH' ]]; then
-    if [[ "$ShowDirWritable" != '0' ]]; then
+    if [[ "$ShowDirWritable" = '0' ]]; then
       MoveDir="$PrimaryShowDir"
     elif [[ "$AltShowDirWritable" = '0' ]]; then
       MoveDir="$AlternateShowDir"

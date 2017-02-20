@@ -544,7 +544,7 @@ exit_job(){
       exitstatus=0
       ;;
     #Successful Completion of myth2kodi
-    LinkModeSuccessful|MoveModeSuccessful|CopyModeSuccessful)
+    LinkModeSuccessful|MoveModeSuccessful|CopyModeSuccessful|FailSafeModeComplete)
       inform "SUCCESSFUL COMPLETION TYPE: $jobtype"
       exitstatus=0
       ;;
@@ -554,7 +554,7 @@ exit_job(){
       exitstatus=0
       ;;
     #File system error occurred #TODO: clean-up...
-    PermissionError|ZeroLengthFile|FileOrPathDoesNotExist|MoveFailed|CopyFailed|FailSafeModeComplete|LinkingFailed)
+    PermissionError|ZeroLengthFile|FileOrPathDoesNotExist|MoveFailed|CopyFailed|LinkingFailed|NoTargetPathAvailable|NotFileOrDirectory)
       err "$ERR_HEADER FILE SYSTEM ERROR: $jobtype"
       exitstatus=1
       ;;
@@ -787,6 +787,9 @@ m2k_init(){
   GotEpisodeNumber=0
   EpisodeConfidenceRating=0
 
+  #Initialise processing state variables.
+  FailSafeState=0
+
   debug "myth2kodi script initialisation complete."
   debug "Running myth2kodi as $CALLER"
 
@@ -800,6 +803,7 @@ m2k_init(){
 #err and abort as appropriate.
 validate_settings(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
+  #TODO: Consider: When it counts as an error we should abort.
 
   #A local reusable message variable
   local msg
@@ -840,10 +844,21 @@ validate_settings(){
   [[ -d "$FailSafeDir" ]]       || err "'FailSafeDir' $msg $FailSafeDir"
 
   #TODO: Consider running check_path_permission() here for all configured directories...
-  #      might be best to add second arg containing required permissions, so, either
-  #      'r', 'w', or 'rw'. Eg, binpath only ever needs read, but m2kdir always needs rw,
-  #      while scanpath in m2k_scan() or InputPath require rw in MOVE mode but only
-  #      r in LINK and COPY modes...
+  #      May need to skip validate_settings call in m2k_init when called as 'myth2kodi --diagnostics'.
+  #Check that we have the required permissions to all configured directories.
+  # check_path_permission "$m2kdir"     "rwx"
+  # check_path_permission "$M2K_TMPDIR" "rwx"
+  # check_path_permission "$binpath"    "rx"
+  # local target_permissions='rwx'
+  # [[ "$PROCESS_RECORDING_MODE" =~ ^(LINK|COPY)$ ]] && target_permissions='rx'
+  # [["$PROCESS_RECORDING_MODE" == 'MOVE' ]] && target_permissions='rwx'
+  # check_path_permission "$MoveDir"           "$target_permissions"
+  # check_path_permission "$AlternateMoveDir"  "$target_permissions"
+  # check_path_permission "$PrimaryMovieDir"   "$target_permissions"
+  # check_path_permission "$AlternateMovieDir" "$target_permissions"
+  # check_path_permission "$PrimaryShowDir"    "$target_permissions"
+  # check_path_permission "$AlternateShowDir"  "$target_permissions"
+  # check_path_permission "$FailSafeDir"       "$target_permissions"
 
   #Discourage excessive load on TheTVDB.
   msg="Don't update from TheTVDB more than once per day, ie set UpdateDatabase>=86400."
@@ -1175,7 +1190,6 @@ set_show_file_name(){
   elif [ "$m2kProgramIDCheck" = "MV" ]; then
     debug "Naming as movie"
     Exx="Movie"
-    MoveDir="$PrimaryMovieDir"
     #TODO: If adding a year then we really want original release date so the Kodi metadata lookup works reliably.
     if [[ -n "$MovieAirDate" ]]; then
       warn "${FUNCNAME[0]}(): Currently forcing bypass of adding MovieAirDate to Movie file names."
@@ -1187,7 +1201,6 @@ set_show_file_name(){
   else
     debug "Naming as generic show"
     Exx="Generic"
-    MoveDir="$PrimaryShowDir"
     ShowFileName="$ShowName S0E0 ($EpisodeSubtitle Recorded $datehour on $ChanID)$SHOW_FILE_NAME_APPEND"
     RequiresNFO=1
     [[ "$m2kProgramIDCheck" = "EP" ]] && RequiresDoover=1
@@ -1733,24 +1746,34 @@ add_undo(){
 
 failsafe(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  warn "FAILSAFE FLAG WAS SET CHECK PERMISSIONS AND FOLDERS"
-  warn "PERMISSION ERROR OR DRIVE FULL OR OFFLINE."
-  if [[ "$FailSafeMode" = 'Enabled' ]]; then
+  warn "FAILSAFE FLAG WAS SET:"
+  warncont "This means there was a permission error or drive full or offline."
+  warncont "Check your permissions, disk usage, and network connection to NAS."
+  if [[ "$FailSafeMode" = 'Enabled' &&  "$SYMLINK" = 'Enabled' ]]; then
     warn "ATTEMPTING SYMLINK TO FAILSAFE DIR: $FailSafeDir"
     inform "FailSafe link name set as: $FailSafeDir/$ShowFileName.$OriginalExt"
     ln -s "$InputPath" "$FailSafeDir/$ShowFileName.$OriginalExt"
-    if [ -f "$FailSafeDir/$ShowFileName.$OriginalExt" ]; then
+    if [[ -f "$FailSafeDir/$ShowFileName.$OriginalExt" ]]; then
       inform "FAILSAFE MODE COMPLETE: SYMLINK CREATED"
+      #Do post processing as a successful LINK mode move, but require doover.
+      MoveDir="$FailSafeDir"
+      inform "${FUNCNAME[0]}() MOVE DIRECTORY SET AS: $MoveDir"
+      PROCESS_RECORDING_MODE='LINK'
+      warn "${FUNCNAME[0]}(): Recordings processed in FAILSAFE MODE will be added to the doover queue."
+      RequiresDoover=1
+      #Generate supporting files, add undo and doover entries, notify Kodi.
+      success_postprocessing
+      EXIT_JOB_TYPE='FailSafeModeComplete'
+      NOTIFY_MSG="FAILSAFE mode active See $LOGFILE for more information"
+      return 0
     else
       err "${FUNCNAME[0]}(): FAILSAFE MODE FAILURE CHECK PERMISSIONS AND FREE SPACE IN $FailSafeDir"
       return 1
     fi
   else
-    inform "FailSafeMode Disabled, we won't try and make a link as a fallback."
+    inform "FailSafeMode or SYMLINK Disabled, we won't try and make a link as a fallback."
     return 0
   fi
-  EXIT_JOB_TYPE='FailSafeModeComplete'
-  NOTIFY_MSG="FAILSAFE mode active See $LOGFILE for more information"
   return 0
 }
 
@@ -3141,13 +3164,21 @@ increment_total_matches(){
 #has sufficient read-write permissions. If not, exit with a descriptive message.
 check_path_permission(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  debugcont "arg 1 = $1"
-  (( "$#" > 1 )) && err "${FUNCNAME[0]}() only takes one arg."
+  debugcont "PATH_TO_CHECK = $1"
+  debugcont "REQUIRED_PERMISSION = $2"
+  (( "$#" > 2 )) && err "${FUNCNAME[0]}() only takes two args."
   local PATH_TO_CHECK
+  local REQUIRED_PERMISSION
   local PATH_OWNER
   local PATH_GROUP
   PATH_TO_CHECK="$1"
-  inform "Checking permissions for: $PATH_TO_CHECK"
+  if [[ -n "$2" ]]; then
+    REQUIRED_PERMISSION="$2"
+  else #If not specified, assume all permissions are required.
+    debug "Setting REQUIRED_PERMISSION='rwx'"
+    REQUIRED_PERMISSION='rwx'
+  fi
+  debug "Checking '$REQUIRED_PERMISSION' permissions for: $PATH_TO_CHECK"
 
   #First check that the file or path actually exists
   if [[ ! -e "$PATH_TO_CHECK" ]]; then
@@ -3156,6 +3187,18 @@ check_path_permission(){
     EXIT_JOB_TYPE='FileOrPathDoesNotExist'
     return 1
   fi
+
+  #Make sure it is either a file or directory
+  if [[ ! -f "$PATH_TO_CHECK" ]]; then
+    if [[ ! -d "$PATH_TO_CHECK" ]]; then
+      NOTIFY_MSG="Path or file is neither a file nor a directory: $PATH_TO_CHECK"
+      err "${FUNCNAME[0]}() CALLED FROM: ${FUNCNAME[1]}(): $NOTIFY_MSG"
+      EXIT_JOB_TYPE='NotFileOrDirectory'
+      return 1
+    fi
+  fi
+
+  #Who owns this thing
   PATH_OWNER="$(find "$PATH_TO_CHECK" -maxdepth 0 -printf %u)"
   PATH_GROUP="$(find "$PATH_TO_CHECK" -maxdepth 0 -printf %g)"
 
@@ -3168,29 +3211,39 @@ check_path_permission(){
     warn "${FUNCNAME[0]}(): $Librarian neither owns nor is a member of the group for $PATH_TO_CHECK."
   fi
 
-  #At the least we'll need to be able to read the path or file
-  if [[ ! -r "$PATH_TO_CHECK" ]]; then
+  #If we require read permission then check for it
+  if [[ "$REQUIRED_PERMISSION" == *'r'* && ! -r "$PATH_TO_CHECK" ]]; then
     NOTIFY_MSG="Can't read: $PATH_TO_CHECK"
     err "${FUNCNAME[0]}() CALLED FROM: ${FUNCNAME[1]}(): $NOTIFY_MSG"
     EXIT_JOB_TYPE='PermissionError'
     return 1
   fi
 
-  #TODO: At the moment we only use this function for source paths, not target
-  #      paths, but if at some point we use it more widely then we'll need to
-  #      handle the case that 'COPY' doesn't require write permissions for
-  #      the source directory but does for the target directory...
-  #If we're moving the file we'll need write permission
-  if [[ "$PROCESS_RECORDING_MODE" = 'MOVE' ]]; then
-    if [[ ! -w "$PATH_TO_CHECK" ]]; then
-      NOTIFY_MSG="Can't write: $PATH_TO_CHECK"
-      err "${FUNCNAME[0]}() CALLED FROM: ${FUNCNAME[1]}(): $NOTIFY_MSG"
-      errcont "USER NAME:$CALLER ATTEMPTED TO MODIFY A $PATH_OWNER OWNED FILE."
-      errcont "To preserve file permissions this has been prevented."
-      EXIT_JOB_TYPE='PermissionError'
-      return 1
-    fi
+  #If we require read permission then check for it
+  if [[ "$REQUIRED_PERMISSION" == *'w'* && ! -w "$PATH_TO_CHECK" ]]; then
+    NOTIFY_MSG="Can't write: $PATH_TO_CHECK"
+    err "${FUNCNAME[0]}() CALLED FROM: ${FUNCNAME[1]}(): $NOTIFY_MSG"
+    errcont "USER NAME:$CALLER ATTEMPTED TO MODIFY A $PATH_OWNER OWNED FILE."
+    errcont "To preserve file permissions this has been prevented."
+    EXIT_JOB_TYPE='PermissionError'
+    return 1
   fi
+
+  #If we require execution permission then check for it
+  if [[ "$REQUIRED_PERMISSION" == *'x'* && ! -x "$PATH_TO_CHECK" ]]; then
+    if [[ -f "$PATH_TO_CHECK" ]]; then
+      NOTIFY_MSG="Can't execute: $PATH_TO_CHECK"
+      err "${FUNCNAME[0]}() CALLED FROM: ${FUNCNAME[1]}(): $NOTIFY_MSG"
+      EXIT_JOB_TYPE='PermissionError'
+    elif [[ -d "$PATH_TO_CHECK" ]];
+      NOTIFY_MSG="Directories need to be executable for access: $PATH_TO_CHECK"
+      err "${FUNCNAME[0]}() CALLED FROM: ${FUNCNAME[1]}(): $NOTIFY_MSG"
+      EXIT_JOB_TYPE='PermissionError'
+    fi
+    return 1
+  fi
+
+  #If we have made it this far then all is well
   debug "Permissions ok for: $PATH_TO_CHECK"
   return 0
 }
@@ -3450,28 +3503,57 @@ cleanse_warning(){
   return 0
 }
 
-#Set the move location for the current recording, using Alternate directories
-#when main directories unavailable, in worst case set FailSafe flag.
-set_move_location(){
-  #TODO: No point setting failsafe state when original dir isn't writeable... add checks. see also, set_target_dir_as_input_path_dir()
-  #      also, need to make sure doover is set when FailSafeState=1
+target_directory_not_writeable(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  #Command line, no database Episodes: Determine where File will fit
-  FailSafeState=0
-  [[ -z "$m2kProgramIDCheck" && "$MoveDirWritable" != "0" ]] && MoveDir="$AlternateMoveDir"
-  [[ -z "$m2kProgramIDCheck" && "$MoveDirWritable" != "0" && "$AltMoveDirWritable" != "0" ]] && FailSafeState=1
+  local target_type="$1"
+  FailSafeState=1
+  NOTIFY_MSG="$target_type target directories not writeable."
+  EXIT_JOB_TYPE='PermissionError'
+  err "${FUNCNAME[1]}() CALLED FROM: ${FUNCNAME[2]}(): $NOTIFY_MSG"
+}
 
-  #Episode handling: Determine where File will fit
-  [[ "$m2kProgramIDCheck" = "EP" && "$MoveDirWritable" != "0" ]] && MoveDir="$AlternateMoveDir"
-  [[ "$m2kProgramIDCheck" = "EP" && "$MoveDirWritable" != "0" && "$AltMoveDirWritable" != "0" ]] && FailSafeState=1
+#Set the move location for the current recording, using Alternate directories
+#when main directories unavailable, setting FailSafe flag when Alternate
+#directories unavailable, and, in worst case, when original directory is not
+#writeable return an error state.
+set_move_location(){
+  debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
 
+  #Episode & uncategorised handling: Determine where File will fit
+  if [[ -z "$m2kProgramIDCheck" || "$m2kProgramIDCheck" = 'EP' ]]; then
+    if [[ "$MoveDirWritable" != '0' && "$AltMoveDirWritable" = '0' ]]; then
+      MoveDir="$AlternateMoveDir"
+    else
+      target_directory_not_writeable "Move"
+    fi
   #Movie handling: Determine where file will fit
-  [[ "$m2kProgramIDCheck" = "MV" && "$MovieDirWritable" != "0" ]] && PrimaryMovieDir="$AlternateMoveDir"
-  [[ "$m2kProgramIDCheck" = "MV" && "$MovieDirWritable" != "0" && "$AltMovieDirWritable" != "0" ]] && FailSafeState=1
-
+  elif [[ "$m2kProgramIDCheck" = 'MV' ]]; then
+    if [[ "$MovieDirWritable" == '0' ]]; then
+      MoveDir="$PrimaryMovieDir"
+    elif [[ "$AltMovieDirWritable" = '0' ]]; then
+      MoveDir="$AlternateMovieDir"
+    else
+      target_directory_not_writeable "Movie"
+    fi
   #Show Handling: Determining Where File will fit
-  [[ "$m2kProgramIDCheck" = "SH" && "$ShowDirWritable" != "0" ]] && PrimaryShowDir="$AlternateShowDir"
-  [[ "$m2kProgramIDCheck" = "SH" && "$ShowDirWritable" != "0" && "$AltShowDirWritable" != "0" ]] && FailSafeState=1
+  elif [[ "$m2kProgramIDCheck" = 'SH' ]]; then
+    if [[ "$ShowDirWritable" != '0' ]]; then
+      MoveDir="$PrimaryShowDir"
+    elif [[ "$AltShowDirWritable" = '0' ]]; then
+      MoveDir="$AlternateShowDir"
+    else
+      target_directory_not_writeable "Show"
+    fi
+  fi
+
+  #Return an error state if there is nowhere to write to.
+  if (( FailSafeState == 1 )) && [[ "$OriginalDirWritable" != '0' ]]; then
+    NOTIFY_MSG='Cannot set move location, there are no writeable target directories.'
+    EXIT_JOB_TYPE='NoTargetPathAvailable'
+    err "${FUNCNAME[0]}() CALLED FROM: ${FUNCNAME[1]}(): $NOTIFY_MSG"
+    return 1
+  fi
+  return 0
 }
 
 #Make the directory we'll move recording to if it doesn't already exist.
@@ -3512,13 +3594,7 @@ make_show_dir(){
     NOTIFY_MSG="COULD NOT CREATE $MoveDir - failsafe mode activated."
     EXIT_JOB_TYPE='PermissionError'
     err "${FUNCNAME[0]}() CALLED FROM: ${FUNCNAME[1]}(): $NOTIFY_MSG"
-    PROCESS_RECORDING_MODE='LINK'
-    SYMLINK='Enabled'
-    MoveDir="$FailSafeDir"
     FailSafeState=1
-    warn "${FUNCNAME[0]}(): Recordings processed in FAILSAFE MODE will be added to the doover queue."
-    RequiresDoover=1
-    inform "FailSafe MOVE DIRECTORY SET AS: $MoveDir"
     return 1
   else
     inform "MOVE DIRECTORY SET AS: $MoveDir"
@@ -3886,17 +3962,13 @@ m2k_scan(){
   local scanpath="$m2karg3"
   debug "Running ${FUNCNAME[0]}() on $checkext files in $scanpath"
 
-  check_path_permission "$scanpath"
-  checkpermissionstatus="$?"
-  [[ "$checkpermissionstatus" != 0 ]] && return "$checkpermissionstatus"
-
   #Do some basic checks before we get started.
   if [[ -z "$checkext" ]]; then
     NOTIFY_MSG='Cannot process blank file extensions'
     msg_scan_usage "$NOTIFY_MSG"
     EXIT_JOB_TYPE='InvalidCall'
     return 1
-  elif [ "${checkext:0:1}" = "." ]; then
+  elif [[ "${checkext:0:1}" = "." ]]; then
     NOTIFY_MSG='Please do not prepend a "." to the file extension'
     msg_scan_usage "$NOTIFY_MSG"
     EXIT_JOB_TYPE='InvalidCall'
@@ -3906,17 +3978,28 @@ m2k_scan(){
     msg_scan_usage "$NOTIFY_MSG"
     EXIT_JOB_TYPE='InvalidCall'
     return 1
-  elif [ ! -d "$scanpath" ]; then
+  elif [[ ! -d "$scanpath" ]]; then
     NOTIFY_MSG="This folder does not exist: $scanpath"
     msg_scan_usage "$NOTIFY_MSG"
     EXIT_JOB_TYPE='FileOrPathDoesNotExist'
     return 1
-  elif [ "${scanpath:0:1}" != "/" ]; then
+  elif [[ "${scanpath:0:1}" != "/" ]]; then
     NOTIFY_MSG='Please specify the full path to the file'
     msg_scan_usage "$NOTIFY_MSG"
     EXIT_JOB_TYPE='InvalidCall'
     return 1
   fi
+
+  #Check that we have the permissions we need for scanpath.
+  if [[ "$PROCESS_RECORDING_MODE" =~ ^(LINK|COPY)$ ]]; then
+    #We do not typically need to write to scanpath in LINK and COPY modes.
+    check_path_permission "$scanpath" 'rx'
+    checkpermissionstatus="$?"
+  else
+    check_path_permission "$scanpath" 'rwx'
+    checkpermissionstatus="$?"
+  fi
+  [[ "$checkpermissionstatus" != 0 ]] && return "$checkpermissionstatus"
 
   warn "--You have entered scan Mode."
   warncont "myth2kodi will conduct a scan of the folder:"
@@ -4118,6 +4201,7 @@ target_file_exists(){
 
 check_filesystem(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
+  local filesystem_write_state=0
   #Get file size for the recording we are processing.
   if [[ -f "$InputPath" ]]; then #Not TEST_FILE
     MoveFileSize=$(wc --bytes < "$InputPath")
@@ -4150,27 +4234,29 @@ check_filesystem(){
 
   #Check write permissions and sufficiency of free space.
   check_write "$MoveFileSize" "$MoveDirFreeSpace"     "$MoveDir"
-  MoveDirWritable="$?"
+  MoveDirWritable="$?" ; ((filesystem_write_state+=MoveDirWritable))
   check_write "$MoveFileSize" "$AltMoveDirFreeSpace"  "$AlternateMoveDir"
-  AltMoveDirWritable="$?"
+  AltMoveDirWritable="$?" ; ((filesystem_write_state+=AltMoveDirWritable))
   check_write "$MoveFileSize" "$MovieDirFreeSpace"    "$PrimaryMovieDir"
-  MovieDirWritable="$?"
+  MovieDirWritable="$?" ; ((filesystem_write_state+=MovieDirWritable))
   check_write "$MoveFileSize" "$AltMovieDirFreeSpace" "$AlternateMovieDir"
-  AltMovieDirWritable="$?"
+  AltMovieDirWritable="$?" ; ((filesystem_write_state+=AltMovieDirWritable))
   check_write "$MoveFileSize" "$ShowDirFreeSpace"     "$PrimaryShowDir"
-  ShowDirWritable="$?"
+  ShowDirWritable="$?" ; ((filesystem_write_state+=ShowDirWritable))
   check_write "$MoveFileSize" "$AltShowDirFreeSpace"  "$AlternateShowDir"
-  AltShowDirWritable="$?"
+  AltShowDirWritable="$?" ; ((filesystem_write_state+=AltShowDirWritable))
   if [[ "$PROCESS_RECORDING_MODE" = 'MOVE' ]]; then
     check_write "1"           "$OriginalDirFreeSpace" "$originaldirname"
-    OriginalDirWritable="$?"
+    OriginalDirWritable="$?" ; ((filesystem_write_state+=OriginalDirWritable))
   else #Unknown as we won't check, the other modes don't require it.
     OriginalDirWritable='?' #This is intentionally the '?' symbol and not "$?".
   fi
   check_write "5"             "$WorkingDirFreeSpace"  "$m2kdir"
-  WorkingDirWritable="$?"
+  WorkingDirWritable="$?" ; ((filesystem_write_state+=WorkingDirWritable))
   check_write "5"             "$TempDirFreeSpace"  "$M2K_TMPDIR"
-  TempDirWritable="$?"
+  TempDirWritable="$?" ; ((filesystem_write_state+=TempDirWritable))
+
+  ((filesystem_write_state != 0)) && return 1
 }
 
 #This function provides basic testing of myth2kodi's functionality.
@@ -4197,6 +4283,7 @@ m2k_diagnostics(){
   local notifytest=""
   local PythonBindingsCheck=""
   local exitstatus
+  local filesystem_state
   inform "Diagnostic mode entered: $(date)"
   inform "myth2kodi will now conduct a series of tests."
   read -r -n1 -p "press any key to verify installed packages..."
@@ -4418,13 +4505,14 @@ m2k_diagnostics(){
     set_target_dir_as_input_path_dir
   fi
 
-  #Determine write permissions and free space for Move and Working directories.
+  #Check write permissions and free space for Move and Working directories.
   check_filesystem
+  filesystem_state="$?"
 
   #Print a summary table of writeable directories.
   msg_dir_summary
 
-  if ((MoveDirWritable + AltMoveDirWritable + WorkingDirWritable + TempDirWritable == 0)) ; then
+  if ((filesystem_state == 0)) ; then
     folderchecks="***PASSED***"
     inform "Critical Filesystem checks $folderchecks"
   else
@@ -5421,6 +5509,7 @@ SafeShowName="$(sed -r 's/[^[:alnum:] &,.)(-]//g' <<< "$SafeShowName")"
 #Format Show name for Sending to www.TheTVDB.com and KODI
 tvdbshowname=$(sed 's/ /%20/g' <<< "$ShowName" | sed 's/&/%26/g')
 
+#TODO: consider moving this up to straight after parse_command_flags...
 #Reset move paths if TargetPathIsInputPath is active, creating dirs as needed.
 if [[ "$TargetPathIsInputPath" = 'Enabled' ]]; then
   inform "TargetPathIsInputPath=Enabled. Resetting paths, creating directories."
@@ -5729,10 +5818,10 @@ if [[ "$PROCESS_RECORDING_MODE" = 'MOVE' && "$SYMLINK" = 'Disabled' ]]; then
   ((ConfidenceRating > -4)) && RequiresDoover=0
 fi
 
-#TODO: Consider turning this into an actual check with return state, then move
-#      it up to straight after the parse_command_flags block for early abort.
+#TODO: Consider moving this up to straight after the parse_command_flags block for early abort.
 #Determine write permissions and free space for Move and Working directories.
 check_filesystem
+filesystem_state="$?"
 
 msg_operation_summary
 
@@ -5763,10 +5852,12 @@ if [[ -z "$Exx" && "$InputPath" != "$m2kdir/6666_20420101084242.tst" ]]; then
 fi
 
 #TODO: Consider moving this up to directly after set_target_dir_as_input_path_dir,
-#      then once the checks of the TODO in this function are added we can add
-#      return state and abort early if there will be nowhere to write to.
-#Figure out if the file can go in the MoveDir, or if the alternate should be used
+#      and abort early if there will be nowhere to write to.
+#      Though may need to recall it as part of StorageGroupFallback
+#Set MoveDir, using alternates if necessary, falling back to FailSafeState, and
+#finally exit if there is nowhere to write to.
 set_move_location
+[[ "$?" != 0 ]] && exit_job "$EXIT_JOB_TYPE"
 
 #####OUTPUT FILE NAME FORMATTING#####
 #Format Shows
@@ -5786,19 +5877,14 @@ fi
 #### MAKE THE DIRECTORY WE'LL MOVE THE RECORDING TO ####
 make_show_dir
 
-#####FAILSAFE HANDLING#####
-#TODO: Review the "FailSafe" handling throughout the script.
-#If failsafe state is set then create link in FailSafeMode
-if [ "$FailSafeState" = "1" ]; then
-  #failsafe activates MoveDir = failsafe dir and link mode is used
+#### FAILSAFE HANDLING ####
+#If failsafe state is set then try to create link in FailSafeMode
+if [[ "$FailSafeState" = "1" ]]; then
   failsafe
-  #TODO: undo and doover entries not being generated here... However, can't just call them
-  #      as failsafe() doesn't set MoveDir=$FailSafeDir. Need to clean this up when refactoring
-  #      main... see, make_show_dir and TODO in set_move_location
   exit_job "$EXIT_JOB_TYPE"
 fi
 
-#####ANTI-CLOBBER#####
+#### ANTI-CLOBBER ####
 if [[ -f "$MoveDir/$ShowFileName.$OriginalExt" ]]; then
   if [[ "$FORCE_PROCESS" = 'Enabled' ]]; then
     increment_target_file_name
@@ -5811,8 +5897,8 @@ fi
 #If this is a test file, then exit now.
 [[ "$InputPath" = "$m2kdir/6666_20420101084242.tst" ]] && testfile_exit
 
-#If the user is not mythtv and the settings are set for mythtv only, then exit, display a clear status message.
-check_path_permission "$InputPath"
+#Check that we are able to read and write InputPath. #TODO: Consider if LINK or COPY downgrade this to requiring 'r' only
+check_path_permission "$InputPath" 'rw'
 
 #If the show is generic programming, this is the best myth2kodi can do.
 [[ "$m2kProgramIDCheck" = "SH" ]] && msg_show_warning

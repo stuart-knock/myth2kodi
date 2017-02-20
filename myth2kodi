@@ -279,6 +279,11 @@ TRACKING='Enabled'
 #Default: ''
 SHOW_FILE_NAME_APPEND=''
 
+#There are some checks in the script that prevent reprocessing a recording that
+#we have already processed. Enabling this option skips those checks.
+#Options: ['Enabled'|'Disabled'(DEFAULT)]
+FORCE_PROCESS='Disabled'
+
 ############################# Directory Settings #############################
 
 #myth2kodi working directory: Default: "$HOME/.myth2kodi"
@@ -583,6 +588,11 @@ exit_job(){
       err "$ERR_HEADER myth2kodi called incorrectly: $jobtype"
       exitstatus=1
       ;;
+    #Already processed
+    RecordingAlreadyProcessed)
+      warn "THE PROVIDED RECORDING HAS ALREADY BEEN PROCESSED, ABORTING."
+      exitstatus=0
+      ;;
     #Catch any incorrectly set exit types.
     *)
       warn "Unrecognised exit job type: '$jobtype'"
@@ -807,8 +817,14 @@ validate_settings(){
     [[ "${!var}" =~ ^(Enabled|Disabled)$ ]] || err "$var $msg"
   done
 
+  msg="PROCESS_RECORDING_MODE is expected to be set as one of ['MOVE'|'LINK'|'COPY']."
+  [[ "$PROCESS_RECORDING_MODE" =~ ^(MOVE|LINK|COPY)$ ]] || err "$msg"
+
   msg="DATABASE_ACCESS is expected to be set as either 'PythonBindings' or 'MySQL'."
   [[ "$DATABASE_ACCESS" =~ ^(PythonBindings|MySQL)$ ]] || err "$msg"
+
+  msg="Processing in COPY mode without FORCE_PROCESS='Enabled' will not copy already processed recordings."
+  [[ "$PROCESS_RECORDING_MODE" = 'COPY' && "$FORCE_PROCESS" != 'Enabled' ]] &&  warn "$msg"
 
   #Check that all user set directories are, in fact, directories.
   msg='is not a directory:'
@@ -845,6 +861,10 @@ validate_settings(){
 validate_args(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   #TODO: Review/Expand the checks of whether we were called correctly.
+
+  debug "Called with $m2karg_count arguments. Called as:"
+  debugcont "myth2kodi '$m2karg1' \"$m2karg2\" \"$m2karg3\" \"$m2karg4\" '$m2karg5' '$m2karg6'"
+
   #We need at least one arg
   if [[ -z "$m2karg1" ]]; then
     NOTIFY_MSG='myth2kodi must be called with at least one argument.'
@@ -860,18 +880,73 @@ validate_args(){
     return 1
   fi
 
-  #If the first arg isn't a switch or our testfile, then it must be a file.
-  if [[ "${m2karg1:0:1}" != "-" && "$m2karg1" != "testfile.ext" && ! -f "$m2karg1" ]]; then
-    if [[ "$Notify" = 'Enabled' ]]; then
-      NOTIFY_MSG="The specified InputPath is not a file."
+  #Validations that only apply when our first argument is not a switch.
+  if [[ "${m2karg1:0:1}" != "-" ]]; then
+
+    #Our first argument must be a file.
+    if [[ ! -f "$m2karg1" ]]; then
+      NOTIFY_MSG='The specified InputPath is not a file.'
+      err "${FUNCNAME[0]}(): $NOTIFY_MSG."
+      msg_invalid_path_error "$m2karg1"
+      EXIT_JOB_TYPE='InputPathNotFile'
+      return 1
     fi
-    err "${FUNCNAME[0]}(): InputPath is not a file."
-    msg_usage
-    EXIT_JOB_TYPE='InputPathNotFile'
+
+    #Do not reprocess a recording we already processed, unless forced to.
+    if [[ "$FORCE_PROCESS" != 'Enabled' ]]; then
+      pre_process_check "$m2karg1"
+      [[ "$?" != 0 ]] && return 1
+    fi
+
+  fi
+  debug "Arguments seem valid."
+  return 0
+}
+
+#Given a file to process, returns 1 if it's not actually a MythTV recording
+#file or if we have already processed it, otherwise returns 0.
+pre_process_check(){
+  debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
+  debugcont "arg1: $1"
+  #Takes a single argument
+  (( "$#" > 1 )) && { err "${FUNCNAME[0]}() only takes one arg."; return 1 ; }
+  local FILE="$1"
+  [[ -f "$FILE" ]] || { err "${FUNCNAME[0]}(): Not a file: $FILE"; return 1; }
+  #A regex that should match MythTVs file naming, for the 21st century.
+  local RECPATTERN='[0-9]{4}_20[0-9]{2}[0-1][0-9][0-3][0-9][0-2][0-9][0-5][0-9]{3}'
+
+  #Is FILE named like a MythTV recording
+  if [[ "$FILE" =~ $RECPATTERN ]]; then #NOTE: Don't quote the RHS
+    debug "Looks ok, FILE is named like a MythTV recording: $FILE"
+  else
+    NOTIFY_MSG="This does not look like a MythTV recording: $FILE"
+    err "${FUNCNAME[0]}() CALLED FROM: ${FUNCNAME[1]}(): $NOTIFY_MSG"
+    EXIT_JOB_TYPE='FileIsNotRecording'
     return 1
   fi
 
-  debug "Call seems correct: myth2kodi '$m2karg1' \"$m2karg2\" \"$m2karg3\" \"$m2karg4\" '$m2karg5' '$m2karg6'"
+  #Has FILE already been processed
+  if [[ -L "$FILE" ]]; then #it's already processed
+    NOTIFY_MSG="We've already processed this recording: $FILE => $(readlink "$FILE")"
+    err "${FUNCNAME[0]}() CALLED FROM: ${FUNCNAME[1]}(): $NOTIFY_MSG"
+    EXIT_JOB_TYPE='RecordingAlreadyProcessed'
+    return 1
+  else #check if it was processed in LINK mode
+    RECORDING_FILE="$(realpath "$FILE")"
+    local -i found=1 #We'll be trying to find a link: 0=success; 1=failure.
+    local -a check_dirs
+    check_dirs=("$MoveDir" "$PrimaryMovieDir" "$PrimaryShowDir" "$AlternateMoveDir" "$AlternateMovieDir" "$AlternateShowDir")
+    for check_dir in "${check_dirs[@]}" ; do
+      LINK_NAME="$(find -L "$check_dir" -samefile "$RECORDING_FILE")"
+      [[ -L "$LINK_NAME" ]] && { found=0 ; break ; }
+    done
+    if (( found == 0 )); then
+      NOTIFY_MSG="We've already processed this recording: $LINK_NAME => $FILE."
+      err "${FUNCNAME[0]}() CALLED FROM: ${FUNCNAME[1]}(): $NOTIFY_MSG"
+      EXIT_JOB_TYPE='RecordingAlreadyProcessed'
+      return 1
+    fi
+  fi
   return 0
 }
 
@@ -3024,7 +3099,7 @@ download_series_identification(){
   return 0
 }
 
-#A special exit point for when we're processing testfile.ext
+#A special exit point for when we're processing our diagnostics test file.
 testfile_exit(){
   #TODO: Consider using [[ -n "$(find ./dir -prune -empty)" ]] instead...
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
@@ -3993,7 +4068,7 @@ msg_operation_summary(){
 check_filesystem(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   #Get file size for the recording we are processing.
-  if [[ -f "$InputPath" ]]; then
+  if [[ -f "$InputPath" ]]; then #Not TEST_FILE
     MoveFileSize=$(wc --bytes < "$InputPath")
   else
     MoveFileSize=1000000000 #default to ~1GB for diagnostics.
@@ -4036,7 +4111,7 @@ check_filesystem(){
   check_write "$MoveFileSize" "$AltShowDirFreeSpace"  "$AlternateShowDir"
   AltShowDirWritable="$?"
   if [[ "$PROCESS_RECORDING_MODE" = 'MOVE' ]]; then
-    check_write "1"             "$OriginalDirFreeSpace" "$originaldirname"
+    check_write "1"           "$OriginalDirFreeSpace" "$originaldirname"
     OriginalDirWritable="$?"
   else #Unknown as we won't check, the other modes don't require it.
     OriginalDirWritable='?' #This is intentionally the '?' symbol and not "$?".
@@ -4280,7 +4355,7 @@ m2k_diagnostics(){
     err "Communication failed for $KODI_COMM_FAILURES of ${#KODIIPs[@]} Kodi instances."
   fi
 
-  #Check filesystem permissions
+  #Check file system permissions
   read -r -n1 -p "Press any key to test file system permissions..."
   printf '\n'
   inform "Testing file system permissions"
@@ -4292,7 +4367,7 @@ m2k_diagnostics(){
     set_target_dir_as_input_path_dir
   fi
 
-  #Check write permissions and free space for Move and Working directories.
+  #Determine write permissions and free space for Move and Working directories.
   check_filesystem
 
   #Print a summary table of writeable directories.
@@ -4313,15 +4388,25 @@ m2k_diagnostics(){
   if [ "$overallchecks" = "***PASSED***" ]; then
     read -r -n1 -p "press any key to test myth2kodi..."
     printf '\n'
+
+    #Create a dummy recording file for testing.
+    local TEST_FILE="$m2kdir/6666_20420101084242.tst"
+    touch "$TEST_FILE"
+
     inform "Recordings Database is not used for testing."
     informcont "Performing fuzzy logic lookup on database file. Please wait."
     informcont "It may take a moment to build the myth2kodi database files."
-    informcont "Executing: myth2kodi 'testfile.ext' 'mister rogers' 'show 1332'"
+    informcont "Executing: myth2kodi '$TEST_FILE' 'mister rogers' 'show 1332'"
     informcont "Testing exit status..."
 
-    myth2kodi 'testfile.ext' 'mister rogers' 'show 1332'
+    #Run myth2kodi against the dummy file
+    myth2kodi "$TEST_FILE" 'mister rogers' 'show 1332'
     exitstatus="$?"
     informcont  "exited with status $exitstatus"
+
+    #Clean-up the dummy recording file.
+    [[ -f "$TEST_FILE" ]] && rm -f "$TEST_FILE"
+
     if [ "$exitstatus" = "0" ]; then
       mythicaltest="***PASSED***"
     else
@@ -5244,9 +5329,6 @@ inform "Processing: $InputPath"
 
 InputFileBasename="$(basename "$InputPath")" #"${InputPath##*/}"
 
-#TODO: Use find_file_link_pairs() early abort here to prevent reprocessing,
-#      probably need to allow for forced reprocessing...
-
 #As long as we're not in diagnostics mode, gather info from MythTV-DB.
 if [[ "$m2kDiagnosticsMode" != "True" ]]; then
   process_mythtvdb
@@ -5596,22 +5678,16 @@ if [[ "$PROCESS_RECORDING_MODE" = 'MOVE' && "$SYMLINK" = 'Disabled' ]]; then
   ((ConfidenceRating > -4)) && RequiresDoover=0
 fi
 
-#####INVALID FILE HANDLING#### #TODO: This should come straight after arg parse and the Initial log entry for the processing of recording
-#If file to be moved does not exist, then report
-if [[ ! -f "$InputPath" && "$InputPath" != "testfile.ext" ]]; then
-  msg_invalid_path_error "$InputPath"
-  NOTIFY_MSG="InputPath not a file: '$InputPath'"
-  exit_job 'FileOrPathDoesNotExist'
-fi
-
-#Check write permissions and free space for Move and Working directories.
+#TODO: Consider turning this into an actual check with return state, then move
+#      it up to straight after the parse_command_flags block for early abort.
+#Determine write permissions and free space for Move and Working directories.
 check_filesystem
 
 msg_operation_summary
 
 ######PRE-NAMING CHECKS#####
 #if no episode data and it's not a movie or a test
-if [[ -z "$Exx" && "$InputPath" != "testfile.ext" ]]; then
+if [[ -z "$Exx" && "$InputPath" != "$m2kdir/6666_20420101084242.tst" ]]; then
   if [[ -z "$ChanID" && -n "$InputPath" ]]; then #TODO: check this...
     NOTIFY_MSG="Episode could not be matched based on supplied Title and SubTitle."
     warn "$NOTIFY_MSG"
@@ -5635,6 +5711,9 @@ if [[ -z "$Exx" && "$InputPath" != "testfile.ext" ]]; then
   fi
 fi
 
+#TODO: Consider moving this up to directly after set_target_dir_as_input_path_dir,
+#      then once the checks of the TODO in that function are added we can add
+#      return state and abort early if there will be nowhere to write to.
 #Figure out if the file can go in the MoveDir, or if the alternate should be used
 set_move_location
 
@@ -5724,7 +5803,7 @@ if [[ -f "$MoveDir/$ShowFileName.$OriginalExt" ]]; then
 fi
 
 #If this is a test file, then exit now.
-[[ "$InputPath" = "testfile.ext" ]] && testfile_exit
+[[ "$InputPath" = "$m2kdir/6666_20420101084242.tst" ]] && testfile_exit
 
 #If the user is not mythtv and the settings are set for mythtv only, then exit, display a clear status message.
 check_path_permission "$InputPath"

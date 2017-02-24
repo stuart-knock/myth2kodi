@@ -1696,6 +1696,7 @@ add_doover(){
     fi
     #Write doover.sh line that recalls myth2kodi in the same way it was originally called:
     printf '%s\n' "myth2kodi '$m2karg1' \"$m2karg2\" \"$m2karg3\" \"$m2karg4\" '$m2karg5' '$m2karg6'" >> "$m2kdir/doover.sh"
+    return "$?"
   else
     err "${FUNCNAME[0]}(): should only be called if job requires doover."
     errcont "RequiresDoover: $RequiresDoover"
@@ -1990,6 +1991,7 @@ get_mythtvdb_info(){
   case "$DATABASE_ACCESS" in
     MySQL)
       get_mythtvdb_info_mysql
+      return "$?"
       ;;
     PythonBindings)
       get_mythtvdb_info_pythonbindings
@@ -1999,6 +2001,7 @@ get_mythtvdb_info(){
         EXIT_JOB_TYPE='MythTVdatabaseFailure'
         return 1
       fi
+      return 0
       ;;
     *)
       NOTIFY_MSG="DATABASE_ACCESS incorrectly specified."
@@ -2074,18 +2077,17 @@ process_mythtvdb_schedulesdirect(){
   m2kProgramIDCheck="${ProgramID:0:2}"
 
   #Extrapolate data from Programid
-  test "$m2kProgramIDCheck" = "SH" && ProgramIDType="Generic Episode With No Data"
-  test "$m2kProgramIDCheck" = "MV" && ProgramIDType="Movie"
-  test "$m2kProgramIDCheck" = "EP" && ProgramIDType="Series With Episode Data"
-  test "$m2kProgramIDCheck" = "SP" && ProgramIDType="Sports Programming" && m2kProgramIDCheck=SH
+  [[ "$m2kProgramIDCheck" = "SH" ]] && ProgramIDType="Generic Episode With No Data"
+  [[ "$m2kProgramIDCheck" = "MV" ]] && ProgramIDType="Movie"
+  [[ "$m2kProgramIDCheck" = "EP" ]] && ProgramIDType="Series With Episode Data"
+  [[ "$m2kProgramIDCheck" = "SP" ]] && ProgramIDType="Sports Programming" && m2kProgramIDCheck=SH
 
   #account for .0123's in EITonly data type
   ProgramID="$(cut -f1 -d"." <<< "$ProgramID")"
 
   #Check if database contains enough information to put into doover que
   GoForDoover=0
-  test "${x:0:2}" = "EP" && echo woot
-  test "$EpisodeSubtitle" != "" && GoForDoover=1
+  [[ "$EpisodeSubtitle" != "" ]] && GoForDoover=1
 
   #Get barebones zap2it series id.
   Zap2itSeriesID=$(echo "$ProgramID" | tr -d MVSHEP | sed 's/0*//' | sed 's/.\{4\}$//')
@@ -2708,8 +2710,8 @@ get_serieslinenumber_showname_fuzzy(){
   debugcont "ShowName: $ShowName"
   debugcont "TMP_SHN_FILE: $TMP_SHN_FILE"
   debugcont "serieslinenumber: $serieslinenumber"
-  #TODO: Why the restriction to the first 27 characters for matching here???
-  serieslinenumber=$(agrep -iBynk "${ShowName:0:27}" "$TMP_SHN_FILE" | sed 's/:.*//' | grep -m1 ^)
+  #Some systems (Ubuntu) have an agrep that limits PATTERN to < 32 characters...
+  serieslinenumber=$(agrep -iBynk "${ShowName:0:29}" "$TMP_SHN_FILE" | grep -m1 -o '^[0-9]*')
   #Correct for serieslinenumber = ""
   [[ -z "$serieslinenumber" ]] && serieslinenumber=0
 
@@ -2726,7 +2728,7 @@ get_serieslinenumber_showname_fuzzy(){
 #against show names returned by querying TheTVDB.
 get_serieslinenumber_showname(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  serieslinenumber="$(grep -nix "$ShowName" "$TMP_SHN_FILE" | sed 's/:.*//' | grep -m1 ^)"
+  serieslinenumber="$(grep -nix "$ShowName" "$TMP_SHN_FILE" | grep -m1 -o '^[0-9]*')"
 
   #Correct for serieslinenumber = ""
   [[ -z "$serieslinenumber" ]] && serieslinenumber=0
@@ -2745,7 +2747,7 @@ resolve_multiple_matches_airdate(){
   test -f "$NewShowBasename.InstanceFAiredLineNumbers.txt" && rm "$NewShowBasename.InstanceFAiredLineNumbers.txt"
   test -f "$NewShowBasename.InstanceLineNumbers.txt"       && rm "$NewShowBasename.InstanceLineNumbers.txt"
   #Create a list of line numbers which match original airdate
-  grep -n "$OriginalAirDate" "$NewShowBasename.FAired.txt" | sed 's/:.*//'>>"$NewShowBasename.InstanceFAiredLineNumbers.txt"
+  grep -n "$OriginalAirDate" "$NewShowBasename.FAired.txt" | cut -d':' -f1 >> "$NewShowBasename.InstanceFAiredLineNumbers.txt"
   #Loop through list and create instance matching files
   while read -r line ; do
     echo "$line" >>"$NewShowBasename.InstanceLineNumbers.txt"
@@ -2753,7 +2755,7 @@ resolve_multiple_matches_airdate(){
   done < "$NewShowBasename.InstanceFAiredLineNumbers.txt"
 
   #get instance line number
-  IntermediateEpisodeNumber=$(grep -ni "$EpisodeSubtitle" "$NewShowBasename.InstanceEnames.txt" | grep -m1 ^ | sed 's/:.*//')
+  IntermediateEpisodeNumber=$(grep -ni "$EpisodeSubtitle" "$NewShowBasename.InstanceEnames.txt" | grep -m1 -o '^[0-9]*')
   #translate instance line number to actual line number
   if [[ -n "$IntermediateEpisodeNumber" ]]; then
     AbsoluteEpisodeNumber=$(sed -n "$IntermediateEpisodeNumber"'p' "$NewShowBasename.InstanceLineNumbers.txt")
@@ -2763,8 +2765,8 @@ resolve_multiple_matches_airdate(){
     return 0
   else
     ConfidenceReasoning="$ConfidenceReasoning Failed; Attempted to resolve conflict with Fuzzy Logic:"
-    #get instance line number
-    IntermediateEpisodeNumber=$(agrep -iByn "^$EpisodeSubtitle" "$NewShowBasename.InstanceEnames.txt" | grep -m1 ^ | sed 's/:.*//')
+    #get instance line number -- Some systems have an agrep that limits PATTERN to < 32 characters...
+    IntermediateEpisodeNumber=$(agrep -iByn "^${EpisodeSubtitle:0:28}" "$NewShowBasename.InstanceEnames.txt" | grep -m1 -o '^[0-9]*')
     #translate instance line number to actual line number
     if [[ -n "$IntermediateEpisodeNumber" ]]; then
       AbsoluteEpisodeNumber=$(sed -n "$IntermediateEpisodeNumber"'p' "$NewShowBasename.InstanceLineNumbers.txt")
@@ -2809,7 +2811,7 @@ set_absolute_episode_number_by_airdate(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   AbsoluteEpisodeNumber=""
   if [[ -n "$OriginalAirDate" ]]; then
-    AbsoluteEpisodeNumber="$(grep -n "$OriginalAirDate" "$m2kdir/$NewShowName/$NewShowName.FAired.txt" | grep -m1 ^ | sed 's/:.*//')"
+    AbsoluteEpisodeNumber="$(grep -n "$OriginalAirDate" "$m2kdir/$NewShowName/$NewShowName.FAired.txt" | grep -m1 -o '^[0-9]*')"
   fi
   #Account for original series airdate
   if [[ -n "$AbsoluteEpisodeNumber" ]] && ((AbsoluteEpisodeNumber > 0)); then
@@ -2840,8 +2842,8 @@ set_absolute_episode_number_by_sxxexx(){
   local Enum=${Exx#E} ; Enum=${Enum#0}
   local SxxAENs
   local ExxAENs
-  SxxAENs=$(grep -nix "$Snum" "$m2kdir/$NewShowName/$NewShowName.S.txt" | sed 's/:.*//') #TODO: As far as I can tell we don't ever get ':' in season number, etc, yet these sed 's/:.*//' are everywhere???
-  ExxAENs=$(grep -nix "$Enum" "$m2kdir/$NewShowName/$NewShowName.E.txt" | sed 's/:.*//')
+  SxxAENs=$(grep -nix "$Snum" "$m2kdir/$NewShowName/$NewShowName.S.txt" | cut -d':' -f1 )
+  ExxAENs=$(grep -nix "$Enum" "$m2kdir/$NewShowName/$NewShowName.E.txt" | cut -d':' -f1 )
   #With multiple data sources we can get multiple AENs, just take the first data source:
   AENs=($(sort --numeric-sort <<< "$(comm -12 <(sort <<< "$SxxAENs") <(sort <<< "$ExxAENs"))"))
   AbsoluteEpisodeNumber="${AENs[0]}"
@@ -2883,7 +2885,9 @@ getAbsoluteEpisodeNumberWithFuzzyPlotMatch(){
   #If Plot length is short this really won't work well, so give up #TODO: figure out what length is genuinely too short...
   ((PlotLength<42)) && warn "${FUNCNAME[0]}(): Plot is too short to attempt fuzzy guess." && return 1
   #Fuzzy guess at plot, prepended with: "AbsoluteEpisodeNumber:cost:"
+  #TODO: Some systems have an agrep that limits PATTERN to < 32 characters...
   FuzzyPlot=($(agrep -iBynsk "$Plot" "$m2kdir/$NewShowName/$NewShowName.Plot.txt"))
+  [[ $? != 0 ]] && agrep -iBynsk "$Plot" "$m2kdir/$NewShowName/$NewShowName.Plot.txt" 2>&1 | err_pipe 'FuzzyPlot: '
   [[ -z "${FuzzyPlot[0]}" ]] && warn "${FUNCNAME[0]}(): No fuzzy match on Plot" && return 1
   #Extract our guessed AbsoluteEpisodeNumber
   AENguess=($(cut -f1 -d":" <<< "$(printf '%s\n' "${FuzzyPlot[@]}")"))
@@ -2935,7 +2939,8 @@ getAbsoluteEpisodeNumberWithFuzzyPlotMatch(){
       ChunkLengths[i]=$(wc --chars <<< "$chunk")
       debugcont "ChunkLengths[$i]=${ChunkLengths[i]}"
       len10per=$(( ChunkLengths[i] / 10 ))
-      fuzzychunk=($(agrep -iBynsk -e "$chunk" "$m2kdir/$NewShowName/$NewShowName.Plot.txt"))
+      #Some systems have an agrep that limits PATTERN to < 32 characters...
+      fuzzychunk=($(agrep -iBynsk -e "${chunk:0:29}" "$m2kdir/$NewShowName/$NewShowName.Plot.txt"))
       FuzzyChunks[i]="${fuzzychunk[0]}"
       debugcont "FuzzyChunks[$i]=${FuzzyChunks[i]}"
       ChunkGuesses[i]=$(cut -f1 -d":" <<< "${FuzzyChunks[i]}")
@@ -3023,7 +3028,7 @@ getAbsoluteEpisodeNumberWithFuzzyPlotMatch(){
 set_absolute_episode_number_by_ename(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   AbsoluteEpisodeNumber=""
-  AbsoluteEpisodeNumber=$(grep -nix "$EpisodeSubtitle" "$m2kdir/$NewShowName/$NewShowName.Ename.txt" | grep -m1 ^ | sed 's/:.*//')
+  AbsoluteEpisodeNumber=$(grep -nix "$EpisodeSubtitle" "$m2kdir/$NewShowName/$NewShowName.Ename.txt" | grep -m1 -o '^[0-9]*')
   if [[ -n "$AbsoluteEpisodeNumber" ]] && ((AbsoluteEpisodeNumber > 0)); then
     return 0
   fi
@@ -3039,7 +3044,8 @@ set_absolute_episode_number_by_ename_fuzzy(){
   #  currently, the former would be associated with 'The Delivery (1)'
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   AbsoluteEpisodeNumber=""
-  AbsoluteEpisodeNumber=$(agrep -iByn "^$EpisodeSubtitle" "$m2kdir/$NewShowName/$NewShowName.Ename.txt" | grep -m1 ^ | sed 's/:.*//')
+  #Some systems have an agrep that limits PATTERN to < 32 characters...
+  AbsoluteEpisodeNumber=$(agrep -iByn "^${EpisodeSubtitle:0:28}" "$m2kdir/$NewShowName/$NewShowName.Ename.txt" | grep -m1 -o '^[0-9]*')
   if [[ -n "$AbsoluteEpisodeNumber" ]] && ((AbsoluteEpisodeNumber > 0)); then
     return 0
   fi
@@ -3145,6 +3151,7 @@ increment_fuzzy_logic_error_count(){
   FuzzyLogicError="$(<"$m2kdir/FuzzyLogicError.log")"
   (( ++FuzzyLogicError ))
   printf '%s\n' "$FuzzyLogicError" > "$m2kdir/FuzzyLogicError.log"
+  return "$?"
 }
 
 #Increment the number contained in "$m2kdir/TotalEpisodeMatches.log"
@@ -3158,6 +3165,7 @@ increment_total_matches(){
   FuzzyLogicMatches="$(<"$m2kdir/TotalEpisodeMatches.log")"
   (( ++FuzzyLogicMatches ))
   printf '%s\n' "$FuzzyLogicMatches" > "$m2kdir/TotalEpisodeMatches.log"
+  return "$?"
 }
 
 #Check to see if a path/file is owned by $Librarian or at least that $Librarian
@@ -3269,6 +3277,7 @@ msg_show_warning(){
   informcont "recognised episode of a series."
   informcont "TYPE: $ProgramIDType- $InputTitle, $InputSubtitle"
   warn "m2kProgramIDCheck='SH', this can occur due to incomplete guide data."
+  return 0
 }
 
 #A message for when we've successfully moved a recording.
@@ -3773,9 +3782,11 @@ process_cleanup_file(){
   #If we're not in debug mode then remove the clean-up file we just processed.
   if (( LOGLEVEL < 3 )); then
     rm -f "$CLEANUP_FILE"
+    return "$?"
   else
     debug "Not removing temporary clean-up file: '$CLEANUP_FILE'"
   fi
+  return 0
 }
 
 #Clean-up old files we don't need any more: log files; m2k database files; etc.
@@ -4074,6 +4085,7 @@ set_group_permission(){
   #Add read and write permissions for the group to the moved recording.
   chmod g=rw "$MoveDir/$ShowFileName.$OriginalExt"
   #TODO:#NOTE: the above command is slightly inconsistent with the comment as = also implies removal of any unmentioned attributes.
+  return "$?"
 }
 
 #Prints a table summarising the status of important directories.
@@ -4090,6 +4102,7 @@ msg_dir_summary(){
   informcont "$(printf '%-18s|  %s  | %10s | %s\n' "AlternateMovieDir" "$AltMovieDirWritable" "$AltMovieDirFreeSpace MB" "$AlternateMovieDir")"
   informcont "$(printf '%-18s|  %s  | %10s | %s\n' "PrimaryShowDir"    "$ShowDirWritable"     "$ShowDirFreeSpace MB"     "$PrimaryShowDir"   )"
   informcont "$(printf '%-18s|  %s  | %10s | %s\n' "AlternateShowDir"  "$AltShowDirWritable"  "$AltShowDirFreeSpace MB"  "$AlternateShowDir" )"
+  return 0
 }
 
 #A message summarizing myth2kodi's operation
@@ -4149,6 +4162,7 @@ msg_operation_summary(){
     fi
   fi
   inform "################ END OF OPERATION SUMMARY ################"
+  return 0
 }
 
 #If target file exists then this function makes a new name for it.
@@ -4259,7 +4273,9 @@ check_filesystem(){
   check_write "5"             "$TempDirFreeSpace"  "$M2K_TMPDIR"
   TempDirWritable="$?" ; ((filesystem_write_state+=TempDirWritable))
 
+  debug "filesystem_write_state=$filesystem_write_state"
   ((filesystem_write_state != 0)) && return 1
+  return 0
 }
 
 #This function provides basic testing of myth2kodi's functionality.

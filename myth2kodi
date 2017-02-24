@@ -1256,8 +1256,9 @@ dailyreport(){
   if [ "$DailyReport" = 'Enabled' ]; then
     [[ ! -d "$m2kdir/DailyReport" ]] && mkdir "$m2kdir/DailyReport"
     local reporttime ; reporttime=$(date +%T) #TODO: This should use a time generated at the same time as $Today otherwise processing near midnight could cause misleading information.
-    inform "Writing to DailyReport file: ${Today}"
+    debug "Writing to DailyReport file: ${Today}"
     printf '%s\n' "$reporttime - $ShowFileName" >> "$m2kdir/DailyReport/${Today}"
+    return "$?"
   fi
   return 0
 }
@@ -2547,7 +2548,7 @@ download_series_info(){
     if [ "$GotNewInformation" = "1" ] ; then
       #Clear out the old
       inform "Downloaded new information for $NewShowName"
-      inform 'Cleaning up old information before processing.'
+      debug 'Cleaning up old information before processing.'
       test -f "$dbdir/$NewShowName.xml" && mv "$dbdir/$NewShowName.xml" "$dbdir/${Today}_$NewShowName.xml"
       mv "$dbdir/$NewShowName.xmlTest" "$dbdir/$NewShowName.xml"
       test -f "$dbdir/$NewShowName.actualEname.txt" && rm -f "$dbdir/$NewShowName.actualEname.txt"
@@ -4148,7 +4149,7 @@ msg_operation_summary(){
     debugcont  "MovieAirDate=$MovieAirDate-"
     debugcont  "OriginalAirDate=$OriginalAirDate-"
     informcont "ProgramID=$ProgramID-"
-    informcont "ChanID=$ChanID-"
+    debugcont "ChanID=$ChanID-"
     informcont "StorageGroup=$StorageGroup-"
     informcont "ShowCategory=$ShowCategory-"
     debugcont  "GoForDoover=$GoForDoover-"

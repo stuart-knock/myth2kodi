@@ -1887,6 +1887,10 @@ get_mythtvdb_info_pythonbindings(){
   [[ "$?" != 0 ]] && { err "${FUNCNAME[0]}(): Failed to create temporary recinfo file." ; return 1 ; }
   debug "Storing MythTV-DB info in temporary file: '$MTV_RECINFO_FILE'"
 
+  #TODO: Temporary hack to clean-up shellcheck so it's easier to see actual
+  #      problems... See mdb_ related TODOs
+  local startdata stopdata title subtitle season episode category airdate originalairdate storagegroup stars description seriesid programid chanid starttime xmltvgrabber
+
   #NOTE: the declare also makes them local, so we'd need to mark them global
   #      with -g to access them outside of the function.
   # declare -ga mdb_startdata
@@ -2098,7 +2102,7 @@ process_mythtvdb_schedulesdirect(){
   #strip needless chars from date
   datehour=$(echo "$ShowStartTime" | tr ":" "." | tr " " "@")
   #get 4 digit year
-  seasonyear="${ShowStartTime:0:4}"
+  #TODO: Not being used, also assumes not a rerun, check and delete.#seasonyear="${ShowStartTime:0:4}"
 
   #predefined naming conventions
   if [[ "$ShowCategory" =~ ^('Sports event'|'News'|'Newsmagazine')$ ]]; then
@@ -2397,7 +2401,7 @@ process_mythtvdb_nolookup(){
   #strip needless chars from date
   datehour=$(echo "$ShowStartTime" | tr ":" "." | tr " " "@")
   #get 4 digit year
-  seasonyear="${ShowStartTime:0:4}"
+  #TODO: Not being used, also assumes not a rerun, check and delete.#seasonyear="${ShowStartTime:0:4}"
 
   #predefined naming conventions
   [[ "$ShowCategory" =~ ^(Sports event|News|Newsmagazine)$ ]] && NamingConvention="$ShowCategory"

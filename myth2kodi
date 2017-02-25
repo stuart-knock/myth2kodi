@@ -75,7 +75,7 @@
 #  recordings processed in this mode, and myth2kodi cannot undo them.
 #
 #Output-Files:
-#  myth2kodi will create several files in it's working folder. This is a
+#  myth2kodi will create several files in its working folder. This is a
 #  list of the files and their functions:
 #    +created.tracking keeps track of created comskip.txt and NFO files so they
 #      can be deleted in the future if their video file is deleted.
@@ -111,7 +111,7 @@
 #  known on TheTVDB.
 #
 #Database-internal:
-#  While myth2kodi maintains and requires it's own external file/folder
+#  While myth2kodi maintains and requires its own external file/folder
 #  database in the working directory, there is also support for integration with
 #  MythTV's internal database. MythTV Database is required for movies to be
 #  recognized and handled by myth2kodi. Also, in the event that the
@@ -121,7 +121,7 @@
 #  the type of program is extracted from the mythtv database and a determination
 #  is made weather or not there is sufficient information available to identify
 #  the show based upon guide data. In order to make myth2kodi work to
-#  it's full potential, all settings must be filled out correctly under the
+#  its full potential, all settings must be filled out correctly under the
 #  database section of the user settings. Currently, the only guide data
 #  supported is schedulesdirect through mythtv. When updating myth2kodi
 #  it is best to delete all database folders to ensure proper data formatting.
@@ -258,13 +258,13 @@ PlotMatchFallback='Enabled'
 CommercialMarkup='Enabled'
 
 #CommercialMarkupCleanup if 'Enabled', when m2k_maintenance() is run, removes
-#comskip & NFO files if the associated .mpg file can't be found.
+#comskip & NFO files if the associated .mpg file cannot be found.
 #Options: ['Enabled'(DEFAULT)|'Disabled']
 CommercialMarkupCleanup='Enabled'
 
 #Whether to track files and directories created by myth2kodi. This should always
 #be 'Enabled' when performing ordinary processing to make MythTV recordings
-#available to a Kodi library. It exists so we don't mess-up the tracking of
+#available to a Kodi library. It exists so we do not mess-up the tracking of
 #myth2kodi's modifications to our Kodi library when we want to use myth2kodi
 #with PROCESS_RECORDING_MODE='COPY' to put nicely named copies of our MythTV
 #recordings on a removable media. See, 'example_copy_to_removable_media_myth2kodi.conf'.
@@ -288,7 +288,7 @@ FORCE_PROCESS='Disabled'
 
 #myth2kodi working directory: Default: "$HOME/.myth2kodi"
 #NOTE: This is the one parameter that cannot be set in 'myth2kodi.conf' and
-#      must be set in the script -- as it's used to find 'myth2kodi.conf'.
+#      must be set in the script -- as it is used to find 'myth2kodi.conf'.
 m2kdir="$HOME/.myth2kodi"
 
 #The path which contains myth2kodi and associated scripts default=/usr/local/bin
@@ -298,10 +298,10 @@ binpath='/usr/local/bin'
 
 #The directory where myth2kodi writes its temporary files, Default='/tmp'
 #Typically, /tmp is tmpfs and so avoids unnecessary writes to disk. If you're
-#on Linux and /tmp isn't tmpfs but you would rather avoid writing to disk then
+#on Linux and /tmp is not tmpfs but you would rather avoid writing to disk then
 #/dev/shm is guaranteed to be tmpfs. Alternatively, if you're short on RAM but
-#don't mind some extra disk writes then use "$m2kdir". NOTE: When running with
-#LOGLEVEL>=3, there are a number of temporary files that aren't automatically
+#do not mind some extra disk writes then use "$m2kdir". NOTE: When running with
+#LOGLEVEL>=3, there are a number of temporary files that are not automatically
 #deleted, they will, however, be cleared as part of: myth2kodi --maintenance
 M2K_TMPDIR='/tmp'
 
@@ -759,7 +759,7 @@ m2k_init(){
     bashloggingstatus="$?"
     [[ "$bashloggingstatus" != "0" ]] && exit "$bashloggingstatus"
   else
-    printf 'ERROR: %s\n' "$binpath/bashlogging doesn't exist." | tee -a "$LOGFILE"
+    printf 'ERROR: %s\n' "$binpath/bashlogging does not exist." | tee -a "$LOGFILE"
     exit 1
   fi
 
@@ -861,12 +861,12 @@ validate_settings(){
   # check_path_permission "$FailSafeDir"       "$target_permissions"
 
   #Discourage excessive load on TheTVDB.
-  msg="Don't update from TheTVDB more than once per day, ie set UpdateDatabase>=86400."
+  msg="Do not update from TheTVDB more than once per day, ie set UpdateDatabase>=86400."
   ((UpdateDatabase < 86400)) && err "$msg"
 
   #PROCESS_RECORDING_MODE='LINK' and SYMLINK='Disabled' are incompatible
   if [[ "$PROCESS_RECORDING_MODE" = 'LINK' && "$SYMLINK" != 'Enabled' ]]; then
-    err "Using LINK mode processing without 'SYMLINK'ing set as 'Enabled' doesn't make sense."
+    err "Using LINK mode processing without 'SYMLINK'ing set as 'Enabled' does not make sense."
     return 1
   fi
   return 0
@@ -1740,7 +1740,7 @@ add_undo(){
       printf ' %s\n' "rm -f \"$MoveDir/$ShowFileName.$OriginalExt\""
     } >> "$m2kdir/undo.sh"
   elif [[ "$PROCESS_RECORDING_MODE" = 'MOVE' && "$SYMLINK" = 'Disabled' && "$RequiresDoover" != "1" ]]; then
-    debug "'MOVE' mode with SYMLINK=Disabled and doesn't require doover, so MythTV-DB info has been removed."
+    debug "'MOVE' mode with SYMLINK=Disabled and does not require doover, so MythTV-DB info has been removed."
     inform "No undo.sh entry will be added for this recording:"
     informcont "File Name: $MoveDir/$ShowFileName.$OriginalExt"
   fi
@@ -1773,7 +1773,7 @@ failsafe(){
       return 1
     fi
   else
-    inform "FailSafeMode or SYMLINK Disabled, we won't try and make a link as a fallback."
+    inform "FailSafeMode or SYMLINK Disabled, we will not try and make a link as a fallback."
     return 0
   fi
   return 0
@@ -2180,8 +2180,8 @@ remove_sxxexx_from_plot(){
       Plot="${Plot%%*([[:space:]])}"
     fi
   else
-    debug "SeasonEpisode isn't currently set:"
-    debugcont "So, either it's not there or we haven't extracted it yet, not discarding from Plot field."
+    debug "SeasonEpisode is not currently set:"
+    debugcont "So, either it is not there or we have not extracted it yet, not discarding from Plot field."
   fi
 }
 
@@ -2220,7 +2220,7 @@ remove_subtitle_from_plot(){
       Plot="${Plot/$STstring/}"
     fi
   else
-    debug "InputSubtitle isn't currently set, so not going to discard it from Plot field."
+    debug "InputSubtitle is not currently set, so not going to discard it from Plot field."
   fi
 }
 
@@ -2500,7 +2500,7 @@ check_m2k_database_up_to_date(){
       inform "DATABASE OUT OF DATE. Next update: $NextUpdate. Current: $CurrentTimeTVDB"
       return 1
     else
-      debug "TheTVDB doesn't appear to have any updates for $NewShowName."
+      debug "TheTVDB does not appear to have any updates for $NewShowName."
       #TODO: SeriesID isn't being found in UpdatesList for Grey's Anatomy, Marvel's Agents of S.H.I.E.L.D., and possibly others, so the the local data isn't being updated
       #inform "DATABASE DOESN'T APPEAR TO BE OUT OF DATE. BUT UNFORTUNATELY WE CURRENTLY HAVE A BUG HERE SO ARE FORCING UPDATE ANYWAY..."
       #return 1 #TODO: This is a current work around for some Series not being found in the UpdatesList from thetvdb, even though updated data is available...
@@ -2672,7 +2672,7 @@ download_series_info(){
       err "${FUNCNAME[0]}(): UNEXPECTED ERROR comparing new to old information for $NewShowName"
       return 1
     elif [ "$GotNewInformation" = "0" ]; then
-      inform "TheTVDB information for $NewShowName hasn't changed since last download."
+      inform "TheTVDB information for $NewShowName has not changed since last download."
       return 0
     fi
   else
@@ -2705,7 +2705,7 @@ get_serieslinenumber_zap2itid(){
       return 0
     fi
   done < "$TMP_ZAP2IT_FILE"
-  warn "${FUNCNAME[0]}(): couldn't find serieslinenumber with Zap2itSeriesID"
+  warn "${FUNCNAME[0]}(): could not find serieslinenumber with Zap2itSeriesID"
   serieslinenumber=0
   return 1
 }
@@ -2915,7 +2915,7 @@ getAbsoluteEpisodeNumberWithFuzzyPlotMatch(){
       debugcont "MatchedPlot $i: ${MatchedPlot[i]}"
     done
   else
-    warn "This version of agrep limits PATTERN to < 32 characters, so can't do complete Plot match."
+    warn "This version of agrep limits PATTERN to < 32 characters, so cannot do complete Plot match."
     crap_agrep_version='yes it is'
   fi
 
@@ -3091,7 +3091,7 @@ download_series_identification(){
   curl -L -s -m"$Timeout" "www.thetvdb.com/api/GetSeries.php?seriesname=$tvdbshowname" > "$WORKING_FILE"
 
   if (( $(wc --bytes < "$WORKING_FILE") == 0 )); then
-    err "${FUNCNAME[0]}(): Couldn't access info from TheTVDB."
+    err "${FUNCNAME[0]}(): Could not access info from TheTVDB."
     errcont "Check your internet connection."
     errcont "Check www.thetvdb.com for '$tvdbshowname'."
     return 1
@@ -3213,7 +3213,7 @@ check_path_permission(){
 
   #First check that the file or path actually exists
   if [[ ! -e "$PATH_TO_CHECK" ]]; then
-    NOTIFY_MSG="Path or file doesn't exist: $PATH_TO_CHECK"
+    NOTIFY_MSG="Path or file does not exist: $PATH_TO_CHECK"
     err "${FUNCNAME[0]}() CALLED FROM: ${FUNCNAME[1]}(): $NOTIFY_MSG"
     EXIT_JOB_TYPE='FileOrPathDoesNotExist'
     return 1
@@ -3244,7 +3244,7 @@ check_path_permission(){
 
   #If we require read permission then check for it
   if [[ "$REQUIRED_PERMISSION" == *'r'* && ! -r "$PATH_TO_CHECK" ]]; then
-    NOTIFY_MSG="Can't read: $PATH_TO_CHECK"
+    NOTIFY_MSG="Cannot read: $PATH_TO_CHECK"
     err "${FUNCNAME[0]}() CALLED FROM: ${FUNCNAME[1]}(): $NOTIFY_MSG"
     EXIT_JOB_TYPE='PermissionError'
     return 1
@@ -3252,7 +3252,7 @@ check_path_permission(){
 
   #If we require read permission then check for it
   if [[ "$REQUIRED_PERMISSION" == *'w'* && ! -w "$PATH_TO_CHECK" ]]; then
-    NOTIFY_MSG="Can't write: $PATH_TO_CHECK"
+    NOTIFY_MSG="Cannot write: $PATH_TO_CHECK"
     err "${FUNCNAME[0]}() CALLED FROM: ${FUNCNAME[1]}(): $NOTIFY_MSG"
     errcont "USER NAME:$CALLER ATTEMPTED TO MODIFY A $PATH_OWNER OWNED FILE."
     errcont "To preserve file permissions this has been prevented."
@@ -3263,7 +3263,7 @@ check_path_permission(){
   #If we require execution permission then check for it
   if [[ "$REQUIRED_PERMISSION" == *'x'* && ! -x "$PATH_TO_CHECK" ]]; then
     if [[ -f "$PATH_TO_CHECK" ]]; then
-      NOTIFY_MSG="Can't execute: $PATH_TO_CHECK"
+      NOTIFY_MSG="Cannot execute: $PATH_TO_CHECK"
       err "${FUNCNAME[0]}() CALLED FROM: ${FUNCNAME[1]}(): $NOTIFY_MSG"
       EXIT_JOB_TYPE='PermissionError'
     elif [[ -d "$PATH_TO_CHECK" ]]; then
@@ -3386,7 +3386,7 @@ msg_unable_to_identify_recording(){
   err     "Operation failed, unable to identify episode info for recording:"
   errcont "     $InputPath"
   informcont "This means that insufficient information was provided to myth2kodi"
-  informcont "and the missing information couldn't be determined by other means."
+  informcont "and the missing information could not be determined by other means."
   informcont "If you know the correct information, provide it at the command line,"
   informcont "    see: myth2kodi --usage"
   informcont "Normally myth2kodi can determine this information from:"
@@ -3507,7 +3507,7 @@ maintenance_warning(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   local yesorno=""
   warn "  --You have entered Maintenance mode."
-  warncont "  myth2kodi will perform maintenance on it's records."
+  warncont "  myth2kodi will perform maintenance on its records."
   warncont "  Please ensure that All network attached storage and removable"
   warncont "  storage drives are connected and mounted properly before continuing"
   read -r -n1 -p "Do you want myth2kodi to perform maintenance? y/(n)>" yesorno
@@ -3526,7 +3526,7 @@ cleanse_warning(){
   informcont "  myth2kodi will PERMANENTLY REMOVE archived log files, myth2kodi"
   informcont "  database files, and daily report files older than specified by"
   informcont "  the user settings: LOG_LIFE; M2K_DB_LIFE; and DAILYREPORT_LIFE."
-  read -r -n1 -p "Do you want myth2kodi to cleanse it's working directory? y/(n)>" yesorno
+  read -r -n1 -p "Do you want myth2kodi to cleanse its working directory? y/(n)>" yesorno
   printf '\n'
   if [ "$yesorno" != "y" ]; then
     inform "You must press 'y' to continue"
@@ -3952,7 +3952,7 @@ m2k_maintenance(){
           printf '%s\n' "$dirtocheck" >> "$m2kdir/dir.tracking2"
         fi
       else
-        warn "${FUNCNAME[0]}(): Tracked directory doesn't seem to be a directory."
+        warn "${FUNCNAME[0]}(): Tracked directory does not seem to be a directory."
         warncont "Continuing to track (just in case): $dirtocheck"
         printf '%s\n' "$dirtocheck" >> "$m2kdir/dir.tracking2"
       fi
@@ -4083,7 +4083,7 @@ m2k_scan(){
       if [[ ! -L "$line" && ! -S "$line" && ! -d "$line" ]]; then
         myth2kodi "$line"
       else
-        debug "Either we've already moved that or it's a directory. Either way, moving on."
+        debug "Either we have already moved that or it is a directory. Either way, moving on."
       fi
     done < "$SCAN_FILE"
     inform "Completed scan of $scanpath for $checkext files."
@@ -4229,7 +4229,7 @@ target_file_exists(){
       informcont "the same episode/movie or our file name generation is too generic."
     fi
   else
-    inform "Can't tell if this is due to reprocessing a recording or there was"
+    inform "Cannot tell if this is due to reprocessing a recording or there was"
     informcont "just already a copy of this episode/movie in our media library."
   fi
   warn "Adding an entry identifying this recording as a possible duplicate."
@@ -4343,7 +4343,7 @@ m2k_diagnostics(){
   if [[ -f "$binpath/bashlogging" ]]; then
     inform "Found: $binpath/bashlogging"
   else
-    err "Can't Find: $binpath/bashlogging"
+    err "Cannot Find: $binpath/bashlogging"
     bashlogging_file=1
   fi
   if [[ -f "$binpath/mythdb_access" ]]; then
@@ -4355,7 +4355,7 @@ m2k_diagnostics(){
       err "Not Executable: $binpath/mythdb_access"
     fi
   else
-    err "Can't Find: $binpath/mythdb_access"
+    err "Cannot Find: $binpath/mythdb_access"
     mythdb_access_file=1
     mythdb_access_exec=1
   fi
@@ -4368,7 +4368,7 @@ m2k_diagnostics(){
       err "Not Executable: $binpath/m2k_notify"
     fi
   else
-    err "Can't Find: $binpath/m2k_notify"
+    err "Cannot Find: $binpath/m2k_notify"
     m2k_notify_file=1
     m2k_notify_exec=1
   fi
@@ -4381,7 +4381,7 @@ m2k_diagnostics(){
   PKGPATH_AGREP=$(command -v agrep)           || PKGNAME_AGREP="agrep or tre-agrep"
   PKGPATH_LIBNOTIFY=$(command -v notify-send) || PKGNAME_LIBNOTIFY="libnotify-bin"
   PKGPATH_JQ=$(command -v jq)                 || PKGNAME_JQ="jq"
-  PKGPATH_REALPATH=$(command -v realpath)     || PKGNAME_REALPATH="realpath"
+  PKGPATH_REALPATH=$(command -v realpath)     || PKGNAME_REALPATH="coreutils or realpath"
   if [ "$DATABASE_ACCESS" = "PythonBindings" ]; then
     PKGPATH_PYTHON=$(command -v python) || PKGNAME_PYTHON="python"
     if [[ -z "$PKGNAME_PYTHON" ]]; then
@@ -4411,7 +4411,7 @@ m2k_diagnostics(){
     packagecheck="$packagecheck$PKGNAME_PYTHON$PKGNAME_LIBMYTH_PYTHON$PKGNAME_PYTHON_LXML"
     [[ -n "$PKGPATH_PYTHON" ]] && inform "package 'python' found: $PKGPATH_PYTHON"
     if [[ -z "$PKGNAME_PYTHON" ]] && ((pyver < 27 || pyver >= 30)); then
-      warn "Python 3 and Python older than 2.7 aren't supported."
+      warn "Python 3 and Python older than 2.7 are not supported."
       warncont "You'll need to set: DATABASE_ACCESS='MySQL' in user settings."
     fi
     [[ -z "$PKGNAME_LIBMYTH_PYTHON" ]] && inform "package 'libmyth-python' found."
@@ -4423,10 +4423,10 @@ m2k_diagnostics(){
     errcont "Missing packages are: $PKGNAME_CURL $PKGNAME_AGREP $PKGNAME_LIBNOTIFY $PKGNAME_JQ $PKGNAME_REALPATH $PKGNAME_PYTHON $PKGNAME_LIBMYTH_PYTHON $PKGNAME_PYTHON_LXML"
     errcont "If packages are already installed, check your path settings."
     if [[ "$m2kPlatform" != "Darwin" ]]; then
-      errcont "Please run 'apt-get install $PKGNAME_CURL $PKGNAME_AGREP $PKGNAME_LIBNOTIFY $PKGNAME_JQ $PKGNAME_REALPATH $PKGNAME_PYTHON $PKGNAME_LIBMYTH_PYTHON $PKGNAME_PYTHON_LXML' or equivalent."
+      errcont "Please install: '$PKGNAME_CURL $PKGNAME_AGREP $PKGNAME_LIBNOTIFY $PKGNAME_JQ $PKGNAME_REALPATH $PKGNAME_PYTHON $PKGNAME_LIBMYTH_PYTHON $PKGNAME_PYTHON_LXML' or equivalent."
     else
       errcont "Please obtain MacPorts and install $PKGNAME_CURL $PKGNAME_AGREP $PKGNAME_LIBNOTIFY $PKGNAME_JQ $PKGNAME_REALPATH $PKGNAME_LIBMYTH_PYTHON $PKGNAME_PYTHON_LXML"
-      [[ -n "$PKGNAME_PYTHON" ]] && errcont "Python is missing, please install Python, or make sure it's in your path."
+      [[ -n "$PKGNAME_PYTHON" ]] && errcont "Python is missing, please install Python, or make sure it is in your path."
     fi
   else
     packagecheck="***PASSED***"
@@ -4529,7 +4529,7 @@ m2k_diagnostics(){
       fi
     else
       err "COMMUNICATIONS NOT ESTABLISHED: $KODIIP"
-      errcont "This may just mean that the Kodi instance isn't running."
+      errcont "This may just mean that the Kodi instance is not running."
       ((++KODI_COMM_FAILURES))
     fi
   done
@@ -4669,7 +4669,7 @@ m2k_diagnostics(){
     errcont "directories, for MythTV recording directories you'll need to add the"
     errcont "appropriate group to your myth2kodi Librarian and enable read/write."
     printf '\n' | tee -a "$DiagnosticsFile"
-    errcont "It's also possible that the directory does not exist, in that case try:"
+    errcont "It is also possible that the directory does not exist, in that case try:"
     errcont "  mkdir /Name/of/My_failed_folder"
     printf '\n' | tee -a "$DiagnosticsFile"
   fi
@@ -4702,7 +4702,7 @@ m2k_doover(){
   warn "--You have entered doover mode."
   warncont "In this mode of operation, myth2kodi will be rerun against all"
   warncont "files which were moved in the past despite having low confidence."
-  warncont "It is important that this process isn't interrupted or data loss may occur."
+  warncont "It is important that this process is not interrupted or data loss may occur."
   ((DoOverBypass != 1)) && read -r -n1 -p "  Doover requested -- 'y' to continue, 'n' to exit... y/(n):>" yesorno && printf '\n'
   ((DoOverBypass == 1)) && yesorno="y"
 
@@ -5022,7 +5022,7 @@ get_series_info(){
     download_series_info
     return "$?"
   else
-    err "${FUNCNAME[0]}(): We had serieslinenumber: $serieslinenumber but couldn't get a SeriesID."
+    err "${FUNCNAME[0]}(): We had serieslinenumber: $serieslinenumber but could not get a SeriesID."
     return 1
   fi
 }
@@ -5036,7 +5036,7 @@ find_file_link_pairs(){
   #Takes a single argument
   (( "$#" > 1 )) && { err "${FUNCNAME[0]}() only takes one arg."; return 1 ; }
   local FILE="$1"
-  [[ -e "$FILE" ]] || { err "${FUNCNAME[0]}(): Doesn't exist: $FILE"; return 1; }
+  [[ -e "$FILE" ]] || { err "${FUNCNAME[0]}(): Does not exist: $FILE"; return 1; }
   #A regex that should match MythTVs file naming, for the 21st century.
   local RECPATTERN='[0-9]{4}_20[0-9]{2}[0-1][0-9][0-3][0-9][0-2][0-9][0-5][0-9]{3}'
   #Is FILE a link or a file
@@ -5088,8 +5088,8 @@ find_file_link_pairs(){
       RECORDING_LINK=""
       return 0
     fi
-    warn "${FUNCNAME[0]}(): Can't find link to: $RECORDING_FILE"
-    warncont "This probably means that the file hasn't been successfully processed by myth2kodi."
+    warn "${FUNCNAME[0]}(): Cannot find link to: $RECORDING_FILE"
+    warncont "This probably means that the file was not successfully processed by myth2kodi."
     return 0
   else
     err "${FUNCNAME[0]}(): Not a file or link: $FILE"
@@ -5114,7 +5114,7 @@ set_recording_name(){
     RECORDING_NAME="$1"
   else
     #In this case we need a full or relative path
-    [[ -f "$1" ]] || { err "${FUNCNAME[0]}(): arg1 isn't a file."; return 1; }
+    [[ -f "$1" ]] || { err "${FUNCNAME[0]}(): arg1 is not a file."; return 1; }
     #Check if it's a moved file name that's still tracked by MythTV
     local -a sg_dirs
     #Get the sorage group directories defined in MythTV-DB
@@ -5374,7 +5374,7 @@ recording_log(){
     (( LOGLEVEL < 3 )) && rm -f "$TEMPLOG_FILE"
     return 0
   else
-    inform "There don't appear to be any processing entries for: $1"
+    inform "There do not appear to be any processing entries for: $1"
     printf '%s\n' "#### NO ENTRIES FOUND ####" >> "$TEMPLOG_FILE"
     return 1
   fi
@@ -5776,7 +5776,7 @@ if [[ "$Sxx" != "S" && -n "$Sxx" && "$Sxx" != "S00" && "$Exx" != "E" && -n "$Exx
     set_absolute_episode_number_by_sxxexx
     if [ "$?" = "0" ]; then
       EpisodeSubtitle=$(sed -n "$AbsoluteEpisodeNumber"'p' "$m2kdir/$NewShowName/$NewShowName.actualEname.txt")
-      inform "MythTV-DB didn't have an EpisodeSubtitle, using '$EpisodeSubtitle' from TheTVDB."
+      inform "MythTV-DB did not have an EpisodeSubtitle, using '$EpisodeSubtitle' from TheTVDB."
     else
       AbsoluteEpisodeNumber=$AbsoluteEpisodeNumberBackup
     fi
@@ -5791,7 +5791,7 @@ elif [[ -n "$AbsoluteEpisodeNumber" ]]; then
   #NOTE: this function also sets EpisodeSubtitle and SeasonNumber
   set_sxxexx_absolute_episode_number
 else
-  warn "Couldn't set Sxx and Exx from MythTV-DB or set them based on InputSubtitle."
+  warn "Could not set Sxx and Exx from MythTV-DB or set them based on InputSubtitle."
   ConfidenceReasoning="$ConfidenceReasoning Could not get Sxx and Exx from MythTV-DB or set them based on InputSubtitle; "
 fi
 
@@ -5973,7 +5973,7 @@ if [[ "$PROCESS_RECORDING_MODE" = 'MOVE' ]]; then
         #Set permissions as rwxrwxr-x (775) #TODO: probably should just be rw-rw-r-- (664)
         chmod 775 "$MoveDir/$ShowFileName.$OriginalExt"
         if [[ "$RequiresDoover" != '1' ]]; then
-          debug "SYMLINK='Disabled' and doesn't require doover, so MythTV-DB info will be removed."
+          debug "SYMLINK='Disabled' and does not require doover, so MythTV-DB info will be removed."
           delete_mythtv_database_entry
         else
           warn "Job requires doover, so attempting to create symlink in SYMLINK='Disabled' mode."

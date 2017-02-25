@@ -769,6 +769,9 @@ m2k_init(){
    initialise_new_logfile
    inform "Previous LOGFILE moved to: $m2kdir/${LogFileName}_${FileNameNow}.log"
   fi
+  debug "LOGFILE=$LOGFILE-"
+  debug "LOGLEVEL=$LOGLEVEL-"
+  debug "LOGTYPE=$LOGTYPE-"
 
   #Do some basic validation of the settings
   validate_settings

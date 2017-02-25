@@ -1957,6 +1957,8 @@ get_mythtvdb_info_pythonbindings(){
   #GuideSeasonNum InputSeasonNum LogicSubtitleSeasonNum FuzzySubtitleSeasonNum FuzzyPlotSeasonNum nlpPlotSeasonNum => EpisodeSeasonNum
   #GuideEpisodeNum InputEpisodeNum LogicSubtitleEpisodeNum FuzzySubtitleEpisodeNum FuzzyPlotEpisodeNum nlpPlotEpisodeNum => EpisodeEpisodeNum
 
+  #TODO: Consider grabbing inetref, seems like it'll be a useful shortcut, at least for SchedulesDirect guide-data
+
   debug 'Setting the following variables based on MythTV-DB guide data:'
   #Import mythtv values into myth2kodi values, don't clobber myth2kodi args title, subtitle, season-number, or episode-number.
   [[ -z "$InputTitle" ]]      && InputTitle="$title"        && debugcont "InputTitle=$title"
@@ -2880,31 +2882,43 @@ getAbsoluteEpisodeNumberWithFuzzyPlotMatch(){
   local -a FuzzyPlot=()
   local -a AENguess=()
   local -a cost=()
+  local crap_agrep_version=''
   #Length of the plot we're trying to match
   PlotLength=$(wc --chars <<< "$Plot")
   debugcont "PlotLength: $PlotLength"
   #If Plot length is short this really won't work well, so give up #TODO: figure out what length is genuinely too short...
   ((PlotLength<42)) && warn "${FUNCNAME[0]}(): Plot is too short to attempt fuzzy guess." && return 1
-  #Fuzzy guess at plot, prepended with: "AbsoluteEpisodeNumber:cost:"
-  #TODO: Some systems have an agrep that limits PATTERN to < 32 characters...
-  FuzzyPlot=($(agrep -iBynsk "$Plot" "$m2kdir/$NewShowName/$NewShowName.Plot.txt"))
-  [[ $? != 0 ]] && agrep -iBynsk "$Plot" "$m2kdir/$NewShowName/$NewShowName.Plot.txt" 2>&1 | err_pipe 'FuzzyPlot: '
-  [[ -z "${FuzzyPlot[0]}" ]] && warn "${FUNCNAME[0]}(): No fuzzy match on Plot" && return 1
-  #Extract our guessed AbsoluteEpisodeNumber
-  AENguess=($(cut -f1 -d":" <<< "$(printf '%s\n' "${FuzzyPlot[@]}")"))
-  debugcont "$( IFS=','; printf '%s' "AbsoluteEpisodeNumber guess: ${AENguess[*]}." )"
-  cost=($(cut -f2 -d":" <<< "$(printf '%s\n' "${FuzzyPlot[@]}")"))
-  debugcont "$( IFS=','; printf '%s' "Cost: ${cost[*]}." )"
-  local -a MatchedPlot=()
-  for (( i = 0; i < ${#AENguess[@]}; i++ )) ; do
-    MatchedPlot[i]="$(sed -n "${AENguess[i]}"'p' "$m2kdir/$NewShowName/$NewShowName.Plot.txt")"
-    (( $(wc --chars <<< "${MatchedPlot[i]}") < PlotLength )) && warn "${FUNCNAME[0]}(): MatchedPlot $i shorter than Plot."
-    debugcont "MatchedPlot $i: ${MatchedPlot[i]}"
-  done
+
+  #If our agrep supports it, try a full Plot match.
+  if agrep --version &> /dev/null ; then #Hacky: works because, so far, the agrep that limits PATTERN length to < 32 also lacks a --version flag.
+    #Fuzzy guess at plot, prepended with: "AbsoluteEpisodeNumber:cost:"
+    FuzzyPlot=($(agrep -iBynsk "$Plot" "$m2kdir/$NewShowName/$NewShowName.Plot.txt"))
+    if [[ -z "${FuzzyPlot[0]}" ]]; then
+      #This should only happen when NewShowName has no Plot info, so no point
+      #continuing trying to match Plot.
+      warn "${FUNCNAME[0]}(): No fuzzy match on Plot -- Possibly no Plot info for $NewShowName"
+      return 1
+    fi
+    #Extract our guessed AbsoluteEpisodeNumber
+    AENguess=($(cut -f1 -d":" <<< "$(printf '%s\n' "${FuzzyPlot[@]}")"))
+    debugcont "$( IFS=','; printf '%s' "AbsoluteEpisodeNumber guess: ${AENguess[*]}." )"
+    cost=($(cut -f2 -d":" <<< "$(printf '%s\n' "${FuzzyPlot[@]}")"))
+    debugcont "$( IFS=','; printf '%s' "Cost: ${cost[*]}." )"
+    local -a MatchedPlot=()
+    for (( i = 0; i < ${#AENguess[@]}; i++ )) ; do
+      MatchedPlot[i]="$(sed -n "${AENguess[i]}"'p' "$m2kdir/$NewShowName/$NewShowName.Plot.txt")"
+      (( $(wc --chars <<< "${MatchedPlot[i]}") < PlotLength )) && warn "${FUNCNAME[0]}(): MatchedPlot $i shorter than Plot."
+      debugcont "MatchedPlot $i: ${MatchedPlot[i]}"
+    done
+  else
+    warn "This version of agrep limits PATTERN to < 32 characters, so can't do complete Plot match."
+    crap_agrep_version='yes it is'
+  fi
+
   #TODO: Should check that MatchedPlot is longer than PlotLength, which is essentially what we're assuming below.
   #If the cost is greater than a 1/3 of characters in the plot we're trying to match #TODO: figure out the critical ratio here.
-  if (( cost[0] > (PlotLength / 3) )) ; then
-    warn "${FUNCNAME[0]}(): AbsoluteEpisodeNumber guess from full Plot too fuzzy, trying chunked match."
+  if [[ -n "$crap_agrep_version" ]] || (( cost[0] > (PlotLength / 3) )) ; then
+    warn "${FUNCNAME[0]}(): AbsoluteEpisodeNumber guess from full Plot failed or too fuzzy, trying chunked match."
     #Some Plots miss on match simply because the text is reordered or the middle is chopped out,
     #something as simple as chopping up the Plot into 8 word blocks, overlapping by 2-4, and testing
     #the agrep cost for each chunk, if at least a couple of the chunks match with a cost < say 10%
@@ -2912,6 +2926,7 @@ getAbsoluteEpisodeNumberWithFuzzyPlotMatch(){
     local -i PlotWords
     PlotWords=$(wc --words <<< "$Plot")
     local chunk=""
+    #TODO: may need to reduce this to 6 or 7 to get reliable behaviour with the new restriction to PATTERN < 32 chars
     local -i chunck_size=8
     local -i chunk_overlap=4
     local -i numchunks
@@ -2953,6 +2968,9 @@ getAbsoluteEpisodeNumberWithFuzzyPlotMatch(){
     debug "$( IFS=','; printf '%s' "${FUNCNAME[0]}(): GoodChunkGuesses ${#GoodChunkGuesses[@]}: ${GoodChunkGuesses[*]}." )"
     #TODO: This needs to be changed to actually check that they refer to the same episode,
     #      with multiple data sources the current test is still sufficient but not necessary...
+    #TODO: Consider a weighted guess, ie rather than all GoodChunkGuesses being the same episode maybe >=80%
+    #      The 100% requirement is more of a problem now that limited PATTERN-length agreps mean our chunks
+    #      are now shorter and so more likely to give false positives... leading to relatively good guesses being discarded.
     #If all ChunkGuess with ChunkCost < 10% are the same Absolute Episode Number
     AENguess=($(printf '%s\n' "${GoodChunkGuesses[@]}" | sort -u))
     if (( ${#AENguess[@]} == 1 )) ; then

@@ -693,7 +693,7 @@ m2k_init(){
   ((LOGLEVEL>=3)) && printf '%s\n' "Config complete." >> '/tmp/m2k_init_pre_logging_debug.txt'
 
   #What am I...
-  m2kVersion="myth2kodi Version 1.2.2c" ; declare -gr m2kVersion
+  m2kVersion="myth2kodi Version 1.2.2d" ; declare -gr m2kVersion
   m2kPlatform="$(uname)" ; declare -gr m2kPlatform
   ((LOGLEVEL>=3)) && printf '%s\n' "Running $m2kVersion on $m2kPlatform." >> '/tmp/m2k_init_pre_logging_debug.txt'
 
@@ -5213,7 +5213,7 @@ delete_recording(){
       local MTV_RECINFO_FILE
       MTV_RECINFO_FILE="$(mktemp "$M2K_TMPDIR/m2k_delrecinfo_$FileNameNow"-XXXX)"
       [[ "$?" != 0 ]] && { err "${FUNCNAME[0]}(): Failed to create temporary delrecinfo file." ; return 1 ; }
-      debug "Deleted recording info will be stored temporary file: '$MTV_RECINFO_FILE'"
+      debug "Deleted recording info will be stored in temporary file: '$MTV_RECINFO_FILE'"
 
       if [[ "$RERECORD" = 'Enabled' ]]; then
         #Ask mythbackend to delete and rerecord the recording.

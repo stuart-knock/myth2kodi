@@ -2880,160 +2880,117 @@ set_absolute_episode_number_by_sxxexx(){
   return 1
 }
 
-#Identify episode by fuzzy matching MythTV-DB Plot against Plots in myth2kodi-DB.
-getAbsoluteEpisodeNumberWithFuzzyPlotMatch(){
-  #TODO: Need to clean up redundancy or otherwise refactor this function to make it cleaner...
-  #      Maybe fuzzy_plot_match(); chunked_fuzzy_plot_match(); multi_match_check(); then get_absolute_episode_number_fuzzy_plot() uses them...
+#Use agrep to match the whole guide-data plot against Plots in myth2kodi-DB.
+#Returns: 2 on a failure that indicates $NewShowName.Plot.txt contains no plots;
+#         0 if AbsoluteEpisodeNumber properly set; 1 otherwise.
+fuzzy_plot_match(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  debugcont "AbsoluteEpisodeNumber: $AbsoluteEpisodeNumber"
   debugcont "NewShowName: $NewShowName"
   debugcont "Plot: $Plot"
-
-  if [[ ! -f "$m2kdir/$NewShowName/$NewShowName.Plot.txt" ]]; then
-    err "Myth2kodi's internal database contains no Plot information for $NewShowName."
-    errcont "This probably means we failed to identify a SeriesID. Either you need"
-    errcont "to add a showTranslation entry, we've mistaken a Movie for an Episode,"
-    errcont "or this is a one off showing like news or a sports event."
-   return 1
- fi
-
-  AbsoluteEpisodeNumber=""
-  #set IFS to use line break as a delineator -- necessary for separating multiple agrep matches below.
-  local IFS=$'\n'
-  local -i PlotLength
-  local -a FuzzyPlot=()
-  local -a AENguess=()
-  local -a cost=()
-  local crap_agrep_version=''
-  #Length of the plot we're trying to match
-  PlotLength=$(wc --chars <<< "$Plot")
   debugcont "PlotLength: $PlotLength"
-  #If Plot length is short this really won't work well, so give up #TODO: figure out what length is genuinely too short...
-  ((PlotLength<42)) && warn "${FUNCNAME[0]}(): Plot is too short to attempt fuzzy guess." && return 1
-
-  #If our agrep supports it, try a full Plot match.
-  if agrep --version &> /dev/null ; then #Hacky: works because, so far, the agrep that limits PATTERN length to < 32 also lacks a --version flag.
-    #Fuzzy guess at plot, prepended with: "AbsoluteEpisodeNumber:cost:"
-    FuzzyPlot=($(agrep -iBynsk "$Plot" "$m2kdir/$NewShowName/$NewShowName.Plot.txt"))
-    if [[ -z "${FuzzyPlot[0]}" ]]; then
-      #This should only happen when NewShowName has no Plot info, so no point
-      #continuing trying to match Plot.
-      warn "${FUNCNAME[0]}(): No fuzzy match on Plot -- Possibly no Plot info for $NewShowName"
-      return 1
-    fi
-    #Extract our guessed AbsoluteEpisodeNumber
-    AENguess=($(cut -f1 -d":" <<< "$(printf '%s\n' "${FuzzyPlot[@]}")"))
-    debugcont "$( IFS=','; printf '%s' "AbsoluteEpisodeNumber guess: ${AENguess[*]}." )"
-    cost=($(cut -f2 -d":" <<< "$(printf '%s\n' "${FuzzyPlot[@]}")"))
-    debugcont "$( IFS=','; printf '%s' "Cost: ${cost[*]}." )"
-    local -a MatchedPlot=()
-    for (( i = 0; i < ${#AENguess[@]}; i++ )) ; do
-      MatchedPlot[i]="$(sed -n "${AENguess[i]}"'p' "$m2kdir/$NewShowName/$NewShowName.Plot.txt")"
-      (( $(wc --chars <<< "${MatchedPlot[i]}") < PlotLength )) && warn "${FUNCNAME[0]}(): MatchedPlot $i shorter than Plot."
-      debugcont "MatchedPlot $i: ${MatchedPlot[i]}"
-    done
-  else
-    warn "This version of agrep limits PATTERN to < 32 characters, so cannot do complete Plot match."
-    crap_agrep_version='yes it is'
+  local -a FuzzyPlot=()
+  local -a cost=()
+  #Fuzzy guess at plot, prepended with: "AbsoluteEpisodeNumber:cost:"
+  FuzzyPlot=($(agrep -iBynsk "$Plot" "$m2kdir/$NewShowName/$NewShowName.Plot.txt"))
+  if [[ -z "${FuzzyPlot[0]}" ]]; then
+    #This should only happen when NewShowName has no Plot info, so no point
+    #continuing trying to match Plot.
+    warn "${FUNCNAME[0]}(): No fuzzy match on Plot -- Possibly no Plot info for $NewShowName"
+    return 2
   fi
-
+  #Extract our guessed AbsoluteEpisodeNumber
+  AENguess=($(cut -f1 -d":" <<< "$(printf '%s\n' "${FuzzyPlot[@]}")"))
+  debugcont "$( IFS=','; printf '%s' "AbsoluteEpisodeNumber guesses: ${AENguess[*]}." )"
+  cost=($(cut -f2 -d":" <<< "$(printf '%s\n' "${FuzzyPlot[@]}")"))
+  debugcont "$( IFS=','; printf '%s' "Cost: ${cost[*]}." )"
+  local -a MatchedPlot=()
+  for (( i = 0; i < ${#AENguess[@]}; i++ )) ; do
+    MatchedPlot[i]="$(sed -n "${AENguess[i]}"'p' "$m2kdir/$NewShowName/$NewShowName.Plot.txt")"
+    (( $(wc --chars <<< "${MatchedPlot[i]}") < PlotLength )) && warn "${FUNCNAME[0]}(): MatchedPlot $i shorter than Plot."
+    debugcont "MatchedPlot $i: ${MatchedPlot[i]}"
+  done
   #TODO: Should check that MatchedPlot is longer than PlotLength, which is essentially what we're assuming below.
-  #If the cost is greater than a 1/3 of characters in the plot we're trying to match #TODO: figure out the critical ratio here.
-  if [[ -n "$crap_agrep_version" ]] || (( cost[0] > (PlotLength / 3) )) ; then
-    warn "${FUNCNAME[0]}(): AbsoluteEpisodeNumber guess from full Plot failed or too fuzzy, trying chunked match."
-    #Some Plots miss on match simply because the text is reordered or the middle is chopped out,
-    #something as simple as chopping up the Plot into 8 word blocks, overlapping by 2-4, and testing
-    #the agrep cost for each chunk, if at least a couple of the chunks match with a cost < say 10%
-    #then we could be fairly confident that it's actually a matching Plot.
-    local -i PlotWords
-    PlotWords=$(wc --words <<< "$Plot")
-    local chunk=""
-    #TODO: may need to reduce this to 6 or 7 to get reliable behaviour with the new restriction to PATTERN < 32 chars
-    local -i chunck_size=8
-    local -i chunk_overlap=4
-    local -i numchunks
-    numchunks=$((PlotWords/(chunck_size-chunk_overlap)))
-    local -i len10per=0
-    local -a fuzzychunk=()
-    local -a FuzzyChunks=()
-    local -a ChunkGuesses=()
-    local -a ChunkCosts=()
-    local -a ChunkLengths=()
-    local -a GoodChunkGuesses=()
-    debug "Attempting chunked fuzzy match."
-    debugcont "PlotWords=$PlotWords"
-    debugcont "chunck_size=$chunck_size"
-    debugcont "chunk_overlap=$chunk_overlap"
-    debugcont "numchunks=$numchunks"
-    local -i Counter=0
-    for (( i = 0; i < numchunks; i++ )) ; do
-      debugcont "i=$i"
-      n=$(((i)*(chunck_size-chunk_overlap)+1))
-      debugcont "n=$n"
-      m=$((n+chunck_size-1))
-      debugcont "m=$m"
-      chunk="$(cut -d" " -f$n-$m <<< "$Plot")"
-      debugcont "chunk=$chunk"
-      ChunkLengths[i]=$(wc --chars <<< "$chunk")
-      debugcont "ChunkLengths[$i]=${ChunkLengths[i]}"
-      len10per=$(( ChunkLengths[i] / 10 ))
-      #Some systems have an agrep that limits PATTERN to < 32 characters...
-      fuzzychunk=($(agrep -iBynsk -e "${chunk:0:29}" "$m2kdir/$NewShowName/$NewShowName.Plot.txt"))
-      FuzzyChunks[i]="${fuzzychunk[0]}"
-      debugcont "FuzzyChunks[$i]=${FuzzyChunks[i]}"
-      ChunkGuesses[i]=$(cut -f1 -d":" <<< "${FuzzyChunks[i]}")
-      debugcont "ChunkGuesses[$i]=${ChunkGuesses[i]}"
-      ChunkCosts[i]=$(cut -f2 -d":" <<< "${FuzzyChunks[i]}")
-      debugcont "ChunkCosts[$i]=${ChunkCosts[i]}"
-      ((ChunkCosts[i] <= len10per)) && GoodChunkGuesses[Counter]=${ChunkGuesses[i]} && ((++Counter))
-    done
-    debug "$( IFS=','; printf '%s' "${FUNCNAME[0]}(): GoodChunkGuesses ${#GoodChunkGuesses[@]}: ${GoodChunkGuesses[*]}." )"
-    #TODO: This needs to be changed to actually check that they refer to the same episode,
-    #      with multiple data sources the current test is still sufficient but not necessary...
-    #TODO: Consider a weighted guess, ie rather than all GoodChunkGuesses being the same episode maybe >=80%
-    #      The 100% requirement is more of a problem now that limited PATTERN-length agreps mean our chunks
-    #      are now shorter and so more likely to give false positives... leading to relatively good guesses being discarded.
-    #If all ChunkGuess with ChunkCost < 10% are the same Absolute Episode Number
-    AENguess=($(printf '%s\n' "${GoodChunkGuesses[@]}" | sort -u))
-    if (( ${#AENguess[@]} == 1 )) ; then
-      AbsoluteEpisodeNumber="${AENguess[0]}"
-      inform "${FUNCNAME[0]}(): Identified AbsoluteEpisodeNumber: $AbsoluteEpisodeNumber using chunked Plot."
-      return 0
-    elif (( ${#AENguess[@]} > 1 )); then
-      debug "Multiple AbsoluteEpisodeNumber guesses matched plot, confirming they're the same episode before using."
-      #If we've identified multiple AbsoluteEpisodeNumbers make sure they refer to the same episode.
-      local -a SxxGuesses=()
-      local -a ExxGuesses=()
-      for (( i = 0; i < ${#AENguess[@]}; i++ )) ; do
-        #gather series and episode numbers for each AENguess.
-        ExxGuesses[i]="$(sed -n "${AENguess[i]}"'p' "$m2kdir/$NewShowName/$NewShowName.E.txt")"
-        SxxGuesses[i]="$(sed -n "${AENguess[i]}"'p' "$m2kdir/$NewShowName/$NewShowName.S.txt")"
-      done
-      local -i uniqExxcount
-      local -i uniqSxxcount
-      uniqExxcount=$(printf '%s\n' "${ExxGuesses[@]}" | uniq | wc -l)
-      uniqSxxcount=$(printf '%s\n' "${SxxGuesses[@]}" | uniq | wc -l)
-      if (( uniqSxxcount == 1 )) && (( uniqExxcount == 1 )); then
-        #With multiple data sources we can get multiple AENs for the same episode, just take the first:
-        AbsoluteEpisodeNumber=$(cut -f1 -d" " <<< "${AENguess[0]}")
-        inform "${FUNCNAME[0]}(): Identified AbsoluteEpisodeNumber: $AbsoluteEpisodeNumber using chunked Plot."
-        debug "$( IFS=','; printf '%s' "${FUNCNAME[0]}(): The following ${#AENguess[@]} AENguesses were identified as the same episode: ${AENguess[*]}." )"
-        return 0
-      else
-        debug "The AbsoluteEpisodeNumber guesses were different:"
-        debugcont "AENguess = SxxGuesses, ExxGuesses"
-        for (( i = 0; i < ${#AENguess[@]}; i++ )) ; do
-          debugcont "${AENguess[i]} = ${SxxGuesses[i]}, ${ExxGuesses[i]}"
-        done
-      fi
-    fi
+  #If the cost is less than a 1/3 of characters in the plot we're trying to match
+  #then consider that good enough and validate. #TODO: figure out the critical ratio here.
+  (( cost[0] <= (PlotLength / 3) )) && { multi_match_check ; return "$?"; }
+  return 1
+}
 
-    warn "${FUNCNAME[0]}(): Chunked Plot match is still too fuzzy, failed to guess AbsoluteEpisodeNumber."
-    return 1
-  fi
 
-  #Guess at fuzzy Plot match is probably ok, we'll use it, but first need to confirm multiple results
-  if (( ${#AENguess[@]} > 1 )); then
+#Some agrep can't use a full Plot as a PATTERN. And sometimes full Plot matching
+#misses simply because the text is reordered or the middle is chopped out. In
+#these cases, something as simple as chopping up the Plot into 6 word blocks,
+#overlapping by 2-4, testing the agrep cost for each chunk, and then taking all
+#the chunks that match with a cost < ~10%. If all the matches are for the same
+#episode, then we can be fairly confident that it's actually a matching Plot.
+chunked_fuzzy_plot_match(){
+  debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
+  debugcont "NewShowName: $NewShowName"
+  debugcont "Plot: $Plot"
+  local -i PlotWords
+  PlotWords=$(wc --words <<< "$Plot")
+  local chunk=""
+  local -i chunck_size=6
+  local -i chunk_overlap=3
+  local -i numchunks
+  numchunks=$((PlotWords/(chunck_size-chunk_overlap)))
+  local -i len10per=3 #~10% error is always ~3 as agrep PATTERN is limited to 29 chars.
+  local -a fuzzychunk=()
+  local -a FuzzyChunks=()
+  local -a ChunkGuesses=()
+  local -a ChunkCosts=()
+  local -a ChunkLengths=()
+  local -a GoodChunkGuesses=()
+  debug "Attempting chunked fuzzy match."
+  debugcont "PlotWords=$PlotWords"
+  debugcont "chunck_size=$chunck_size"
+  debugcont "chunk_overlap=$chunk_overlap"
+  debugcont "numchunks=$numchunks"
+  local -i Counter=0
+  for (( i = 0; i < numchunks; i++ )) ; do
+    debugcont "i=$i"
+    n=$(((i)*(chunck_size-chunk_overlap)+1))
+    debugcont "n=$n"
+    m=$((n+chunck_size-1))
+    debugcont "m=$m"
+    chunk="$(cut -d" " -f$n-$m <<< "$Plot")"
+    debugcont "chunk=$chunk"
+    ChunkLengths[i]=$(wc --chars <<< "$chunk")
+    debugcont "ChunkLengths[$i]=${ChunkLengths[i]}"
+    #~10% error is always ~3 as agrep PATTERN is limited to 29 chars.#len10per=$(( ChunkLengths[i] / 10 ))
+    #Some systems have an agrep that limits PATTERN to < 32 characters...
+    fuzzychunk=($(agrep -iBynsk -e "${chunk:0:29}" "$m2kdir/$NewShowName/$NewShowName.Plot.txt"))
+    FuzzyChunks[i]="${fuzzychunk[0]}"
+    debugcont "FuzzyChunks[$i]=${FuzzyChunks[i]}"
+    ChunkGuesses[i]=$(cut -f1 -d":" <<< "${FuzzyChunks[i]}")
+    debugcont "ChunkGuesses[$i]=${ChunkGuesses[i]}"
+    ChunkCosts[i]=$(cut -f2 -d":" <<< "${FuzzyChunks[i]}")
+    debugcont "ChunkCosts[$i]=${ChunkCosts[i]}"
+    ((ChunkCosts[i] <= len10per)) && GoodChunkGuesses[Counter]=${ChunkGuesses[i]} && ((++Counter))
+  done
+  debug "$( IFS=','; printf '%s' "${FUNCNAME[0]}(): GoodChunkGuesses ${#GoodChunkGuesses[@]}: ${GoodChunkGuesses[*]}." )"
+
+  #If all ChunkGuess with ChunkCost < 10% are the same Absolute Episode Number
+  AENguess=($(printf '%s\n' "${GoodChunkGuesses[@]}" | sort -u))
+  multi_match_check
+  return "$?"
+}
+
+#Verify that any absolute-episode-number guesses are the same episode.
+#Returns: 0 if AbsoluteEpisodeNumber properly set; 1 otherwise.
+multi_match_check(){
+  #TODO: Consider a weighted guess, ie rather than all GoodChunkGuesses being the same episode maybe >=80%
+  #      The 100% requirement is more of a problem now that limited PATTERN-length agreps mean our chunks
+  #      are now shorter and so more likely to give false positives... leading to relatively good guesses being discarded.
+  debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
+  debugcont "NewShowName: $NewShowName"
+  debugcont "$( IFS=','; printf '%s' "There are ${#AENguess[@]} AENguesses: ${AENguess[*]}." )"
+  if (( ${#AENguess[@]} == 1 )) ; then
+    AbsoluteEpisodeNumber="${AENguess[0]}"
+    inform "${FUNCNAME[0]}(): Identified AbsoluteEpisodeNumber: $AbsoluteEpisodeNumber using ${FUNCNAME[1]}()."
+    return 0
+  elif (( ${#AENguess[@]} > 1 )); then
+    debug "Multiple AbsoluteEpisodeNumber guesses matched plot, confirming they're the same episode before using."
     #If we've identified multiple AbsoluteEpisodeNumbers make sure they refer to the same episode.
     local -a SxxGuesses=()
     local -a ExxGuesses=()
@@ -3049,19 +3006,68 @@ getAbsoluteEpisodeNumberWithFuzzyPlotMatch(){
     if (( uniqSxxcount == 1 )) && (( uniqExxcount == 1 )); then
       #With multiple data sources we can get multiple AENs for the same episode, just take the first:
       AbsoluteEpisodeNumber=$(cut -f1 -d" " <<< "${AENguess[0]}")
-      inform "${FUNCNAME[0]}(): Identified AbsoluteEpisodeNumber: $AbsoluteEpisodeNumber using full Plot."
-      debug "$( IFS=','; printf '%s' "${FUNCNAME[0]}(): The following ${#AENguess[@]} AENguesses were identified as the same episode: ${AENguess[*]}." )"
+      inform "${FUNCNAME[0]}(): Identified AbsoluteEpisodeNumber: $AbsoluteEpisodeNumber using ${FUNCNAME[1]}()."
       return 0
     else
-      warn "${FUNCNAME[0]}(): Fuzzy Plot match is too fuzzy, as we matched two or more different episodes."
-      err "${FUNCNAME[0]}(): This function needs review as bad match on full plot should lead to chunked plot attempt."
-      debug "$( IFS=','; printf '%s' "${FUNCNAME[0]}(): The following ${#AENguess[@]} AENguesses were identified: ${AENguess[*]}." )"
+      debug "The AbsoluteEpisodeNumber guesses were different:"
+      debugcont "AENguess = SxxGuesses, ExxGuesses"
+      for (( i = 0; i < ${#AENguess[@]}; i++ )) ; do
+        debugcont "${i}: ${AENguess[i]} = ${SxxGuesses[i]}, ${ExxGuesses[i]}"
+      done
       return 1
     fi
   fi
-  AbsoluteEpisodeNumber="${AENguess[0]}"
-  inform "${FUNCNAME[0]}(): Identified AbsoluteEpisodeNumber: $AbsoluteEpisodeNumber using full Plot."
-  return 0
+  #There are no guesses...
+  return 1
+}
+
+#Identify episode by fuzzy matching MythTV-DB Plot against Plots in myth2kodi-DB.
+get_absolute_episode_number_fuzzy_plot(){
+  debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
+  debugcont "AbsoluteEpisodeNumber: $AbsoluteEpisodeNumber"
+  debugcont "NewShowName: $NewShowName"
+  debugcont "Plot: $Plot"
+
+  if [[ ! -f "$m2kdir/$NewShowName/$NewShowName.Plot.txt" ]]; then
+    err "Myth2kodi's internal database contains no Plot file for $NewShowName."
+    errcont "This probably means we failed to identify a SeriesID. Either you need"
+    errcont "to add a showTranslations entry, we've mistaken a Movie for an Episode,"
+    errcont "or this is a one off showing like news or a sports event."
+   return 1
+  fi
+
+  AbsoluteEpisodeNumber=""
+  #set IFS to use line break as a delineator -- necessary for separating multiple agrep matches below.
+  local IFS=$'\n'
+  local -i PlotLength
+  local -a AENguess=()
+  local -i fuzzy_plot_return_status=0
+  local -i fuzzy_chunk_return_status=0
+  #Length of the plot we're trying to match
+  PlotLength=$(wc --chars <<< "$Plot")
+  debugcont "PlotLength: $PlotLength"
+  #If Plot length is short this really won't work well, so give up #TODO: figure out what length is genuinely too short...
+  ((PlotLength<42)) && warn "${FUNCNAME[0]}(): Plot is too short to attempt fuzzy guess." && return 1
+
+  #If our agrep supports it, try a full Plot match.
+  if agrep --version &> /dev/null ; then #Hacky: works because, so far, the agrep that limits PATTERN length to < 32 also lacks a --version flag.
+    fuzzy_plot_match
+    fuzzy_plot_return_status="$?"
+    if [[ "$fuzzy_plot_return_status" =~ ^('0'|'2')$ ]]; then
+      return "$fuzzy_plot_return_status"
+    fi
+  else
+    warn "This version of agrep limits PATTERN to < 32 characters, so cannot do complete Plot match."
+  fi
+
+  warn "${FUNCNAME[0]}(): AbsoluteEpisodeNumber guess from full Plot failed or too fuzzy, trying chunked match."
+
+  #Try matching small chunks of the plot.
+  chunked_fuzzy_plot_match
+  fuzzy_chunk_return_status="$?"
+  [[ "$fuzzy_chunk_return_status" == 0 ]] && return 0
+  warn "${FUNCNAME[0]}(): Chunked Plot match is still too fuzzy, failed to guess AbsoluteEpisodeNumber."
+  return "$fuzzy_chunk_return_status"
 }
 
 #Set the AbsoluteEpisodeNumber by matching EpisodeSubtitle against
@@ -4729,7 +4735,8 @@ m2k_doover(){
     #NOTE: The first command in doover.sh is to delete the file doover.sh.
     cp "$m2kdir/doover.sh" "$m2kdir/doover_${FileNameNow}.sh"
     chmod +x "$m2kdir/doover.sh"
-    "$m2kdir/doover.sh" 2>&1 | err_pipe "doover: "
+    #TODO: Need to fix err_pipe for subcalls to myth2kodi # 2>&1 | err_pipe "doover: "
+    "$m2kdir/doover.sh"
     dooverstatus="${PIPESTATUS[0]}"
     #TODO: The dooverstatus is most likely the myth2kodi exit status for the
     #      last recording processed by doover.sh...
@@ -5840,7 +5847,7 @@ if [[ "$PlotMatchFallback" = 'Enabled' ]]; then
   debug "PlotMatchFallback is Enabled" #[[ -z "$Sxx" || "$Sxx" =~ ^(S00|S)$ || -z "$Exx" || "$Exx" =~ ^(E00|E)$ ]]
   #TODO: S00 can be a legitimate season number, need to drop "$Sxx" = "S00", the TODO for a HasSxxExx variable should resolve this too
   if [ "$m2kProgramIDCheck" = "EP" ] && [[ "$Sxx" = "S" || -z "$Sxx" || "$Sxx" = "S00" || "$Exx" = "E" || -z "$Exx" || "$Exx" = "E00" ]] ; then
-    getAbsoluteEpisodeNumberWithFuzzyPlotMatch
+    get_absolute_episode_number_fuzzy_plot
     if [[ "$?" = "0" && -n "$AbsoluteEpisodeNumber" ]]; then
       inform "Setting Sxx, Exx, and EpisodeSubtitle based on FuzzyPlotMatch:"
       #NOTE: set_sxxexx_absolute_episode_number also sets EpisodeSubtitle and SeasonNumber

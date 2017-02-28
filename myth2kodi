@@ -1080,6 +1080,20 @@ parse_command_flags(){
       debug "Recognised command line switch '--undo'"
       #TODO: Enable undo for a specific file, eg: myth2kodi --undo '/path/to/recordings/1070_20160331073100.mpg'
       #      Ideally we'd alternatively be able to provide the moved file name and it would still work.
+      # if [[ -z "$m2karg2" ]]; then
+      #   err 'myth2kodi --undo requires either "all" or a file name arg.'
+      #   return 1
+      # fi
+      # if [[ "${m2karg2,,}" == 'all' ]]; then
+      #   m2k_undo_all
+      #   return $?
+      # elif [[ -f "$m2karg2" ]]; then
+      #   m2k_undo_rec "$m2karg2"
+      #   return $?
+      # else
+      #   err 'The argument to --undo must be "all" or a recording file name. Called as:'
+      #   errcont "myth2kodi $m2karg1 '$m2karg2'"
+      # fi
       if ((m2karg_count > 1)); then
         err "${FUNCNAME[0]}(): NotImplemented: file specific --undo."
         return 1
@@ -4817,12 +4831,41 @@ m2k_undo_all(){
   return 1
 }
 
-#This function provides the mechanism to undo a specified myth2kodi jobs
+#Provides a mechanism to undo processing of a specified recording.
 m2k_undo_rec(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
 
-  #Check the provided file has been processed by myth2kodi.
-  #Check that our MythTV-DB still contains entry for the recording.
+  #We can only undo recordings that we have successfully processed.
+  #Every recording we have successfully processed has an entry in the
+  #auto generated undo.sh script. So just extract the entry from undo,
+  #remove it from undo and run it...
+
+  #Identify any MythTV file name associated with the specified recording.
+  set_recording_name "$1"
+
+  # if [[ "$?" == 0 && -n "$RECORDING_NAME" ]]; then
+  #   #Try and extract the undo entries associated with $RECORDING_NAME from undo.sh
+  #   sed -n "\#$RECORDING_NAME#p" "$m2kdir/undo.sh" > A_TEMP_FILE.SH
+  #   if [[ WE HAVE UNDO COMMANDS ]]; then
+  #     chmod +x A_TEMP_FILE.SH
+  #     local undostatus
+  #     A_TEMP_FILE.SH 2>&1 | err_pipe "undo: "
+  #     undostatus="${PIPESTATUS[0]}"
+  #   fi
+
+  #   if [[ "$undostatus" == 0 ]]; then
+  #     debug "Removing lines mentioning '$RECORDING_NAME' from $m2kdir/undo.sh"
+  #     sed -i.bak "\#$RECORDING_NAME#d" "$m2kdir/undo.sh" 2>&1 | err_pipe "${FUNCNAME[0]}(): Line $LINENO: "
+  #     (( LOGLEVEL < 3 )) && rm -f "$m2kdir/undo.sh.bak"
+  #     return 0
+  #   fi
+  #   err "${FUNCNAME[0]}(): Failed to undo: $1"
+  #   return 1
+  # else
+  #   err "${FUNCNAME[0]}(): Cannot undo: $1"
+  #   return 1
+  # fi
+
   #Try and extract the undo entry from undo.sh
   #  ?Or, failing that, generate an undo command for this recording?
   #undo the myth2kodi processing

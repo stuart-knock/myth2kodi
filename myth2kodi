@@ -699,7 +699,7 @@ m2k_init(){
   ((LOGLEVEL>=3)) && printf '%s\n' "Config complete." >> '/tmp/m2k_init_pre_logging_debug.txt'
 
   #What am I...
-  m2kVersion="myth2kodi Version 1.3.1b" ; declare -gr m2kVersion
+  m2kVersion="myth2kodi Version 1.3.1c" ; declare -gr m2kVersion
   m2kPlatform="$(uname)" ; declare -gr m2kPlatform
   ((LOGLEVEL>=3)) && printf '%s\n' "Running $m2kVersion on $m2kPlatform." >> '/tmp/m2k_init_pre_logging_debug.txt'
 
@@ -1093,29 +1093,19 @@ parse_command_flags(){
     ;;
     --undo)
       debug "Recognised command line switch '--undo'"
-      #TODO: Enable undo for a specific file, eg: myth2kodi --undo '/path/to/recordings/1070_20160331073100.mpg'
-      #      Ideally we'd alternatively be able to provide the moved file name and it would still work.
-      # if [[ -z "$m2karg2" ]]; then
-      #   err 'myth2kodi --undo requires either "all" or a file name arg.'
-      #   return 1
-      # elif [[ "${m2karg2,,}" == 'all' ]]; then
-      #   m2k_undo_all
-      #   return $?
-      # elif [[ -f "$m2karg2" ]]; then
-      #   m2k_undo_rec "$m2karg2"
-      #   return $?
-      # else
-      #   err 'The argument to --undo must be "all" or a recording file name. Called as:'
-      #   errcont "myth2kodi $m2karg1 '$m2karg2'"
-      # fi
-      if ((m2karg_count > 1)); then
-        err "${FUNCNAME[0]}(): NotImplemented: file specific --undo."
+      if [[ -z "$m2karg2" ]]; then
+        err 'myth2kodi --undo requires either "all" or a file name arg.'
         return 1
-        #m2k_undo_rec "$m2karg2"
-        #return $?
-      else
+      elif [[ "${m2karg2,,}" == 'all' ]]; then
         m2k_undo_all
         return $?
+      elif [[ -f "$m2karg2" ]]; then
+        m2k_undo_rec "$m2karg2"
+        return $?
+      else
+        err 'The argument to --undo must be "all" or a /path/to/recording/filename.ext. Called as:'
+        errcont "myth2kodi $m2karg1 '$m2karg2'"
+        return 1
       fi
     ;;
     --series-info) #ShowName
@@ -1734,7 +1724,8 @@ add_doover(){
       {
         #Write doover.sh line that removes a link to a recording:
         printf '%s'    "test -L \"$MoveDir/$ShowFileName.$OriginalExt\" &&"
-        printf ' %s\n' "rm -f \"$MoveDir/$ShowFileName.$OriginalExt\""
+        printf ' %s'   "rm -f \"$MoveDir/$ShowFileName.$OriginalExt\" &&"
+        printf ' %s\n' "echo removed link \"$MoveDir/$ShowFileName.$OriginalExt\""
       } >> "$m2kdir/doover.sh"
     else
       err "${FUNCNAME[0]}(): PROCESS_RECORDING_MODE not equal to 'LINK' or 'MOVE' with 'SYMLINK'ing 'Enabled'."
@@ -1772,7 +1763,7 @@ add_undo(){
       #Write undo.sh line that removes link:
       printf '%s'    "test -L \"$InputPath\" &&"
       printf ' %s'   "rm -f \"$InputPath\" &&"
-      printf ' %s\n' "echo removed \"$InputPath\""
+      printf ' %s\n' "echo removed link \"$InputPath\""
       #Write undo.sh line that moves already-moved-file back to original location:
       printf '%s'    "test -f \"$MoveDir/$ShowFileName.$OriginalExt\" &&"
       printf ' %s'   "mv \"$MoveDir/$ShowFileName.$OriginalExt\" \"$InputPath\" &&"
@@ -1782,7 +1773,8 @@ add_undo(){
     {
       #Write undo.sh line that removes link:
       printf '%s'    "test -L \"$MoveDir/$ShowFileName.$OriginalExt\" &&"
-      printf ' %s\n' "rm -f \"$MoveDir/$ShowFileName.$OriginalExt\""
+      printf ' %s'   "rm -f \"$MoveDir/$ShowFileName.$OriginalExt\" &&"
+      printf ' %s\n' "echo removed link \"$MoveDir/$ShowFileName.$OriginalExt\""
     } >> "$m2kdir/undo.sh"
   elif [[ "$PROCESS_RECORDING_MODE" = 'MOVE' && "$SYMLINK" = 'Disabled' && "$RequiresDoover" != "1" ]]; then
     debug "'MOVE' mode with SYMLINK=Disabled and does not require doover, so MythTV-DB info has been removed."
@@ -4847,42 +4839,62 @@ m2k_undo_all(){
 #Provides a mechanism to undo processing of a specified recording.
 m2k_undo_rec(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
+  #We can only undo recordings that we have successfully processed. Every
+  #recording we have successfully processed has an entry in the auto generated
+  #undo.sh script. So just extract the entry from undo, run it and the remove
+  #it from undo if we were successful...
 
-  #We can only undo recordings that we have successfully processed.
-  #Every recording we have successfully processed has an entry in the
-  #auto generated undo.sh script. So just extract the entry from undo,
-  #remove it from undo and run it...
+  #Identify the recording file, recording link, and who owns what.
+  identify_recording_files "$1"
 
-  #Identify any MythTV file name associated with the specified recording.
-  set_recording_name "$1"
+  if [[ "$?" == 0 && -n "$RECORDING_LINK" ]]; then
+    local RECORDING_UNDO_FILE
+    RECORDING_UNDO_FILE="$(mktemp "$M2K_TMPDIR/m2k_recording_undo_$FileNameNow"-XXXX)"
 
-  # if [[ "$?" == 0 && -n "$RECORDING_NAME" ]]; then
-  #   #Try and extract the undo entries associated with $RECORDING_NAME from undo.sh
-  #   sed -n "\#$RECORDING_NAME#p" "$m2kdir/undo.sh" > A_TEMP_FILE.SH
-  #   if [[ WE HAVE UNDO COMMANDS ]]; then
-  #     chmod +x A_TEMP_FILE.SH
-  #     local undostatus
-  #     A_TEMP_FILE.SH 2>&1 | err_pipe "undo: "
-  #     undostatus="${PIPESTATUS[0]}"
-  #   fi
+    #Try and extract the undo entries associated with $RECORDING_LINK from undo.sh
+    #NOTE: In LINK mode, RECORDING_LINK => myth2kodi file name;
+    #      In MOVE with SYMLINKing='Enabled', RECORDING_LINK => MythTV file name.
+    sed -n "\#$RECORDING_LINK#p" "$m2kdir/undo.sh" > "$RECORDING_UNDO_FILE"
 
-  #   if [[ "$undostatus" == 0 ]]; then
-  #     debug "Removing lines mentioning '$RECORDING_NAME' from $m2kdir/undo.sh"
-  #     sed -i.bak "\#$RECORDING_NAME#d" "$m2kdir/undo.sh" 2>&1 | err_pipe "${FUNCNAME[0]}(): Line $LINENO: "
-  #     (( LOGLEVEL < 3 )) && rm -f "$m2kdir/undo.sh.bak"
-  #     return 0
-  #   fi
-  #   err "${FUNCNAME[0]}(): Failed to undo: $1"
-  #   return 1
-  # else
-  #   err "${FUNCNAME[0]}(): Cannot undo: $1"
-  #   return 1
-  # fi
+    #If we did not find matching lines then return error state.
+    if [[ ! -s "$RECORDING_UNDO_FILE" ]]; then
+      err "${FUNCNAME[0]}(): Failed to find undo entry for '$1'"
+      return 1
+    fi
 
-  #Try and extract the undo entry from undo.sh
-  #  ?Or, failing that, generate an undo command for this recording?
-  #undo the myth2kodi processing
-  #return status
+    #We found matching lines, so process them.
+    chmod +x "$RECORDING_UNDO_FILE"
+    local undostatus
+    "$RECORDING_UNDO_FILE" 2>&1 | err_pipe "undo: "
+    undostatus="${PIPESTATUS[0]}"
+
+    if [[ "$undostatus" == 0 ]]; then
+    #TODO: THe delete undo and doover is repeated in 3 places, refactor into func.
+      debug "Removing lines mentioning '$RECORDING_LINK' from $m2kdir/undo.sh"
+      sed -i.bak "\#$RECORDING_LINK#d" "$m2kdir/undo.sh" 2>&1 | err_pipe "${FUNCNAME[0]}(): Line $LINENO: "
+      (( LOGLEVEL < 3 )) && rm -f "$m2kdir/undo.sh.bak"
+
+      #Delete doover.sh entries associated with $RECORDING_NAME
+      if [[ -f "$m2kdir/doover.sh" ]]; then
+        debug "Removing lines related to '$1' from $m2kdir/doover.sh"
+        if [[ "$RECORDING_LINK_OWNER" = 'myth2kodi' ]]; then
+          #Was processed in LINK mode, so find and delete LINK removal line
+          sed -i.bak "\#$RECORDING_LINK#d" "$m2kdir/doover.sh" 2>&1 | err_pipe "${FUNCNAME[0]}(): Line $LINENO: "
+          (( LOGLEVEL < 3 )) && rm -f "$m2kdir/doover.sh.bak"
+        fi
+        #Find and delete all lines in MOVE mode or just the myth2kodi line in LINK mode
+        sed -i.bak "\#$RECORDING_NAME#d" "$m2kdir/doover.sh" 2>&1 | err_pipe "${FUNCNAME[0]}(): Line $LINENO: "
+        (( LOGLEVEL < 3 )) && rm -f "$m2kdir/doover.sh.bak"
+      fi
+      #TODO: Consider whether we should be running maintenance here...
+      return 0
+    fi
+    err "${FUNCNAME[0]}(): Failed executing undo commands: $1"
+    return 1
+  else
+    err "${FUNCNAME[0]}(): Unprocessed or MOVEed with SYMLINKing='Disabled', cannot undo: $1"
+    return 1
+  fi
 }
 
 ##### HELP MESSAGES #####
@@ -4938,13 +4950,13 @@ msg_options(){
   printf '\n%s\n' "  --unmanned_doover"
   printf '%s\n'   "    Same as --doover but for use without human intervention"
   printf '%s\n'   "    eg. myth2kodi --unmanned_doover"
-  printf '\n%s\n' "  --undo"
-  printf '%s\n'   "    Returns all processed recordings to their original state."
-  printf '%s\n'   "    There is an exception for recordings successfully processed"
-  printf '%s\n'   "    with SYMLINK='Disabled', as MythTV-DB info has been deleted,"
-  printf '%s\n'   "    these can not be undone. Also,recordings that have been"
-  printf '%s\n'   "    deleted or disconnected cannot be undone."
-  printf '%s\n'   "    eg. myth2kodi --undo"
+  printf '\n%s\n' "  --undo '/path/to/file'|'all'"
+  printf '%s\n'   "    Returns either a specified recording or 'all' processed"
+  printf '%s\n'   "    recordings to their original state. NOTE: Recordings"
+  printf '%s\n'   "    successfully processed with SYMLINK='Disabled' cannot be"
+  printf '%s\n'   "    undone, as MythTV-DB info has been deleted. Also, recordings"
+  printf '%s\n'   "    that have been deleted or disconnected cannot be undone."
+  printf '%s\n'   "    eg. myth2kodi --undo '/home/mythtv/recordings/1099_20151210093000.mpg'"
   printf '\n%s\n' "  --series-info 'Series Name'"
   printf '%s\n'   "    Updates our local database tables for a specified series,"
   printf '%s\n'   "    ignoring lastupdated.time. Information is obtained from"
@@ -5172,11 +5184,12 @@ find_file_link_pairs(){
     if [[ ! "$RECORDING_FILE" =~ $RECPATTERN ]]; then
       warn "${FUNCNAME[0]}(): No link found to: $RECORDING_FILE"
       warncont "Assuming recording has been disconnected from MythTV."
-      RECORDING_LINK=""
+      RECORDING_LINK=''
       return 0
     fi
     warn "${FUNCNAME[0]}(): Cannot find link to: $RECORDING_FILE"
     warncont "This probably means that the file was not successfully processed by myth2kodi."
+    RECORDING_LINK=''
     return 0
   else
     err "${FUNCNAME[0]}(): Not a file or link: $FILE"
@@ -5204,7 +5217,7 @@ set_recording_name(){
     [[ -f "$1" ]] || { err "${FUNCNAME[0]}(): arg1 is not a file."; return 1; }
     #Check if it's a moved file name that's still tracked by MythTV
     local -a sg_dirs
-    #Get the sorage group directories defined in MythTV-DB
+    #Get the storage group directories defined in MythTV-DB
     sg_dirs=($("$binpath"/mythdb_access --storagegroups            \
                                         --SecurityPin="$DBPin"     \
                                         --DBHostName="$DBHostName" \
@@ -5311,11 +5324,14 @@ delete_recording(){
       ;;
   esac
 
+  #TODO: THe delete undo and doover is repeated in 3 places, refactor into func.
+
   #Delete undo.sh entries associated with $RECORDING_NAME
   debug "Removing lines mentioning '$RECORDING_NAME' from $m2kdir/undo.sh"
   sed -i.bak "\#$RECORDING_NAME#d" "$m2kdir/undo.sh" 2>&1 | err_pipe "${FUNCNAME[0]}(): Line $LINENO: "
   (( LOGLEVEL < 3 )) && rm -f "$m2kdir/undo.sh.bak"
 
+  #TODO: THis may not be getting the remove link line in LINK mode, see m2k_undo_rec()
   #Delete doover.sh entries associated with $RECORDING_NAME
   if [[ -f "$m2kdir/doover.sh" ]]; then
     debug "Removing lines mentioning '$RECORDING_NAME' from $m2kdir/doover.sh"
@@ -5375,11 +5391,14 @@ disconnect_recording(){
   #Delete the associated database entry and thumbnail
   delete_mythtv_database_entry
 
+  #TODO: THe delete undo and doover is repeated in 3 places, refactor into func.
+
   #Delete undo.sh entries associated with $RECORDING_NAME
   debug "Removing lines mentioning '$RECORDING_NAME' from $m2kdir/undo.sh"
   sed -i.bak "/$RECORDING_NAME/d" "$m2kdir/undo.sh"
   (( LOGLEVEL < 3 )) && rm -f "$m2kdir/undo.sh.bak"
 
+  #TODO: THis may not be getting the remove link line in LINK mode
   #Delete doover.sh entries associated with $RECORDING_NAME
   debug "Removing lines mentioning '$RECORDING_NAME' from $m2kdir/doover.sh"
   sed -i.bak "/$RECORDING_NAME/d" "$m2kdir/doover.sh"

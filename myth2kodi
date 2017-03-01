@@ -699,7 +699,7 @@ m2k_init(){
   ((LOGLEVEL>=3)) && printf '%s\n' "Config complete." >> '/tmp/m2k_init_pre_logging_debug.txt'
 
   #What am I...
-  m2kVersion="myth2kodi Version 1.3.1a" ; declare -gr m2kVersion
+  m2kVersion="myth2kodi Version 1.3.1b" ; declare -gr m2kVersion
   m2kPlatform="$(uname)" ; declare -gr m2kPlatform
   ((LOGLEVEL>=3)) && printf '%s\n' "Running $m2kVersion on $m2kPlatform." >> '/tmp/m2k_init_pre_logging_debug.txt'
 

@@ -226,7 +226,7 @@ TargetPathIsInputPath='Disabled'
 #processed. Options: ['Enabled'(DEFAULT)|'Disabled']
 ShowStopper='Enabled'
 
-#TODO: Review. Consider renaming this.
+#TODO: Review. Consider renaming this. DIR_TRACKING_CLEANUP='Enabled'
 #DirTracking will check for and remove the folders created by myth2kodi
 #Options: ['Enabled'(DEFAULT)|'Disabled']
 DirTracking='Enabled'
@@ -424,6 +424,11 @@ KODIIPs=( '127.0.0.1:8080' )                 #<------THIS VALUE MUST BE SET-----
 #for more information on setting this up.
 #Options: ['Enabled'(DEFAULT)|'Disabled']
 CREATE_RSS='Enabled'
+
+#The directory to write the RSS file to when CREATE_RSS='Enabled'. The directory
+#must exist and Librarian needs rwx permission to it. #TODO: Add to diagnostics...
+#Default: '/var/www/myth2kodi-rss'
+RSS_DIRECTORY='/var/www/myth2kodi-rss'
 
 #RSSmaxItems controls the number of items in the RSS. RSS Can be activated by
 #creating a folder in /var/www/myth2kodi-rss. NOTE: setting this to 0 will
@@ -868,9 +873,11 @@ validate_settings(){
   # check_path_permission "$m2kdir"     "rwx"
   # check_path_permission "$M2K_TMPDIR" "rwx"
   # check_path_permission "$binpath"    "rx"
+  # local origdir_permissions
+  # [[ "$PROCESS_RECORDING_MODE" =~ ^(LINK|COPY)$ ]] && origdir_permissions='rx'
+  # [[ "$PROCESS_RECORDING_MODE" == 'MOVE' ]] && origdir_permissions='rwx'
+  # #TODO: originaldir not set when this is called... ?move elsewhere?
   # local target_permissions='rwx'
-  # [[ "$PROCESS_RECORDING_MODE" =~ ^(LINK|COPY)$ ]] && target_permissions='rx'
-  # [["$PROCESS_RECORDING_MODE" == 'MOVE' ]] && target_permissions='rwx'
   # check_path_permission "$MoveDir"           "$target_permissions"
   # check_path_permission "$AlternateMoveDir"  "$target_permissions"
   # check_path_permission "$PrimaryMovieDir"   "$target_permissions"
@@ -1001,6 +1008,14 @@ parse_command_flags(){
     ;;
     --movie) #/path/to/recording/filename.mpg
       debug "Recognised command line switch '--movie'"
+      # if ((m2karg_count > 3)); then
+      #   err "myth2kodi --movie takes at most 2 additional arguments: /path/to/filename.mpg and [title]."
+      #   return 1
+      # elif ((m2karg_count == 1)); then
+      #   err "myth2kodi --movie requires at least 1 additional argument: /path/to/filename.mpg."
+      #   return 1
+      # fi
+
       export ShowCategory="Movie"
       #TODO: We shouldn't ever have a subtitle for a movie, so abort/err if -n "$m2karg4" and only call myth2kodi "$m2karg2" "$m2karg3" below.
       myth2kodi "$m2karg2" "$m2karg3" "$m2karg4"
@@ -1083,8 +1098,7 @@ parse_command_flags(){
       # if [[ -z "$m2karg2" ]]; then
       #   err 'myth2kodi --undo requires either "all" or a file name arg.'
       #   return 1
-      # fi
-      # if [[ "${m2karg2,,}" == 'all' ]]; then
+      # elif [[ "${m2karg2,,}" == 'all' ]]; then
       #   m2k_undo_all
       #   return $?
       # elif [[ -f "$m2karg2" ]]; then
@@ -1224,6 +1238,7 @@ set_show_file_name(){
     debug "Naming as movie"
     Exx="Movie"
     #TODO: If adding a year then we really want original release date so the Kodi metadata lookup works reliably.
+    #      Add a MOVIE_RELEASE_YEAR to the processing functions for guide-data that provide this.
     if [[ -n "$MovieAirDate" ]]; then
       warn "${FUNCNAME[0]}(): Currently forcing bypass of adding MovieAirDate to Movie file names."
       ShowFileName="$NewShowName$SHOW_FILE_NAME_APPEND" # ShowFileName="$NewShowName ($MovieAirDate)$SHOW_FILE_NAME_APPEND"
@@ -1288,9 +1303,8 @@ dailyreport(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   if [ "$DailyReport" = 'Enabled' ]; then
     [[ ! -d "$m2kdir/DailyReport" ]] && mkdir "$m2kdir/DailyReport"
-    local reporttime ; reporttime=$(date +%T) #TODO: This should use a time generated at the same time as $Today otherwise processing near midnight could cause misleading information.
     debug "Writing to DailyReport file: ${Today}"
-    printf '%s\n' "$reporttime - $ShowFileName" >> "$m2kdir/DailyReport/${Today}"
+    printf '%s\n' "$ScriptStartTime - $ShowFileName" >> "$m2kdir/DailyReport/${Today}"
     return "$?"
   fi
   return 0
@@ -1445,7 +1459,8 @@ recreate_comskip(){
 
   elif [[ -d "$inputarg" ]]; then
     local yesorno='no' #Default to safety, ie do nothing.
-    #TODO: confirm inputarg doesn't end in a /
+    #TODO: confirm inputarg doesn't end in a /, or just remove if there is any... inputarg="${inputarg%*/}"
+    #      [[ "$inputarg" == */ ]] && { err "${FUNCNAME[0]}(): Not trailing /: '$inputarg'" ; return 1; }
     warn "YOU ARE ABOUT TO SCAN THE DIRECTORY: $inputarg"
     warncont "AND REGENERATE COMSKIP FILES FOR ALL PREVIOUSLY MOVED RECORDINGS."
     read -r -n1 -p "  Do you want myth2kodi to regenerate all comskip files? y/(n)>" yesorno
@@ -1563,11 +1578,8 @@ kodi_newshow(){
 #Generate an RSS feed for processed recordings, Kodi can be set to view this feed.
 generaterss(){
   #Big thanks to barney_1!
-  #TODO: return codes from this function aren't captured...
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  #user settings:
-  #TODO: this probably should be a setting at the top of file...
-  local rssDir='/var/www/myth2kodi-rss'
+  #Only called when RSS generation is enabled, so we want some entries:
   ((RSSmaxItems == 0)) && RSSmaxItems=8 #maximum number of items to read into the feed
 
   #script settings
@@ -1578,14 +1590,14 @@ generaterss(){
   local lineBreak='&lt;br /&gt;'
 
   #test if rssFile directory is writeable
-  if [ ! -w "$rssDir" ]; then
-    err "${FUNCNAME[0]}(): RSS generation failed: Directory not writeable ($rssDir)"
+  if [ ! -w "$RSS_DIRECTORY" ]; then
+    err "${FUNCNAME[0]}(): RSS generation failed: Directory not writeable ($RSS_DIRECTORY)"
     return 5
   fi
 
   #test if rssFile is writeable
-  if [[ -e "$rssDir/$OLDrssFile" && ! -w "$rssDir/$OLDrssFile" ]]; then
-    err "${FUNCNAME[0]}(): RSS generation failed: File exists but is not writeable: $rssDir/$OLDrssFile"
+  if [[ -e "$RSS_DIRECTORY/$OLDrssFile" && ! -w "$RSS_DIRECTORY/$OLDrssFile" ]]; then
+    err "${FUNCNAME[0]}(): RSS generation failed: File exists but is not writeable: $RSS_DIRECTORY/$OLDrssFile"
     return 6
   fi
 
@@ -1597,7 +1609,7 @@ generaterss(){
     echo -e '\t<title>Recently added by myth2kodi</title>'
     echo -e '\t<link>http://kodi.tv</link>'
     echo -e '\t<description>myth2kodi Daily Report Information</description>'
-  } > "$rssDir/$TEMPrssFile"
+  } > "$RSS_DIRECTORY/$TEMPrssFile"
 
   #TODO: Need to make the call to ifconfig more portable, maybe just revert to straight call and add /sbin to librarians path.
   #  The below assumed the first inet addr was the correct one, but that can lead to the loopback, using m2 and removing 127.0.0.1 avoids this problem,
@@ -1612,14 +1624,14 @@ generaterss(){
   {
     echo -e "\t\t<item>"
     echo -e "\t\t\t<title>$rssNewShowName $Sxx$Exx $rssEpisodeSubtitle</title>"
-  } >> "$rssDir/$TEMPrssFile"
+  } >> "$RSS_DIRECTORY/$TEMPrssFile"
   if [ "$m2kProgramIDCheck" = "EP" ]; then
-    echo -e "\t\t\t<link>http://www.thetvdb.com/?tab=series&amp;id=$SeriesID</link>" >> "$rssDir/$TEMPrssFile"
+    echo -e "\t\t\t<link>http://www.thetvdb.com/?tab=series&amp;id=$SeriesID</link>" >> "$RSS_DIRECTORY/$TEMPrssFile"
   elif [ "$m2kProgramIDCheck" = "MV" ]; then
-    echo -e "\t\t\t<link>http://www.imdb.com/search/title?release_date=,$MovieAirDate&amp;title=$ShowName&amp;title_type=feature</link>" >> "$rssDir/$TEMPrssFile"
+    echo -e "\t\t\t<link>http://www.imdb.com/search/title?release_date=,$MovieAirDate&amp;title=$ShowName&amp;title_type=feature</link>" >> "$RSS_DIRECTORY/$TEMPrssFile"
   else
     tvdotcomshowname="${ShowName// /%20}"
-    echo -e "\t\t\t<link>http://www.tv.com/search.php?type=11&amp;stype=all&amp;tag=search%3Bfrontdoor&amp;qs=$tvdotcomshowname </link>" >> "$rssDir/$TEMPrssFile"
+    echo -e "\t\t\t<link>http://www.tv.com/search.php?type=11&amp;stype=all&amp;tag=search%3Bfrontdoor&amp;qs=$tvdotcomshowname </link>" >> "$RSS_DIRECTORY/$TEMPrssFile"
   fi
   {
     echo -e "\t\t\t<guid>sftp://$mythicalGUID</guid>"
@@ -1632,13 +1644,13 @@ generaterss(){
     echo -e "\t\t\t\tPlot: $rssPlot"
     echo -e "\t\t\t</description>"
     echo -e "\t\t</item>"
-  } >> "$rssDir/$TEMPrssFile"
+  } >> "$RSS_DIRECTORY/$TEMPrssFile"
 
   #If there is an old RSS file
-  if [ -e "$rssDir/$OLDrssFile" ]; then
+  if [ -e "$RSS_DIRECTORY/$OLDrssFile" ]; then
     #test for number of </item> tags using grep
     local RssItemCount itemLimit firstLine lastLine old_rss_data
-    RssItemCount=$(grep -c "</item>" "$rssDir/$OLDrssFile")
+    RssItemCount=$(grep -c "</item>" "$RSS_DIRECTORY/$OLDrssFile")
 
     #if $RSSmaxItems is greater than this number
     if ((RSSmaxItems > RssItemCount)); then
@@ -1650,17 +1662,17 @@ generaterss(){
     fi
 
     #get the line number for the first <item> tag
-    firstLine="$(grep -n -m 1 "<item>" "$rssDir/$OLDrssFile" | cut -d ":" -f 1)"
+    firstLine="$(grep -n -m 1 "<item>" "$RSS_DIRECTORY/$OLDrssFile" | cut -d ":" -f 1)"
     #get the line number for our last </item> tag
-    lastLine="$(grep -n -m $((itemLimit-1)) "</item>" "$rssDir/$OLDrssFile" | tail -n1 | cut -d ":" -f 1)"
+    lastLine="$(grep -n -m $((itemLimit-1)) "</item>" "$RSS_DIRECTORY/$OLDrssFile" | tail -n1 | cut -d ":" -f 1)"
     #set IFS to use line break as a delineator
     local IFS=$'\n'
     #Read in the old RSS file
-    declare -a old_rss_data=( $(cat "$rssDir/$OLDrssFile") )
+    declare -a old_rss_data=( $(cat "$RSS_DIRECTORY/$OLDrssFile") )
     #arrayLen=${#old_rss_data[@]}
     #iterate through the array
     for index in $(seq $((firstLine-1)) $((lastLine-1))) ; do
-      echo "${old_rss_data[$index]}" >> "$rssDir/$TEMPrssFile"
+      echo "${old_rss_data[$index]}" >> "$RSS_DIRECTORY/$TEMPrssFile"
     done
     #copy line from old to new
     #if copied line is </item>
@@ -1673,11 +1685,11 @@ generaterss(){
   {
     echo -e '</channel>'
     echo -e '</rss>'
-  } >> "$rssDir/$TEMPrssFile"
+  } >> "$RSS_DIRECTORY/$TEMPrssFile"
 
   #move fully formed temp file on top of the old file
-  mv "$rssDir/$TEMPrssFile" "$rssDir/$OLDrssFile" 2>&1 | err_pipe "${FUNCNAME[0]}(): "
-  inform "RSS ENTRY SUCCESSFULLY CREATED: $rssDir/$OLDrssFile"
+  mv "$RSS_DIRECTORY/$TEMPrssFile" "$RSS_DIRECTORY/$OLDrssFile" 2>&1 | err_pipe "${FUNCNAME[0]}(): "
+  inform "RSS ENTRY SUCCESSFULLY CREATED: $RSS_DIRECTORY/$OLDrssFile"
   return 0
 }
 
@@ -1921,7 +1933,7 @@ get_mythtvdb_info_pythonbindings(){
   debug "Storing MythTV-DB info in temporary file: '$MTV_RECINFO_FILE'"
 
   #TODO: Temporary hack to clean-up shellcheck so it's easier to see actual
-  #      problems... See mdb_ related TODOs
+  #      problems... See mdb_ related TODOs for a better solution.
   local startdata stopdata title subtitle season episode category airdate originalairdate storagegroup stars description seriesid programid chanid starttime xmltvgrabber
 
   #NOTE: the declare also makes them local, so we'd need to mark them global
@@ -2151,7 +2163,7 @@ process_mythtvdb_schedulesdirect(){
 #Use regex to check for and make use of SxxExx info in Plot.
 get_sxxexx_from_plot(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  #TODO: localise the SeasonEpisode variable, considerrefactor the *_sxxexx_from_plot() functions.
+  #TODO: localise the SeasonEpisode variable, consider refactor the *_sxxexx_from_plot() functions.
   debugcont "SeasonEpisode: $SeasonEpisode"
   debugcont "InputSeasonNum: $InputSeasonNum"
   debugcont "InputEpisodeNum: $InputEpisodeNum"
@@ -2331,6 +2343,7 @@ process_mythtvdb_sydfta(){
     #  so, this is an ok approximation, but should look through more EPG data
     #  and determine whether the Category field reliably distinguishes things
     #  like news, sport, etc
+    debug "Recording is not obviously a movie, so assuming episode of series. TODO: Line $LINENO."
     m2kProgramIDCheck="EP"
   fi
 
@@ -4941,7 +4954,7 @@ msg_options(){
   printf '%s\n'   "    Print the MythTV database information for the specified"
   printf '%s\n'   "    recording. "
   printf '%s\n'   "    eg. myth2kodi --recording-info '1099_20151210093000.mpg'"
-  printf '\n%s\n' "  --movie 'filename'"
+  printf '\n%s\n' "  --movie 'filename' [Movie Title]"
   printf '%s\n'   "    Specifies that the recording being processed is a movie."
   printf '%s\n'   "    eg. myth2kodi --movie '1099_20151210093000.mpg'"
   printf '\n%s\n' "  --delete '/path/to/file'"
@@ -5148,6 +5161,7 @@ find_file_link_pairs(){
                                              --DBName="$MySQLMythDb"    \
                                              --DBUserName="$MySQLuser"  \
                                              --DBPassword="$MySQLpass"))
+      #TODO: should check return state...
     fi
     for check_dir in "${check_dirs[@]}" ; do
       LINK_NAME="$(find -L "$check_dir" -samefile "$RECORDING_FILE")"
@@ -5561,12 +5575,8 @@ InputTitle="$2"
 InputSubtitle="$3"
 InputSeasonNum="$4"
 InputEpisodeNum="$5"
-#TODO: Should allow manual input of season and episode numbers in addition to
-#  Title & Subtitle, with full information all searching should be overridden/bypassed...
+#TODO: With full information all searching should be overridden/bypassed...
 #  Issue warnings for any conflicts. but don't override command line arguments...
-#InputSxx="$4"
-#InputExx="$5"
-#InputCategory="%6" #So we can specify that it's a Movie...
 
 #Some basic tests to make sure we were called correctly
 validate_args

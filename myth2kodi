@@ -689,23 +689,23 @@ m2k_init(){
     printf '%s\n' "Called with $m2karg_count arguments. Called as:"
     printf '%s\n' "  myth2kodi '$m2karg1' \"$m2karg2\" \"$m2karg3\" \"$m2karg4\" '$m2karg5' '$m2karg6'"
     printf '%s\n' "Working directory: '$m2kdir'"
-  } > '/tmp/m2k_init_pre_logging_debug.txt'
+  } > "/tmp/m2k_init_pre_logging_debug_$(whoami).txt"
 
   #Override default settings with anything in myth2kodi.conf
   # shellcheck source=./myth2kodi.conf
   [[ -f "$m2kdir/myth2kodi.conf" ]] && source "$m2kdir/myth2kodi.conf"
 
   #Provide debugging info prior to the logging system's initialisation.
-  ((LOGLEVEL>=3)) && printf '%s\n' "Config complete." >> '/tmp/m2k_init_pre_logging_debug.txt'
+  ((LOGLEVEL>=3)) && printf '%s\n' "Config complete." >> "/tmp/m2k_init_pre_logging_debug_$(whoami).txt"
 
   #What am I...
   m2kVersion="myth2kodi Version 1.3.1c" ; declare -gr m2kVersion
   m2kPlatform="$(uname)" ; declare -gr m2kPlatform
-  ((LOGLEVEL>=3)) && printf '%s\n' "Running $m2kVersion on $m2kPlatform." >> '/tmp/m2k_init_pre_logging_debug.txt'
+  ((LOGLEVEL>=3)) && printf '%s\n' "Running $m2kVersion on $m2kPlatform." >> "/tmp/m2k_init_pre_logging_debug_$(whoami).txt"
 
   #Who called me...
   CALLER=$(whoami) ; declare -gr CALLER
-  ((LOGLEVEL>=3)) && printf '%s\n' "Called by $CALLER." >> '/tmp/m2k_init_pre_logging_debug.txt'
+  ((LOGLEVEL>=3)) && printf '%s\n' "Called by $CALLER." >> "/tmp/m2k_init_pre_logging_debug_$(whoami).txt"
   if [[ "$CALLER" != "$Librarian" ]]; then
     printf 'ERROR: %s\n' "myth2kodi should be run by user '$Librarian'"
     printf '  %s\n' "Check the USER SETTINGS section near the top of the script"
@@ -747,7 +747,7 @@ m2k_init(){
   UnrecognizedSeriesFile="$m2kdir/unrecognizedseries.log" ; declare -gr UnrecognizedSeriesFile
 
   #Make our working directory if it doesn't already exist
-  ((LOGLEVEL>=3)) && printf '%s\n' "Checking if we need to make '$m2kdir'." >> '/tmp/m2k_init_pre_logging_debug.txt'
+  ((LOGLEVEL>=3)) && printf '%s\n' "Checking if we need to make '$m2kdir'." >> "/tmp/m2k_init_pre_logging_debug_$(whoami).txt"
   if [[ ! -d "$m2kdir" ]]; then
     local createworkingdirstatus
     mkdir --parents "$m2kdir"
@@ -771,7 +771,7 @@ m2k_init(){
   fi
 
   #Initialise logging system
-  ((LOGLEVEL>=3)) && printf '%s\n' 'Initialising logging system.' >> '/tmp/m2k_init_pre_logging_debug.txt'
+  ((LOGLEVEL>=3)) && printf '%s\n' 'Initialising logging system.' >> "/tmp/m2k_init_pre_logging_debug_$(whoami).txt"
   if [ -f "$binpath/bashlogging" ] ; then
     local bashloggingstatus
     # shellcheck source=./bashlogging
@@ -782,7 +782,7 @@ m2k_init(){
     printf 'ERROR: %s\n' "$binpath/bashlogging does not exist." | tee -a "$LOGFILE"
     exit 1
   fi
-  ((LOGLEVEL>=3)) && printf '%s\n' "Logging system initialised, see '$LOGFILE'." >> '/tmp/m2k_init_pre_logging_debug.txt'
+  ((LOGLEVEL>=3)) && printf '%s\n' "Logging system initialised, see '$LOGFILE'." >> "/tmp/m2k_init_pre_logging_debug_$(whoami).txt"
 
   #When the LOGFILE exceeds 4MB compress it and start a fresh one.
   log_rotation "$LOGFILE" "$m2kdir/${LogFileName}_${FileNameNow}.log" '4000000'

@@ -647,28 +647,29 @@ exit_job(){
 #of this file. It initialises the state of the script and the logging system.
 m2k_init(){
   #Write a temp file every time we are called, useful to debug MythTV User Job issues.
+  local -r pre_logging_file="/tmp/m2k_init_pre_logging_debug_$(whoami).txt"
   {
     printf '%s\n' "Entered ${FUNCNAME[0]}() -- $(date)"
     printf '%s\n' "Called with $m2karg_count arguments. Called as:"
     printf '%s\n' "  myth2kodi '$m2karg1' \"$m2karg2\" \"$m2karg3\" \"$m2karg4\" '$m2karg5' '$m2karg6'"
     printf '%s\n' "Working directory: '$m2kdir'"
-  } > "/tmp/m2k_init_pre_logging_debug_$(whoami).txt"
+  } > "$pre_logging_file"
 
   #Override default settings with anything in myth2kodi.conf
   # shellcheck source=./myth2kodi.conf
   [[ -f "$m2kdir/myth2kodi.conf" ]] && source "$m2kdir/myth2kodi.conf"
 
   #Provide debugging info prior to the logging system's initialisation.
-  ((LOGLEVEL>=3)) && printf '%s\n' "Config complete." >> "/tmp/m2k_init_pre_logging_debug_$(whoami).txt"
+  ((LOGLEVEL>=3)) && printf '%s\n' "Config complete." >> "$pre_logging_file"
 
   #What am I...
   m2kVersion="myth2kodi Version 1.3.1c" ; declare -gr m2kVersion
   m2kPlatform="$(uname)" ; declare -gr m2kPlatform
-  ((LOGLEVEL>=3)) && printf '%s\n' "Running $m2kVersion on $m2kPlatform." >> "/tmp/m2k_init_pre_logging_debug_$(whoami).txt"
+  ((LOGLEVEL>=3)) && printf '%s\n' "Running $m2kVersion on $m2kPlatform." >> "$pre_logging_file"
 
   #Who called me...
   CALLER=$(whoami) ; declare -gr CALLER
-  ((LOGLEVEL>=3)) && printf '%s\n' "Called by $CALLER." >> "/tmp/m2k_init_pre_logging_debug_$(whoami).txt"
+  ((LOGLEVEL>=3)) && printf '%s\n' "Called by $CALLER." >> "$pre_logging_file"
   if [[ "$CALLER" != "$Librarian" ]]; then
     printf 'ERROR: %s\n' "myth2kodi should be run by user '$Librarian'"
     printf '  %s\n' "Check the USER SETTINGS section near the top of the script"
@@ -700,8 +701,11 @@ m2k_init(){
   declare -gr ScriptStartTime
   declare -gr FileNameNow
 
-  #The full path version of the file to which logging output will be sent:
-  LOGFILE="$m2kdir/${LogFileName}.log"
+  #The full path version of the file to which logging output will be sent.
+  #Do not clobber LOGFILE on sub call to myth2kodi from --diagnostics.
+  [[ -z "$LOGFILE" ]] && LOGFILE="$m2kdir/${LogFileName}.log"
+  ((LOGLEVEL>=3)) && printf '%s\n' "LOGFILE set as '$LOGFILE'." >> "$pre_logging_file"
+
   #When running diagnostics mode, output will instead be sent to this file:
   DiagnosticsFile="$m2kdir/diagnostics.log" ; declare -gr DiagnosticsFile
   #A file containing a list of possible duplicate recordings:
@@ -710,7 +714,7 @@ m2k_init(){
   UnrecognizedSeriesFile="$m2kdir/unrecognizedseries.log" ; declare -gr UnrecognizedSeriesFile
 
   #Make our working directory if it doesn't already exist
-  ((LOGLEVEL>=3)) && printf '%s\n' "Checking if we need to make '$m2kdir'." >> "/tmp/m2k_init_pre_logging_debug_$(whoami).txt"
+  ((LOGLEVEL>=3)) && printf '%s\n' "Checking if we need to make '$m2kdir'." >> "$pre_logging_file"
   if [[ ! -d "$m2kdir" ]]; then
     local createworkingdirstatus
     mkdir --parents "$m2kdir"
@@ -734,7 +738,7 @@ m2k_init(){
   fi
 
   #Initialise logging system
-  ((LOGLEVEL>=3)) && printf '%s\n' 'Initialising logging system.' >> "/tmp/m2k_init_pre_logging_debug_$(whoami).txt"
+  ((LOGLEVEL>=3)) && printf '%s\n' 'Initialising logging system.' >> "$pre_logging_file"
   if [ -f "$binpath/bashlogging" ] ; then
     local bashloggingstatus
     # shellcheck source=./bashlogging
@@ -745,7 +749,7 @@ m2k_init(){
     printf 'ERROR: %s\n' "$binpath/bashlogging does not exist." | tee -a "$LOGFILE"
     exit 1
   fi
-  ((LOGLEVEL>=3)) && printf '%s\n' "Logging system initialised, see '$LOGFILE'." >> "/tmp/m2k_init_pre_logging_debug_$(whoami).txt"
+  ((LOGLEVEL>=3)) && printf '%s\n' "Logging system initialised, see '$LOGFILE'." >> "$pre_logging_file"
 
   #When the LOGFILE exceeds 4MB compress it and start a fresh one.
   log_rotation "$LOGFILE" "$m2kdir/${LogFileName}_${FileNameNow}.log" '4000000'
@@ -828,23 +832,21 @@ parse_command_flags(){
       else
         inform "Running diagnostics, so redirecting subsequent messages to $DiagnosticsFile"
       fi
-      LOGFILE="$DiagnosticsFile"
+      export LOGFILE="$DiagnosticsFile"
       m2k_diagnostics
       declare -i diagnosticsreturnstatus="$?"
       #Reset the LOGFILE & LOGLEVEL to previous state, in case we ever call
       # myth2kodi --diagnostics from within myth2kodi
+      unset LOGFILE
       LOGFILE="$PreCallLogFile"
-      #TODO: Move resetting of LOGLEVEL below the finished message, so start
-      #      and finished messages are written to the main log file. Also,
-      #      consider moving the archiving of the diagnostics file from the
-      #      start of m2k_diagnostics to here, so the date time tag is for
-      #      when the diagnostics are run and the initial debug message is
-      #      on calling m2k_diagnostics is written to the start of the current
-      #      diagnostics log and not to the end of the previous one. NOTE: the
-      #      first run after this change will result in two diagnostics reports
-      #      into one file for anyone who has an existing "$DiagnosticsFile".
+      #Move current diagnostics file to diagnostics_<Current Date&Time>.log
+      debug "Moving '$DiagnosticsFile' to '$m2kdir/diagnostics_${FileNameNow}.log'"
+      [[ -f "$DiagnosticsFile" ]] && mv "$DiagnosticsFile" "$m2kdir/diagnostics_${FileNameNow}.log"
+      if [[ ! "$LOGTYPE" =~ ^(stdout|stderr)$ ]]; then
+        inform "Finished running diagnostics, see '$m2kdir/diagnostics_${FileNameNow}.log'."
+      fi
+      #Reset LOGLEVEL after 'Finished...' so it and 'Running...' are written consistently to LOGFILE.
       LOGLEVEL="$PreCallLogLevel"
-      [[ "$LOGTYPE" =~ ^(stdout|stderr)$ ]] || inform 'Finished running diagnostics.'
       unset m2kDiagnosticsMode
       return $diagnosticsreturnstatus
     ;;
@@ -4639,8 +4641,6 @@ testfile_exit(){
 #This function provides basic testing of myth2kodi's functionality.
 m2k_diagnostics(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  #Move any existing diagnostics file to diagnostics_<Date&Time script was launched>.log
-  [[ -f "$DiagnosticsFile" ]] && mv "$DiagnosticsFile" "$m2kdir/diagnostics_${FileNameNow}.log"
   local PKGNAME_LIBMYTH_PYTHON=''
   local PKGNAME_PYTHON_LXML=''
   local PKGNAME_CURL=''
@@ -5020,7 +5020,7 @@ m2k_diagnostics(){
   fi
 
   inform "Diagnostic mode completed: $(date)"
-  inform "A diagnostics log file was written to: $LOGFILE"
+  debug "A diagnostics log file was written to: $LOGFILE"
 
   test "$overallchecks" = "***FAILED***" && return 1
 

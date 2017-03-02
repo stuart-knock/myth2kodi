@@ -802,17 +802,17 @@ parse_command_flags(){
     ;;
     --movie) #/path/to/recording/filename.mpg
       debug "Recognised command line switch '--movie'"
-      # if ((m2karg_count > 3)); then
-      #   err "myth2kodi --movie takes at most 2 additional arguments: /path/to/filename.mpg and [title]."
-      #   return 1
-      # elif ((m2karg_count == 1)); then
-      #   err "myth2kodi --movie requires at least 1 additional argument: /path/to/filename.mpg."
-      #   return 1
-      # fi
-
+      #Check the basic call was ok.
+      if ((m2karg_count > 3)); then
+        err "myth2kodi --movie takes at most 2 additional arguments: /path/to/filename.mpg and [title]."
+        return 1
+      elif ((m2karg_count == 1)); then
+        err "myth2kodi --movie requires at least 1 additional argument: /path/to/filename.mpg."
+        return 1
+      fi
+      #Force processing as a movie.
       export ShowCategory="Movie"
-      #TODO: We shouldn't ever have a subtitle for a movie, so abort/err if -n "$m2karg4" and only call myth2kodi "$m2karg2" "$m2karg3" below.
-      myth2kodi "$m2karg2" "$m2karg3" "$m2karg4"
+      myth2kodi "$m2karg2" "$m2karg3"
       declare -i m2kreturnstatus="$?"
       unset ShowCategory
       return $m2kreturnstatus

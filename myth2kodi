@@ -4836,6 +4836,43 @@ m2k_undo_all(){
   return 1
 }
 
+remove_undo_doover_entries(){
+  debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
+  debugcont "m2kdir=$m2kdir"
+  debugcont "RECORDING_LINK=$RECORDING_LINK"
+  debugcont "RECORDING_LINK_OWNER=$RECORDING_LINK_OWNER"
+  debugcont "RECORDING_NAME=$RECORDING_NAME"
+
+  local -i undo_entry_remove_status=0
+  local -i doover_entry_remove_status=0
+
+  #NOTE: In LINK mode, RECORDING_LINK => myth2kodi file name;
+  #      In MOVE with SYMLINKing='Enabled', RECORDING_LINK => MythTV file name.
+  debug "Removing lines mentioning '$RECORDING_LINK' from $m2kdir/undo.sh"
+  sed -i.bak "\#$RECORDING_LINK#d" "$m2kdir/undo.sh" 2>&1 | err_pipe "${FUNCNAME[0]}(): Line $LINENO: "
+  undo_entry_remove_status="${PIPESTATUS[0]}"
+  debug "undo_entry_remove_status=$undo_entry_remove_status"
+  (( LOGLEVEL < 3 )) && rm -f "$m2kdir/undo.sh.bak"
+
+  #Delete doover.sh entries associated with $RECORDING_NAME
+  if [[ -f "$m2kdir/doover.sh" ]]; then
+    debug "Removing lines related to '$RECORDING_NAME' == '$RECORDING_LINK' from $m2kdir/doover.sh"
+    if [[ "$RECORDING_LINK_OWNER" = 'myth2kodi' ]]; then
+      #Was processed in LINK mode, so find and delete LINK removal line
+      sed -i.bak "\#$RECORDING_LINK#d" "$m2kdir/doover.sh" 2>&1 | err_pipe "${FUNCNAME[0]}(): Line $LINENO: "
+      (( doover_entry_remove_status+=PIPESTATUS[0] ))
+      debug "doover_entry_remove_status=$doover_entry_remove_status"
+      (( LOGLEVEL < 3 )) && rm -f "$m2kdir/doover.sh.bak"
+    fi
+    #Find and delete all lines in MOVE mode or just the myth2kodi line in LINK mode
+    sed -i.bak "\#$RECORDING_NAME#d" "$m2kdir/doover.sh" 2>&1 | err_pipe "${FUNCNAME[0]}(): Line $LINENO: "
+    (( doover_entry_remove_status+=PIPESTATUS[0] ))
+    debug "doover_entry_remove_status=$doover_entry_remove_status"
+    (( LOGLEVEL < 3 )) && rm -f "$m2kdir/doover.sh.bak"
+  fi
+  return "$(( undo_entry_remove_status + doover_entry_remove_status ))"
+}
+
 #Provides a mechanism to undo processing of a specified recording.
 m2k_undo_rec(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
@@ -4867,27 +4904,13 @@ m2k_undo_rec(){
     local undostatus
     "$RECORDING_UNDO_FILE" 2>&1 | err_pipe "undo: "
     undostatus="${PIPESTATUS[0]}"
+    (( LOGLEVEL < 3 )) && rm -f "$RECORDING_UNDO_FILE"
 
     if [[ "$undostatus" == 0 ]]; then
-    #TODO: THe delete undo and doover is repeated in 3 places, refactor into func.
-      debug "Removing lines mentioning '$RECORDING_LINK' from $m2kdir/undo.sh"
-      sed -i.bak "\#$RECORDING_LINK#d" "$m2kdir/undo.sh" 2>&1 | err_pipe "${FUNCNAME[0]}(): Line $LINENO: "
-      (( LOGLEVEL < 3 )) && rm -f "$m2kdir/undo.sh.bak"
-
-      #Delete doover.sh entries associated with $RECORDING_NAME
-      if [[ -f "$m2kdir/doover.sh" ]]; then
-        debug "Removing lines related to '$1' from $m2kdir/doover.sh"
-        if [[ "$RECORDING_LINK_OWNER" = 'myth2kodi' ]]; then
-          #Was processed in LINK mode, so find and delete LINK removal line
-          sed -i.bak "\#$RECORDING_LINK#d" "$m2kdir/doover.sh" 2>&1 | err_pipe "${FUNCNAME[0]}(): Line $LINENO: "
-          (( LOGLEVEL < 3 )) && rm -f "$m2kdir/doover.sh.bak"
-        fi
-        #Find and delete all lines in MOVE mode or just the myth2kodi line in LINK mode
-        sed -i.bak "\#$RECORDING_NAME#d" "$m2kdir/doover.sh" 2>&1 | err_pipe "${FUNCNAME[0]}(): Line $LINENO: "
-        (( LOGLEVEL < 3 )) && rm -f "$m2kdir/doover.sh.bak"
-      fi
+      #Remove the undo and doover entries associated with the recording.
+      remove_undo_doover_entries
       #TODO: Consider whether we should be running maintenance here...
-      return 0
+      return "$?"
     fi
     err "${FUNCNAME[0]}(): Failed executing undo commands: $1"
     return 1
@@ -5324,20 +5347,11 @@ delete_recording(){
       ;;
   esac
 
-  #TODO: THe delete undo and doover is repeated in 3 places, refactor into func.
+  #Remove the undo and doover entries associated with the recording.
+  remove_undo_doover_entries
+  #TODO: ?capture return state here?
 
-  #Delete undo.sh entries associated with $RECORDING_NAME
-  debug "Removing lines mentioning '$RECORDING_NAME' from $m2kdir/undo.sh"
-  sed -i.bak "\#$RECORDING_NAME#d" "$m2kdir/undo.sh" 2>&1 | err_pipe "${FUNCNAME[0]}(): Line $LINENO: "
-  (( LOGLEVEL < 3 )) && rm -f "$m2kdir/undo.sh.bak"
-
-  #TODO: THis may not be getting the remove link line in LINK mode, see m2k_undo_rec()
-  #Delete doover.sh entries associated with $RECORDING_NAME
-  if [[ -f "$m2kdir/doover.sh" ]]; then
-    debug "Removing lines mentioning '$RECORDING_NAME' from $m2kdir/doover.sh"
-    sed -i.bak "\#$RECORDING_NAME#d" "$m2kdir/doover.sh" 2>&1 | err_pipe "${FUNCNAME[0]}(): Line $LINENO: "
-    (( LOGLEVEL < 3 )) && rm -f "$m2kdir/doover.sh.bak"
-  fi
+  #TODO: Are the manual deletes of tracking, comskip, NFO actually need here, or should it just be running myth2kodi --maintenance
 
   #Delete created.tracking entries associated with recording.
   if [[ "$RECORDING_FILE_OWNER" = 'myth2kodi' ]]; then
@@ -5391,18 +5405,9 @@ disconnect_recording(){
   #Delete the associated database entry and thumbnail
   delete_mythtv_database_entry
 
-  #TODO: THe delete undo and doover is repeated in 3 places, refactor into func.
-
-  #Delete undo.sh entries associated with $RECORDING_NAME
-  debug "Removing lines mentioning '$RECORDING_NAME' from $m2kdir/undo.sh"
-  sed -i.bak "/$RECORDING_NAME/d" "$m2kdir/undo.sh"
-  (( LOGLEVEL < 3 )) && rm -f "$m2kdir/undo.sh.bak"
-
-  #TODO: THis may not be getting the remove link line in LINK mode
-  #Delete doover.sh entries associated with $RECORDING_NAME
-  debug "Removing lines mentioning '$RECORDING_NAME' from $m2kdir/doover.sh"
-  sed -i.bak "/$RECORDING_NAME/d" "$m2kdir/doover.sh"
-  (( LOGLEVEL < 3 )) && rm -f "$m2kdir/doover.sh.bak"
+  #Remove the undo and doover entries associated with the recording.
+  remove_undo_doover_entries
+  #TODO: ?capture return state here?
 
   #Delete created.tracking entries associated with recording.
   if [[ "$RECORDING_FILE_OWNER" = 'myth2kodi' ]]; then

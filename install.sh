@@ -38,6 +38,14 @@
 #Options: ['Enabled'|'Disabled'(DEFAULT)]
 DEVELOPMENT_INSTALL='Disabled'
 
+#How to go about the installation. The default 'Interactive' mode will give you
+#the option of switching to the 'Quick' mode when you run the install script.
+#The 'Quick' mode just does a default install with no questions or feedback
+#about what is happening unless there is an error -- a log file is still written
+#in 'Quick' mode. Quick mode does not set-up myth2kodi's working directory.
+#Options: ['Interactive'(DEFAULT)|'Quick']
+INSTALL_TYPE='Interactive'
+
 ############################## Logging Settings ##############################
 #The settings below are for the bashlogging script which provides the configurable
 #logging functionality used in myth2kodi.
@@ -46,10 +54,8 @@ DEVELOPMENT_INSTALL='Disabled'
 #    1=adds warnings;
 #    2=adds more information;  --> DEFAULT
 #    3=provides debugging output.
-#Recommend 2 to start with or if you want to keep track of what myth2kodi is doing.
-#Recommend 1 for usual operation, once you're confident that everything is working.
-#Only use 3 if you have a particular problem that you're trying to track down,
-#it significantly increases the output.
+#Recommend 2 to keep track of what myth2kodi's install script has done.
+#Only use 3 if you have a particular problem that you're trying to track down.
 LOGLEVEL=2
 
 #NOTE: LOGFILE is set to a temporary file which is copied into myth2kodi's
@@ -66,20 +72,19 @@ LOGTYPE='file'
 ############################################################################
 
 m2k_install_init(){
+  #Where am I
+  SCRIPT_PATH="$( cd "$(dirname "${BASH_SOURCE[0]}")" || return 1 ; pwd -P )"
+
   #Who called me...
   CALLER=$(whoami) ; declare -gr CALLER
-  
-  #Strongly recommend against running as root.
-  if [[ "$EUID" = '0' || "$UID" = '0' || "$USER" = 'root' || "$CALLER" = 'root' ]]; then
-    printf 'WARNING: %s\n' "You do NOT need to run myth2kodi's install script as root."
-    printf '         %s\n' "If you select an install directory that requires elevated"
-    printf '         %s\n' "privileges, you will be asked for your sudo password by the"
-    printf '         %s\n' "system commands as needed."
-    return 1
-  fi
-  
-  #Where am I
-  SCRIPT_PATH="$( cd "$(dirname "${BASH_SOURCE[0]}")" ; pwd -P )"
+
+  #And when...
+  Today="$(date +%F)"  #Date in IEEE standard format, ie YYYY-mm-dd
+  ScriptStartTime="$(date +%H:%M:%S)" #Time in a readable IEEE standard format, ie HH:MM:SS
+  FileNameNow="$(date +%FT%H%M%S)"  #ISO 8601: YYYY-mm-ddThhMMSS
+  declare -gr Today
+  declare -gr ScriptStartTime
+  declare -gr FileNameNow
   
   #Initialise logging system -- boot strapping, this is the bashlogging we're about to install.
   LOGFILE="$(mktemp "/tmp/m2k_install_log_${Today}-XXXX")"
@@ -93,18 +98,21 @@ m2k_install_init(){
     printf 'ERROR: %s\n' "$SCRIPT_PATH/bashlogging does not exist." | tee -a "$LOGFILE"
     return 1
   fi
-  
+  inform "Running myth2kodi's installation script as $CALLER, $ScriptStartTime."
+
+  #Strongly recommend against running as root.
+  if [[ "$EUID" = '0' || "$UID" = '0' || "$USER" = 'root' || "$CALLER" = 'root' ]]; then
+    warn "You do NOT need to run myth2kodi's install script as root."
+    warncont "If you select an install directory that requires elevated"
+    warncont "privileges, you will be asked for your sudo password by the"
+    warncont "system commands as needed."
+    return 1
+  fi
+
   #What am I
   eval "$(grep -o 'm2kVersion=".*"' "${SCRIPT_PATH}/myth2kodi")"
-  
-  #And when...
-  Today="$(date +%F)"  #Date in IEEE standard format, ie YYYY-mm-dd
-  ScriptStartTime="$(date +%H:%M:%S)" #Time in a readable IEEE standard format, ie HH:MM:SS
-  FileNameNow="$(date +%FT%H%M%S)"  #ISO 8601: YYYY-mm-ddThhMMSS
-  declare -gr Today
-  declare -gr ScriptStartTime
-  declare -gr FileNameNow
 
+  inform "Install script successfully initialised."
   return 0
 }
 
@@ -115,14 +123,14 @@ prepare_installation(){
   [[ -d "${SCRIPT_PATH}/.git" ]] && INSTALL_SOURCE='repo'
   
   if [[ "$INSTALL_SOURCE" == 'repo' && "$DEVELOPMENT_INSTALL" != 'Enabled' ]]; then
-  	#Make sure we have git
-  	local pkgpath_git=''
-  	pkgpath_git=$(command -v git) || { err "No git, but seems to be a repo"; return 1; }
-  	debug "Found git at: '$pkgpath_git'"
+    #Make sure we have git
+    local pkgpath_git=''
+    pkgpath_git=$(command -v git) || { err "No git, but we seem to be in a repo"; return 1; }
+    debug "Found git at: '$pkgpath_git'"
     #Where we started
     ORIGINAL_DIR="$( pwd -P )"
     #Make sure we are actually in the directory containing install.sh
-    cd "${SCRIPT_PATH}"
+    cd "${SCRIPT_PATH}" || return 1
     #What branch did we start on
     ORIGINAL_BRANCH="$( git rev-parse --abbrev-ref HEAD )"
     #Make sure we are in master
@@ -136,7 +144,7 @@ prepare_installation(){
     create_temporary_copy_conf
     #Put things back where they were
     git checkout "$ORIGINAL_BRANCH"
-    cd "$ORIGINAL_DIR"
+    cd "$ORIGINAL_DIR" || return 1
   else #We are either in a release tar-ball or a repo with 'Development' install Enabled.
     #Copy the available version of the scripts and .conf file
     create_temporary_copies_scripts
@@ -165,7 +173,7 @@ create_temporary_copies_scripts(){
     err "Cannot find the python script for accessing MythTV-DB: '${SCRIPT_PATH}/mythdb_access'."
     return 1
   fi
-  
+
   #Make a temporary copy of bashlogging
   if [[ -f "${SCRIPT_PATH}/bashlogging" ]]; then
     M2K_INSTALL_BASHLOGGING_FILE="$(mktemp "/tmp/m2k_install_bashlogging_${Today}-XXXX")"
@@ -175,7 +183,7 @@ create_temporary_copies_scripts(){
     err "Cannot find the bashlogging script: '${SCRIPT_PATH}/bashlogging'."
     return 1
   fi
-  
+
   #Make a temporary copy of m2k_notify
   if [[ -f "${SCRIPT_PATH}/m2k_notify" ]]; then
     M2K_INSTALL_M2K_NOTIFY_FILE="$(mktemp "/tmp/m2k_install_m2k_notify_${Today}-XXXX")"
@@ -200,7 +208,34 @@ create_temporary_copy_conf(){
   return 0
 }
 
-set_install_dir(){
+get_install_type(){
+  #Default to an interactive install
+  local install_type_code=1
+
+  #Install mode message
+  printf ' %s\n' 'There are two modes of installation:'
+  printf '   %s\n' '1. Interactive (Preferred) -- Informs you of progress, provides.'
+  printf '               %s\n' 'the option to select non-default install location,'
+  printf '               %s\n\n' 'as well as some other basic configuration.'
+  printf '   %s\n' '2. Quick -- Do default install, no questions or feedback, does'
+  printf '               %s\n\n' 'not create a myth2kodi working directory.'
+
+  #Install mode selection
+  read -r -p "What type of install do you want to do? (1)|2 >" install_type_code
+  printf '\n'
+  if [[ "$install_type_code" = "1" || "${install_type_code,,}" = 'interactive' ]]; then
+    inform "Selected interactive install mode."
+  elif [[ "$install_type_code" = "2" || "${install_type_code,,}" = 'quick'  ]]; then
+    inform "Selected quick install mode."
+    INSTALL_TYPE='Quick'
+  else
+    err "Failed to specify install mode correctly, you provided: '$install_type_code'"
+    return 1
+  fi
+  return 0
+}
+
+get_install_dir(){
   CUSTOM_INSTALL_DIR=''
   read -r -p "Where do you want myth2kodi installed? [DEFAULT:/usr/local/bin]>" CUSTOM_INSTALL_DIR
   printf '\n'
@@ -243,7 +278,7 @@ get_working_dir_location(){
   printf ' %s\n' "to store myth2kodi's local television series tables, the file" 
   printf ' %s\n' "myth2kodi.conf which is used for user configuration settings,"
   printf ' %s\n\n' "as well as logging information and other bits and pieces."
-  
+
   CREATE_WORKING_DIR=''
   read -r -n1 -p "Do you want to set-up a working directory for '$CALLER'? y/(n)>" CREATE_WORKING_DIR
   printf '\n'
@@ -255,7 +290,7 @@ get_working_dir_location(){
   fi
   if [[ -n "$M2K_WORKING_DIRECTORY" ]]; then
     if [[ ! -d "$M2K_WORKING_DIRECTORY" ]]; then
-    	#Two levels of inception:
+      #Two levels of inception:
       if [[ -w "$(dirname "$M2K_WORKING_DIRECTORY")" ]] || [[ ! -e "$(dirname "$M2K_WORKING_DIRECTORY")" && -w "$(dirname "$(dirname "$M2K_WORKING_DIRECTORY")")" ]]; then
         inform "Working directory will be set as: $M2K_WORKING_DIRECTORY"
       else
@@ -317,58 +352,107 @@ setup_working_dir(){
 
 # Initialisation: Who; Where; What; When; logging; etc...
 m2k_install_init
-[[ "$?" != '0' ]] && exit 1
+[[ "$?" != '0' ]] && { printf '%s\n' "Failed during init, see '$LOGFILE'."; exit 1 ; }
 
-#Orientation message
-printf '        %s\n'   "#######################################"
-printf '        %s\n'   "#### Install Script for myth2kodi. ####"
-printf '        %s\n'   "#######################################"
-printf '        %s\n\n' "${BASH_SOURCE[0]}"
-printf ' %s\n' 'This script will walk you through the installation process.'
-printf ' %s\n' 'It allows you to customise some of the installation. However,'
-printf ' %s\n' 'just pressing enter for each option will do a default install.'
-printf ' %s\n' 'If you select an install directory that requires elevated'
-printf ' %s\n' 'privileges (such as the default "/usr/local/bin"), you will be'
-printf ' %s\n\n' 'asked for your sudo password by the system commands as needed.'
+#Does the caller want an Interactive or a quick and blind install.
+if [[ "$INSTALL_TYPE" != 'Quick' ]]; then
+  get_install_type
+  [[ "$?" != '0' ]] && { printf '%s\n' "Failed getting install type, see '$LOGFILE'."; exit 1 ; }
+fi
 
-#Should we proceed?
-yesorno='N'
-read -r -n1 -p "Do you want to install myth2kodi? y/(n)>" yesorno
-printf '\n'
-if [[ "$yesorno" != "y" ]]; then
-  inform "You must press 'y' to continue, installation aborted."
-  exit 1
+if [[ "$INSTALL_TYPE" != 'Quick' ]]; then
+  #Orientation message
+  printf '        %s\n'   "#######################################"
+  printf '        %s\n'   "#### Install Script for myth2kodi. ####"
+  printf '        %s\n'   "#######################################"
+  printf '        %s\n\n' "${BASH_SOURCE[0]}"
+  printf ' %s\n' 'This script will walk you through the installation process.'
+  printf ' %s\n' 'It allows you to customise some of the installation. However,'
+  printf ' %s\n' 'just pressing enter for each option will do a default install.'
+  printf ' %s\n' 'If you select an install directory that requires elevated'
+  printf ' %s\n' 'privileges (such as the default "/usr/local/bin"), you will be'
+  printf ' %s\n\n' 'asked for your sudo password by the system commands as needed.'
+
+  #Should we proceed?
+  yesorno='N'
+  read -r -n1 -p "Do you want to install myth2kodi? y/(n)>" yesorno
+  printf '\n'
+  if [[ "$yesorno" != "y" ]]; then
+    inform "You must press 'y' to continue, installation aborted."
+    exit 1
+  fi
 fi
 
 ############################ Gather Information ############################
 #Make temporary copies of the files to be installed
 prepare_installation
-[[ "$?" != '0' ]] && exit 1
+[[ "$?" != '0' ]] && { printf '%s\n' "Failed during preparation, see '$LOGFILE'."; exit 1 ; }
 
-#Set installation directory
-set_install_dir
-[[ "$?" != '0' ]] && exit 1
+if [[ "$INSTALL_TYPE" != 'Quick' ]]; then
+  #Set installation directory
+  get_install_dir
+  [[ "$?" != '0' ]] && { printf '%s\n' "Failed setting install dir, see '$LOGFILE'."; exit 1 ; }
+else
+  INSTALL_DIRECTORY='/usr/local/bin'
+fi
 
-#Ask if working directory set-up is wanted
-get_working_dir_location
+if [[ "$INSTALL_TYPE" != 'Quick' ]]; then
+  #Ask if working directory set-up is wanted
+  get_working_dir_location
+  [[ "$?" != '0' ]] && { printf '%s\n' "Failed getting working dir, see '$LOGFILE'."; exit 1 ; }
+else
+  M2K_WORKING_DIRECTORY="$HOME/.myth2kodi"
+fi
 
 #################### Make Any Requested Customisations #####################
 #Add customisations to myth2kodi and myth2kodi.conf
 make_customisations
+[[ "$?" != '0' ]] && { printf '%s\n' "Failed customising install, see '$LOGFILE'."; exit 1 ; }
 
 ########################### Install Everything #############################
 # Copy all scripts to proper directory, only use sudo if necessary
 install_scripts
 
-#If working directory set-up was requested then do it...
-setup_working_dir
+if [[ "$INSTALL_TYPE" != 'Quick' ]]; then
+  #If working directory set-up was requested then do it...
+  setup_working_dir
+fi
+
+################################# Clean-Up #################################
+
+#If we're not debugging then remove temporary files.
+if ((LOGLEVEL < 3)); then
+  [[ -f "$M2K_INSTALL_MYTH2KODI_FILE" ]]     && rm -f "$M2K_INSTALL_MYTH2KODI_FILE"
+  [[ -f "$M2K_INSTALL_MYTHDB_ACCESS_FILE" ]] && rm -f "$M2K_INSTALL_MYTHDB_ACCESS_FILE"
+  [[ -f "$M2K_INSTALL_BASHLOGGING_FILE" ]]   && rm -f "$M2K_INSTALL_BASHLOGGING_FILE"
+  [[ -f "$M2K_INSTALL_M2K_NOTIFY_FILE" ]]    && rm -f "$M2K_INSTALL_M2K_NOTIFY_FILE"
+  [[ -f "$M2K_INSTALL_CONF_FILE" ]]          && rm -f "$M2K_INSTALL_CONF_FILE"
+fi
+
+#Copy the install log file to the working directory if it exists
+[[ -d "$M2K_WORKING_DIRECTORY" ]] && mv "$LOGFILE" "$M2K_WORKING_DIRECTORY/m2k_install_log_${FileNameNow}.txt"
 
 ###################### Installation Complete Messages ######################
 
+if [[ "$INSTALL_TYPE" != 'Quick' ]]; then
+  #Successful installation message
+  printf '        %s\n'   "##################################"
+  printf '        %s\n'   "#### Installation Successful. ####"
+  printf '        %s\n\n' "##################################"
+  printf ' %s\n' "myth2kodi was installed in: $INSTALL_DIRECTORY"
+  if [[ "${CREATE_WORKING_DIR,,}" = "y" ]]; then
+    printf ' %s\n\n' "Created Working directory: $M2K_WORKING_DIRECTORY"
+  fi
+  #
+  printf ' %s\n' 'For configuration and setup help see:'
+  printf '     %s\n' 'myth2kodi --config-help'
+  printf '     %s\n' 'doc/CONFIGURE.md'
+  printf ' %s\n' 'or:'
+  printf '     %s\n' 'https://github.com/stuart-knock/myth2kodi/blob/master/doc/CONFIGURE.md'
+  printf ' %s\n' 'For usage help see:'
+  printf '     %s\n\n' ' myth2kodi --help'
+  printf ' %s\n\n' 'And, before using your new/updated install, be sure to run:'
+  printf '     %s\n\n' 'myth2kodi --diagnostics'
+fi
 
-#For configuration and setup help see
-
-#For usage help see
-#myth2kodi --help | less
-
-#Be sure to run myth2kodi --diagnostics to verify your configuration settings and to check that the current version is compatible with your system 
+exit 0

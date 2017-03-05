@@ -79,15 +79,16 @@ m2k_install_init(){
   CALLER=$(whoami) ; declare -gr CALLER
 
   #And when...
-  Today="$(date +%F)"  #Date in IEEE standard format, ie YYYY-mm-dd
-  ScriptStartTime="$(date +%H:%M:%S)" #Time in a readable IEEE standard format, ie HH:MM:SS
-  FileNameNow="$(date +%FT%H%M%S)"  #ISO 8601: YYYY-mm-ddThhMMSS
-  declare -gr Today
-  declare -gr ScriptStartTime
-  declare -gr FileNameNow
+  local script_start_time
+  script_start_time="$(date +%H:%M:%S)" #Time in a readable IEEE standard format, ie HH:MM:SS
+  TODAY="$(date +%F)"  #Date in IEEE standard format, ie YYYY-mm-dd
+  FILE_NAME_NOW="$(date +%FT%H%M%S)"  #ISO 8601: YYYY-mm-ddThhMMSS
+  declare -gr TODAY
+  declare -gr FILE_NAME_NOW
   
   #Initialise logging system -- boot strapping, this is the bashlogging we're about to install.
-  LOGFILE="$(mktemp "/tmp/m2k_install_log_${Today}-XXXX")"
+  LOGFILE="$(mktemp "/tmp/m2k_install_log_${TODAY}-XXXX")"
+  declare -gr LOGFILE
   if [[ -f "$SCRIPT_PATH/bashlogging" ]]; then
     local bashloggingstatus
     # shellcheck source=./bashlogging
@@ -98,7 +99,8 @@ m2k_install_init(){
     printf 'ERROR: %s\n' "$SCRIPT_PATH/bashlogging does not exist." | tee -a "$LOGFILE"
     return 1
   fi
-  inform "Running myth2kodi's installation script as $CALLER, $ScriptStartTime."
+  inform "Running myth2kodi's installation script as $CALLER"
+  inform "Install script called on $TODAY at $script_start_time."
 
   #Strongly recommend against running as root.
   if [[ "$EUID" = '0' || "$UID" = '0' || "$USER" = 'root' || "$CALLER" = 'root' ]]; then
@@ -110,55 +112,128 @@ m2k_install_init(){
   fi
 
   #What am I
-  eval "$(grep -o 'm2kVersion=".*"' "${SCRIPT_PATH}/myth2kodi")"
+  if [[ ! -d "${SCRIPT_PATH}/.git" ]]; then
+    local m2kVersion
+    eval "$(grep -o 'm2kVersion=".*"' "${SCRIPT_PATH}/myth2kodi")"
+    inform "Running installation script for $m2kVersion"
+  fi
+
+  #Pre-declare global variables set beyond this point in the script, to make it
+  #easier to keep track of them.
+  #Temporary installation files:
+  declare -g M2K_INSTALL_MYTH2KODI_FILE
+  declare -g M2K_INSTALL_MYTHDB_ACCESS_FILE
+  declare -g M2K_INSTALL_BASHLOGGING_FILE
+  declare -g M2K_INSTALL_M2K_NOTIFY_FILE
+  declare -g M2K_INSTALL_CONF_FILE
+  #Target directories:
+  declare -g INSTALL_DIRECTORY
+  declare -g M2K_WORKING_DIRECTORY
 
   inform "Install script successfully initialised."
+  debug "SCRIPT_PATH='$SCRIPT_PATH'"
+  debug "CALLER='$CALLER'"
   return 0
 }
 
 #Make temporary copies of the files to be installed so we can modify them 
 #rather than the originals.
 prepare_installation(){
+  debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
+  debugcont "DEVELOPMENT_INSTALL='$DEVELOPMENT_INSTALL'"
+  debugcont "SCRIPT_PATH='$SCRIPT_PATH'"
+
+  local install_source
+  local original_dir
+  local original_branch orig_branch_status
+  local latest_release latest_release_status
+
   #Use the presence of a .git directory to infer that we're in a repo
-  [[ -d "${SCRIPT_PATH}/.git" ]] && INSTALL_SOURCE='repo'
+  [[ -d "${SCRIPT_PATH}/.git" ]] && install_source='repo'
   
-  if [[ "$INSTALL_SOURCE" == 'repo' && "$DEVELOPMENT_INSTALL" != 'Enabled' ]]; then
+  if [[ "$install_source" == 'repo' && "$DEVELOPMENT_INSTALL" != 'Enabled' ]]; then
+    debug "In a repository, so will switch to a release tag before installing."
+
     #Make sure we have git
     local pkgpath_git=''
     pkgpath_git=$(command -v git) || { err "No git, but we seem to be in a repo"; return 1; }
     debug "Found git at: '$pkgpath_git'"
+
     #Where we started
-    ORIGINAL_DIR="$( pwd -P )"
+    original_dir="$( pwd -P )"
+    debug "original_dir='$original_dir'"
+
     #Make sure we are actually in the directory containing install.sh
     cd "${SCRIPT_PATH}" || return 1
+
     #What branch did we start on
-    ORIGINAL_BRANCH="$( git rev-parse --abbrev-ref HEAD )"
+    debug 'Getting the repository branch we were in when called.'
+    original_branch="$( git rev-parse --abbrev-ref HEAD )"
+    orig_branch_status="$?"
+    debug "original_branch='$original_branch'"
+    [[ "$orig_branch_status" != 0 ]] && { err "Failed to get original branch." ; return 1; }
+
     #Make sure we are in master
-    git checkout master
+    debug "Make sure we start from master."
+    git checkout master 2>&1 | err_pipe "${FUNCNAME[0]}(): "
+    [[ "${PIPESTATUS[0]}" != '0' ]] && return 1
+
     #Get the latest release tag
-    LATEST_RELEASE="$(git tag --list | tail -1)"
+    debug "Get the latest release tag."
+    latest_release="$(git tag --list | tail -1)"
+    latest_release_status="$?"
+    debug "latest_release='$latest_release'"
+    [[ "$latest_release_status" != 0 ]] && { err "Failed to get latest release." ; return 1; }
+
     #Switch to a temporary "detached HEAD" state
-    git checkout tags/"$LATEST_RELEASE"
+    debug "Switch to 'detached HEAD' state at the latest release tag."
+    git checkout tags/"$latest_release" 2>&1 | err_pipe "${FUNCNAME[0]}(): "
+    [[ "${PIPESTATUS[0]}" != '0' ]] && return 1
+
     #Copy the release version of the scripts and .conf file
     create_temporary_copies_scripts
+    if [[ "$?" != '0' ]]; then
+      printf '%s\n' "Failed creating temporary copies of scripts, see '$LOGFILE'."
+      return 1
+    fi
     create_temporary_copy_conf
+    if [[ "$?" != '0' ]]; then
+      printf '%s\n' "Failed creating temporary copy of configuration file, see '$LOGFILE'."
+      return 1
+    fi
     #Put things back where they were
-    git checkout "$ORIGINAL_BRANCH"
-    cd "$ORIGINAL_DIR" || return 1
+    debug "Switch back to the branch we started on."
+    git checkout "$original_branch" 2>&1 | err_pipe "${FUNCNAME[0]}(): "
+    [[ "${PIPESTATUS[0]}" != '0' ]] && return 1
+    #Change back to where we started
+    debug "Change back to the directory we started in."
+    cd "$original_dir" || return 1
   else #We are either in a release tar-ball or a repo with 'Development' install Enabled.
     #Copy the available version of the scripts and .conf file
     create_temporary_copies_scripts
+    if [[ "$?" != '0' ]]; then
+      printf '%s\n' "Failed creating temporary copies of scripts, see '$LOGFILE'."
+      return 1
+    fi
     create_temporary_copy_conf
+    if [[ "$?" != '0' ]]; then
+      printf '%s\n' "Failed creating temporary copy of configuration file, see '$LOGFILE'."
+      return 1
+    fi
   fi
   return 0
 }
 
 create_temporary_copies_scripts(){
+  debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
+  debugcont "SCRIPT_PATH='$SCRIPT_PATH'"
   #Make a temporary copy of myth2kodi
   if [[ -f "${SCRIPT_PATH}/myth2kodi" ]]; then
-    M2K_INSTALL_MYTH2KODI_FILE="$(mktemp "/tmp/m2k_install_myth2kodi_${Today}-XXXX")"
-    cp -p "${SCRIPT_PATH}/myth2kodi" "$M2K_INSTALL_SCRIPT_FILE"
-    [[ "$?" != 0 ]] && err "Failed to create a temporary copy of myth2kodi for install."
+    debug "Creating a temporary copy of myth2kodi for install."
+    M2K_INSTALL_MYTH2KODI_FILE="$(mktemp "/tmp/m2k_install_myth2kodi_${TODAY}-XXXX")"
+    [[ "$?" != '0' ]] && return 1
+    cp -p "${SCRIPT_PATH}/myth2kodi" "$M2K_INSTALL_MYTH2KODI_FILE" 2>&1 | err_pipe "${FUNCNAME[0]}(): "
+    [[ "${PIPESTATUS[0]}" != '0' ]] && return 1
   else
     err "Cannot find the main script: '${SCRIPT_PATH}/myth2kodi'."
     return 1
@@ -166,9 +241,11 @@ create_temporary_copies_scripts(){
 
   #Make a temporary copy of mythdb_access
   if [[ -f "${SCRIPT_PATH}/mythdb_access" ]]; then
-    M2K_INSTALL_MYTHDB_ACCESS_FILE="$(mktemp "/tmp/m2k_install_mythdb_access_${Today}-XXXX")"
-    cp -p "${SCRIPT_PATH}/mythdb_access" "$M2K_INSTALL_MYTHDB_ACCESS_FILE"
-    [[ "$?" != 0 ]] && err "Failed to create a temporary copy of mythdb_access for install."
+    debug "Creating a temporary copy of mythdb_access for install."
+    M2K_INSTALL_MYTHDB_ACCESS_FILE="$(mktemp "/tmp/m2k_install_mythdb_access_${TODAY}-XXXX")"
+    [[ "$?" != '0' ]] && return 1
+    cp -p "${SCRIPT_PATH}/mythdb_access" "$M2K_INSTALL_MYTHDB_ACCESS_FILE" 2>&1 | err_pipe "${FUNCNAME[0]}(): "
+    [[ "${PIPESTATUS[0]}" != '0' ]] && return 1
   else
     err "Cannot find the python script for accessing MythTV-DB: '${SCRIPT_PATH}/mythdb_access'."
     return 1
@@ -176,9 +253,11 @@ create_temporary_copies_scripts(){
 
   #Make a temporary copy of bashlogging
   if [[ -f "${SCRIPT_PATH}/bashlogging" ]]; then
-    M2K_INSTALL_BASHLOGGING_FILE="$(mktemp "/tmp/m2k_install_bashlogging_${Today}-XXXX")"
-    cp -p "${SCRIPT_PATH}/bashlogging" "$M2K_INSTALL_BASHLOGGING_FILE"
-    [[ "$?" != 0 ]] && err "Failed to create a temporary copy of bashlogging for install."
+    debug "Creating a temporary copy of bashlogging for install."
+    M2K_INSTALL_BASHLOGGING_FILE="$(mktemp "/tmp/m2k_install_bashlogging_${TODAY}-XXXX")"
+    [[ "$?" != '0' ]] && return 1
+    cp -p "${SCRIPT_PATH}/bashlogging" "$M2K_INSTALL_BASHLOGGING_FILE" 2>&1 | err_pipe "${FUNCNAME[0]}(): "
+    [[ "${PIPESTATUS[0]}" != '0' ]] && return 1
   else
     err "Cannot find the bashlogging script: '${SCRIPT_PATH}/bashlogging'."
     return 1
@@ -186,21 +265,32 @@ create_temporary_copies_scripts(){
 
   #Make a temporary copy of m2k_notify
   if [[ -f "${SCRIPT_PATH}/m2k_notify" ]]; then
-    M2K_INSTALL_M2K_NOTIFY_FILE="$(mktemp "/tmp/m2k_install_m2k_notify_${Today}-XXXX")"
-    cp -p "${SCRIPT_PATH}/m2k_notify" "$M2K_INSTALL_M2K_NOTIFY_FILE"
-    [[ "$?" != 0 ]] && err "Failed to create a temporary copy of m2k_notify for install."
+    debug "Creating a temporary copy of m2k_notify for install."
+    M2K_INSTALL_M2K_NOTIFY_FILE="$(mktemp "/tmp/m2k_install_m2k_notify_${TODAY}-XXXX")"
+    [[ "$?" != '0' ]] && return 1
+    cp -p "${SCRIPT_PATH}/m2k_notify" "$M2K_INSTALL_M2K_NOTIFY_FILE" 2>&1 | err_pipe "${FUNCNAME[0]}(): "
+    [[ "${PIPESTATUS[0]}" != '0' ]] && return 1
   else
     err "Cannot find the m2k_notify script: '${SCRIPT_PATH}/m2k_notify'."
     return 1
   fi
+  debug "M2K_INSTALL_MYTH2KODI_FILE='$M2K_INSTALL_MYTH2KODI_FILE'"
+  debug "M2K_INSTALL_MYTHDB_ACCESS_FILE='$M2K_INSTALL_MYTHDB_ACCESS_FILE'"
+  debug "M2K_INSTALL_BASHLOGGING_FILE='$M2K_INSTALL_BASHLOGGING_FILE'"
+  debug "M2K_INSTALL_M2K_NOTIFY_FILE='$M2K_INSTALL_M2K_NOTIFY_FILE'"
   return 0
 }
 
 create_temporary_copy_conf(){
+  debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
+  debugcont "SCRIPT_PATH='$SCRIPT_PATH'"
+  debugcont "TODAY='$TODAY'"
   if [[ -f "${SCRIPT_PATH}/myth2kodi.conf" ]]; then
-    M2K_INSTALL_CONF_FILE="$(mktemp "/tmp/m2k_install_conf_${Today}-XXXX")"
-    cp -p "${SCRIPT_PATH}/myth2kodi.conf" "$M2K_INSTALL_CONF_FILE"
-    [[ "$?" != 0 ]] && err "Failed to create a temporary copy of myth2kodi.conf for install."
+    debug "Creating a temporary copy of myth2kodi.conf for install."
+    M2K_INSTALL_CONF_FILE="$(mktemp "/tmp/m2k_install_conf_${TODAY}-XXXX")"
+    [[ "$?" != '0' ]] && return 1
+    cp -p "${SCRIPT_PATH}/myth2kodi.conf" "$M2K_INSTALL_CONF_FILE" 2>&1 | err_pipe "${FUNCNAME[0]}(): "
+    [[ "${PIPESTATUS[0]}" != '0' ]] && return 1
   else
     err "Cannot find the myth2kodi.conf script: '${SCRIPT_PATH}/myth2kodi.conf'."
     return 1
@@ -209,20 +299,21 @@ create_temporary_copy_conf(){
 }
 
 get_install_type(){
-  #Default to an interactive install
-  local install_type_code=1
+  debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
 
   #Install mode message
   printf ' %s\n' 'There are two modes of installation:'
-  printf '   %s\n' '1. Interactive (Preferred) -- Informs you of progress, provides.'
+  printf '   %s\n' '1. Interactive (Preferred) -- Informs you of progress, provides'
   printf '               %s\n' 'the option to select non-default install location,'
   printf '               %s\n\n' 'as well as some other basic configuration.'
   printf '   %s\n' '2. Quick -- Do default install, no questions or feedback, does'
   printf '               %s\n\n' 'not create a myth2kodi working directory.'
 
   #Install mode selection
+  local install_type_code
   read -r -p "What type of install do you want to do? (1)|2 >" install_type_code
   printf '\n'
+  [[ -z "$install_type_code" ]] && install_type_code=1
   if [[ "$install_type_code" = "1" || "${install_type_code,,}" = 'interactive' ]]; then
     inform "Selected interactive install mode."
   elif [[ "$install_type_code" = "2" || "${install_type_code,,}" = 'quick'  ]]; then
@@ -236,58 +327,61 @@ get_install_type(){
 }
 
 get_install_dir(){
-  CUSTOM_INSTALL_DIR=''
-  read -r -p "Where do you want myth2kodi installed? [DEFAULT:/usr/local/bin]>" CUSTOM_INSTALL_DIR
+  debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
+  local custom_install_dir
+  read -r -p "Where do you want myth2kodi installed? [DEFAULT:/usr/local/bin]>" custom_install_dir
   printf '\n'
-  if [[ -n "$CUSTOM_INSTALL_DIR" ]]; then
-    if [[ -d "$CUSTOM_INSTALL_DIR" ]]; then
-      INSTALL_DIRECTORY="$CUSTOM_INSTALL_DIR"
+  if [[ -n "$custom_install_dir" ]]; then
+    if [[ -d "$custom_install_dir" ]]; then
+      INSTALL_DIRECTORY="$custom_install_dir"
     else
-      yesorno='N'
-      printf ' %s\n\n' "The directory you provided does not exist: '$CUSTOM_INSTALL_DIR'."
-      read -r -n1 -p "Do you want us to try and make it? y/(n)>" yesorno
+      local yesorno
+      printf ' %s\n\n' "The directory you provided does not exist: '$custom_install_dir'."
+      read -r -n1 -p "Do you want us to try and make it? (y)/n>" yesorno
       printf '\n'
+      [[ -z "$yesorno" ]] && yesorno='y'
       if [[ "${yesorno,,}" = "y" ]]; then
-        mkdir -P "$CUSTOM_INSTALL_DIR"  2>&1 | err_pipe "${FUNCNAME[0]}(): "
-        [[ "$?" != '0' ]] && err "Could not create requested directory: $CUSTOM_INSTALL_DIR"
-      elif [[ "${yesorno,,}" = "n" ]]; then
-        CUSTOM_INSTALL_DIR=''
-        read -r -p "Where do you want myth2kodi installed? [DEFAULT:/usr/local/bin]>" CUSTOM_INSTALL_DIR
-        printf '\n'
-        if [[ -n "$CUSTOM_INSTALL_DIR" && -d "$CUSTOM_INSTALL_DIR" ]]; then
-          INSTALL_DIRECTORY="$CUSTOM_INSTALL_DIR"
-        else
-          err "The directory you provided does not exist: '$CUSTOM_INSTALL_DIR'"
+        debug 'Trying to create install directory.'
+        mkdir -P "$custom_install_dir" 2>&1 | err_pipe "${FUNCNAME[0]}(): "
+        if [[ "${PIPESTATUS[0]}" != '0' ]]; then
+          err "Could not create requested directory: $custom_install_dir"
           return 1
         fi
+        INSTALL_DIRECTORY="$custom_install_dir"
       else
-        err "You must respond with 'y' or 'n', you responded: '$yesorno'"
+        err "${FUNCNAME[0]}(): Cannot install into a directory that does not exist: '$custom_install_dir'."
         return 1
       fi
     fi
   else
     INSTALL_DIRECTORY='/usr/local/bin'
   fi
+  inform "Install directory set as: '$INSTALL_DIRECTORY'"
   return 0
 }
 
 get_working_dir_location(){
-  M2K_WORKING_DIRECTORY=''
+  debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
+
   # Ask do you want your myth2kodi working directory "$m2kdir" initialised.
   printf ' %s\n' 'The myth2kodi script requires a working directory. This is used'
   printf ' %s\n' "to store myth2kodi's local television series tables, the file" 
   printf ' %s\n' "myth2kodi.conf which is used for user configuration settings,"
   printf ' %s\n\n' "as well as logging information and other bits and pieces."
 
-  CREATE_WORKING_DIR=''
+  #Get user choices regarding working directory set-up.
   read -r -n1 -p "Do you want to set-up a working directory for '$CALLER'? y/(n)>" CREATE_WORKING_DIR
-  printf '\n'
+  printf '\n\n'
   if [[ "${CREATE_WORKING_DIR,,}" = "y" ]]; then
     read -r -p "Where do you want the working directory? [DEFAULT:$HOME/.myth2kodi]>" M2K_WORKING_DIRECTORY
     printf '\n'
   else
+    debug 'Not setting-up working directory.'
+    inform 'You will need to manually specify a working directory.'
     return 0
   fi
+
+  #If specified, check the custom working directory.
   if [[ -n "$M2K_WORKING_DIRECTORY" ]]; then
     if [[ ! -d "$M2K_WORKING_DIRECTORY" ]]; then
       #Two levels of inception:
@@ -295,55 +389,104 @@ get_working_dir_location(){
         inform "Working directory will be set as: $M2K_WORKING_DIRECTORY"
       else
         err "You do not have permission to create '$M2K_WORKING_DIRECTORY' or its parent."
-        M2K_WORKING_DIRECTORY="$HOME/.myth2kodi"
+        return 1
       fi
     fi
   else
+    debug 'Setting default working directory.'
     M2K_WORKING_DIRECTORY="$HOME/.myth2kodi"
   fi
   return 0
 }
 
 make_customisations(){
+  debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
+  debugcont "HOME='$HOME'"
+  debugcont "M2K_WORKING_DIRECTORY='$M2K_WORKING_DIRECTORY'"
+  debugcont "CREATE_WORKING_DIR='$CREATE_WORKING_DIR'"
+  debugcont "CALLER='$CALLER'"
+  debugcont "M2K_INSTALL_CONF_FILE='$M2K_INSTALL_CONF_FILE'"
+
   #Modify the m2kdir dir in myth2kodi if that was requested
   if [[ "$M2K_WORKING_DIRECTORY" != "$HOME/.myth2kodi" ]]; then
-    sed -i 's|m2kdir="$HOME/.myth2kodi"|m2kdir="'"${M2K_WORKING_DIRECTORY}"'"|' "$M2K_INSTALL_MYTH2KODI_FILE"
+    debug "Adding custom working directory to the myth2kodi script's settings."
+    sed -i 's|^m2kdir="$HOME/.myth2kodi"|m2kdir="'"${M2K_WORKING_DIRECTORY}"'"|' "$M2K_INSTALL_MYTH2KODI_FILE" 2>&1 | err_pipe "${FUNCNAME[0]}(): "
+    [[ "${PIPESTATUS[0]}" != '0' ]] && return 1
   fi
 
   #Set the callers user-name as the Librarian
   if [[ "${CREATE_WORKING_DIR,,}" = "y" ]]; then
-    sed -i "s|#\?Librarian='mythtv'|Librarian='$CALLER'|" "$M2K_INSTALL_CONF_FILE"
+    debug "Setting 'Librarian' in myth2kodi.conf to: '$CALLER'."
+    sed -i "s|#\?Librarian='mythtv'|Librarian='$CALLER'|" "$M2K_INSTALL_CONF_FILE" 2>&1 | err_pipe "${FUNCNAME[0]}(): "
+    [[ "${PIPESTATUS[0]}" != '0' ]] && return 1
   fi
 
   return 0
 }
 
 install_scripts(){
+  debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
+  debugcont "INSTALL_DIRECTORY='$INSTALL_DIRECTORY'"
+  debugcont "M2K_INSTALL_MYTH2KODI_FILE='$M2K_INSTALL_MYTH2KODI_FILE'"
+  debugcont "M2K_INSTALL_MYTHDB_ACCESS_FILE='$M2K_INSTALL_MYTHDB_ACCESS_FILE'"
+  debugcont "M2K_INSTALL_BASHLOGGING_FILE='$M2K_INSTALL_BASHLOGGING_FILE'"
+  debugcont "M2K_INSTALL_M2K_NOTIFY_FILE='$M2K_INSTALL_M2K_NOTIFY_FILE'"
+
   if [[ -w "$INSTALL_DIRECTORY" ]]; then
-    cp -p "$M2K_INSTALL_MYTH2KODI_FILE"     "$INSTALL_DIRECTORY" 2>&1 | err_pipe "${FUNCNAME[0]}(): "
-    cp -p "$M2K_INSTALL_MYTHDB_ACCESS_FILE" "$INSTALL_DIRECTORY" 2>&1 | err_pipe "${FUNCNAME[0]}(): "
-    cp -p "$M2K_INSTALL_BASHLOGGING_FILE"   "$INSTALL_DIRECTORY" 2>&1 | err_pipe "${FUNCNAME[0]}(): "
-    cp -p "$M2K_INSTALL_M2K_NOTIFY_FILE"    "$INSTALL_DIRECTORY" 2>&1 | err_pipe "${FUNCNAME[0]}(): "
-  else
-    sudo cp -p "$M2K_INSTALL_MYTH2KODI_FILE"     "$INSTALL_DIRECTORY" 2>&1 | err_pipe "${FUNCNAME[0]}(): "
-    sudo cp -p "$M2K_INSTALL_MYTHDB_ACCESS_FILE" "$INSTALL_DIRECTORY" 2>&1 | err_pipe "${FUNCNAME[0]}(): "
-    sudo cp -p "$M2K_INSTALL_BASHLOGGING_FILE"   "$INSTALL_DIRECTORY" 2>&1 | err_pipe "${FUNCNAME[0]}(): "
-    sudo cp -p "$M2K_INSTALL_M2K_NOTIFY_FILE"    "$INSTALL_DIRECTORY" 2>&1 | err_pipe "${FUNCNAME[0]}(): "
+    #We can install without sudo, probably installing in a caller owned directory.
+    cp -p "$M2K_INSTALL_MYTH2KODI_FILE"     "$INSTALL_DIRECTORY/myth2kodi"     2>&1 | err_pipe "${FUNCNAME[0]}(): "
+    [[ "${PIPESTATUS[0]}" != '0' ]] && return 1
+    cp -p "$M2K_INSTALL_MYTHDB_ACCESS_FILE" "$INSTALL_DIRECTORY/mythdb_access" 2>&1 | err_pipe "${FUNCNAME[0]}(): "
+    [[ "${PIPESTATUS[0]}" != '0' ]] && return 1
+    cp -p "$M2K_INSTALL_BASHLOGGING_FILE"   "$INSTALL_DIRECTORY/bashlogging"   2>&1 | err_pipe "${FUNCNAME[0]}(): "
+    [[ "${PIPESTATUS[0]}" != '0' ]] && return 1
+    cp -p "$M2K_INSTALL_M2K_NOTIFY_FILE"    "$INSTALL_DIRECTORY/m2k_notify"    2>&1 | err_pipe "${FUNCNAME[0]}(): "
+    [[ "${PIPESTATUS[0]}" != '0' ]] && return 1
+  else #Assume we are installing in a system directory
+    #Copy the scripts preserving mode and timestamp
+    sudo cp --preserve=mode,timestamps "$M2K_INSTALL_MYTH2KODI_FILE"     "$INSTALL_DIRECTORY/myth2kodi"     2>&1 | err_pipe "${FUNCNAME[0]}(): "
+    [[ "${PIPESTATUS[0]}" != '0' ]] && return 1
+    sudo cp --preserve=mode,timestamps "$M2K_INSTALL_MYTHDB_ACCESS_FILE" "$INSTALL_DIRECTORY/mythdb_access" 2>&1 | err_pipe "${FUNCNAME[0]}(): "
+    [[ "${PIPESTATUS[0]}" != '0' ]] && return 1
+    sudo cp --preserve=mode,timestamps "$M2K_INSTALL_BASHLOGGING_FILE"   "$INSTALL_DIRECTORY/bashlogging"   2>&1 | err_pipe "${FUNCNAME[0]}(): "
+    [[ "${PIPESTATUS[0]}" != '0' ]] && return 1
+    sudo cp --preserve=mode,timestamps "$M2K_INSTALL_M2K_NOTIFY_FILE"    "$INSTALL_DIRECTORY/m2k_notify"    2>&1 | err_pipe "${FUNCNAME[0]}(): "
+    [[ "${PIPESTATUS[0]}" != '0' ]] && return 1
+    #Some sudo setups will preserve owner, so make sure owner is now root.
+    sudo chown root:root "$INSTALL_DIRECTORY/myth2kodi"     2>&1 | err_pipe "${FUNCNAME[0]}(): "
+    [[ "${PIPESTATUS[0]}" != '0' ]] && return 1
+    sudo chown root:root "$INSTALL_DIRECTORY/mythdb_access" 2>&1 | err_pipe "${FUNCNAME[0]}(): "
+    [[ "${PIPESTATUS[0]}" != '0' ]] && return 1
+    sudo chown root:root "$INSTALL_DIRECTORY/bashlogging"   2>&1 | err_pipe "${FUNCNAME[0]}(): "
+    [[ "${PIPESTATUS[0]}" != '0' ]] && return 1
+    sudo chown root:root "$INSTALL_DIRECTORY/m2k_notify"    2>&1 | err_pipe "${FUNCNAME[0]}(): "
+    [[ "${PIPESTATUS[0]}" != '0' ]] && return 1
   fi
+  return 0
 }
 
 setup_working_dir(){
+  debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
+  debugcont "CREATE_WORKING_DIR='$CREATE_WORKING_DIR'"
+  debugcont "M2K_WORKING_DIRECTORY='$M2K_WORKING_DIRECTORY'"
+  debugcont "SCRIPT_PATH='$SCRIPT_PATH'"
+
   if [[ "${CREATE_WORKING_DIR,,}" = "y" ]]; then
     # If directory does not already exist: create working directory 
-    [[ -d "$M2K_WORKING_DIRECTORY" ]] || mkdir -p "$M2K_WORKING_DIRECTORY"
+    [[ -d "$M2K_WORKING_DIRECTORY" ]] || mkdir -p "$M2K_WORKING_DIRECTORY" 2>&1 | err_pipe "${FUNCNAME[0]}(): "
+    [[ "${PIPESTATUS[0]}" != 0 ]] && return 1
   
     # If myth2kodi.conf does not already exist: Copy myth2kodi.conf template into place .
-    [[ -f "$M2K_WORKING_DIRECTORY/myth2kodi.conf" ]] || cp -p "$M2K_INSTALL_CONF_FILE" "$M2K_WORKING_DIRECTORY"
+    [[ -f "$M2K_WORKING_DIRECTORY/myth2kodi.conf" ]] || cp -p "$M2K_INSTALL_CONF_FILE" "$M2K_WORKING_DIRECTORY/myth2kodi.conf" 2>&1 | err_pipe "${FUNCNAME[0]}(): "
+    [[ "${PIPESTATUS[0]}" != 0 ]] && return 1
   
     # Copy myth2kodi.png and myth2kodi_failed.png into place.
-    [[ -f "$M2K_WORKING_DIRECTORY/myth2kodi.png" ]] || cp -p "${SCRIPT_PATH}/myth2kodi.png" "$M2K_WORKING_DIRECTORY"
-    [[ -f "$M2K_WORKING_DIRECTORY/myth2kodi_failed.png" ]] || cp -p "${SCRIPT_PATH}/myth2kodi_failed.png" "$M2K_WORKING_DIRECTORY"
+    [[ -f "$M2K_WORKING_DIRECTORY/myth2kodi.png" ]] || cp -p "${SCRIPT_PATH}/myth2kodi.png" "$M2K_WORKING_DIRECTORY" 2>&1 | err_pipe "${FUNCNAME[0]}(): "
+    [[ "${PIPESTATUS[0]}" != 0 ]] && return 1
+    [[ -f "$M2K_WORKING_DIRECTORY/myth2kodi_failed.png" ]] || cp -p "${SCRIPT_PATH}/myth2kodi_failed.png" "$M2K_WORKING_DIRECTORY" 2>&1 | err_pipe "${FUNCNAME[0]}(): "
+    [[ "${PIPESTATUS[0]}" != 0 ]] && return 1
   fi
+  return 0
 }
 
 ############################################################################
@@ -354,33 +497,31 @@ setup_working_dir(){
 m2k_install_init
 [[ "$?" != '0' ]] && { printf '%s\n' "Failed during init, see '$LOGFILE'."; exit 1 ; }
 
-#Does the caller want an Interactive or a quick and blind install.
-if [[ "$INSTALL_TYPE" != 'Quick' ]]; then
-  get_install_type
-  [[ "$?" != '0' ]] && { printf '%s\n' "Failed getting install type, see '$LOGFILE'."; exit 1 ; }
-fi
-
 if [[ "$INSTALL_TYPE" != 'Quick' ]]; then
   #Orientation message
-  printf '        %s\n'   "#######################################"
+  printf '\n        %s\n'   "#######################################"
   printf '        %s\n'   "#### Install Script for myth2kodi. ####"
   printf '        %s\n'   "#######################################"
   printf '        %s\n\n' "${BASH_SOURCE[0]}"
   printf ' %s\n' 'This script will walk you through the installation process.'
   printf ' %s\n' 'It allows you to customise some of the installation. However,'
-  printf ' %s\n' 'just pressing enter for each option will do a default install.'
-  printf ' %s\n' 'If you select an install directory that requires elevated'
-  printf ' %s\n' 'privileges (such as the default "/usr/local/bin"), you will be'
-  printf ' %s\n\n' 'asked for your sudo password by the system commands as needed.'
+  printf ' %s\n' 'just pressing enter for each option (after this first one)'
+  printf ' %s\n' 'will do a default install. If you select an install directory'
+  printf ' %s\n' 'that requires elevated privileges (such as "/usr/local/bin"),'
+  printf ' %s\n' 'you will be asked for your sudo password by the system commands'
+  printf ' %s\n\n' 'as needed.'
 
   #Should we proceed?
-  yesorno='N'
   read -r -n1 -p "Do you want to install myth2kodi? y/(n)>" yesorno
-  printf '\n'
+  printf '\n\n'
   if [[ "$yesorno" != "y" ]]; then
     inform "You must press 'y' to continue, installation aborted."
-    exit 1
+    exit 0
   fi
+
+  #Does the caller want an Interactive or a quick and blind install.
+  get_install_type
+  [[ "$?" != '0' ]] && { printf '%s\n' "Failed getting install type, see '$LOGFILE'."; exit 1 ; }
 fi
 
 ############################ Gather Information ############################
@@ -396,6 +537,7 @@ else
   INSTALL_DIRECTORY='/usr/local/bin'
 fi
 
+#TODO: if custom working directory but system install, warn about multiple users or maybe prevent...
 if [[ "$INSTALL_TYPE" != 'Quick' ]]; then
   #Ask if working directory set-up is wanted
   get_working_dir_location
@@ -412,25 +554,37 @@ make_customisations
 ########################### Install Everything #############################
 # Copy all scripts to proper directory, only use sudo if necessary
 install_scripts
+[[ "$?" != '0' ]] && { printf '%s\n' "Failed installing scripts, see '$LOGFILE'."; exit 1 ; }
 
 if [[ "$INSTALL_TYPE" != 'Quick' ]]; then
   #If working directory set-up was requested then do it...
   setup_working_dir
+  [[ "$?" != '0' ]] && { printf '%s\n' "Failed to setup working directory, see '$LOGFILE'."; exit 1 ; }
 fi
 
 ################################# Clean-Up #################################
 
 #If we're not debugging then remove temporary files.
 if ((LOGLEVEL < 3)); then
+  debug 'Cleaning up temporary installation files.'
   [[ -f "$M2K_INSTALL_MYTH2KODI_FILE" ]]     && rm -f "$M2K_INSTALL_MYTH2KODI_FILE"
+  [[ "$?" != '0' ]] && err "Failed removing temporary file: $M2K_INSTALL_MYTH2KODI_FILE"
   [[ -f "$M2K_INSTALL_MYTHDB_ACCESS_FILE" ]] && rm -f "$M2K_INSTALL_MYTHDB_ACCESS_FILE"
+  [[ "$?" != '0' ]] && err "Failed removing temporary file: $M2K_INSTALL_MYTHDB_ACCESS_FILE"
   [[ -f "$M2K_INSTALL_BASHLOGGING_FILE" ]]   && rm -f "$M2K_INSTALL_BASHLOGGING_FILE"
+  [[ "$?" != '0' ]] && err "Failed removing temporary file: $M2K_INSTALL_BASHLOGGING_FILE"
   [[ -f "$M2K_INSTALL_M2K_NOTIFY_FILE" ]]    && rm -f "$M2K_INSTALL_M2K_NOTIFY_FILE"
+  [[ "$?" != '0' ]] && err "Failed removing temporary file: $M2K_INSTALL_M2K_NOTIFY_FILE"
   [[ -f "$M2K_INSTALL_CONF_FILE" ]]          && rm -f "$M2K_INSTALL_CONF_FILE"
+  [[ "$?" != '0' ]] && err "Failed removing temporary file: $M2K_INSTALL_CONF_FILE"
+else
+  debug "Not removing temporary installation files. See, '/tmp/m2k_*'."
 fi
 
 #Copy the install log file to the working directory if it exists
-[[ -d "$M2K_WORKING_DIRECTORY" ]] && mv "$LOGFILE" "$M2K_WORKING_DIRECTORY/m2k_install_log_${FileNameNow}.txt"
+inform 'Installation successful.'
+debug "Moving log file to: '$M2K_WORKING_DIRECTORY/m2k_install_log_${FILE_NAME_NOW}.txt'."
+[[ -d "$M2K_WORKING_DIRECTORY" ]] && mv "$LOGFILE" "$M2K_WORKING_DIRECTORY/m2k_install_log_${FILE_NAME_NOW}.txt"
 
 ###################### Installation Complete Messages ######################
 
@@ -441,7 +595,8 @@ if [[ "$INSTALL_TYPE" != 'Quick' ]]; then
   printf '        %s\n\n' "##################################"
   printf ' %s\n' "myth2kodi was installed in: $INSTALL_DIRECTORY"
   if [[ "${CREATE_WORKING_DIR,,}" = "y" ]]; then
-    printf ' %s\n\n' "Created Working directory: $M2K_WORKING_DIRECTORY"
+    printf ' %s\n' "Created Working directory: $M2K_WORKING_DIRECTORY"
+    printf ' %s\n\n' "Placed installation log at: $M2K_WORKING_DIRECTORY/m2k_install_log_${FILE_NAME_NOW}.txt"
   fi
   #
   printf ' %s\n' 'For configuration and setup help see:'

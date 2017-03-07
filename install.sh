@@ -99,6 +99,7 @@ m2k_install_init(){
     printf 'ERROR: %s\n' "$SCRIPT_PATH/bashlogging does not exist." | tee -a "$LOGFILE"
     return 1
   fi
+  printf '  %s\n\n' "Writing installation log to: '$LOGFILE'."
   inform "Running myth2kodi's installation script as $CALLER"
   inform "Install script called on $TODAY at $script_start_time."
 
@@ -129,6 +130,7 @@ m2k_install_init(){
   #Target directories:
   declare -g INSTALL_DIRECTORY
   declare -g M2K_WORKING_DIRECTORY
+  declare -g M2K_CUSTOM_WORKING_DIRECTORY
 
   inform "Install script successfully initialised."
   debug "SCRIPT_PATH='$SCRIPT_PATH'"
@@ -152,7 +154,7 @@ prepare_installation(){
   [[ -d "${SCRIPT_PATH}/.git" ]] && install_source='repo'
   
   if [[ "$install_source" == 'repo' && "$DEVELOPMENT_INSTALL" != 'Enabled' ]]; then
-    debug "In a repository, so will switch to a release tag before installing."
+    inform "In a repository, so will switch to a release tag before installing."
 
     #Make sure we have git
     local pkgpath_git=''
@@ -302,12 +304,12 @@ get_install_type(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
 
   #Install mode message
-  printf ' %s\n' 'There are two modes of installation:'
-  printf '   %s\n' '1. Interactive (Preferred) -- Informs you of progress, provides'
-  printf '               %s\n' 'the option to select non-default install location,'
-  printf '               %s\n\n' 'as well as some other basic configuration.'
-  printf '   %s\n' '2. Quick -- Do default install, no questions or feedback, does'
-  printf '               %s\n\n' 'not create a myth2kodi working directory.'
+  printf '   %s\n' 'There are two modes of installation:'
+  printf '     %s\n' '1. Interactive (Preferred) -- Informs you of progress, provides'
+  printf '                 %s\n' 'the option to select non-default install location,'
+  printf '                 %s\n\n' 'as well as some other basic configuration.'
+  printf '     %s\n' '2. Quick -- Do default install, no questions or feedback, does'
+  printf '                 %s\n\n' 'not create a myth2kodi working directory.'
 
   #Install mode selection
   local install_type_code
@@ -329,9 +331,15 @@ get_install_type(){
 get_install_dir(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   local custom_install_dir
+  printf '  %s\n\n' 'NOTE: For non-default install directory, specify explicit absolute path.'
   read -r -p "Where do you want myth2kodi installed? [DEFAULT:/usr/local/bin]>" custom_install_dir
   printf '\n'
   if [[ -n "$custom_install_dir" ]]; then
+    #Abort if we weren't given an absolute path.
+    if [[ "${custom_install_dir:0:1}" != '/' ]]; then
+      err "Must provide explicit absolute path for install directory, received:'$custom_install_dir'"
+      return 1
+    fi
     if [[ -d "$custom_install_dir" ]]; then
       INSTALL_DIRECTORY="$custom_install_dir"
     else
@@ -365,15 +373,18 @@ get_working_dir_location(){
 
   # Ask do you want your myth2kodi working directory "$m2kdir" initialised.
   printf ' %s\n' 'The myth2kodi script requires a working directory. This is used'
-  printf ' %s\n' "to store myth2kodi's local television series tables, the file" 
+  printf ' %s\n' "to store myth2kodi's local television series tables, the file"
   printf ' %s\n' "myth2kodi.conf which is used for user configuration settings,"
   printf ' %s\n\n' "as well as logging information and other bits and pieces."
 
   #Get user choices regarding working directory set-up.
-  read -r -n1 -p "Do you want to set-up a working directory for '$CALLER'? y/(n)>" CREATE_WORKING_DIR
+  read -r -n1 -p "Do you want to set-up a working directory for '$CALLER'? (y)/n>" CREATE_WORKING_DIR
   printf '\n\n'
+  #Default to working directory creation on interactive install
+  [[ -z "$CREATE_WORKING_DIR" ]] && CREATE_WORKING_DIR='y'
   if [[ "${CREATE_WORKING_DIR,,}" = "y" ]]; then
-    read -r -p "Where do you want the working directory? [DEFAULT:$HOME/.myth2kodi]>" M2K_WORKING_DIRECTORY
+    printf '  %s\n\n' 'NOTE: For non-default working directory, specify either absolute or $HOME based path.'
+    read -r -p "Where do you want the working directory? [DEFAULT:$HOME/.myth2kodi]>" M2K_CUSTOM_WORKING_DIRECTORY
     printf '\n'
   else
     debug 'Not setting-up working directory.'
@@ -382,13 +393,39 @@ get_working_dir_location(){
   fi
 
   #If specified, check the custom working directory.
-  if [[ -n "$M2K_WORKING_DIRECTORY" ]]; then
+  if [[ -n "$M2K_CUSTOM_WORKING_DIRECTORY" ]]; then
+    #First check that it has a form we can handle.
+    if [[ "${M2K_CUSTOM_WORKING_DIRECTORY:0:1}" != '/' && "${M2K_CUSTOM_WORKING_DIRECTORY:0:5}" != '$HOME' ]]; then
+      err 'Must provide absolute or $HOME based path for working directory, received:'"'$M2K_CUSTOM_WORKING_DIRECTORY'"
+      return 1
+    fi
+    #If given a $HOME form, map it to a specific path
+    if [[ "${M2K_CUSTOM_WORKING_DIRECTORY:0:5}" = '$HOME' ]]; then
+      M2K_WORKING_DIRECTORY="$(printf '%s' "$M2K_CUSTOM_WORKING_DIRECTORY" | sed 's|$HOME|'"$HOME"'|' )"
+    else
+      M2K_WORKING_DIRECTORY="$M2K_CUSTOM_WORKING_DIRECTORY"
+    fi
+    #Warn if a fixed working directory is specified with an install path not owned by CALLER.
+    local install_path_owner
+    install_path_owner="$(find "$INSTALL_DIRECTORY" -maxdepth 0 -printf %u)"
+    if [[ "${M2K_CUSTOM_WORKING_DIRECTORY:0:1}" = '/' && "$install_path_owner" != "$CALLER" ]]; then
+      warn "It appears you have set a fixed working directory but not an install directory owned by '$CALLER'."
+      inform "This probably means, despite install location, only '$CALLER' will be able to run myth2kodi."
+    fi
+    #Make sure we can create it if we need too.
     if [[ ! -d "$M2K_WORKING_DIRECTORY" ]]; then
-      #Two levels of inception:
+      #Two levels of inception, either exists and is writeable or parent exists and is writeable:
       if [[ -w "$(dirname "$M2K_WORKING_DIRECTORY")" ]] || [[ ! -e "$(dirname "$M2K_WORKING_DIRECTORY")" && -w "$(dirname "$(dirname "$M2K_WORKING_DIRECTORY")")" ]]; then
-        inform "Working directory will be set as: $M2K_WORKING_DIRECTORY"
+        inform "Working directory will be set as: '$M2K_CUSTOM_WORKING_DIRECTORY'"
       else
         err "You do not have permission to create '$M2K_WORKING_DIRECTORY' or its parent."
+        return 1
+      fi
+    else
+      if [[ -w "$M2K_WORKING_DIRECTORY" ]]; then
+        inform "Setting working directory as: '$M2K_CUSTOM_WORKING_DIRECTORY'"
+      else
+        err "You do not have permission to write to the specified working directory: '$M2K_WORKING_DIRECTORY'."
         return 1
       fi
     fi
@@ -402,15 +439,23 @@ get_working_dir_location(){
 make_customisations(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   debugcont "HOME='$HOME'"
-  debugcont "M2K_WORKING_DIRECTORY='$M2K_WORKING_DIRECTORY'"
+  debugcont "INSTALL_DIRECTORY='$INSTALL_DIRECTORY'"
+  debugcont "M2K_CUSTOM_WORKING_DIRECTORY='$M2K_CUSTOM_WORKING_DIRECTORY'"
   debugcont "CREATE_WORKING_DIR='$CREATE_WORKING_DIR'"
   debugcont "CALLER='$CALLER'"
   debugcont "M2K_INSTALL_CONF_FILE='$M2K_INSTALL_CONF_FILE'"
 
+  #Modify the $binpath if we were provided with a custom install directory.
+  if [[ "$INSTALL_DIRECTORY" != '/usr/local/bin' ]]; then
+    debug "Adding custom install directory to the myth2kodi script's settings."
+    sed -i "s|^binpath='/usr/local/bin/'|binpath='${INSTALL_DIRECTORY}'|" "$M2K_INSTALL_MYTH2KODI_FILE" 2>&1 | err_pipe "${FUNCNAME[0]}(): "
+    [[ "${PIPESTATUS[0]}" != '0' ]] && return 1
+  fi
+
   #Modify the m2kdir dir in myth2kodi if that was requested
-  if [[ "$M2K_WORKING_DIRECTORY" != "$HOME/.myth2kodi" ]]; then
+  if [[ -n "$M2K_CUSTOM_WORKING_DIRECTORY" && "$M2K_CUSTOM_WORKING_DIRECTORY" != '$HOME/.myth2kodi' ]]; then
     debug "Adding custom working directory to the myth2kodi script's settings."
-    sed -i 's|^m2kdir="$HOME/.myth2kodi"|m2kdir="'"${M2K_WORKING_DIRECTORY}"'"|' "$M2K_INSTALL_MYTH2KODI_FILE" 2>&1 | err_pipe "${FUNCNAME[0]}(): "
+    sed -i 's|^m2kdir="$HOME/.myth2kodi"|m2kdir="'"${M2K_CUSTOM_WORKING_DIRECTORY}"'"|' "$M2K_INSTALL_MYTH2KODI_FILE" 2>&1 | err_pipe "${FUNCNAME[0]}(): "
     [[ "${PIPESTATUS[0]}" != '0' ]] && return 1
   fi
 
@@ -499,17 +544,19 @@ m2k_install_init
 
 if [[ "$INSTALL_TYPE" != 'Quick' ]]; then
   #Orientation message
-  printf '\n        %s\n'   "#######################################"
-  printf '        %s\n'   "#### Install Script for myth2kodi. ####"
-  printf '        %s\n'   "#######################################"
-  printf '        %s\n\n' "${BASH_SOURCE[0]}"
-  printf ' %s\n' 'This script will walk you through the installation process.'
-  printf ' %s\n' 'It allows you to customise some of the installation. However,'
-  printf ' %s\n' 'just pressing enter for each option (after this first one)'
-  printf ' %s\n' 'will do a default install. If you select an install directory'
-  printf ' %s\n' 'that requires elevated privileges (such as "/usr/local/bin"),'
-  printf ' %s\n' 'you will be asked for your sudo password by the system commands'
-  printf ' %s\n\n' 'as needed.'
+  printf '\n          %s\n'   "#######################################"
+  printf '          %s\n'   "#### Install Script for myth2kodi. ####"
+  printf '          %s\n'   "#######################################"
+  printf '          %s\n\n' "${BASH_SOURCE[0]}"
+  printf '  %s\n' 'This script will walk you through the installation process.'
+  printf '  %s\n' 'It allows you to customise some of the installation. However,'
+  printf '  %s\n' 'just pressing enter for each option (after this first one)'
+  printf '  %s\n' 'will do a default install. If you select an install directory'
+  printf '  %s\n' 'that requires elevated privileges (such as "/usr/local/bin"),'
+  printf '  %s\n' 'you will be asked for your sudo password by the system commands'
+  printf '  %s\n\n' 'as needed.'
+  printf '  %s\n' 'NOTE: You should run the install script as the user who will'
+  printf '  %s\n\n' '      be running myth2kodi.'
 
   #Should we proceed?
   read -r -n1 -p "Do you want to install myth2kodi? y/(n)>" yesorno
@@ -583,27 +630,36 @@ fi
 
 #Copy the install log file to the working directory if it exists
 inform 'Installation successful.'
-debug "Moving log file to: '$M2K_WORKING_DIRECTORY/m2k_install_log_${FILE_NAME_NOW}.txt'."
-[[ -d "$M2K_WORKING_DIRECTORY" ]] && mv "$LOGFILE" "$M2K_WORKING_DIRECTORY/m2k_install_log_${FILE_NAME_NOW}.txt"
+if [[ -d "$M2K_WORKING_DIRECTORY" ]]; then
+  debug "Moving log file to: '$M2K_WORKING_DIRECTORY/m2k_install_log_${FILE_NAME_NOW}.txt'."
+  mv "$LOGFILE" "$M2K_WORKING_DIRECTORY/m2k_install_log_${FILE_NAME_NOW}.txt"
+fi
 
 ###################### Installation Complete Messages ######################
 
 if [[ "$INSTALL_TYPE" != 'Quick' ]]; then
   #Successful installation message
-  printf '        %s\n'   "##################################"
-  printf '        %s\n'   "#### Installation Successful. ####"
-  printf '        %s\n\n' "##################################"
+  printf '            %s\n'   "################################"
+  printf '            %s\n'   "#### Installation Complete. ####"
+  printf '            %s\n\n' "################################"
   printf ' %s\n' "myth2kodi was installed in: $INSTALL_DIRECTORY"
   if [[ "${CREATE_WORKING_DIR,,}" = "y" ]]; then
-    printf ' %s\n' "Created Working directory: $M2K_WORKING_DIRECTORY"
+    if [[ -d "$M2K_WORKING_DIRECTORY" ]]; then
+      printf ' %s\n' "Set-up Working directory: $M2K_WORKING_DIRECTORY"
+    else
+      printf ' %s\n' "ERROR: Failed creating working directory: $M2K_WORKING_DIRECTORY"
+    fi
+  fi
+  if [[ -d "$M2K_WORKING_DIRECTORY" ]]; then
     printf ' %s\n\n' "Placed installation log at: $M2K_WORKING_DIRECTORY/m2k_install_log_${FILE_NAME_NOW}.txt"
   fi
   #
   printf ' %s\n' 'For configuration and setup help see:'
   printf '     %s\n' 'myth2kodi --config-help'
+  printf ' %s\n' 'and:'
   printf '     %s\n' 'doc/CONFIGURE.md'
   printf ' %s\n' 'or:'
-  printf '     %s\n' 'https://github.com/stuart-knock/myth2kodi/blob/master/doc/CONFIGURE.md'
+  printf '     %s\n\n' 'https://github.com/stuart-knock/myth2kodi/blob/master/doc/CONFIGURE.md'
   printf ' %s\n' 'For usage help see:'
   printf '     %s\n\n' ' myth2kodi --help'
   printf ' %s\n\n' 'And, before using your new/updated install, be sure to run:'

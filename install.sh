@@ -330,6 +330,8 @@ get_install_type(){
   read -r -p "What type of install do you want to do? (1)|2 >" install_type_code
   printf '\n'
   [[ -z "$install_type_code" ]] && install_type_code=1
+  #Make sure they did not use quotes
+  [[ "${install_type_code:0:1}" =~ ^("'"|'"')$ ]] && { err 'Do not quote input.'; return 1 ; }
   if [[ "$install_type_code" = "1" || "${install_type_code,,}" = 'interactive' ]]; then
     inform "Selected interactive install mode."
   elif [[ "$install_type_code" = "2" || "${install_type_code,,}" = 'quick'  ]]; then
@@ -349,6 +351,8 @@ get_install_dir(){
   read -r -p "Where do you want myth2kodi installed? [DEFAULT:/usr/local/bin]>" custom_install_dir
   printf '\n'
   if [[ -n "$custom_install_dir" ]]; then
+    #First, make sure they did not use quotes
+    [[ "${custom_install_dir:0:1}" =~ ^("'"|'"')$ ]] && { err 'Do not quote input.'; return 1 ; }
     #Abort if we weren't given an absolute path.
     if [[ "${custom_install_dir:0:1}" != '/' ]]; then
       err "Must provide explicit absolute path for install directory, received:'$custom_install_dir'"
@@ -397,8 +401,8 @@ get_working_dir_location(){
   #Default to working directory creation on interactive install
   [[ -z "$CREATE_WORKING_DIR" ]] && CREATE_WORKING_DIR='y'
   if [[ "${CREATE_WORKING_DIR,,}" = "y" ]]; then
-    printf '  %s\n\n' 'NOTE: For non-default working directory, specify either absolute or $HOME based path.'
-    read -r -p "Where do you want the working directory? [DEFAULT:$HOME/.myth2kodi]>" M2K_CUSTOM_WORKING_DIRECTORY
+    printf '  %s\n\n' 'NOTE: For non-default working directory, specify either $HOME based or absolute path.'
+    read -r -p 'Where do you want the working directory? [DEFAULT:$HOME/.myth2kodi]>' M2K_CUSTOM_WORKING_DIRECTORY
     printf '\n'
   else
     debug 'Not setting-up working directory.'
@@ -408,7 +412,9 @@ get_working_dir_location(){
 
   #If specified, check the custom working directory.
   if [[ -n "$M2K_CUSTOM_WORKING_DIRECTORY" ]]; then
-    #First check that it has a form we can handle.
+    #First, make sure they did not use quotes
+    [[ "${M2K_CUSTOM_WORKING_DIRECTORY:0:1}" =~ ^("'"|'"')$ ]] && { err 'Do not quote input.'; return 1 ; }
+    #Check that it has a form we can handle.
     if [[ "${M2K_CUSTOM_WORKING_DIRECTORY:0:1}" != '/' && "${M2K_CUSTOM_WORKING_DIRECTORY:0:5}" != '$HOME' ]]; then
       err 'Must provide absolute or $HOME based path for working directory, received:'"'$M2K_CUSTOM_WORKING_DIRECTORY'"
       return 1
@@ -424,7 +430,7 @@ get_working_dir_location(){
     install_path_owner="$(find "$INSTALL_DIRECTORY" -maxdepth 0 -printf %u)"
     if [[ "${M2K_CUSTOM_WORKING_DIRECTORY:0:1}" = '/' && "$install_path_owner" != "$CALLER" ]]; then
       warn "It appears you have set a fixed working directory but not an install directory owned by '$CALLER'."
-      inform "This probably means, despite install location, only '$CALLER' will be able to run myth2kodi."
+      warncont "This probably means, despite install location, only '$CALLER' will be able to run myth2kodi."
     fi
     #Make sure we can create it if we need too.
     if [[ ! -d "$M2K_WORKING_DIRECTORY" ]]; then
@@ -643,7 +649,7 @@ else
 fi
 
 #Copy the install log file to the working directory if it exists
-inform 'Installation successful.'
+inform 'Installation Complete.'
 if [[ -d "$M2K_WORKING_DIRECTORY" ]]; then
   debug "Moving log file to: '$M2K_WORKING_DIRECTORY/m2k_install_log_${FILE_NAME_NOW}.txt'."
   mv "$LOGFILE" "$M2K_WORKING_DIRECTORY/m2k_install_log_${FILE_NAME_NOW}.txt"
@@ -676,6 +682,10 @@ if [[ "$INSTALL_TYPE" != 'Quick' ]]; then
   printf '     %s\n\n' 'https://github.com/stuart-knock/myth2kodi/blob/master/doc/CONFIGURE.md'
   printf ' %s\n' 'For usage help see:'
   printf '     %s\n\n' ' myth2kodi --help'
+  printf ' %s\n' 'and:'
+  printf '     %s\n' 'doc/USAGE.md'
+  printf ' %s\n' 'or:'
+  printf '     %s\n\n' 'https://github.com/stuart-knock/myth2kodi/blob/master/doc/USAGE.md'
   printf ' %s\n\n' 'And, before using your new/updated install, be sure to run:'
   printf '     %s\n\n' 'myth2kodi --diagnostics'
 fi

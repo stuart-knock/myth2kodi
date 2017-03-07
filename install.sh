@@ -161,6 +161,7 @@ prepare_installation(){
   #Use the presence of a .git directory to infer that we're in a repo
   [[ -d "${SCRIPT_PATH}/.git" ]] && install_source='repo'
   
+  #Handle release install from a repo
   if [[ "$install_source" == 'repo' && "$DEVELOPMENT_INSTALL" != 'Enabled' ]]; then
     inform "In a repository, so will switch to a release tag before installing."
 
@@ -225,10 +226,12 @@ prepare_installation(){
       printf '%s\n' "Failed creating temporary copy of configuration file, see '$LOGFILE'."
       return 1
     fi
+
     #Put things back where they were
     debug "Switch back to the branch we started on."
     git checkout "$original_branch" 2>&1 | err_pipe "${FUNCNAME[0]}(): "
     [[ "${PIPESTATUS[0]}" != '0' ]] && return 1
+
     #Change back to where we started
     debug "Change back to the directory we started in."
     cd "$original_dir" || return 1
@@ -613,7 +616,6 @@ else
   INSTALL_DIRECTORY='/usr/local/bin'
 fi
 
-#TODO: if custom working directory but system install, warn about multiple users or maybe prevent...
 if [[ "$INSTALL_TYPE" != 'Quick' ]]; then
   #Ask if working directory set-up is wanted
   get_working_dir_location

@@ -5,19 +5,27 @@
 #USAGE:
 #  Run:
 #    ./install.sh
-#  at a command line and follow the instructions.
+#  at a command line and follow the instructions. If this is the first time
+#  you have installed myth2kodi then you will still need to configure it
+#  before first use, see:
+#    https://github.com/stuart-knock/myth2kodi/blob/master/doc/CONFIGURE.md
+#  or, in this directory:
+#    doc/CONFIGURE.md
+#  and:
+#    myth2kodi --config-help
+#
+#  Whether updating or doing a fresh install, always be sure to run:
+#    myth2kodi --diagnostics
+#  before using the new script on your recordings.
 #
 #REQUIRES:
-#  
 #  git -- only if running from a repository rather than a release tar-ball.
 #
 #DESCRIPTION:
 #  An interactive command line tool for installing myth2kodi on your
 #  system. The script gives you the opportunity to customise some of
 #  the installation. Just pressing enter and providing your sudo
-#  password when requested will do a default install. You will still
-#  need to configure myth2kodi before first use, see:
-#    https://github.com/stuart-knock/myth2kodi/blob/master/doc/CONFIGURE.md
+#  password when requested will do a default install.
 #
 # Author: Stuart A. Knock
 # Originally Written: 2017-03
@@ -26,7 +34,7 @@
 # Thanks to jctennis at the Kodi forums for the suggestion/motivation:
 #   http://forum.kodi.tv/showthread.php?tid=301925&pid=2538668#pid2538668
 #
-
+[[ "$1" =~ ^('-h'|'--help'|'-?'|)$ ]] && { head -n 29 "${BASH_SOURCE[0]}" ; exit 1 ; }
 ############################################################################
 ################################# Settings #################################
 ############################################################################
@@ -451,6 +459,7 @@ get_working_dir_location(){
     fi
   else
     debug 'Setting default working directory.'
+    #Expand the default working directory to an actual path for CALLER.
     M2K_WORKING_DIRECTORY="$HOME/.myth2kodi"
   fi
   return 0

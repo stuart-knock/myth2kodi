@@ -166,7 +166,21 @@ prepare_installation(){
     debug "original_dir='$original_dir'"
 
     #Make sure we are actually in the directory containing install.sh
-    cd "${SCRIPT_PATH}" || return 1
+    cd "${SCRIPT_PATH}" || { err "Could not change to: '$SCRIPT_PATH'" ; return 1; }
+
+    #Make sure the repo is in a clean state
+    local git_status
+    git_status="$(git status --untracked-files=no --porcelain)"
+    if [[ "$?" != '0' ]]; then
+      git status --untracked-files=no --porcelain | err_pipe "git status:"
+      err "Could not determine status of the git repo you are installing from."
+      return 1
+    fi
+    if [[ -n "$git_status" ]]; then
+      err 'The git repo you are installing from has uncommitted changes.'
+      errcont 'Commit, stash or revert changes before trying again.'
+      return 1
+    fi
 
     #What branch did we start on
     debug 'Getting the repository branch we were in when called.'

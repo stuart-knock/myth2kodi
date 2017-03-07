@@ -50,7 +50,7 @@ DEVELOPMENT_INSTALL='Disabled'
 #the option of switching to the 'Quick' mode when you run the install script.
 #The 'Quick' mode just does a default install with no questions or feedback
 #about what is happening unless there is an error -- a log file is still written
-#in 'Quick' mode. Quick mode does not set-up myth2kodi's working directory.
+#in 'Quick' mode.
 #Options: ['Interactive'(DEFAULT)|'Quick']
 INSTALL_TYPE='Interactive'
 
@@ -63,7 +63,7 @@ INSTALL_TYPE='Interactive'
 #    2=adds more information;  --> DEFAULT
 #    3=provides debugging output.
 #Recommend 2 to keep track of what myth2kodi's install script has done.
-#Only use 3 if you have a particular problem that you're trying to track down.
+#Use 3 if you are having a problem with the installation process.
 LOGLEVEL=2
 
 #NOTE: LOGFILE is set to a temporary file which is copied into myth2kodi's

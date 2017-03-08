@@ -663,7 +663,7 @@ m2k_init(){
   ((LOGLEVEL>=3)) && printf '%s\n' "Config complete." >> "$pre_logging_file"
 
   #What am I...
-  m2kVersion="myth2kodi Version 1.3.1d" ; declare -gr m2kVersion
+  m2kVersion="myth2kodi Version 1.3.1e" ; declare -gr m2kVersion
   m2kPlatform="$(uname)" ; declare -gr m2kPlatform
   ((LOGLEVEL>=3)) && printf '%s\n' "Running $m2kVersion on $m2kPlatform." >> "$pre_logging_file"
 
@@ -3051,47 +3051,85 @@ chunked_fuzzy_plot_match(){
   return "$?"
 }
 
-#Verify that any absolute-episode-number guesses are the same episode.
+#Verify that any absolute-episode-number guesses are either all the same
+#episode or if multiple distinct episodes were matched, accept the match
+#provided that one episode represents >= 80% of the matches.
 #Returns: 0 if AbsoluteEpisodeNumber properly set; 1 otherwise.
 multi_match_check(){
-  #TODO: Consider a weighted guess, ie rather than all GoodChunkGuesses being the same episode maybe >=80%
-  #      The 100% requirement is more of a problem now that limited PATTERN-length agreps mean our chunks
-  #      are now shorter and so more likely to give false positives... leading to relatively good guesses being discarded.
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   debugcont "NewShowName: $NewShowName"
   debugcont "$( IFS=','; printf '%s' "There are ${#AENguess[@]} AENguesses: ${AENguess[*]}." )"
-  if (( ${#AENguess[@]} == 1 )) ; then
+
+  local -i match_count
+  match_count="${#AENguess[@]}"
+
+  if (( match_count == 1 )) ; then
+    debug "Called with only one Absolute Episode Number guess."
     AbsoluteEpisodeNumber="${AENguess[0]}"
     inform "${FUNCNAME[0]}(): Identified AbsoluteEpisodeNumber: $AbsoluteEpisodeNumber using ${FUNCNAME[1]}()."
     return 0
-  elif (( ${#AENguess[@]} > 1 )); then
+  elif (( match_count > 1 )); then
     debug "Multiple AbsoluteEpisodeNumber guesses matched plot, confirming they're the same episode before using."
     #If we've identified multiple AbsoluteEpisodeNumbers make sure they refer to the same episode.
-    local -a SxxGuesses=()
-    local -a ExxGuesses=()
-    for (( i = 0; i < ${#AENguess[@]}; i++ )) ; do
-      #gather series and episode numbers for each AENguess.
-      ExxGuesses[i]="$(sed -n "${AENguess[i]}"'p' "$m2kdir/$NewShowName/$NewShowName.E.txt")"
-      SxxGuesses[i]="$(sed -n "${AENguess[i]}"'p' "$m2kdir/$NewShowName/$NewShowName.S.txt")"
+    local -i SxxGuess
+    local -i ExxGuess
+    local -a SxxExxGuesses=()
+    local -a uniqSxxExx=()
+    local -i uniq_match_count
+
+    #Gather series and episode numbers for each AENguess.
+    for (( i = 0; i < match_count; i++ )) ; do
+      ExxGuess="$(sed -n "${AENguess[i]}"'p' "$m2kdir/$NewShowName/$NewShowName.E.txt")"
+      SxxGuess="$(sed -n "${AENguess[i]}"'p' "$m2kdir/$NewShowName/$NewShowName.S.txt")"
+      SxxExxGuesses[i]="s${SxxGuess}e${ExxGuess}"
     done
-    local -i uniqExxcount
-    local -i uniqSxxcount
-    uniqExxcount=$(printf '%s\n' "${ExxGuesses[@]}" | uniq | wc -l)
-    uniqSxxcount=$(printf '%s\n' "${SxxGuesses[@]}" | uniq | wc -l)
-    if (( uniqSxxcount == 1 )) && (( uniqExxcount == 1 )); then
+
+    uniqSxxExx=( $(printf '%s\n' "${SxxExxGuesses[@]}" | uniq ) )
+    uniq_match_count="${#uniqSxxExx[@]}"
+    debug "$( IFS=','; printf '%s' "There are $uniq_match_count matching episodes: ${uniqSxxExx[*]}." )"
+
+    #If all matches are the same episode then just use it,
+    if ((uniq_match_count == 1)); then
       #With multiple data sources we can get multiple AENs for the same episode, just take the first:
       AbsoluteEpisodeNumber=$(cut -f1 -d" " <<< "${AENguess[0]}")
       inform "${FUNCNAME[0]}(): Identified AbsoluteEpisodeNumber: $AbsoluteEpisodeNumber using ${FUNCNAME[1]}()."
       return 0
-    else
-      debug "The AbsoluteEpisodeNumber guesses were different:"
-      debugcont "AENguess = SxxGuesses, ExxGuesses"
-      for (( i = 0; i < ${#AENguess[@]}; i++ )) ; do
-        debugcont "${i}: ${AENguess[i]} = ${SxxGuesses[i]}, ${ExxGuesses[i]}"
+    elif (( uniq_match_count > 1 )); then
+      local -i uniqSxxExxcount
+      local most_common_match
+      local -i most_common_match_count=0
+      local -i aen_index
+      #Get the most commonly occurring match
+      for (( i = 0; i < uniq_match_count; i++ )) ; do
+        uniqSxxExxcount="$(printf '%s\n' "${SxxExxGuesses[@]}" | grep -c "${uniqSxxExx[i]}")"
+        if (( uniqSxxExxcount > most_common_match_count)); then
+          most_common_match="${uniqSxxExx[i]}"
+          most_common_match_count="$uniqSxxExxcount"
+        fi
       done
-      return 1
-    fi
-  fi
+      debug "most_common_match='$most_common_match'"
+      debug "most_common_match_count='$most_common_match_count'"
+      #Only accept the most common match if it represents >= 80% of the matches.
+      #This means all matches if match_count < 4; 1 bad match for 5 <= match_count < 10.
+      if (( (match_count*100)/most_common_match_count <= 125 )); then
+        inform "Multiple matches, but $most_common_match_count out of $match_count are the same episode."
+        for (( i = 0; i < match_count; i++ )) ; do
+          [[ "${SxxExxGuesses[i]}" = "$most_common_match" ]] && { aen_index="$i"; break; }
+        done
+        debug "aen_index='$aen_index'"
+        AbsoluteEpisodeNumber=$(cut -f1 -d" " <<< "${AENguess[$aen_index]}")
+        inform "${FUNCNAME[0]}(): Identified AbsoluteEpisodeNumber: $AbsoluteEpisodeNumber using ${FUNCNAME[1]}()."
+        return 0
+      else
+        debug "The AbsoluteEpisodeNumber guesses were different:"
+        debugcont "AENguess = SxxExxGuesses"
+        for (( i = 0; i < match_count; i++ )) ; do
+          debugcont "${i}: ${AENguess[i]} = ${SxxExxGuesses[i]}"
+        done
+        return 1
+      fi #>=80%
+    fi #uniq_match_count
+  fi #match_count
   #There are no guesses...
   return 1
 }

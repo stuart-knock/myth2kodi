@@ -34,7 +34,7 @@
 # Thanks to jctennis at the Kodi forums for the suggestion/motivation:
 #   http://forum.kodi.tv/showthread.php?tid=301925&pid=2538668#pid2538668
 #
-[[ "$1" =~ ^('-h'|'--help'|'-?'|)$ ]] && { head -n 29 "${BASH_SOURCE[0]}" ; exit 1 ; }
+[[ "$1" =~ ^('-h'|'--help'|'-?')$ ]] && { head -n 29 "${BASH_SOURCE[0]}" ; exit 1 ; }
 ############################################################################
 ################################# Settings #################################
 ############################################################################
@@ -529,15 +529,16 @@ install_scripts(){
     [[ "${PIPESTATUS[0]}" != '0' ]] && return 1
     sudo cp --preserve=mode,timestamps "$M2K_INSTALL_M2K_NOTIFY_FILE"    "$INSTALL_DIRECTORY/m2k_notify"    2>&1 | err_pipe "${FUNCNAME[0]}(): "
     [[ "${PIPESTATUS[0]}" != '0' ]] && return 1
-    #Some sudo setups will preserve owner, so make sure owner is now root.
-    sudo chown root:root "$INSTALL_DIRECTORY/myth2kodi"     2>&1 | err_pipe "${FUNCNAME[0]}(): "
-    [[ "${PIPESTATUS[0]}" != '0' ]] && return 1
-    sudo chown root:root "$INSTALL_DIRECTORY/mythdb_access" 2>&1 | err_pipe "${FUNCNAME[0]}(): "
-    [[ "${PIPESTATUS[0]}" != '0' ]] && return 1
-    sudo chown root:root "$INSTALL_DIRECTORY/bashlogging"   2>&1 | err_pipe "${FUNCNAME[0]}(): "
-    [[ "${PIPESTATUS[0]}" != '0' ]] && return 1
-    sudo chown root:root "$INSTALL_DIRECTORY/m2k_notify"    2>&1 | err_pipe "${FUNCNAME[0]}(): "
-    [[ "${PIPESTATUS[0]}" != '0' ]] && return 1
+    #DO NOT DO THIS, BEING OWNED BY THE INSTALLER IS NOT REALLY A PROBLEM...
+    # #Some sudo setups will preserve owner, so make sure owner is now root.
+    # sudo chown root:root "$INSTALL_DIRECTORY/myth2kodi"     2>&1 | err_pipe "${FUNCNAME[0]}(): "
+    # [[ "${PIPESTATUS[0]}" != '0' ]] && return 1
+    # sudo chown root:root "$INSTALL_DIRECTORY/mythdb_access" 2>&1 | err_pipe "${FUNCNAME[0]}(): "
+    # [[ "${PIPESTATUS[0]}" != '0' ]] && return 1
+    # sudo chown root:root "$INSTALL_DIRECTORY/bashlogging"   2>&1 | err_pipe "${FUNCNAME[0]}(): "
+    # [[ "${PIPESTATUS[0]}" != '0' ]] && return 1
+    # sudo chown root:root "$INSTALL_DIRECTORY/m2k_notify"    2>&1 | err_pipe "${FUNCNAME[0]}(): "
+    # [[ "${PIPESTATUS[0]}" != '0' ]] && return 1
   fi
   return 0
 }
@@ -554,8 +555,17 @@ setup_working_dir(){
     [[ "${PIPESTATUS[0]}" != 0 ]] && return 1
   
     # If myth2kodi.conf does not already exist: Copy myth2kodi.conf template into place .
-    [[ -f "$M2K_WORKING_DIRECTORY/myth2kodi.conf" ]] || cp -p "$M2K_INSTALL_CONF_FILE" "$M2K_WORKING_DIRECTORY/myth2kodi.conf" 2>&1 | err_pipe "${FUNCNAME[0]}(): "
-    [[ "${PIPESTATUS[0]}" != 0 ]] && return 1
+    if [[ -f "$M2K_WORKING_DIRECTORY/myth2kodi.conf" ]]; then
+      warn "There is an existing myth2kodi.conf file in '$M2K_WORKING_DIRECTORY'."
+      warncont "Copying temporary myth2kodi.conf to '$M2K_WORKING_DIRECTORY/m2k_install_${FILE_NAME_NOW}_myth2kodi.conf'."
+      cp -p "$M2K_INSTALL_CONF_FILE" "$M2K_WORKING_DIRECTORY/m2k_install_${FILE_NAME_NOW}_myth2kodi.conf" 2>&1 | err_pipe "${FUNCNAME[0]}(): "
+      [[ "${PIPESTATUS[0]}" != 0 ]] && return 1
+      warn "Be sure to check that your old configuration and new install are compatible."
+    else
+      debug "Copying temporary myth2kodi.conf file to '$M2K_WORKING_DIRECTORY'."
+      cp -p "$M2K_INSTALL_CONF_FILE" "$M2K_WORKING_DIRECTORY/myth2kodi.conf" 2>&1 | err_pipe "${FUNCNAME[0]}(): "
+      [[ "${PIPESTATUS[0]}" != 0 ]] && return 1
+    fi
   
     # Copy myth2kodi.png and myth2kodi_failed.png into place.
     [[ -f "$M2K_WORKING_DIRECTORY/myth2kodi.png" ]] || cp -p "${SCRIPT_PATH}/myth2kodi.png" "$M2K_WORKING_DIRECTORY" 2>&1 | err_pipe "${FUNCNAME[0]}(): "
@@ -581,12 +591,10 @@ if [[ "$INSTALL_TYPE" != 'Quick' ]]; then
   printf '          %s\n'   "#######################################"
   printf '          %s\n\n' "${BASH_SOURCE[0]}"
   printf '  %s\n' 'This script will walk you through the installation process.'
-  printf '  %s\n' 'It allows you to customise some of the installation. However,'
-  printf '  %s\n' 'just pressing enter for each option (after this first one)'
-  printf '  %s\n' 'will do a default install. If you select an install directory'
-  printf '  %s\n' 'that requires elevated privileges (such as "/usr/local/bin"),'
-  printf '  %s\n' 'you will be asked for your sudo password by the system commands'
-  printf '  %s\n\n' 'as needed.'
+  printf '  %s\n' 'It allows you to customise some of the installation.'
+  printf '  %s\n' 'If you select an install directory that requires elevated'
+  printf '  %s\n' 'privileges (such as "/usr/local/bin"), you will be asked for'
+  printf '  %s\n\n' 'your sudo password by the system commands as needed.'
   printf '  %s\n' 'NOTE: You should run the install script as the user who will'
   printf '  %s\n\n' '      be running myth2kodi.'
 
@@ -662,8 +670,8 @@ fi
 #Copy the install log file to the working directory if it exists
 inform 'Installation Complete.'
 if [[ -d "$M2K_WORKING_DIRECTORY" ]]; then
-  debug "Moving log file to: '$M2K_WORKING_DIRECTORY/m2k_install_log_${FILE_NAME_NOW}.txt'."
-  mv "$LOGFILE" "$M2K_WORKING_DIRECTORY/m2k_install_log_${FILE_NAME_NOW}.txt"
+  debug "Moving log file to: '$M2K_WORKING_DIRECTORY/m2k_install_${FILE_NAME_NOW}_log.txt'."
+  mv "$LOGFILE" "$M2K_WORKING_DIRECTORY/m2k_install_${FILE_NAME_NOW}_log.txt"
 fi
 
 ###################### Installation Complete Messages ######################
@@ -682,7 +690,7 @@ if [[ "$INSTALL_TYPE" != 'Quick' ]]; then
     fi
   fi
   if [[ -d "$M2K_WORKING_DIRECTORY" ]]; then
-    printf ' %s\n' "Placed installation log at: $M2K_WORKING_DIRECTORY/m2k_install_log_${FILE_NAME_NOW}.txt"
+    printf ' %s\n' "Placed installation log at: $M2K_WORKING_DIRECTORY/m2k_install_${FILE_NAME_NOW}_log.txt"
     printf ' %s\n\n' "Be sure to check the log for any WARNINGS or ERRORS."
   fi
   #

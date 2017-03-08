@@ -5583,14 +5583,12 @@ main(){
   fi
   debug "No command flag set. Processing as recording."
 
-#    #If trying to move a recording, get info from command line
-#    #Command line sanity checks
 #    #Now we have all important settings, and know we're not performing some other function,
 #     do filesystem checks etc -- no point doing a lot of work if we can't move anything at the end..
 #    #Do we have enough info from the command line to move, if so jump to verify
 #    #If not: Get info from the MythTV-DB
 #    #MythTV-DB Guide data basic/common post processing, then sanity checks.
-#    #Do we have enough info to move, if so jump to verify
+#    #Do we have enough info to process, if so jump to verify
 #    #If still lacking information, try matching against TheTVDB info
 #      #If SchedulesDirect, check zap2it
 #      #If US, check airdate
@@ -5600,7 +5598,7 @@ main(){
 #    #Verify: do checks to make sure what we're moving and where we're moving it too makes sense,
 #             and that we have good confidence that the names we're using are correct.
 #    #IF WE'RE NOT CONFIDENT OR ANYTHING ELSE DURING THE ABOVE STEPS IS WRONG, WRITE JOB TO DOOVER, REPORT WHAT WENT WRONG, BUT OTHERWISE DO NOTHING!
-#    #Move file...
+#    #Process, ie move and/or link, file...
 #    #Notify Kodi, RSS, and whoever else wanted to know that we're done and what it is we've done.
 #    #THE END
 }

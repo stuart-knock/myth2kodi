@@ -682,7 +682,8 @@ if [[ "$INSTALL_TYPE" != 'Quick' ]]; then
     fi
   fi
   if [[ -d "$M2K_WORKING_DIRECTORY" ]]; then
-    printf ' %s\n\n' "Placed installation log at: $M2K_WORKING_DIRECTORY/m2k_install_log_${FILE_NAME_NOW}.txt"
+    printf ' %s\n' "Placed installation log at: $M2K_WORKING_DIRECTORY/m2k_install_log_${FILE_NAME_NOW}.txt"
+    printf ' %s\n\n' "Be sure to check the log for any WARNINGS or ERRORS."
   fi
   #
   printf ' %s\n' 'For configuration and setup help see:'

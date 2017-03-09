@@ -5715,7 +5715,7 @@ process_ignore_lists
 EpisodeSubtitle="$(sed 's/;.*//' <<< "$InputSubtitle")"
 #Only keep Alpha-numeric characters, space, parenthesis and the four chars & , . -
 EpisodeSubtitle="$(sed -r 's/[^[:alnum:] &,.)(-]//g' <<< "$EpisodeSubtitle")"
-OriginalExt="${InputFileBasename#*.}" #TODO: Should be "${InputFileBasename##*.}" ???
+OriginalExt="${InputFileBasename##*.}"
 originaldirname="$(dirname "$InputPath")"
 #Set originaldir name if none was supplied
 [[ "$originaldirname" =~ ^('./'|'.'|'')$ ]] && originaldirname="$(pwd)"

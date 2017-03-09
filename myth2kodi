@@ -2759,9 +2759,9 @@ download_series_info(){
 #Create myth2kodi's internal database directory for the current show.
 make_m2k_database_dir(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  if [ ! -d "$m2kdir/$NewShowName" ]; then
+  if [[ ! -d "$m2kdir/$NewShowName" ]]; then
     mkdir "$m2kdir/$NewShowName"
-    chmod 777 "$m2kdir/$NewShowName" #TODO: consider chmod 755
+    chmod 755 "$m2kdir/$NewShowName"
     inform "Created myth2kodi Database Folder: $m2kdir/$NewShowName"
   fi
 }

@@ -3046,14 +3046,14 @@ chunked_fuzzy_plot_match(){
   (( ${#GoodChunkGuesses[@]} < 2 )) && return 1
 
   #If all ChunkGuess with ChunkCost < 10% are the same Absolute Episode Number
-  AENguess=($(printf '%s\n' "${GoodChunkGuesses[@]}" | sort -u))
+  AENguess=($(printf '%s\n' "${GoodChunkGuesses[@]}" | sort))
   multi_match_check
   return "$?"
 }
 
 #Verify that any absolute-episode-number guesses are either all the same
 #episode or if multiple distinct episodes were matched, accept the match
-#provided that one episode represents >= 80% of the matches.
+#provided that one episode represents >= 2/3 of the matches.
 #Returns: 0 if AbsoluteEpisodeNumber properly set; 1 otherwise.
 multi_match_check(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
@@ -3071,8 +3071,8 @@ multi_match_check(){
   elif (( match_count > 1 )); then
     debug "Multiple AbsoluteEpisodeNumber guesses matched plot, confirming they're the same episode before using."
     #If we've identified multiple AbsoluteEpisodeNumbers make sure they refer to the same episode.
-    local -i SxxGuess
-    local -i ExxGuess
+    local SxxGuess
+    local ExxGuess
     local -a SxxExxGuesses=()
     local -a uniqSxxExx=()
     local -i uniq_match_count
@@ -3081,7 +3081,10 @@ multi_match_check(){
     for (( i = 0; i < match_count; i++ )) ; do
       ExxGuess="$(sed -n "${AENguess[i]}"'p' "$m2kdir/$NewShowName/$NewShowName.E.txt")"
       SxxGuess="$(sed -n "${AENguess[i]}"'p' "$m2kdir/$NewShowName/$NewShowName.S.txt")"
-      SxxExxGuesses[i]="s${SxxGuess}e${ExxGuess}"
+      #Single digit episode and show names are not allowed Ex and Sx replaced with Exx Sxx
+      if ((ExxGuess < 10)); then ExxGuess="e0$ExxGuess"; else ExxGuess="e$ExxGuess"; fi
+      if ((SxxGuess < 10)); then SxxGuess="s0$SxxGuess"; else SxxGuess="s$SxxGuess"; fi
+      SxxExxGuesses[i]="${SxxGuess}${ExxGuess}"
     done
 
     uniqSxxExx=( $(printf '%s\n' "${SxxExxGuesses[@]}" | uniq ) )
@@ -3109,9 +3112,9 @@ multi_match_check(){
       done
       debug "most_common_match='$most_common_match'"
       debug "most_common_match_count='$most_common_match_count'"
-      #Only accept the most common match if it represents >= 80% of the matches.
-      #This means all matches if match_count < 4; 1 bad match for 5 <= match_count < 10.
-      if (( (match_count*100)/most_common_match_count <= 125 )); then
+      #Only accept the most common match if it represents >= 2/3 of the matches.
+      #This means all matches if match_count < 3; 1 bad match for 3 <= match_count < 6.
+      if (( (match_count*100)/most_common_match_count <= 150 )); then
         inform "Multiple matches, but $most_common_match_count out of $match_count are the same episode."
         for (( i = 0; i < match_count; i++ )) ; do
           [[ "${SxxExxGuesses[i]}" = "$most_common_match" ]] && { aen_index="$i"; break; }
@@ -3127,10 +3130,15 @@ multi_match_check(){
           debugcont "${i}: ${AENguess[i]} = ${SxxExxGuesses[i]}"
         done
         return 1
-      fi #>=80%
+      fi #>=2/3
     fi #uniq_match_count
   fi #match_count
   #There are no guesses...
+  err "${FUNCNAME[1]}():${FUNCNAME[0]}(): Something unexpected went wrong."
+  errcont "Maybe called with empty AENguess. Or accessing Season and Episode numbers failed."
+  errcont "$( IFS=','; printf '%s' "There are ${#AENguess[@]} AENguesses: ${AENguess[*]}." )"
+  errcont "Season number file:  '$m2kdir/$NewShowName/$NewShowName.S.txt'"
+  errcont "Episode number file: '$m2kdir/$NewShowName/$NewShowName.E.txt'"
   return 1
 }
 

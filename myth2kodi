@@ -3918,7 +3918,7 @@ set_move_location(){
   if [[ -z "$m2kProgramIDCheck" || "$m2kProgramIDCheck" = 'EP' ]]; then
     if [[ "$MoveDirWritable" != '0' && "$AltMoveDirWritable" = '0' ]]; then
       MoveDir="$AlternateMoveDir"
-    else
+    elif [[ "$MoveDirWritable" != '0' && "$AltMoveDirWritable" != '0' ]]; then
       target_directory_not_writeable "Move"
     fi
   #Movie handling: Determine where file will fit

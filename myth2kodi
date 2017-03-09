@@ -3909,10 +3909,7 @@ set_move_location(){
 
   #Episode & uncategorised handling: Determine where File will fit
   if [[ -z "$m2kProgramIDCheck" || "$m2kProgramIDCheck" = 'EP' ]]; then
-    if [[ "$MoveDirWritable" = '0' ]]; then
-       #TODO:
-      debug "Nothing to do here as Move dir is writeable, but cannot have an empty then and too tired to figure out how to rearrange the if block"
-    elif [[ "$AltMoveDirWritable" = '0' ]]; then
+    if [[ "$MoveDirWritable" != '0' && "$AltMoveDirWritable" = '0' ]]; then
       MoveDir="$AlternateMoveDir"
     else
       target_directory_not_writeable "Move"

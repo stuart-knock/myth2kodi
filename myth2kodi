@@ -5541,8 +5541,6 @@ recreate_comskip(){
 
   elif [[ -d "$inputarg" ]]; then
     local yesorno='no' #Default to safety, ie do nothing.
-    #TODO: confirm inputarg doesn't end in a /, or just remove if there is any... inputarg="${inputarg%*/}"
-    #      [[ "$inputarg" == */ ]] && { err "${FUNCNAME[0]}(): Not trailing /: '$inputarg'" ; return 1; }
     warn "YOU ARE ABOUT TO SCAN THE DIRECTORY: $inputarg"
     warncont "AND REGENERATE COMSKIP FILES FOR ALL PREVIOUSLY MOVED RECORDINGS."
     read -r -n1 -p "  Do you want myth2kodi to regenerate all comskip files? y/(n)>" yesorno
@@ -5550,9 +5548,11 @@ recreate_comskip(){
     #Default to safety, ie do nothing.
     if [ "$yesorno" = "y" ]; then
       local scanpath
+      #Default to mpg extension
       [[ -z "$checkext" ]] && checkext="mpg"
+      #Strip any trailing / from  inputarg
+      scanpath="${inputarg%*/}"
       debug "Checking for files with names of the form: '$scanpath/filename.$checkext'"
-      scanpath="$inputarg"
       local COMSKIP_SCAN_FILE
       COMSKIP_SCAN_FILE="$(mktemp "$M2K_TMPDIR/m2k_comskip_scan_$FileNameNow"-XXXX)"
       [[ "$?" != 0 ]] && { err "${FUNCNAME[0]}(): Failed to create temporary comskip-scan file." ; return 1 ; }

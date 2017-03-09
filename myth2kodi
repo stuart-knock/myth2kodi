@@ -781,6 +781,14 @@ m2k_init(){
   #Initialise processing state variables.
   FailSafeState=0
 
+  #Initialise the fuzzy logic error count to zero if the file doesn't exist.
+  declare -gi FuzzyLogicError
+  if [[ -f "$m2kdir/FuzzyLogicError.log" ]]; then
+    FuzzyLogicError="$(<"$m2kdir/FuzzyLogicError.log")"
+  else
+    FuzzyLogicError=0
+  fi
+
   debug "myth2kodi script initialisation complete."
   debug "Running myth2kodi as $CALLER"
 
@@ -3306,7 +3314,6 @@ increment_fuzzy_logic_error_count(){
   if [[ ! -f "$m2kdir/FuzzyLogicError.log" ]]; then
     printf '%s\n' '0' > "$m2kdir/FuzzyLogicError.log"
   fi
-  declare -gi FuzzyLogicError
   FuzzyLogicError="$(<"$m2kdir/FuzzyLogicError.log")"
   (( ++FuzzyLogicError ))
   printf '%s\n' "$FuzzyLogicError" > "$m2kdir/FuzzyLogicError.log"
@@ -5924,8 +5931,7 @@ if [[ -n "$SeriesID" ]]; then
   #Statistical Fuzzy Logic monitoring
   increment_total_matches
   debug "TOTAL FUZZY LOGIC MATCHES:$FuzzyLogicMatches"
-  #TODO: Consider repositioning this debug, also look into increment_fuzzy_logic_error_count usage... Maybe use $FuzzyLogicError here: ${FuzzyLogicError:-0}
-  debug "TOTAL VERIFIED FUZZY ERRORS:$(test -f "$m2kdir/FuzzyLogicError.log" && cat "$m2kdir/FuzzyLogicError.log" || echo "0")"
+  debug "TOTAL VERIFIED FUZZY ERRORS:${FuzzyLogicError:-0}"
 fi
 
 #TODO: The following few blocks will run even if we haven't properly identified the series, which doesn't make

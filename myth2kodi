@@ -870,13 +870,13 @@ parse_command_flags(){
     ;;
     --delete)
       debug "Recognised command line switch '--delete'"
-      delete_recording "$m2karg2"
+      switch_delete_recording "$m2karg2"
       return $?
     ;;
     --rerecord)
       debug "Recognised command line switch '--rerecord'"
       RERECORD='Enabled'
-      delete_recording "$m2karg2"
+      switch_delete_recording "$m2karg2"
       return $?
     ;;
     --disconnect)
@@ -2026,7 +2026,7 @@ get_mythtvdb_info(){
 
 #Remove recording's pictures and database entries from MythTV-DB.
 #Thanks to barney_1.
-delete_mythtv_database_entry(){
+delete_mythtv_database_entry_mysql(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   debug "InputPath: $InputPath"
   debug "InputFileBasename: $InputFileBasename"
@@ -5293,27 +5293,14 @@ get_series_info(){
 #        associated support files (comskip, NFO).
 delete_recording(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  warn "Attempting to delete recording: $1"
-  warncont "This will PERMANENTLY delete the recording, associated files"
-  warncont "and the associated MythTV database entry."
-  warncont "Are you sure you want to continue?"
-  local yesorno=""
-  if [[ "$RERECORD" = 'Enabled' ]]; then
-    read -r -n1 -p "  Requested deletion with rerecord: 'y' to continue or 'n' to exit... y/(n):>" yesorno
-  else
-    read -r -n1 -p "  Requested permanent deletion: 'y' to continue or 'n' to exit... y/(n):>" yesorno
-  fi
-  printf '\n'
-  [[ "$yesorno" != 'y' ]] && { inform "You must press 'y' to continue, aborting."; return 1 ; }
-
   local inputarg="$1"
 
   #Identify file, link, who owns what, and the MythTV path and basename.
   identify_recording_files "$inputarg"
   [[ "$?" != 0 ]] && return "$?"
 
-  #TODO: Consider moving the DATABASE_ACCESS method logic below into the function
-  #      delete_mythtv_database_entry(), so all calls respect DATABASE_ACCESS.
+  #TODO: Make sure that all deletions of MythTV recording or DB entries respect DATABASE_ACCESS.
+
   #Delete the recording file and its associated DB entry
   case "$DATABASE_ACCESS" in
     MySQL)
@@ -5326,7 +5313,7 @@ delete_recording(){
         [[ -f "$RECORDING_FILE" ]] && rm -f "$RECORDING_FILE"
 
         #Delete the associated database entry and thumbnails.
-        delete_mythtv_database_entry
+        delete_mythtv_database_entry_mysql
       fi
       ;;
     PythonBindings)
@@ -5388,6 +5375,28 @@ delete_recording(){
   fi
   (( LOGLEVEL < 3 )) && rm -f "$m2kdir/created.tracking.bak"
 
+  return 0
+}
+
+
+switch_delete_recording(){
+  debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
+  warn "Attempting to delete recording: $1"
+  warncont "This will PERMANENTLY delete the recording, associated files"
+  warncont "and the associated MythTV database entry."
+  warncont "Are you sure you want to continue?"
+  local yesorno=""
+  if [[ "$RERECORD" = 'Enabled' ]]; then
+    read -r -n1 -p "  Requested deletion with rerecord: 'y' to continue or 'n' to exit... y/(n):>" yesorno
+  else
+    read -r -n1 -p "  Requested permanent deletion: 'y' to continue or 'n' to exit... y/(n):>" yesorno
+  fi
+  printf '\n'
+  [[ "$yesorno" != 'y' ]] && { inform "You must press 'y' to continue, aborting."; return 1 ; }
+
+  delete_recording "$1"
+  [[ "$?" != 0 ]] && return 1
+
   #Delete any comskip or NFO files associated with the recording.
   if [[ "$RECORDING_FILE_OWNER" = 'myth2kodi' ]]; then
     rm -f "${RECORDING_FILE%.*}.nfo"
@@ -5416,17 +5425,24 @@ disconnect_recording(){
   identify_recording_files "$inputarg"
   [[ "$?" != 0 ]] && return "$?"
 
-  #Remove link associated with recording, and if recording file still has a
-  #MythTV name ('moved' in LINK mode) then actually move it to myth2kodi name.
+  #Remove link associated with recording.
   [[ -L "$RECORDING_LINK" ]] && rm -f "$RECORDING_LINK"
+
+  #If recording file still has a MythTV name ('moved' in LINK mode) then
+  #actually move it to myth2kodi name.
   if [[ "$RECORDING_FILE_OWNER" = 'MythTV' ]]; then
+    local mv_status
     inform "Recording was processed in 'LINK' mode, actually moving file now..."
     mv "$RECORDING_FILE" "$RECORDING_LINK" 2>&1 | err_pipe "${FUNCNAME[0]}(): "
-    [[ "$?" != 0 ]] && { err "${FUNCNAME[0]}(): FAILED: mv '$RECORDING_FILE' '$RECORDING_LINK'"; return "$?"; }
+    mv_status="${PIPESTATUS[0]}"
+    if [[ "$mv_status" != 0 ]]; then
+      err "${FUNCNAME[0]}(): FAILED: mv '$RECORDING_FILE' '$RECORDING_LINK'"
+      return "$mv_status"
+    fi
   fi
 
   #Delete the associated database entry and thumbnail
-  delete_mythtv_database_entry
+  delete_mythtv_database_entry_mysql
 
   #Remove the undo and doover entries associated with the recording. If there
   #was no RECORDING_LINK found then there should not be undo or doover entries.
@@ -6152,7 +6168,7 @@ if [[ "$PROCESS_RECORDING_MODE" = 'MOVE' ]]; then
         chmod 775 "$MoveDir/$ShowFileName.$OriginalExt"
         if [[ "$RequiresDoover" != '1' ]]; then
           debug "SYMLINK='Disabled' and does not require doover, so MythTV-DB info will be removed."
-          delete_mythtv_database_entry
+          delete_mythtv_database_entry_mysql
         else
           warn "Job requires doover, so attempting to create symlink in SYMLINK='Disabled' mode."
           ln -s "$MoveDir/$ShowFileName.$OriginalExt" "$InputPath"

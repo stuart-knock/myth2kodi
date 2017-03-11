@@ -4571,7 +4571,7 @@ m2k_scan(){
   local dooverstatus
   #Map myth2kodi input variables to local variables for our current purpose.
   local checkext="$m2karg2"
-  local scanpath="$m2karg3"
+  local scanpath="${m2karg3%*/}" #Strip any trailing / from the directory name.
   debug "Running ${FUNCNAME[0]}() on $checkext files in $scanpath"
 
   #Do some basic checks before we get started.

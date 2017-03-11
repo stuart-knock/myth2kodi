@@ -5222,26 +5222,26 @@ m2k_undo_rec(){
   identify_recording_files "$1"
 
   if [[ "$?" == 0 && -n "$RECORDING_LINK" ]]; then
-    local RECORDING_UNDO_FILE
-    RECORDING_UNDO_FILE="$(mktemp "$M2K_TMPDIR/m2k_recording_undo_$FileNameNow"-XXXX)"
+    local recording_undo_file
+    recording_undo_file="$(mktemp "$M2K_TMPDIR/m2k_recording_undo_$FileNameNow"-XXXX)"
 
     #Try and extract the undo entries associated with $RECORDING_LINK from undo.sh
     #NOTE: In LINK mode, RECORDING_LINK => myth2kodi file name;
     #      In MOVE with SYMLINKing='Enabled', RECORDING_LINK => MythTV file name.
-    sed -n "\#$RECORDING_LINK#p" "$m2kdir/undo.sh" > "$RECORDING_UNDO_FILE"
+    sed -n "\#$RECORDING_LINK#p" "$m2kdir/undo.sh" > "$recording_undo_file"
 
     #If we did not find matching lines then return error state.
-    if [[ ! -s "$RECORDING_UNDO_FILE" ]]; then
+    if [[ ! -s "$recording_undo_file" ]]; then
       err "${FUNCNAME[0]}(): Failed to find undo entry for '$1'"
       return 1
     fi
 
     #We found matching lines, so process them.
-    chmod +x "$RECORDING_UNDO_FILE"
+    chmod +x "$recording_undo_file"
     local undostatus
-    "$RECORDING_UNDO_FILE" 2>&1 | err_pipe "undo: "
+    "$recording_undo_file" 2>&1 | err_pipe "undo: "
     undostatus="${PIPESTATUS[0]}"
-    (( LOGLEVEL < 3 )) && rm -f "$RECORDING_UNDO_FILE"
+    (( LOGLEVEL < 3 )) && rm -f "$recording_undo_file"
 
     if [[ "$undostatus" == 0 ]]; then
       #Remove the undo and doover entries associated with the recording.
@@ -5369,8 +5369,9 @@ delete_recording(){
       ;;
   esac
 
-  #Remove the undo and doover entries associated with the recording.
-  remove_undo_doover_entries
+  #Remove the undo and doover entries associated with the recording. If there
+  #was no RECORDING_LINK found then there should not be undo or doover entries.
+  [[ -n "$RECORDING_LINK" ]] && remove_undo_doover_entries
   #TODO: ?capture return state here?
 
   #TODO: Are the manual deletes of tracking, comskip, NFO actually need here, or should it just be running myth2kodi --maintenance
@@ -5427,8 +5428,9 @@ disconnect_recording(){
   #Delete the associated database entry and thumbnail
   delete_mythtv_database_entry
 
-  #Remove the undo and doover entries associated with the recording.
-  remove_undo_doover_entries
+  #Remove the undo and doover entries associated with the recording. If there
+  #was no RECORDING_LINK found then there should not be undo or doover entries.
+  [[ -n "$RECORDING_LINK" ]] && remove_undo_doover_entries
   #TODO: ?capture return state here?
 
   #Delete created.tracking entries associated with recording.

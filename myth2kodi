@@ -6018,9 +6018,8 @@ fi
 #TODO: If this works reliably, then consider moving it up to directly below fuzzy match on subtitle
 #As a last resort, if we still think it's an episode but have no episode info, try fuzzy match on plot
 if [[ "$PlotMatchFallback" = 'Enabled' ]]; then
-  debug "PlotMatchFallback is Enabled" #[[ -z "$Sxx" || "$Sxx" =~ ^(S00|S)$ || -z "$Exx" || "$Exx" =~ ^(E00|E)$ ]]
-  #TODO: S00 can be a legitimate season number, need to drop "$Sxx" = "S00", the TODO for a HasSxxExx variable should resolve this too
-  if [ "$m2kProgramIDCheck" = "EP" ] && [[ "$Sxx" = "S" || -z "$Sxx" || "$Sxx" = "S00" || "$Exx" = "E" || -z "$Exx" || "$Exx" = "E00" ]] ; then
+  debug "PlotMatchFallback is Enabled"
+  if [[ "$m2kProgramIDCheck" = "EP" && "$HasSxxExx" != '1' ]] ; then
     get_absolute_episode_number_fuzzy_plot
     if [[ "$?" = "0" && -n "$AbsoluteEpisodeNumber" ]]; then
       inform "Setting Sxx, Exx, and EpisodeSubtitle based on FuzzyPlotMatch:"

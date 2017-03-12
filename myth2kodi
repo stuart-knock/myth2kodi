@@ -736,6 +736,8 @@ m2k_init(){
       printf '  %s\n' "myth2kodi_failed.png into $m2kdir"
     } | tee -a "$LOGFILE"
   fi
+  #In case we already had a working directory, but no log file.
+  [[ ! -f "$LOGFILE" ]] && initialise_new_logfile
 
   #Initialise logging system
   ((LOGLEVEL>=3)) && printf '%s\n' 'Initialising logging system.' >> "$pre_logging_file"

@@ -1504,7 +1504,7 @@ set_recording_name(){
       RECORDING_NAME="$(find -L "$sg_dir" -samefile "$1")"
       [[ "$RECORDING_NAME" =~ $RECPATTERN ]] && { found=0 ; break ; }
     done
-    (( found == 0 )) && debug "$1 <==> $RECORDING_NAME"
+    (( found == 0 )) && inform "$1 <==> $RECORDING_NAME"
   fi
   if (( found == 0 )); then
     RECORDING_PATH="$(realpath --no-symlinks "$RECORDING_NAME")"
@@ -5311,9 +5311,9 @@ get_series_info(){
 #        associated support files (comskip, NFO).
 delete_recording_from_mythtv(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
+  debugcont "RECORDING_NAME='$RECORDING_NAME'"
   debugcont "DATABASE_ACCESS='$DATABASE_ACCESS'"
   debugcont "RERECORD='$RERECORD'"
-  debugcont "='$'"
 
   local inputarg="$1"
 

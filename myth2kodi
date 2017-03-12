@@ -2122,6 +2122,8 @@ process_mythtvdb_schedulesdirect(){
   [[ "$m2kProgramIDCheck" = "EP" ]] && ProgramIDType="Series With Episode Data"
   [[ "$m2kProgramIDCheck" = "SP" ]] && ProgramIDType="Sports Programming" && m2kProgramIDCheck=SH
 
+  #TODO: Consider calling set_sxxexx_season_episode_numbers here
+
   #account for .0123's in EITonly data type
   ProgramID="$(cut -f1 -d"." <<< "$ProgramID")"
 
@@ -2172,6 +2174,8 @@ process_mythtvdb_nolookup(){
   test "$m2kProgramIDCheck" = "MV" && ProgramIDType="Movie"
   test "$m2kProgramIDCheck" = "SP" && ProgramIDType="Sports Programming" && m2kProgramIDCheck=SH
 
+  #TODO: Consider calling set_sxxexx_season_episode_numbers here
+
   #account for .0123's in EITonly data type
   ProgramID=$(cut -f1 -d"." <<< "$ProgramID")
 
@@ -2210,13 +2214,11 @@ process_mythtvdb_sydfta(){
   [[ -n "$rating" ]] && let rating=$rating*2
   [[ -z "$rating" ]] && rating=1
 
-  #TODO: Does this need to be more general, accounting for 00 | S0 | S00 | etc
-  #  On the other hand, if it's reliably 0, then remove this and just
-  #  change the conditionals to check for 0
-  #  ((InputSeasonNum == 0))
-  #Default value for season and episode numbers is 0, not $null or ""
-  test "$InputSeasonNum" = 0 && InputSeasonNum=''
-  test "$InputEpisodeNum" = 0 && InputEpisodeNum=''
+  #The definition of the 'season' and 'episode' fields of a 'recorded' entry
+  #specifies a default value of NULL. But for SydFTA guide-data we sometimes
+  #get "no information" value set incorrectly as 0, not $null or "".
+  [[ "$InputSeasonNum" = 0 ]]  && InputSeasonNum=''
+  [[ "$InputEpisodeNum" = 0 ]] && InputEpisodeNum=''
 
   #Current (2016-08) issue from 7flix: description in Subtitle field, all-caps cast in Plot...
   #Longest actual subtitle I've seen so far is 84 characters. Rather than assuming Plot field
@@ -2323,6 +2325,35 @@ process_mythtvdb_sydfta(){
   return 0
 }
 
+set_sxxexx_season_episode_numbers(){
+  debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
+  debugcont "InputSeasonNum='$InputSeasonNum'"
+  debugcont "InputEpisodeNum='$InputEpisodeNum'"
+  debugcont "SeasonEpisode='$SeasonEpisode'"
+
+  if [[ -n "$InputSeasonNum" && -n "$InputEpisodeNum" ]]; then
+    debug 'Using season & episode information from MythTV-DB season & episode fields.'
+    Sxx="$InputSeasonNum"
+    Exx="$InputEpisodeNum"
+  elif [[ -n "$SeasonEpisode" ]]; then
+    debug 'Extracted season & episode information from Plot.'
+    Sxx="$(echo "$SeasonEpisode" | grep -E -i --only-matching '(s\.?[0-9]?[0-9])|([0-9]?[0-9]x)' | sed 's/s\.\?\|x//I')"
+    Exx="$(echo "$SeasonEpisode" | grep -E -i --only-matching '((e|ep)\.?[0-9][0-9]?)|(x[0-9][0-9]?)' | sed 's/\(E\.\?\|Ep\.\?\)\|x//I')"
+    #Strip leading zero
+    Sxx="${Sxx#0}"
+    Exx="${Exx#0}"
+  else
+    debug "No Season & Episode number information is available."
+    return 1
+  fi
+  #Single digit episode and show names are not allowed Ex and Sx replaced with Sxx Exx
+  if (( Sxx < 10 )); then Sxx="S0$Sxx"; else Sxx="S$Sxx"; fi
+  if (( Exx < 10 )); then Exx="E0$Exx"; else Exx="E$Exx"; fi
+  inform "Found Season ($Sxx) & Episode ($Exx) information."
+  HasSxxExx='1'
+  return 0
+}
+
 #Use regex to check for and make use of SxxExx info in Plot.
 get_sxxexx_from_plot(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
@@ -2344,26 +2375,9 @@ get_sxxexx_from_plot(){
     #S01E42 | (01x42) | s01e42 | 1X2 | S1E4 | (S01Ep42) | (S1Ep42) | 42x1 | (S.01Ep.42) | (S.01,Ep.42) | S1 E42
     SeasonEpisode="$(grep -E -i --only-matching '(s\.?[0-9]?[0-9]\,?\s?(e|ep)\.?[0-9][0-9]?)|([0-9]?[0-9]x[0-9][0-9]?)' <<< "$Plot")"
   fi
-  if [[ -n "$InputSeasonNum" && -n "$InputEpisodeNum" ]]; then
-    debug 'Using season & episode information from MythTV-DB season & episode fields.'
-    Sxx="$InputSeasonNum"
-    Exx="$InputEpisodeNum"
-  elif [[ -n "$SeasonEpisode" ]]; then
-    debug 'Extracted season & episode information from Plot.'
-    Sxx="$(echo "$SeasonEpisode" | grep -E -i --only-matching '(s\.?[0-9]?[0-9])|([0-9]?[0-9]x)' | sed 's/s\.\?\|x//I')"
-    Exx="$(echo "$SeasonEpisode" | grep -E -i --only-matching '((e|ep)\.?[0-9][0-9]?)|(x[0-9][0-9]?)' | sed 's/\(E\.\?\|Ep\.\?\)\|x//I')"
-    #Strip leading zero
-    Sxx="${Sxx#0}"
-    Exx="${Exx#0}"
-  else
-    debug "No Season & Episode number information is available."
-    return 1
-  fi
-  #Single digit episode and show names are not allowed Ex and Sx replaced with Sxx Exx
-  if (( Sxx < 10 )); then Sxx="S0$Sxx"; else Sxx="S$Sxx"; fi
-  if (( Exx < 10 )); then Exx="E0$Exx"; else Exx="E$Exx"; fi
-  inform "Found Season ($Sxx) & Episode ($Exx) information."
-  return 0
+
+  set_sxxexx_season_episode_numbers
+  return "$?"
 }
 
 #If we already have season and episode info, remove it from the Plot field.
@@ -3214,6 +3228,7 @@ set_sxxexx_absolute_episode_number(){
   if ((Exx < 10)); then Exx="E0$Exx"; else Exx="E$Exx"; fi
   if ((Sxx < 10)); then Sxx="S0$Sxx"; else Sxx="S$Sxx"; fi
   inform "EPISODE:$EpisodeSubtitle EPISODE NUMBER:$AbsoluteEpisodeNumber $Sxx$Exx WITH CONFIDENCE: $EpisodeConfidenceRating"
+  HasSxxExx='1'
 }
 
 ######################### MESSAGE/REPORT FUNCTIONS ###########################
@@ -3280,6 +3295,7 @@ msg_operation_summary(){
   informcont "NewShowName=$NewShowName-"
   debugcont  "AbsoluteEpisodeNumber=$AbsoluteEpisodeNumber-"
   informcont "EpisodeSubtitle=$EpisodeSubtitle-"
+  informcont "HasSxxExx=HasSxxExx-"
   informcont "Sxx=$Sxx- Exx=$Exx-"
   informcont "MoveFileSize=$MoveFileSize MB"
   informcont "ConfidenceRating=$ConfidenceRating-"
@@ -4105,7 +4121,7 @@ generate_episode_nfo(){
     printf '%b\n' "\t$basetitle -Categoric</title>" >> "$MoveDir/$ShowFileName.nfo"
   fi
 
-  if [ "$HasSxxExx" = "1" ] ; then
+  if [[ "$HasSxxExx" = '1' ]]; then
     {
       printf '%b\n' "\t<season>$Sxx</season>"
       printf '%b\n' "\t<episode>$Exx</episode>"
@@ -5948,8 +5964,7 @@ fi
 #      sense for the things trying to set SxxExx...
 
 #If we already have Sxx and Exx from MythTV-DB, use them. If we also had a Subtitle, then do some verification.
-# Reversed sense of match: [[ -z "$Sxx" || "$Sxx" =~ ^(S00|S)$ || -z "$Exx" || "$Exx" =~ ^(E00|E)$ ]]
-if [[ "$Sxx" != "S" && -n "$Sxx" && "$Sxx" != "S00" && "$Exx" != "E" && -n "$Exx" && "$Exx" != "E00" ]] ; then
+if [[ "$HasSxxExx" = '1' ]] ; then
   #TODO: If the confidence rating from the above is good, and we have an
   #  AbsoluteEpisodeNumber then use it to validate the Sxx, Exx & Subtitle from
   #  the MythTV-DB.
@@ -5984,12 +5999,9 @@ fi
 #If it's not tagged as a Movie but lacking SxxExx and then as a fallback check storagegroup in case it's a Movie we missed
 if [[ "$StorageGroupFallback" = 'Enabled' ]]; then
   debug "StorageGroupFallback is Enabled"
-  #TODO: Make a HasSxxExx variable that is set and used consistently, #NOTE: there is already one but it's weirdly used
-  #TODO: S00 can be a legitimate season number, need to drop "$Sxx" = "S00", the TODO for a HasSxxExx variable should resolve this too
-  #      if [[ -z "$Sxx" || "$Sxx" =~ ^(S00|S)$ || -z "$Exx" || "$Exx" =~ ^(E00|E)$ ]]; then HasSxxExx=0; else HasSxxExx=1; fi
-  if [ "$m2kProgramIDCheck" != "MV" ] && [[ "$Sxx" = "S" || -z "$Sxx" || "$Sxx" = "S00" || "$Exx" = "E" || -z "$Exx" || "$Exx" = "E00" ]] ; then
+  if [[ "$m2kProgramIDCheck" != 'MV' && "$HasSxxExx" != '1' ]] ; then
     if grep -iq '\(Movies*\|Films*\)' <<< "$StorageGroup" ; then
-      inform "GUESSING that this is a Movie based on being in storagegroup: $StorageGroup"
+      inform "GUESSING that this is a Movie based on being in storagegroup: '$StorageGroup'"
       m2kProgramIDCheck="MV"
       ProgramIDType="Movie"
       ((--ConfidenceRating)) #Decrement confidence, because this is a guess.

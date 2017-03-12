@@ -226,10 +226,9 @@ TargetPathIsInputPath='Disabled'
 #processed. Options: ['Enabled'(DEFAULT)|'Disabled']
 ShowStopper='Enabled'
 
-#TODO: Review. Consider renaming this. DIR_TRACKING_CLEANUP='Enabled'
-#DirTracking will check for and remove the folders created by myth2kodi
+#DIR_TRACKING_CLEANUP will check for and remove the folders created by myth2kodi
 #Options: ['Enabled'(DEFAULT)|'Disabled']
-DirTracking='Enabled'
+DIR_TRACKING_CLEANUP='Enabled'
 
 #FailSafe mode will enable symlinks to be formed in FailSafeDir if the move or
 #symlink operation fails. Options: Enabled|Disabled
@@ -1017,7 +1016,7 @@ validate_settings(){
   #Check all Enabled|Disabled switches are set correctly.
   local -a switch_user_settings
   switch_user_settings=( 'SYMLINK' 'TRACKING' 'TargetPathIsInputPath'        \
-                         'FailSafeMode' 'DirTracking' 'StorageGroupFallback' \
+                         'FailSafeMode' 'DIR_TRACKING_CLEANUP' 'StorageGroupFallback' \
                          'PlotMatchFallback' 'Database' 'ShowStopper'        \
                          'CommercialMarkup' 'CommercialMarkupCleanup'        \
                          'DailyReport' 'Notify' 'KODIUpdate' 'KODIClean'     \
@@ -1639,7 +1638,7 @@ m2k_maintenance(){
   fi
 
   #Check if folders are empty and remove dir if needed and it was created by myth2kodi
-  if [[ "$DirTracking" = 'Enabled' && -f "$m2kdir/dir.tracking" ]]; then
+  if [[ "$DIR_TRACKING_CLEANUP" = 'Enabled' && -f "$m2kdir/dir.tracking" ]]; then
     inform "PERFORMING CLEANUP OF EMPTY DIRECTORIES."
     local SORTED_DIR_TRACKING_FILE
     SORTED_DIR_TRACKING_FILE="$(mktemp "$M2K_TMPDIR"/m2k_sorted_dir_tracking-XXXX)"

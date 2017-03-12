@@ -489,7 +489,13 @@ make_customisations(){
     [[ "${PIPESTATUS[0]}" != '0' ]] && return 1
   fi
 
-  #Set the callers user-name as the Librarian
+  #Set the callers user-name as the default Librarian in myth2kodi script file.
+  debug "Setting 'Librarian' in myth2kodi.conf to: '$CALLER'."
+  sed -i "s|^Librarian='mythtv'|Librarian='$CALLER'|" "$M2K_INSTALL_MYTH2KODI_FILE" 2>&1 | err_pipe "${FUNCNAME[0]}(): "
+  [[ "${PIPESTATUS[0]}" != '0' ]] && return 1
+
+
+  #Set the callers user-name as the Librarian in install's version of myth2kodi.conf.
   if [[ "${CREATE_WORKING_DIR,,}" = "y" ]]; then
     debug "Setting 'Librarian' in myth2kodi.conf to: '$CALLER'."
     sed -i "s|#\?Librarian='mythtv'|Librarian='$CALLER'|" "$M2K_INSTALL_CONF_FILE" 2>&1 | err_pipe "${FUNCNAME[0]}(): "

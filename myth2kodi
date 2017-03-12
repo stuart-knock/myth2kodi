@@ -2574,7 +2574,7 @@ check_m2k_database_up_to_date(){
     #      the v1 api... Need to implement access to the new JSON based v2 api...
     #      See:
     #          https://api.thetvdb.com/swagger
-    warn "${FUNCNAME[0]}(): Bypassing TheTVDB LatUpdated checks... Forcing update. See #TODO: Line $LINENO"
+    warn "${FUNCNAME[0]}(): Bypassing TheTVDB LastUpdated checks... Forcing update. See #TODO: Line $LINENO"
     return 1
     ##########################################################################
     curl -L -s -m"$Timeout" "${updates_site}?type=all&time=$LastUpdatedTVDB" > "$dbdir/UpdatesList.txt"

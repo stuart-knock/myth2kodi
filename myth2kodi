@@ -2625,7 +2625,7 @@ download_series_info(){
 
   #Validate that the show has at least one EpisodeName tag and is a valid download before clobbering our old download.
   if grep -q "EpisodeName" "$dbdir/$NewShowName.xmlTest"; then
-    printf '%s\n' "$(date +%s)" > "$dbdir/lastupdated.time" && chmod 666 "$dbdir/lastupdated.time"
+    printf '%s\n' "$(date +%s)" > "$dbdir/lastupdated.time" && chmod 644 "$dbdir/lastupdated.time"
     #Check the new info is actually new, if there was no old info then it must be new.
     if [ -f "$dbdir/$NewShowName.xml" ] ; then
       diff "$dbdir/$NewShowName.xmlTest" "$dbdir/$NewShowName.xml" &> /dev/null
@@ -2742,12 +2742,13 @@ download_series_info(){
         done
       fi
 
-      chmod 666 "$dbdir/$NewShowName.actualEname.txt"
-      chmod 666 "$dbdir/$NewShowName.Ename.txt"
-      chmod 666 "$dbdir/$NewShowName.FAired.txt"
-      chmod 666 "$dbdir/$NewShowName.S.txt"
-      chmod 666 "$dbdir/$NewShowName.E.txt"
-      chmod 666 "$dbdir/$NewShowName.Plot.txt"
+      #Set permission 644 (rw-r--r--)
+      chmod 644 "$dbdir/$NewShowName.actualEname.txt"
+      chmod 644 "$dbdir/$NewShowName.Ename.txt"
+      chmod 644 "$dbdir/$NewShowName.FAired.txt"
+      chmod 644 "$dbdir/$NewShowName.S.txt"
+      chmod 644 "$dbdir/$NewShowName.E.txt"
+      chmod 644 "$dbdir/$NewShowName.Plot.txt"
       ProcessingSuccesful=1
 
     elif [ "$GotNewInformation" = "2" ]; then
@@ -2776,6 +2777,7 @@ make_m2k_database_dir(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   if [[ ! -d "$m2kdir/$NewShowName" ]]; then
     mkdir "$m2kdir/$NewShowName"
+    #Set permission 755 (rwxr-xr-x)
     chmod 755 "$m2kdir/$NewShowName"
     inform "Created myth2kodi Database Folder: $m2kdir/$NewShowName"
   fi
@@ -4198,7 +4200,7 @@ success_postprocessing(){
   #Move comskip data to proper folder and add created.tracking entry.
   if [[ "$CommercialMarkup" = "Created" ]]; then
     mv "$MARKUPFRAMES_TMP" "$MoveDir/$ShowFileName.txt" 2>&1 | err_pipe "${FUNCNAME[0]}(): "
-    chmod go+r "$MoveDir/$ShowFileName.txt" 2>&1 | err_pipe "${FUNCNAME[0]}(): "
+    chmod 664 "$MoveDir/$ShowFileName.txt" 2>&1 | err_pipe "${FUNCNAME[0]}(): "
     if [[ "$TRACKING" != 'Disabled' ]]; then
       printf '%s\n' "'$MoveDir/$ShowFileName.txt' '$MoveDir/$ShowFileName.$OriginalExt'" >> "$m2kdir/created.tracking"
     fi
@@ -4237,7 +4239,7 @@ add_doover(){
   #Create the doover.sh file if it doesn't already exist.
   if [[ ! -f "$m2kdir/doover.sh" ]]; then
     printf '%s\n' "rm -f '$m2kdir/doover.sh'" >> "$m2kdir/doover.sh"
-    chmod 666 "$m2kdir/doover.sh"
+    chmod 644 "$m2kdir/doover.sh"
   fi
 
   if [[ "$RequiresDoover" = "1" ]]; then
@@ -4288,7 +4290,7 @@ add_undo(){
   #Create the undo.sh file if it doesn't already exist.
   if [[ ! -f "$m2kdir/undo.sh" ]]; then
     printf '%s\n' "rm -f '$m2kdir/undo.sh'" >> "$m2kdir/undo.sh"
-    chmod 666 "$m2kdir/undo.sh"
+    chmod 644 "$m2kdir/undo.sh"
   fi
 
   if [[ "$PROCESS_RECORDING_MODE" = 'MOVE' && "$SYMLINK" = 'Enabled' ]]; then
@@ -4353,9 +4355,8 @@ failsafe(){
 set_group_permission(){
   #TODO: review... Why?
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  #Add read and write permissions for the group to the moved recording.
-  chmod g=rw "$MoveDir/$ShowFileName.$OriginalExt"
-  #TODO:#NOTE: the above command is slightly inconsistent with the comment as = also implies removal of any unmentioned attributes.
+  #Set permission 664 (rw-rw-r--)
+  chmod 664 "$MoveDir/$ShowFileName.$OriginalExt"
   return "$?"
 }
 
@@ -5570,7 +5571,8 @@ recreate_comskip(){
     #Move the comskip file into place
     inform "Moving new comskip file to: ${ShowComSkip}"
     mv "$MARKUPFRAMES_TMP" "$ShowComSkip" 2>&1 | err_pipe "${FUNCNAME[0]}(): "
-    chmod go+r "$ShowComSkip" 2>&1 | err_pipe "${FUNCNAME[0]}(): "
+    #Set permission 664 (rw-rw-r--)
+    chmod 664 "$ShowComSkip" 2>&1 | err_pipe "${FUNCNAME[0]}(): "
     return "${PIPESTATUS[0]}"
 
   elif [[ -d "$inputarg" ]]; then
@@ -6168,8 +6170,8 @@ if [[ "$PROCESS_RECORDING_MODE" = 'MOVE' ]]; then
         [[ -L "$InputPath" ]] || err "Failed to Create symlink: FILESYSTEM MAY NOT SUPPORT SYMLINKS"
       #If SYMLINK=Disabled, remove database entries
       elif [[ "$SYMLINK" = 'Disabled' ]]; then
-        #Set permissions as rwxrwxr-x (775) #TODO: probably should just be rw-rw-r-- (664)
-        chmod 775 "$MoveDir/$ShowFileName.$OriginalExt"
+        #Set permissions as rw-rw-r-- (664)
+        chmod 664 "$MoveDir/$ShowFileName.$OriginalExt"
         if [[ "$RequiresDoover" != '1' ]]; then
           debug "SYMLINK='Disabled' and does not require doover, so MythTV-DB info will be removed."
           RECORDING_NAME="$InputFileBasename" #Set here so we won't needlessly run identify_recording_files().

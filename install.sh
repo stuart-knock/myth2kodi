@@ -49,8 +49,7 @@ DEVELOPMENT_INSTALL='Disabled'
 #How to go about the installation. The default 'Interactive' mode will give you
 #the option of switching to the 'Quick' mode when you run the install script.
 #The 'Quick' mode just does a default install with no questions or feedback
-#about what is happening unless there is an error -- a log file is still written
-#in 'Quick' mode.
+#about what is happening unless there is an error -- a log file is still written.
 #Options: ['Interactive'(DEFAULT)|'Quick']
 INSTALL_TYPE='Interactive'
 
@@ -333,8 +332,7 @@ get_install_type(){
   printf '     %s\n' '1. Interactive (Preferred) -- Informs you of progress, provides'
   printf '                 %s\n' 'the option to select non-default install location,'
   printf '                 %s\n\n' 'as well as some other basic configuration.'
-  printf '     %s\n' '2. Quick -- Do default install, no questions or feedback, does'
-  printf '                 %s\n\n' 'not create a myth2kodi working directory.'
+  printf '     %s\n\n' '2. Quick -- Do default install, no questions or feedback.'
 
   #Install mode selection
   local install_type_code
@@ -629,6 +627,8 @@ if [[ "$INSTALL_TYPE" != 'Quick' ]]; then
   get_working_dir_location
   [[ "$?" != '0' ]] && { printf '%s\n' "Failed getting working dir, see '$LOGFILE'."; exit 1 ; }
 else
+  #Default to working directory creation/set-up
+  CREATE_WORKING_DIR='y'
   M2K_WORKING_DIRECTORY="$HOME/.myth2kodi"
 fi
 
@@ -642,11 +642,10 @@ make_customisations
 install_scripts
 [[ "$?" != '0' ]] && { printf '%s\n' "Failed installing scripts, see '$LOGFILE'."; exit 1 ; }
 
-if [[ "$INSTALL_TYPE" != 'Quick' ]]; then
-  #If working directory set-up was requested then do it...
-  setup_working_dir
-  [[ "$?" != '0' ]] && { printf '%s\n' "Failed to setup working directory, see '$LOGFILE'."; exit 1 ; }
-fi
+#If working directory set-up was requested then do it...
+setup_working_dir
+[[ "$?" != '0' ]] && { printf '%s\n' "Failed to setup working directory, see '$LOGFILE'."; exit 1 ; }
+
 
 ################################# Clean-Up #################################
 

@@ -540,7 +540,7 @@ LOGTYPE='filestderr'
 exit_job(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   debugcont "Called with $# arguments"
-  local -i i=0; local var; for var in "$@"; do ((++i)); debugcont "arg $i = ${var}"; done
+  local -i i=0; local var; for var in "$@"; do ((++i)); debugcont "arg $i = '${var}'"; done
   local jobtype="$1"
   local ERR_HEADER="${FUNCNAME[0]}() CALLED FROM: ${FUNCNAME[1]}()."
   local -i exitstatus
@@ -791,7 +791,7 @@ m2k_init(){
   fi
 
   debug "myth2kodi script initialisation complete."
-  debug "Running myth2kodi as $CALLER"
+  debug "Running myth2kodi as '$CALLER'"
 
   #Some excessive logging for extra buggy bugs.
   ((LOGLEVEL>=4)) && env | err_pipe 'env:  '
@@ -1129,7 +1129,7 @@ validate_args(){
 #file or if we have already processed it, otherwise returns 0.
 pre_process_check(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  debugcont "arg1: $1"
+  debugcont "arg1: '$1'"
   #Takes a single argument
   (( "$#" > 1 )) && { err "${FUNCNAME[0]}() only takes one arg."; return 1 ; }
   local FILE="$1"
@@ -1139,9 +1139,9 @@ pre_process_check(){
 
   #Is FILE named like a MythTV recording
   if [[ "$FILE" =~ $RECPATTERN ]]; then #NOTE: Don't quote the RHS
-    debug "Looks ok, FILE is named like a MythTV recording: $FILE"
+    debug "Looks ok, FILE is named like a MythTV recording: '$FILE'"
   else
-    NOTIFY_MSG="This does not look like a MythTV recording: $FILE"
+    NOTIFY_MSG="This does not look like a MythTV recording: '$FILE'"
     err "${FUNCNAME[0]}() CALLED FROM: ${FUNCNAME[1]}(): $NOTIFY_MSG"
     EXIT_JOB_TYPE='FileIsNotRecording'
     return 1
@@ -1178,7 +1178,7 @@ check_write(){
   #TODO: Do we really need to write a dummy file here??? Wouldn't file comparisons using -e -d -r -w etc be sufficient...
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   debugcont "Called with $# arguments"
-  local -i i=0 ; local var ; for var in "$@"; do ((++i)) ; debugcont "arg $i = ${var}" ; done
+  local -i i=0 ; local var ; for var in "$@"; do ((++i)) ; debugcont "arg $i = '${var}'" ; done
   if [[ -n "$2" ]]; then
     if [[ -n "$1" ]]; then
       if [[ -d "$3" ]]; then
@@ -1223,8 +1223,8 @@ check_write(){
 #has sufficient read-write permissions. If not, exit with a descriptive message.
 check_path_permission(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  debugcont "PATH_TO_CHECK = $1"
-  debugcont "REQUIRED_PERMISSION = $2"
+  debugcont "PATH_TO_CHECK = '$1'"
+  debugcont "REQUIRED_PERMISSION = '$2'"
   (( "$#" > 2 )) && err "${FUNCNAME[0]}() only takes two args."
   local PATH_TO_CHECK
   local REQUIRED_PERMISSION
@@ -1237,7 +1237,7 @@ check_path_permission(){
     debug "Setting REQUIRED_PERMISSION='rwx'"
     REQUIRED_PERMISSION='rwx'
   fi
-  debug "Checking '$REQUIRED_PERMISSION' permissions for: $PATH_TO_CHECK"
+  debug "Checking '$REQUIRED_PERMISSION' permissions for: '$PATH_TO_CHECK'"
 
   #First check that the file or path actually exists
   if [[ ! -e "$PATH_TO_CHECK" ]]; then
@@ -1263,11 +1263,11 @@ check_path_permission(){
 
   #Log some ownership related info
   if [[ "$PATH_OWNER" = "$Librarian" ]]; then
-    debug "Good start: $Librarian owns it."
+    debug "Good start: '$Librarian' owns it."
   elif id -nG "$Librarian" | grep -qw "$PATH_GROUP"; then
-    debug "May be ok: $Librarian is at least a member of the same group."
+    debug "May be ok: '$Librarian' is at least a member of the same group."
   else
-    warn "${FUNCNAME[0]}(): $Librarian neither owns nor is a member of the group for $PATH_TO_CHECK."
+    warn "${FUNCNAME[0]}(): '$Librarian' neither owns nor is a member of the group for '$PATH_TO_CHECK'."
   fi
 
   #If we require read permission then check for it
@@ -1280,9 +1280,9 @@ check_path_permission(){
 
   #If we require read permission then check for it
   if [[ "$REQUIRED_PERMISSION" == *'w'* && ! -w "$PATH_TO_CHECK" ]]; then
-    NOTIFY_MSG="Cannot write: $PATH_TO_CHECK"
+    NOTIFY_MSG="Cannot write: '$PATH_TO_CHECK'"
     err "${FUNCNAME[0]}() CALLED FROM: ${FUNCNAME[1]}(): $NOTIFY_MSG"
-    errcont "USER NAME:$CALLER ATTEMPTED TO MODIFY A $PATH_OWNER OWNED FILE."
+    errcont "USER NAME:'$CALLER' ATTEMPTED TO MODIFY A '$PATH_OWNER' OWNED FILE."
     errcont "To preserve file permissions this has been prevented."
     EXIT_JOB_TYPE='PermissionError'
     return 1
@@ -1291,11 +1291,11 @@ check_path_permission(){
   #If we require execution permission then check for it
   if [[ "$REQUIRED_PERMISSION" == *'x'* && ! -x "$PATH_TO_CHECK" ]]; then
     if [[ -f "$PATH_TO_CHECK" ]]; then
-      NOTIFY_MSG="Cannot execute: $PATH_TO_CHECK"
+      NOTIFY_MSG="Cannot execute: '$PATH_TO_CHECK'"
       err "${FUNCNAME[0]}() CALLED FROM: ${FUNCNAME[1]}(): $NOTIFY_MSG"
       EXIT_JOB_TYPE='PermissionError'
     elif [[ -d "$PATH_TO_CHECK" ]]; then
-      NOTIFY_MSG="Directories need to be executable for access: $PATH_TO_CHECK"
+      NOTIFY_MSG="Directories need to be executable for access: '$PATH_TO_CHECK'"
       err "${FUNCNAME[0]}() CALLED FROM: ${FUNCNAME[1]}(): $NOTIFY_MSG"
       EXIT_JOB_TYPE='PermissionError'
     fi
@@ -1303,7 +1303,7 @@ check_path_permission(){
   fi
 
   #If we have made it this far then all is well
-  debug "Permissions ok for: $PATH_TO_CHECK"
+  debug "Permissions ok for: '$PATH_TO_CHECK'"
   return 0
 }
 
@@ -1364,7 +1364,7 @@ check_filesystem(){
   check_write "5"             "$TempDirFreeSpace"  "$M2K_TMPDIR"
   TempDirWritable="$?" ; ((filesystem_write_state+=TempDirWritable))
 
-  debug "filesystem_write_state=$filesystem_write_state"
+  debug "filesystem_write_state='$filesystem_write_state'"
   ((filesystem_write_state != 0)) && return 1
   return 0
 }
@@ -1379,16 +1379,16 @@ identify_recording_files(){
     #Find the recording file and any link to it.
     find_file_link_pairs "$inputarg"
     [[ "$?" != 0 ]] && return "$?"
-    debug "RECORDING_LINK: $RECORDING_LINK"
-    debug "RECORDING_LINK_OWNER: $RECORDING_LINK_OWNER"
-    debug "RECORDING_FILE: $RECORDING_FILE"
-    debug "RECORDING_FILE_OWNER: $RECORDING_FILE_OWNER"
+    debug "RECORDING_LINK: '$RECORDING_LINK'"
+    debug "RECORDING_LINK_OWNER: '$RECORDING_LINK_OWNER'"
+    debug "RECORDING_FILE: '$RECORDING_FILE'"
+    debug "RECORDING_FILE_OWNER: '$RECORDING_FILE_OWNER'"
 
     #Find the MythTV recording file name and its path.
     set_recording_name "$inputarg"
     [[ "$?" != 0 ]] && return "$?"
-    debug "RECORDING_PATH: $RECORDING_PATH"
-    debug "RECORDING_NAME: $RECORDING_NAME"
+    debug "RECORDING_PATH: '$RECORDING_PATH'"
+    debug "RECORDING_NAME: '$RECORDING_NAME'"
     InputPath="$RECORDING_PATH"
     InputFileBasename="$RECORDING_NAME"
   else
@@ -1409,7 +1409,7 @@ find_file_link_pairs(){
   #Takes a single argument
   (( "$#" > 1 )) && { err "${FUNCNAME[0]}() only takes one arg."; return 1 ; }
   local FILE="$1"
-  [[ -e "$FILE" ]] || { err "${FUNCNAME[0]}(): Does not exist: $FILE"; return 1; }
+  [[ -e "$FILE" ]] || { err "${FUNCNAME[0]}(): Does not exist: '$FILE'"; return 1; }
   #A regex that should match MythTVs file naming, for the 21st century.
   local RECPATTERN='[0-9]{4}_20[0-9]{2}[0-1][0-9][0-3][0-9][0-2][0-9][0-5][0-9]{3}'
   #Is FILE a link or a file
@@ -1457,12 +1457,12 @@ find_file_link_pairs(){
     #TODO: realpath may be heading toward deprecation, so maybe: "$(cd "$(dirname "$LINK_NAME")" ; pwd)". THough not sure about the robustness of dirname here...
     (( found == 0 )) && { RECORDING_LINK="$(realpath --no-symlinks "$LINK_NAME")"; return 0; }
     if [[ ! "$RECORDING_FILE" =~ $RECPATTERN ]]; then
-      warn "${FUNCNAME[0]}(): No link found to: $RECORDING_FILE"
+      warn "${FUNCNAME[0]}(): No link found to: '$RECORDING_FILE'"
       warncont "Assuming recording has been disconnected from MythTV."
       RECORDING_LINK=''
       return 0
     fi
-    warn "${FUNCNAME[0]}(): Cannot find link to: $RECORDING_FILE"
+    warn "${FUNCNAME[0]}(): Cannot find link to: '$RECORDING_FILE'"
     warncont "This probably means that the file was not successfully processed by myth2kodi."
     RECORDING_LINK=''
     return 0
@@ -1477,7 +1477,7 @@ find_file_link_pairs(){
 #we find the corresponding MythTV recording name.
 set_recording_name(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  debugcont "arg1: $1"
+  debugcont "arg1: '$1'"
   #Takes a single argument
   (( "$#" > 1 )) && { err "${FUNCNAME[0]}() only takes one arg."; return 1 ; }
   #A regex that should match MythTVs file naming, for the 21st century.
@@ -1545,7 +1545,7 @@ log_rotation(){
         inform "Moved old $FILE_NAME to ${ARCHIVE_NAME}.gz"
         ARCHIVED_FILE='True'
       else
-        err "${FUNCNAME[0]}(): Errors archiving $FILE_NAME: mv=$mvstatus; gzip=$gzipstatus"
+        err "${FUNCNAME[0]}(): Errors archiving '$FILE_NAME': mv='$mvstatus'; gzip='$gzipstatus'"
         ARCHIVED_FILE='False'
       fi
     fi
@@ -1619,15 +1619,15 @@ m2k_maintenance(){
         fi
       else
         if [[ -d "$(dirname "$SupportFile")" ]]; then
-          inform "REMOVING ORPHAN FILE: $SupportFile"
+          inform "REMOVING ORPHAN FILE: '$SupportFile'"
           rm -f "$SupportFile"
           printf '%s\n' "$line" >> "$m2kdir/created.tracking.old"
         else
-          warn "${FUNCNAME[0]}(): FOLDER DISCONNECTED: $SupportFile"
+          warn "${FUNCNAME[0]}(): FOLDER DISCONNECTED: '$SupportFile'"
           if (( removedead != 1 )); then
             printf '%s\n' "$line" >> "$m2kdir/created.tracking2"
           else
-            inform "REMOVING FROM FUTURE SEARCHES: $line"
+            inform "REMOVING FROM FUTURE SEARCHES: '$line'"
             printf '%s\n' "$line" >> "$m2kdir/created.tracking.old"
           fi
         fi
@@ -1643,7 +1643,7 @@ m2k_maintenance(){
     local SORTED_DIR_TRACKING_FILE
     SORTED_DIR_TRACKING_FILE="$(mktemp "$M2K_TMPDIR"/m2k_sorted_dir_tracking-XXXX)"
     [[ "$?" != 0 ]] && { err "${FUNCNAME[0]}(): Failed to create temporary sorted-dir-tracking file." ; return 1 ; }
-    debug "Created a temporary sorted dir,tracking file: $SORTED_DIR_TRACKING_FILE"
+    debug "Created a temporary sorted dir,tracking file: '$SORTED_DIR_TRACKING_FILE'"
     #Reverse dictionary sort the tracked dirs, should have the effect of depth first.
     sort -dr "$m2kdir/dir.tracking" > "$SORTED_DIR_TRACKING_FILE"
     local CONTAINS
@@ -1654,7 +1654,7 @@ m2k_maintenance(){
         #Is there something in the directory other than 'tvshow.nfo'
         CONTAINS="$(find "$dirtocheck" -mindepth 1 ! -name 'tvshow.nfo' -print -quit)"
         if [[ -z "$CONTAINS" ]]; then
-          inform "REMOVING ORPHAN FOLDER: $dirtocheck"
+          inform "REMOVING ORPHAN FOLDER: '$dirtocheck'"
           [[ -f "$dirtocheck/tvshow.nfo" ]] && rm -f "$dirtocheck/tvshow.nfo"
           rmdir "$dirtocheck"
           printf '%s\n' "$dirtocheck" >> "$m2kdir/dir.tracking.old"
@@ -1664,7 +1664,7 @@ m2k_maintenance(){
         fi
       else
         warn "${FUNCNAME[0]}(): Tracked directory does not seem to be a directory."
-        warncont "Continuing to track (just in case): $dirtocheck"
+        warncont "Continuing to track (just in case): '$dirtocheck'"
         printf '%s\n' "$dirtocheck" >> "$m2kdir/dir.tracking2"
       fi
     done < "$SORTED_DIR_TRACKING_FILE"
@@ -1692,7 +1692,7 @@ m2k_maintenance(){
 process_cleanup_file(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   debugcont "Called with $# arguments"
-  local -i i=0; local var; for var in "$@"; do ((++i)); debugcont "arg $i = ${var}"; done
+  local -i i=0; local var; for var in "$@"; do ((++i)); debugcont "arg $i = '${var}'"; done
   local CLEANUP_FILE
   local -i ARCHIVE_LIFE
   local ARCHIVE_DATE
@@ -1709,7 +1709,7 @@ process_cleanup_file(){
     #Convert it to an integer
     ARCHIVE_DATE="$(date -d "$ARCHIVE_DATE" +"%Y%m%d")"
     if ((ARCHIVE_DATE < EXPIRE_OLDER_THAN)); then
-      debug "Removing old archive file: $line"
+      debug "Removing old archive file: '$line'"
       rm -f "$line"
     fi
   done < "$CLEANUP_FILE"
@@ -1778,7 +1778,7 @@ m2k_cleanse(){
 
   #Archive our duplicates.log.
   if [[ -f "$DuplicatesFile" ]]; then
-    debug "Moving $DuplicatesFile to ${DuplicatesFile%.*}_${FileNameNow}.log."
+    debug "Moving '$DuplicatesFile' to '${DuplicatesFile%.*}_${FileNameNow}.log'."
     mv "$DuplicatesFile" "${DuplicatesFile%.*}_${FileNameNow}.log"
   fi
 }
@@ -1788,26 +1788,26 @@ m2k_cleanse(){
 #Helper function for MySQL access to MythTV-DB.
 dbselect(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  debugcont "arg 1 = $1"
+  debugcont "arg 1 = '$1'"
   mysql -u"$MySQLuser" -p"$MySQLpass" -e "USE $MySQLMythDb ; SELECT $1 FROM recorded WHERE basename LIKE '$InputFileBasename' ; "
 }
 
 #Use mysql commands to get MythTV-DB entry for the current recording.
 get_mythtvdb_info_mysql(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  debugcont "m2kdir: $m2kdir"
-  debugcont "InputFileBasename: $InputFileBasename"
-  debugcont "MySQLMythDb: $MySQLMythDb"
-  debugcont "MySQLuser: $MySQLuser"
-  debugcont "MySQLpass: $MySQLpass"
-  debugcont "InputTitle: $InputTitle"
-  debugcont "InputSubtitle: $InputSubtitle"
-  debugcont "InputSeasonNum: $InputSeasonNum"
-  debugcont "InputEpisodeNum: $InputEpisodeNum"
+  debugcont "m2kdir: '$m2kdir'"
+  debugcont "InputFileBasename: '$InputFileBasename'"
+  debugcont "MySQLMythDb: '$MySQLMythDb'"
+  debugcont "MySQLuser: '$MySQLuser'"
+  debugcont "MySQLpass: '$MySQLpass'"
+  debugcont "InputTitle: '$InputTitle'"
+  debugcont "InputSubtitle: '$InputSubtitle'"
+  debugcont "InputSeasonNum: '$InputSeasonNum'"
+  debugcont "InputEpisodeNum: '$InputEpisodeNum'"
 
   #Obtain MythTV Database Information
   inform "Accessing MythTV DataBase Using mysql Commands:"
-  inform "Attempting to pull database information on $InputFileBasename"
+  inform "Attempting to pull database information on '$InputFileBasename'"
   #NOTE: Previously the info retrieved from the MythTV-DB was also passed through additional sed commands
   #  where "/", the thing being selected (eg "title") and occasionally spaces were stripped. At least for
   #  mythtv 0.27.5 and "mysql Ver 15.1 Distrib 10.0.22-MariaDB, for Linux (x86_64) using readline 5.2",
@@ -1872,20 +1872,20 @@ get_mythtvdb_info_mysql(){
 #Use python bindings to get MythTV-DB entry for the current recording.
 get_mythtvdb_info_pythonbindings(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  debugcont "m2kdir: $m2kdir"
-  debugcont "binpath: $binpath"
-  debugcont "InputFileBasename: $InputFileBasename"
-  debugcont "DBPin: $DBPin"
-  debugcont "DBHostName: $DBHostName"
-  debugcont "MySQLMythDb: $MySQLMythDb"
-  debugcont "MySQLuser: $MySQLuser"
-  debugcont "MySQLpass: $MySQLpass"
-  debugcont "InputTitle: $InputTitle"
-  debugcont "InputSubtitle: $InputSubtitle"
-  debugcont "InputSeasonNum: $InputSeasonNum"
-  debugcont "InputEpisodeNum: $InputEpisodeNum"
+  debugcont "m2kdir: '$m2kdir'"
+  debugcont "binpath: '$binpath'"
+  debugcont "InputFileBasename: '$InputFileBasename'"
+  debugcont "DBPin: '$DBPin'"
+  debugcont "DBHostName: '$DBHostName'"
+  debugcont "MySQLMythDb: '$MySQLMythDb'"
+  debugcont "MySQLuser: '$MySQLuser'"
+  debugcont "MySQLpass: '$MySQLpass'"
+  debugcont "InputTitle: '$InputTitle'"
+  debugcont "InputSubtitle: '$InputSubtitle'"
+  debugcont "InputSeasonNum: '$InputSeasonNum'"
+  debugcont "InputEpisodeNum: '$InputEpisodeNum'"
   inform "Accessing MythTV DataBase Using PythonBindings:"
-  inform "Attempting to pull database information on $InputFileBasename"
+  inform "Attempting to pull database information on '$InputFileBasename'"
 
   local pythonExitStatus
   local MTV_RECINFO_FILE
@@ -1939,7 +1939,7 @@ get_mythtvdb_info_pythonbindings(){
     value="$(tr -d \" <<< "$value")"
     #[[ "$equals" = "=" ]] && "mdb_$var=$value" && debugcont "mdb_$var$equals$value"
     #declare -r "mdb_$var"
-    [[ "$equals" = "=" ]] && declare "$var=$value" && debugcont "$var$equals$value"
+    [[ "$equals" = "=" ]] && declare "$var=$value" && debugcont "$var$equals'$value'"
   done < "$MTV_RECINFO_FILE"
 
   if [[ "$CommercialMarkup" = 'Enabled' ]]; then
@@ -1971,24 +1971,24 @@ get_mythtvdb_info_pythonbindings(){
 
   debug 'Setting the following variables based on MythTV-DB guide data:'
   #Import mythtv values into myth2kodi values, don't clobber myth2kodi args title, subtitle, season-number, or episode-number.
-  [[ -z "$InputTitle" ]]      && InputTitle="$title"        && debugcont "InputTitle=$title"
-  [[ -z "$InputSubtitle" ]]   && InputSubtitle="$subtitle"  && debugcont "InputSubtitle=$subtitle"
-  [[ -z "$InputSeasonNum" ]]  && InputSeasonNum="$season"   && debugcont "InputSeasonNum=$season"
-  [[ -z "$InputEpisodeNum" ]] && InputEpisodeNum="$episode" && debugcont "InputEpisodeNum=$episode"
+  [[ -z "$InputTitle" ]]      && InputTitle="$title"        && debugcont "InputTitle='$title'"
+  [[ -z "$InputSubtitle" ]]   && InputSubtitle="$subtitle"  && debugcont "InputSubtitle='$subtitle'"
+  [[ -z "$InputSeasonNum" ]]  && InputSeasonNum="$season"   && debugcont "InputSeasonNum='$season'"
+  [[ -z "$InputEpisodeNum" ]] && InputEpisodeNum="$episode" && debugcont "InputEpisodeNum='$episode'"
   #Support for the --movie flag
-  [[ -z "$ShowCategory" ]]    && ShowCategory="$category"   && debugcont "ShowCategory=$category"
+  [[ -z "$ShowCategory" ]]    && ShowCategory="$category"   && debugcont "ShowCategory='$category'"
 
   #redefine database var names into myth2kodi var names
-  MovieAirDate="$airdate"            && debugcont "MovieAirDate=$airdate"
-  OriginalAirDate="$originalairdate" && debugcont "OriginalAirDate=$originalairdate"
-  StorageGroup="$storagegroup"       && debugcont "StorageGroup=$storagegroup"
-  Stars="$stars"                     && debugcont "Stars=$stars"
-  Plot="$description"                && debugcont "Plot=$description"
-  LocalSeriesID="$seriesid"          && debugcont "LocalSeriesID=$seriesid"
-  ProgramID="$programid"             && debugcont "ProgramID=$programid"
-  ChanID="$chanid"                   && debugcont "ChanID=$chanid"
-  ShowStartTime="$starttime"         && debugcont "ShowStartTime=$starttime"
-  XMLTVGrabber="$xmltvgrabber"       && debugcont "XMLTVGrabber=$xmltvgrabber"
+  MovieAirDate="$airdate"            && debugcont "MovieAirDate='$airdate'"
+  OriginalAirDate="$originalairdate" && debugcont "OriginalAirDate='$originalairdate'"
+  StorageGroup="$storagegroup"       && debugcont "StorageGroup='$storagegroup'"
+  Stars="$stars"                     && debugcont "Stars='$stars'"
+  Plot="$description"                && debugcont "Plot='$description'"
+  LocalSeriesID="$seriesid"          && debugcont "LocalSeriesID='$seriesid'"
+  ProgramID="$programid"             && debugcont "ProgramID='$programid'"
+  ChanID="$chanid"                   && debugcont "ChanID='$chanid'"
+  ShowStartTime="$starttime"         && debugcont "ShowStartTime='$starttime'"
+  XMLTVGrabber="$xmltvgrabber"       && debugcont "XMLTVGrabber='$xmltvgrabber'"
 
   #If we're not in debug mode then clean-up the file written by mythdb_access
   if (( LOGLEVEL < 3 )) ; then
@@ -2029,15 +2029,15 @@ get_mythtvdb_info(){
 #Thanks to barney_1.
 delete_mythtv_database_entry_mysql(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  debug "InputPath: $InputPath"
-  debug "InputFileBasename: $InputFileBasename"
-  debug "MySQLuser: $MySQLuser"
-  debug "MySQLpass: $MySQLpass"
-  debug "MySQLMythDb: $MySQLMythDb"
+  debug "InputPath: '$InputPath'"
+  debug "InputFileBasename: '$InputFileBasename'"
+  debug "MySQLuser: '$MySQLuser'"
+  debug "MySQLpass: '$MySQLpass'"
+  debug "MySQLMythDb: '$MySQLMythDb'"
   #Make sure we got input arguments and file is valid
   if [[ ! -e "$InputPath" ]]; then
     #Remove recording entry from mysql database
-    inform "${FUNCNAME[0]}(): REMOVING: $InputFileBasename; THUMBNAILS; DATABASE ENTRIES."
+    inform "${FUNCNAME[0]}(): REMOVING: '$InputFileBasename'; THUMBNAILS; DATABASE ENTRIES."
     mysql -u"$MySQLuser" -p"$MySQLpass" -e "USE $MySQLMythDb ; DELETE FROM recorded WHERE basename LIKE '$InputFileBasename' ; "
     if [[ "$?" != 0 ]]; then
       err "${FUNCNAME[0]}(): Failed to delete DB entry for: $InputFileBasename"
@@ -2046,7 +2046,7 @@ delete_mythtv_database_entry_mysql(){
     #Remove thumbnails
     rm -f "$InputPath".*
   else
-    warn "${FUNCNAME[0]}(): File still exists: $InputPath"
+    warn "${FUNCNAME[0]}(): File still exists: '$InputPath'"
     warncont "Not removing MythTV-DB information."
     return 1
   fi
@@ -2229,13 +2229,13 @@ process_mythtvdb_sydfta(){
     local PossiblePlot
     PossiblePlot="$InputSubtitle"
     warn "${FUNCNAME[0]}(): InputSubtitle field from MythTV-DB appears to contain Plot information."
-    debug "Plot: $Plot"
-    debug "PossiblePlot: $PossiblePlot"
+    debug "Plot: '$Plot'"
+    debug "PossiblePlot: '$PossiblePlot'"
     warn "Resetting InputSubtitle to ''"
     InputSubtitle=''
     warn "Appending PossiblePlot to Plot."
     Plot="$Plot $PossiblePlot"
-    debug "Plot: $Plot"
+    debug "Plot: '$Plot'"
     debug "Full Plot match will almost certainly fail, though chunked match should still work."
   fi
 
@@ -2265,7 +2265,7 @@ process_mythtvdb_sydfta(){
   #If the information is already available, set the Sxx & Exx variables
   if [ "$m2kProgramIDCheck" = "EP" ]; then
     debug "The MythTV Guide data Plot before we messed with it:"
-    debugcont "Plot:$Plot"
+    debugcont "Plot:'$Plot'"
     get_sxxexx_from_plot
     remove_sxxexx_from_plot
     #If we haven't set a Subtitle yet, try and get one from $Plot
@@ -2275,7 +2275,7 @@ process_mythtvdb_sydfta(){
       remove_subtitle_from_plot
     fi
     debug "The MythTV Guide data Plot after we messed with it:"
-    debugcont "Plot:$Plot"
+    debugcont "Plot:'$Plot'"
   fi
 
   #Remove hashtag reference/s from the Plot field #TODO: Will probably need to check and extend this.
@@ -2359,10 +2359,10 @@ set_sxxexx_season_episode_numbers(){
 get_sxxexx_from_plot(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   #TODO: localise the SeasonEpisode variable, consider refactor the *_sxxexx_from_plot() functions.
-  debugcont "SeasonEpisode: $SeasonEpisode"
-  debugcont "InputSeasonNum: $InputSeasonNum"
-  debugcont "InputEpisodeNum: $InputEpisodeNum"
-  debugcont "Plot: $Plot"
+  debugcont "SeasonEpisode: '$SeasonEpisode'"
+  debugcont "InputSeasonNum: '$InputSeasonNum'"
+  debugcont "InputEpisodeNum: '$InputEpisodeNum'"
+  debugcont "Plot: '$Plot'"
   #TODO: Maybe add warning in the case of 4x4 in case it's not actually an SxxExx
   #If available use the season and episode fields from MythTV database, otherwise,
   #use or attempt to determine $SeasonEpisode
@@ -2455,9 +2455,9 @@ remove_cast_from_plot(){
   if [[ -n "$CastString" ]]; then
     warn "${FUNCNAME[0]}(): Plot field appears to contain Cast information, removing it to simplify subsequent processing."
     debug "Removing: '$CastString' from Plot."
-    debugcont "Plot:$Plot"
+    debugcont "Plot:'$Plot'"
     Plot="${Plot/$CastString/.}"
-    debugcont "New Plot:$Plot"
+    debugcont "New Plot:'$Plot'"
   fi
 }
 
@@ -2602,7 +2602,7 @@ check_m2k_database_up_to_date(){
 #myth2kodi's internal database files for the series.
 download_series_info(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  inform "Downloading Series: $SeriesID"
+  inform "Downloading Series: '$SeriesID'"
   local -i GotNewInformation=0
   local -i ProcessingSuccesful=0
   local dbdir="$m2kdir/$NewShowName"
@@ -2616,10 +2616,10 @@ download_series_info(){
   local tvmazeJsonFile="$dbdir/${NewShowName}_tvmaze.json"
   # to get the matching tvmaze id, then
   if ((tvmaze_id != 0)) ; then
-    debug "Found matchiong tvmaze id: $tvmaze_id"
+    debug "Found matchiong tvmaze id: '$tvmaze_id'"
     local tvmazeShowJson="http://api.tvmaze.com/shows/$tvmaze_id/episodes"
     [[ -f "$tvmazeJsonFile" ]] && mv "$tvmazeJsonFile" "$dbdir/${Today}_${NewShowName}_tvmaze.json"
-    debug "Getting new tvmaze show info from: $tvmazeShowJson"
+    debug "Getting new tvmaze show info from: '$tvmazeShowJson'"
     curl -L -s -m"$Timeout" "$tvmazeShowJson" > "$tvmazeJsonFile"
   fi
 
@@ -2635,7 +2635,7 @@ download_series_info(){
     fi
     if [ "$GotNewInformation" = "1" ] ; then
       #Clear out the old
-      inform "Downloaded new information for $NewShowName"
+      inform "Downloaded new information for '$NewShowName'"
       debug 'Cleaning up old information before processing.'
       test -f "$dbdir/$NewShowName.xml" && mv "$dbdir/$NewShowName.xml" "$dbdir/${Today}_$NewShowName.xml"
       mv "$dbdir/$NewShowName.xmlTest" "$dbdir/$NewShowName.xml"
@@ -2752,14 +2752,14 @@ download_series_info(){
       ProcessingSuccesful=1
 
     elif [ "$GotNewInformation" = "2" ]; then
-      err "${FUNCNAME[0]}(): UNEXPECTED ERROR comparing new to old information for $NewShowName"
+      err "${FUNCNAME[0]}(): UNEXPECTED ERROR comparing new to old information for '$NewShowName'"
       return 1
     elif [ "$GotNewInformation" = "0" ]; then
       inform "TheTVDB information for $NewShowName has not changed since last download."
       return 0
     fi
   else
-    warn "${FUNCNAME[0]}(): COULD NOT DOWNLOAD: $TheTVDBShowXML"
+    warn "${FUNCNAME[0]}(): COULD NOT DOWNLOAD: '$TheTVDBShowXML'"
   fi
   #check if files were created and generate message
   if ((ProcessingSuccesful == 1)) ; then
@@ -2810,9 +2810,9 @@ get_serieslinenumber_zap2itid(){
 #variable against show names returned by querying TheTVDB.
 get_serieslinenumber_showname_fuzzy(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  debugcont "ShowName: $ShowName"
-  debugcont "TMP_SHN_FILE: $TMP_SHN_FILE"
-  debugcont "serieslinenumber: $serieslinenumber"
+  debugcont "ShowName: '$ShowName'"
+  debugcont "TMP_SHN_FILE: '$TMP_SHN_FILE'"
+  debugcont "serieslinenumber: '$serieslinenumber'"
   #Some systems (Ubuntu) have an agrep that limits PATTERN to < 32 characters...
   serieslinenumber=$(agrep -iBynk "${ShowName:0:29}" "$TMP_SHN_FILE" | grep -m1 -o '^[0-9]*')
   #Correct for serieslinenumber = ""
@@ -2820,10 +2820,10 @@ get_serieslinenumber_showname_fuzzy(){
 
   #Get the seriesid based on the showname
   if ((serieslinenumber > 0)); then
-    debug "Determined serieslinenumber=$serieslinenumber for ShowName: $ShowName"
+    debug "Determined serieslinenumber='$serieslinenumber' for ShowName: '$ShowName'"
     return 0
   fi
-  err "${FUNCNAME[0]}(): FAILED to determine serieslinenumber for ShowName: $ShowName"
+  err "${FUNCNAME[0]}(): FAILED to determine serieslinenumber for ShowName: '$ShowName'"
   return 1
 }
 
@@ -2922,10 +2922,10 @@ set_absolute_episode_number_by_airdate(){
 #series and episode number information in myth2kodi's local database.
 set_absolute_episode_number_by_sxxexx(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  debugcont "AbsoluteEpisodeNumber: $AbsoluteEpisodeNumber"
-  debugcont "NewShowName: $NewShowName"
-  debugcont "Sxx: $Sxx"
-  debugcont "Exx: $Exx"
+  debugcont "AbsoluteEpisodeNumber: '$AbsoluteEpisodeNumber'"
+  debugcont "NewShowName: '$NewShowName'"
+  debugcont "Sxx: '$Sxx'"
+  debugcont "Exx: '$Exx'"
 
   AbsoluteEpisodeNumber=""
   local -a AENs
@@ -2982,9 +2982,9 @@ set_absolute_episode_number_by_ename_fuzzy(){
 #         0 if AbsoluteEpisodeNumber properly set; 1 otherwise.
 fuzzy_plot_match(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  debugcont "NewShowName: $NewShowName"
-  debugcont "Plot: $Plot"
-  debugcont "PlotLength: $PlotLength"
+  debugcont "NewShowName: '$NewShowName'"
+  debugcont "Plot: '$Plot'"
+  debugcont "PlotLength: '$PlotLength'"
   local -a FuzzyPlot=()
   local -a cost=()
   #Fuzzy guess at plot, prepended with: "AbsoluteEpisodeNumber:cost:"
@@ -3021,8 +3021,8 @@ fuzzy_plot_match(){
 #episode, then we can be fairly confident that it's actually a matching Plot.
 chunked_fuzzy_plot_match(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  debugcont "NewShowName: $NewShowName"
-  debugcont "Plot: $Plot"
+  debugcont "NewShowName: '$NewShowName'"
+  debugcont "Plot: '$Plot'"
   local -i PlotWords
   PlotWords=$(wc --words <<< "$Plot")
   local chunk=""
@@ -3038,30 +3038,30 @@ chunked_fuzzy_plot_match(){
   local -a ChunkLengths=()
   local -a GoodChunkGuesses=()
   debug "Attempting chunked fuzzy match."
-  debugcont "PlotWords=$PlotWords"
-  debugcont "chunck_size=$chunck_size"
-  debugcont "chunk_overlap=$chunk_overlap"
-  debugcont "numchunks=$numchunks"
+  debugcont "PlotWords='$PlotWords'"
+  debugcont "chunck_size='$chunck_size'"
+  debugcont "chunk_overlap='$chunk_overlap'"
+  debugcont "numchunks='$numchunks'"
   local -i Counter=0
   for (( i = 0; i < numchunks; i++ )) ; do
-    debugcont "i=$i"
+    debugcont "i='$i'"
     n=$(((i)*(chunck_size-chunk_overlap)+1))
-    debugcont "n=$n"
+    debugcont "n='$n'"
     m=$((n+chunck_size-1))
-    debugcont "m=$m"
+    debugcont "m='$m'"
     chunk="$(cut -d" " -f$n-$m <<< "$Plot")"
-    debugcont "chunk=$chunk"
+    debugcont "chunk='$chunk'"
     ChunkLengths[i]=$(wc --chars <<< "$chunk")
-    debugcont "ChunkLengths[$i]=${ChunkLengths[i]}"
+    debugcont "ChunkLengths[$i]='${ChunkLengths[i]}'"
     #~10% error is always ~3 as agrep PATTERN is limited to 29 chars.#len10per=$(( ChunkLengths[i] / 10 ))
     #Some systems have an agrep that limits PATTERN to < 32 characters...
     fuzzychunk=($(agrep -iBynsk -e "${chunk:0:29}" "$m2kdir/$NewShowName/$NewShowName.Plot.txt"))
     FuzzyChunks[i]="${fuzzychunk[0]}"
-    debugcont "FuzzyChunks[$i]=${FuzzyChunks[i]}"
+    debugcont "FuzzyChunks[$i]='${FuzzyChunks[i]}'"
     ChunkGuesses[i]=$(cut -f1 -d":" <<< "${FuzzyChunks[i]}")
-    debugcont "ChunkGuesses[$i]=${ChunkGuesses[i]}"
+    debugcont "ChunkGuesses[$i]='${ChunkGuesses[i]}'"
     ChunkCosts[i]=$(cut -f2 -d":" <<< "${FuzzyChunks[i]}")
-    debugcont "ChunkCosts[$i]=${ChunkCosts[i]}"
+    debugcont "ChunkCosts[$i]='${ChunkCosts[i]}'"
     ((ChunkCosts[i] <= len10per)) && GoodChunkGuesses[Counter]=${ChunkGuesses[i]} && ((++Counter))
   done
   debug "$( IFS=','; printf '%s' "${FUNCNAME[0]}(): GoodChunkGuesses ${#GoodChunkGuesses[@]}: ${GoodChunkGuesses[*]}." )"
@@ -3082,7 +3082,7 @@ chunked_fuzzy_plot_match(){
 #Returns: 0 if AbsoluteEpisodeNumber properly set; 1 otherwise.
 multi_match_check(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  debugcont "NewShowName: $NewShowName"
+  debugcont "NewShowName: '$NewShowName'"
   debugcont "$( IFS=','; printf '%s' "There are ${#AENguess[@]} AENguesses: ${AENguess[*]}." )"
 
   local -i match_count
@@ -3114,7 +3114,7 @@ multi_match_check(){
 
     uniqSxxExx=( $(printf '%s\n' "${SxxExxGuesses[@]}" | uniq ) )
     uniq_match_count="${#uniqSxxExx[@]}"
-    debug "$( IFS=','; printf '%s' "There are $uniq_match_count matching episodes: ${uniqSxxExx[*]}." )"
+    debug "$( IFS=','; printf '%s' "There are '$uniq_match_count' matching episodes: ${uniqSxxExx[*]}." )"
 
     #If all matches are the same episode then just use it,
     if ((uniq_match_count == 1)); then
@@ -3152,7 +3152,7 @@ multi_match_check(){
         debug "The AbsoluteEpisodeNumber guesses were different:"
         debugcont "AENguess = SxxExxGuesses"
         for (( i = 0; i < match_count; i++ )) ; do
-          debugcont "${i}: ${AENguess[i]} = ${SxxExxGuesses[i]}"
+          debugcont "${i}: ${AENguess[i]} = '${SxxExxGuesses[i]}'"
         done
         return 1
       fi #>=2/3
@@ -3170,12 +3170,12 @@ multi_match_check(){
 #Identify episode by fuzzy matching MythTV-DB Plot against Plots in myth2kodi-DB.
 get_absolute_episode_number_fuzzy_plot(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  debugcont "AbsoluteEpisodeNumber: $AbsoluteEpisodeNumber"
-  debugcont "NewShowName: $NewShowName"
-  debugcont "Plot: $Plot"
+  debugcont "AbsoluteEpisodeNumber: '$AbsoluteEpisodeNumber'"
+  debugcont "NewShowName: '$NewShowName'"
+  debugcont "Plot: '$Plot'"
 
   if [[ ! -f "$m2kdir/$NewShowName/$NewShowName.Plot.txt" ]]; then
-    err "Myth2kodi's internal database contains no Plot file for $NewShowName."
+    err "Myth2kodi's internal database contains no Plot file for '$NewShowName'."
     errcont "This probably means we failed to identify a SeriesID. Either you need"
     errcont "to add a showTranslations entry, we've mistaken a Movie for an Episode,"
     errcont "or this is a one off showing like news or a sports event."
@@ -3191,7 +3191,7 @@ get_absolute_episode_number_fuzzy_plot(){
   local -i fuzzy_chunk_return_status=0
   #Length of the plot we're trying to match
   PlotLength=$(wc --chars <<< "$Plot")
-  debugcont "PlotLength: $PlotLength"
+  debugcont "PlotLength: '$PlotLength'"
   #If Plot length is short this really won't work well, so give up #TODO: figure out what length is genuinely too short...
   ((PlotLength<42)) && warn "${FUNCNAME[0]}(): Plot is too short to attempt fuzzy guess." && return 1
 
@@ -3556,23 +3556,23 @@ msg_recording_info(){
 #Report the combination of command line input and MythTV-DB data.
 msg_merged_input_mythtvdb(){
   debug "Input and MythTV-DB guide data for $InputFileBasename"
-  [[ "$Database" = 'Enabled' ]] && debugcont "RECSTART:$ShowStartTime"
-  [[ "$Database" = 'Enabled' ]] && debugcont "DATE:$MovieAirDate $OriginalAirDate"
-  [[ "$Database" = 'Enabled' ]] && debugcont "PROGRAMID:$ProgramID"
-  [[ "$Database" = 'Enabled' ]] && debugcont "ShowCategory:$ShowCategory"
+  [[ "$Database" = 'Enabled' ]] && debugcont "RECSTART:'$ShowStartTime'"
+  [[ "$Database" = 'Enabled' ]] && debugcont "DATE:'$MovieAirDate' '$OriginalAirDate'"
+  [[ "$Database" = 'Enabled' ]] && debugcont "PROGRAMID:'$ProgramID'"
+  [[ "$Database" = 'Enabled' ]] && debugcont "ShowCategory:'$ShowCategory'"
   if [[ -n "$InputTitle" ]]; then
-    debugcont "InputTitle:$InputTitle"
+    debugcont "InputTitle:'$InputTitle'"
   else
     debugcont "InputTitle: UNKNOWN"
   fi
   if [[ -n "$InputSubtitle" ]]; then
-    debugcont "InputSubtitle:$InputSubtitle"
+    debugcont "InputSubtitle:'$InputSubtitle'"
   else
     debugcont "InputSubtitle: UNKNOWN"
   fi
-  if [[ -n "$Sxx" ]]; then debugcont "Sxx:$Sxx"; else debugcont "Sxx: UNKNOWN"; fi
-  if [[ -n "$Exx" ]]; then debugcont "Exx:$Exx"; else debugcont "Exx: UNKNOWN"; fi
-  [[ "$Database" = 'Enabled' ]] && debugcont "PLOT: $Plot"
+  if [[ -n "$Sxx" ]]; then debugcont "Sxx:'$Sxx'"; else debugcont "Sxx: UNKNOWN"; fi
+  if [[ -n "$Exx" ]]; then debugcont "Exx:'$Exx'"; else debugcont "Exx: UNKNOWN"; fi
+  [[ "$Database" = 'Enabled' ]] && debugcont "PLOT: '$Plot'"
 }
 
 #A warning message about performing maintenance that waits on user input
@@ -3973,18 +3973,18 @@ set_move_location(){
 #Make the directory we'll move recording to if it doesn't already exist.
 make_show_dir(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  debugcont "NewShowName: $NewShowName"
-  debugcont "MoveDir: $MoveDir"
-  debugcont "SeasonNumber: $SeasonNumber"
-  debugcont "Notify: $Notify"
-  debugcont "NotifyUserName: $NotifyUserName"
-  debugcont "FailSafeDir: $FailSafeDir"
+  debugcont "NewShowName: '$NewShowName'"
+  debugcont "MoveDir: '$MoveDir'"
+  debugcont "SeasonNumber: '$SeasonNumber'"
+  debugcont "Notify: '$Notify'"
+  debugcont "NotifyUserName: '$NotifyUserName'"
+  debugcont "FailSafeDir: '$FailSafeDir'"
 
   #If specified, make $MoveDir = $MoveDir/show name
   if [[ -n "$NewShowName" ]]; then
     MoveDir="$MoveDir/$NewShowName"
     if [ ! -d "$MoveDir" ]; then
-      inform "CREATING SERIES FOLDER: $MoveDir"
+      inform "CREATING SERIES FOLDER: '$MoveDir'"
       [[ "$TRACKING" != 'Disabled' ]] && printf '%s\n' "$MoveDir" >> "$m2kdir/dir.tracking"
       mkdir "$MoveDir"
       chmod 775 "$MoveDir"
@@ -3995,7 +3995,7 @@ make_show_dir(){
     if [[ -n "$SeasonNumber" ]]; then
       MoveDir="$MoveDir/Season $SeasonNumber"
       if [ ! -d "$MoveDir" ]; then
-        inform "CREATING SEASON FOLDER: $MoveDir"
+        inform "CREATING SEASON FOLDER: '$MoveDir'"
         mkdir "$MoveDir"
         chmod 775 "$MoveDir"
         [[ "$TRACKING" != 'Disabled' ]] && printf '%s\n' "$MoveDir" >> "$m2kdir/dir.tracking"
@@ -4011,7 +4011,7 @@ make_show_dir(){
     FailSafeState=1
     return 1
   else
-    inform "MOVE DIRECTORY SET AS: $MoveDir"
+    inform "MOVE DIRECTORY SET AS: '$MoveDir'"
     return 0
   fi
 }
@@ -4062,7 +4062,7 @@ generate_comskip(){
     if [[ ! -z "$StopData" ]]; then
       printf '%s\n' "$StartData $StopData" >> "$MARKUPFRAMES_TMP"
       CommercialMarkup="Created"
-      debug "COMMERCIAL DATA START:$StartData STOP:$StopData"
+      debug "COMMERCIAL DATA START:'$StartData' STOP:'$StopData'"
     fi
   done < "$MARKUPSTOP_TMP"
 
@@ -4221,20 +4221,20 @@ success_postprocessing(){
 #Adds an entry to doover.sh for the current job.
 add_doover(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  debugcont "m2karg1: $m2karg1"
-  debugcont "m2karg2: $m2karg2"
-  debugcont "m2karg3: $m2karg3"
-  debugcont "m2karg4: $m2karg4"
-  debugcont "m2karg5: $m2karg5"
-  debugcont "m2karg6: $m2karg6"
-  debugcont "m2kdir: $m2kdir"
-  debugcont "InputPath: $InputPath"
-  debugcont "MoveDir: $MoveDir"
-  debugcont "ShowFileName: $ShowFileName"
-  debugcont "OriginalExt: $OriginalExt"
-  debugcont "RequiresDoover: $RequiresDoover"
-  debugcont "PROCESS_RECORDING_MODE: $PROCESS_RECORDING_MODE"
-  debugcont "SYMLINK: $SYMLINK"
+  debugcont "m2karg1: '$m2karg1'"
+  debugcont "m2karg2: '$m2karg2'"
+  debugcont "m2karg3: '$m2karg3'"
+  debugcont "m2karg4: '$m2karg4'"
+  debugcont "m2karg5: '$m2karg5'"
+  debugcont "m2karg6: '$m2karg6'"
+  debugcont "m2kdir: '$m2kdir'"
+  debugcont "InputPath: '$InputPath'"
+  debugcont "MoveDir: '$MoveDir'"
+  debugcont "ShowFileName: '$ShowFileName'"
+  debugcont "OriginalExt: '$OriginalExt'"
+  debugcont "RequiresDoover: '$RequiresDoover'"
+  debugcont "PROCESS_RECORDING_MODE: '$PROCESS_RECORDING_MODE'"
+  debugcont "SYMLINK: '$SYMLINK'"
 
   #Create the doover.sh file if it doesn't already exist.
   if [[ ! -f "$m2kdir/doover.sh" ]]; then
@@ -4279,13 +4279,13 @@ add_doover(){
 #Adds an entry to undo.sh for the current job.
 add_undo(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  debugcont "m2kdir: $m2kdir"
-  debugcont "InputPath: $InputPath"
-  debugcont "MoveDir: $MoveDir"
-  debugcont "ShowFileName: $ShowFileName"
-  debugcont "OriginalExt: $OriginalExt"
-  debugcont "PROCESS_RECORDING_MODE: $PROCESS_RECORDING_MODE"
-  debugcont "SYMLINK: $SYMLINK"
+  debugcont "m2kdir: '$m2kdir'"
+  debugcont "InputPath: '$InputPath'"
+  debugcont "MoveDir: '$MoveDir'"
+  debugcont "ShowFileName: '$ShowFileName'"
+  debugcont "OriginalExt: '$OriginalExt'"
+  debugcont "PROCESS_RECORDING_MODE: '$PROCESS_RECORDING_MODE'"
+  debugcont "SYMLINK: '$SYMLINK'"
 
   #Create the undo.sh file if it doesn't already exist.
   if [[ ! -f "$m2kdir/undo.sh" ]]; then
@@ -4314,7 +4314,7 @@ add_undo(){
   elif [[ "$PROCESS_RECORDING_MODE" = 'MOVE' && "$SYMLINK" = 'Disabled' && "$RequiresDoover" != "1" ]]; then
     debug "'MOVE' mode with SYMLINK=Disabled and does not require doover, so MythTV-DB info has been removed."
     inform "No undo.sh entry will be added for this recording:"
-    informcont "File Name: $MoveDir/$ShowFileName.$OriginalExt"
+    informcont "File Name: '$MoveDir/$ShowFileName.$OriginalExt'"
   fi
 }
 
@@ -4325,7 +4325,7 @@ failsafe(){
   warncont "Check your permissions, disk usage, and network connection to NAS."
   if [[ "$FailSafeMode" = 'Enabled' &&  "$SYMLINK" = 'Enabled' ]]; then
     warn "ATTEMPTING SYMLINK TO FAILSAFE DIR: $FailSafeDir"
-    inform "FailSafe link name set as: $FailSafeDir/$ShowFileName.$OriginalExt"
+    inform "FailSafe link name set as: '$FailSafeDir/$ShowFileName.$OriginalExt'"
     ln -s "$InputPath" "$FailSafeDir/$ShowFileName.$OriginalExt"
     if [[ -f "$FailSafeDir/$ShowFileName.$OriginalExt" ]]; then
       inform "FAILSAFE MODE COMPLETE: SYMLINK CREATED"
@@ -4338,10 +4338,10 @@ failsafe(){
       #Generate supporting files, add undo and doover entries, notify Kodi.
       success_postprocessing
       EXIT_JOB_TYPE='FailSafeModeComplete'
-      NOTIFY_MSG="FAILSAFE mode active See $LOGFILE for more information"
+      NOTIFY_MSG="FAILSAFE mode active See '$LOGFILE' for more information"
       return 0
     else
-      err "${FUNCNAME[0]}(): FAILSAFE MODE FAILURE CHECK PERMISSIONS AND FREE SPACE IN $FailSafeDir"
+      err "${FUNCNAME[0]}(): FAILSAFE MODE FAILURE CHECK PERMISSIONS AND FREE SPACE IN '$FailSafeDir'"
       return 1
     fi
   else
@@ -4380,8 +4380,8 @@ increment_target_file_name(){
 #Request Kodi remove any no-longer reachable files from its library.
 kodi_cleanup(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  debugcont "m2kScanMode: $m2kScanMode"
-  debugcont "KODIClean: $KODIClean"
+  debugcont "m2kScanMode: '$m2kScanMode'"
+  debugcont "KODIClean: '$KODIClean'"
   debugcont "$( printf 'KODIIPs: %s' "${KODIIPs[*]/%/ ;}." )"
   if [[ "$m2kScanMode" != "True" ]] ; then
     if [[ "$KODIClean" = 'Enabled' ]] ; then
@@ -4407,11 +4407,11 @@ kodi_cleanup(){
 kodi_newshow(){
   #TODO: there must be a better way to do this neatly than using eval...
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  debugcont "m2kScanMode: $m2kScanMode"
-  debugcont "KODINotify: $KODINotify"
-  debugcont "KODIUpdate: $KODIUpdate"
+  debugcont "m2kScanMode: '$m2kScanMode'"
+  debugcont "KODINotify: '$KODINotify'"
+  debugcont "KODIUpdate: '$KODIUpdate'"
   debugcont "$( printf 'KODIIPs: %s' "${KODIIPs[*]/%/ ;}." )"
-  debugcont "ShowName: $ShowName"
+  debugcont "ShowName: '$ShowName'"
   local data=""
   local curlPOST=""
   #SEE: http://kodi.wiki/view/HOW-TO:Remotely_update_library and 'man curl'
@@ -4426,7 +4426,7 @@ kodi_newshow(){
     for KODIIP in "${KODIIPs[@]}" ; do
       inform "Sending GUI.ShowNotification request to: $KODIIP"
       eval "$curlPOST $data http://$KODIIP/jsonrpc" > /dev/null 2>&1
-      debug "SENT: GUI.ShowNotification for $ShowName"
+      debug "SENT: GUI.ShowNotification for '$ShowName'"
     done
   else
     debug 'Kodi notification is disabled.'
@@ -4590,7 +4590,7 @@ m2k_scan(){
   #Map myth2kodi input variables to local variables for our current purpose.
   local checkext="$m2karg2"
   local scanpath="${m2karg3%*/}" #Strip any trailing / from the directory name.
-  debug "Running ${FUNCNAME[0]}() on $checkext files in $scanpath"
+  debug "Running ${FUNCNAME[0]}() on '$checkext' files in '$scanpath'"
 
   #Do some basic checks before we get started.
   if [[ -z "$checkext" ]]; then
@@ -4633,8 +4633,8 @@ m2k_scan(){
 
   warn "--You have entered scan Mode."
   warncont "myth2kodi will conduct a scan of the folder:"
-  warncont "  $scanpath"
-  warncont "searching for file types: $checkext. Each file will be processed"
+  warncont "  '$scanpath'"
+  warncont "searching for file types: '$checkext'. Each file will be processed"
   warncont "through myth2kodi. This mode will only work when database access"
   warncont "is functional."
   warncont "Please scan a single file to test myth2kodi before running in"
@@ -4670,16 +4670,16 @@ m2k_scan(){
     [[ "$?" != 0 ]] && { err "${FUNCNAME[0]}(): Failed to create temporary scan file." ; return 1 ; }
     debug "Created a temporary scan file: '$SCAN_FILE'"
     ls -1 "$scanpath"/*."$checkext" > "$SCAN_FILE"
-    inform "Scanning $scanpath for $checkext files."
+    inform "Scanning '$scanpath' for '$checkext' files."
     while read -r line ; do
-      debug "Attempting to envoke myth2kodi on $line"
+      debug "Attempting to envoke myth2kodi on '$line'"
       if [[ ! -L "$line" && ! -S "$line" && ! -d "$line" ]]; then
         myth2kodi "$line"
       else
         debug "Either we have already moved that or it is a directory. Either way, moving on."
       fi
     done < "$SCAN_FILE"
-    inform "Completed scan of $scanpath for $checkext files."
+    inform "Completed scan of '$scanpath' for '$checkext' files."
     #If we're not in debug mode then remove the scan file we just processed.
     if (( LOGLEVEL < 3 )); then
       rm -f "$SCAN_FILE"
@@ -5171,7 +5171,7 @@ m2k_undo_all(){
 
     #If we've undone everything then our doover.sh is no longer valid.
     if [[ -f "$m2kdir/doover.sh" ]]; then
-      debug "Moving doover.sh to doover_${FileNameNow}.sh."
+      debug "Moving doover.sh to 'doover_${FileNameNow}.sh'."
       mv "$m2kdir/doover.sh" "$m2kdir/doover_${FileNameNow}.sh"
     fi
 
@@ -5193,36 +5193,36 @@ m2k_undo_all(){
 
 remove_undo_doover_entries(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  debugcont "m2kdir=$m2kdir"
-  debugcont "RECORDING_LINK=$RECORDING_LINK"
-  debugcont "RECORDING_LINK_OWNER=$RECORDING_LINK_OWNER"
-  debugcont "RECORDING_NAME=$RECORDING_NAME"
+  debugcont "m2kdir='$m2kdir'"
+  debugcont "RECORDING_LINK='$RECORDING_LINK'"
+  debugcont "RECORDING_LINK_OWNER='$RECORDING_LINK_OWNER'"
+  debugcont "RECORDING_NAME='$RECORDING_NAME'"
 
   local -i undo_entry_remove_status=0
   local -i doover_entry_remove_status=0
 
   #NOTE: In LINK mode, RECORDING_LINK => myth2kodi file name;
   #      In MOVE with SYMLINKing='Enabled', RECORDING_LINK => MythTV file name.
-  debug "Removing lines mentioning '$RECORDING_LINK' from $m2kdir/undo.sh"
+  debug "Removing lines mentioning '$RECORDING_LINK' from '$m2kdir/undo.sh'"
   sed -i.bak "\#$RECORDING_LINK#d" "$m2kdir/undo.sh" 2>&1 | err_pipe "${FUNCNAME[0]}(): Line $LINENO: "
   undo_entry_remove_status="${PIPESTATUS[0]}"
-  debug "undo_entry_remove_status=$undo_entry_remove_status"
+  debug "undo_entry_remove_status='$undo_entry_remove_status'"
   (( LOGLEVEL < 3 )) && rm -f "$m2kdir/undo.sh.bak"
 
   #Delete doover.sh entries associated with $RECORDING_NAME
   if [[ -f "$m2kdir/doover.sh" ]]; then
-    debug "Removing lines related to '$RECORDING_NAME' == '$RECORDING_LINK' from $m2kdir/doover.sh"
+    debug "Removing lines related to '$RECORDING_NAME' == '$RECORDING_LINK' from '$m2kdir/doover.sh'"
     if [[ "$RECORDING_LINK_OWNER" = 'myth2kodi' ]]; then
       #Was processed in LINK mode, so find and delete LINK removal line
       sed -i.bak "\#$RECORDING_LINK#d" "$m2kdir/doover.sh" 2>&1 | err_pipe "${FUNCNAME[0]}(): Line $LINENO: "
       (( doover_entry_remove_status+=PIPESTATUS[0] ))
-      debug "doover_entry_remove_status=$doover_entry_remove_status"
+      debug "doover_entry_remove_status='$doover_entry_remove_status'"
       (( LOGLEVEL < 3 )) && rm -f "$m2kdir/doover.sh.bak"
     fi
     #Find and delete all lines in MOVE mode or just the myth2kodi line in LINK mode
     sed -i.bak "\#$RECORDING_NAME#d" "$m2kdir/doover.sh" 2>&1 | err_pipe "${FUNCNAME[0]}(): Line $LINENO: "
     (( doover_entry_remove_status+=PIPESTATUS[0] ))
-    debug "doover_entry_remove_status=$doover_entry_remove_status"
+    debug "doover_entry_remove_status='$doover_entry_remove_status'"
     (( LOGLEVEL < 3 )) && rm -f "$m2kdir/doover.sh.bak"
   fi
   return "$(( undo_entry_remove_status + doover_entry_remove_status ))"
@@ -5392,11 +5392,11 @@ delete_recording_from_mythtv(){
   #Delete created.tracking entries associated with recording.
   if [[ "$RECORDING_FILE_OWNER" = 'myth2kodi' ]]; then
     debug "File tracked by myth2kodi."
-    debug "Removing lines mentioning '$RECORDING_FILE' from $m2kdir/created.tracking"
+    debug "Removing lines mentioning '$RECORDING_FILE' from '$m2kdir/created.tracking'"
     sed -i.bak "\#$RECORDING_FILE#d" "$m2kdir/created.tracking" 2>&1 | err_pipe "${FUNCNAME[0]}(): Line $LINENO: "
   elif [[ "$RECORDING_LINK_OWNER" = 'myth2kodi' && -n "$RECORDING_LINK" ]]; then
     debug "Link tracked by myth2kodi."
-    debug "Removing lines mentioning '$RECORDING_LINK' from $m2kdir/created.tracking"
+    debug "Removing lines mentioning '$RECORDING_LINK' from '$m2kdir/created.tracking'"
     sed -i.bak "\#$RECORDING_LINK#d" "$m2kdir/created.tracking" 2>&1 | err_pipe "${FUNCNAME[0]}(): Line $LINENO: "
   fi
   (( LOGLEVEL < 3 )) && [[ -f "$m2kdir/created.tracking.bak" ]] && rm -f "$m2kdir/created.tracking.bak"
@@ -5407,7 +5407,7 @@ delete_recording_from_mythtv(){
 #Called from myth2kodi --delete and myth2kodi --rerecord.
 switch_delete_recording(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  warn "Attempting to delete recording: $1"
+  warn "Attempting to delete recording: '$1'"
   warncont "This will PERMANENTLY delete the recording, associated files"
   warncont "and the associated MythTV database entry."
   warncont "Are you sure you want to continue?"
@@ -5436,7 +5436,7 @@ switch_delete_recording(){
 
 disconnect_recording(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  warn "Attempting to disconnect recording: $1"
+  warn "Attempting to disconnect recording: '$1'"
   warncont "This will PERMANENTLY disconnect the recording from MythTV,"
   warncont "deleting the associated MythTV database entry."
   warncont "Are you sure you want to continue?"
@@ -5492,14 +5492,14 @@ recording_log(){
   #Find the MythTV recording file name and its path.
   set_recording_name "$1"
   [[ "$?" != 0 ]] && return "$?"
-  debug "RECORDING_PATH: $RECORDING_PATH"
-  debug "RECORDING_NAME: $RECORDING_NAME"
+  debug "RECORDING_PATH: '$RECORDING_PATH'"
+  debug "RECORDING_NAME: '$RECORDING_NAME'"
   LOGFILELIST_FILE="$(mktemp "$M2K_TMPDIR"/m2k_logfilelist-XXXX)"
   [[ "$?" != 0 ]] && { err "${FUNCNAME[0]}(): Failed to create temporary logfilelist file." ; return 1 ; }
-  debug "Created a temporary list of logfiles file: $LOGFILELIST_FILE"
+  debug "Created a temporary list of logfiles file: '$LOGFILELIST_FILE'"
   TEMPLOG_FILE="$(mktemp "$M2K_TMPDIR"/m2k_templog-XXXX)"
   [[ "$?" != 0 ]] && { err "${FUNCNAME[0]}(): Failed to create temporary templog file." ; return 1 ; }
-  debug "Created a temporary recording-specific log file: $TEMPLOG_FILE"
+  debug "Created a temporary recording-specific log file: '$TEMPLOG_FILE'"
   #Start a log file list with the current log file
   printf '%s\n' "$LOGFILE" > "$LOGFILELIST_FILE"
   #Add archived log files to the list, most recent first
@@ -5509,7 +5509,7 @@ recording_log(){
   while read -r LOG_FILE ; do
     if [[ "${LOG_FILE##*.}" = 'gz' ]]; then
       if gzip -dc "$LOG_FILE" 2>/dev/null | grep -q "$PROC" ; then
-        debug "Searching for relevant entries in: $LOG_FILE"
+        debug "Searching for relevant entries in: '$LOG_FILE'"
         awk '/'"$PROC"'/,/'"$COMP"'/ {print $0}' <(gzip -dc "$LOG_FILE") \
           | awk -v RS="$PROC" -v OFS='\n' -v ORS='\n\n'                  \
               '$0~/'"${RECORDING_NAME%%.}"'/{print "'"$LOG_FILE"'",RS$0}' >> "$TEMPLOG_FILE"
@@ -5517,7 +5517,7 @@ recording_log(){
     elif [[ "${LOG_FILE##*.}" = 'log' ]]; then
       #Confirm the log file actually contains a process recording entry
       if grep -q "$PROC" "$LOG_FILE" ; then
-        debug "Searching for relevant entries in: $LOG_FILE"
+        debug "Searching for relevant entries in: '$LOG_FILE'"
         awk '/'"$PROC"'/,/'"$COMP"'/ {print $0}' "$LOG_FILE" \
           | awk -v RS="$PROC" -v OFS='\n' -v ORS='\n\n'      \
               '$0~/'"${RECORDING_NAME%%.}"'/{print "'"$LOG_FILE"'",RS$0}' >> "$TEMPLOG_FILE"
@@ -5529,7 +5529,7 @@ recording_log(){
   (( LOGLEVEL < 3 )) && rm -f "$LOGFILELIST_FILE"
   #
   if (( $(wc --lines < "$TEMPLOG_FILE") > 2 )); then
-    debug "Viewing log entries for $RECORDING_NAME in less."
+    debug "Viewing log entries for '$RECORDING_NAME' in less."
     less "$TEMPLOG_FILE"
     debug "Finished viewing."
     (( LOGLEVEL < 3 )) && rm -f "$TEMPLOG_FILE"
@@ -5592,11 +5592,11 @@ recreate_comskip(){
       local COMSKIP_SCAN_FILE
       COMSKIP_SCAN_FILE="$(mktemp "$M2K_TMPDIR/m2k_comskip_scan_$FileNameNow"-XXXX)"
       [[ "$?" != 0 ]] && { err "${FUNCNAME[0]}(): Failed to create temporary comskip-scan file." ; return 1 ; }
-      debug "Created a temporary comskip_scan file: $COMSKIP_SCAN_FILE"
+      debug "Created a temporary comskip_scan file: '$COMSKIP_SCAN_FILE'"
       ls -1 "$scanpath"/*."$checkext" > "$COMSKIP_SCAN_FILE"
       inform "Scanning $scanpath for already moved $checkext files"
       while read -r line ; do
-        debug "Attempting to regenerate comskip file for $line"
+        debug "Attempting to regenerate comskip file for '$line'"
         myth2kodi --comskip "$line"
       done < "$COMSKIP_SCAN_FILE"
 
@@ -5959,8 +5959,8 @@ if [[ -n "$SeriesID" ]]; then
 
   #Statistical Fuzzy Logic monitoring
   increment_total_matches
-  debug "TOTAL FUZZY LOGIC MATCHES:$FuzzyLogicMatches"
-  debug "TOTAL VERIFIED FUZZY ERRORS:${FuzzyLogicError:-0}"
+  debug "TOTAL FUZZY LOGIC MATCHES:'$FuzzyLogicMatches'"
+  debug "TOTAL VERIFIED FUZZY ERRORS:'${FuzzyLogicError:-0}'"
 fi
 
 #TODO: The following few blocks will run even if we haven't properly identified the series, which doesn't make
@@ -5971,7 +5971,7 @@ if [[ "$HasSxxExx" = '1' ]] ; then
   #TODO: If the confidence rating from the above is good, and we have an
   #  AbsoluteEpisodeNumber then use it to validate the Sxx, Exx & Subtitle from
   #  the MythTV-DB.
-  inform "Using episode number: $Sxx$Exx, extracted from the MythTV-DB."
+  inform "Using episode number: '$Sxx$Exx', extracted from the MythTV-DB."
   #TODO: Probably should only do the following if the Series confidence rating
   #  is ok.
   #If we don't have a Subtitle, then use Sxx & Exx to get it from the TVDb info.
@@ -6212,7 +6212,7 @@ if [[ "$PROCESS_RECORDING_MODE" = 'MOVE' ]]; then
 #####LINK MODE HANDLING#####
 #If symlink is in LINK mode then create symlink
 elif [[ "$PROCESS_RECORDING_MODE" = 'LINK' ]]; then
-  debug "Creating link in LINK mode with CONFIDENCE:$ConfidenceRating"
+  debug "Creating link in LINK mode with CONFIDENCE:'$ConfidenceRating'"
 
   ln -s "$InputPath" "$MoveDir/$ShowFileName.$OriginalExt"
 

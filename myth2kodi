@@ -662,7 +662,7 @@ m2k_init(){
   ((LOGLEVEL>=3)) && printf '%s\n' "Config complete." >> "$pre_logging_file"
 
   #What am I...
-  m2kVersion="myth2kodi Version 1.3.1f" ; declare -gr m2kVersion
+  m2kVersion="myth2kodi Version 1.3.1g" ; declare -gr m2kVersion
   m2kPlatform="$(uname)" ; declare -gr m2kPlatform
   ((LOGLEVEL>=3)) && printf '%s\n' "Running $m2kVersion on $m2kPlatform." >> "$pre_logging_file"
 
@@ -2225,7 +2225,7 @@ process_mythtvdb_sydfta(){
   #Longest actual subtitle I've seen so far is 84 characters. Rather than assuming Plot field
   #is garbage, we'll append the InputSubtitle field to the Plot -- this will almost certainly
   #prevent full Plot fuzzy match from succeeding but chunked match should still match effectively.
-  if (( $(wc --chars <<< "$InputSubtitle") > 88 )) ; then #Probably not a subtitle.
+  if (( $(wc --chars <<< "$InputSubtitle") > 84 )) ; then #Probably not a subtitle.
     local PossiblePlot
     PossiblePlot="$InputSubtitle"
     warn "${FUNCNAME[0]}(): InputSubtitle field from MythTV-DB appears to contain Plot information."
@@ -2968,13 +2968,46 @@ set_absolute_episode_number_by_ename_fuzzy(){
   #    'The Office' 'The Delivery (2)'       -TvDb data
   #  currently, the former would be associated with 'The Delivery (1)'
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
+  #set IFS to use line break as a delineator -- necessary for separating multiple agrep matches below.
+  local IFS=$'\n'
   AbsoluteEpisodeNumber=""
+  local -a fuzzy_ename_0=()
+  local -a fuzzy_ename_1=()
+  local -a fuzzy_ename=()
+  local -a cost=()
+  local -a all_cost_aen_guess=()
+  declare -ga AENguess=()
   #Some systems have an agrep that limits PATTERN to < 32 characters...
-  AbsoluteEpisodeNumber=$(agrep -iByn "^${EpisodeSubtitle:0:28}" "$m2kdir/$NewShowName/$NewShowName.Ename.txt" | grep -m1 -o '^[0-9]*')
-  if [[ -n "$AbsoluteEpisodeNumber" ]] && ((AbsoluteEpisodeNumber > 0)); then
-    return 0
-  fi
-  return 1
+  #To avoid "special" episodes of the form "Special: Related Episode Name" first
+  #try and match the pattern from the start of the line.
+  fuzzy_ename_0=($(agrep -iByns "^${EpisodeSubtitle:0:28}" "$m2kdir/$NewShowName/$NewShowName.Ename.txt"))
+  #Then, because some shows (eg Gotham) use two part names like "Chapter Name: Episode Name" and
+  #guide-data can contain just the "Episode Name" we match without binding to the front of the
+  #line. And as the EpisodeSubtitle can contain character with special meanings in regex, we match
+  #as a string literal (-k).
+  fuzzy_ename_1=($(agrep -iBynsk "${EpisodeSubtitle:0:29}" "$m2kdir/$NewShowName/$NewShowName.Ename.txt"))
+  fuzzy_ename=("${fuzzy_ename_0[@]}" "${fuzzy_ename_1[@]}")
+  #Extract our guessed AbsoluteEpisodeNumbers
+  all_cost_aen_guess=($(cut -f1 -d":" <<< "$(printf '%s\n' "${fuzzy_ename[@]}")"))
+  debugcont "$( IFS=','; printf '%s' "AbsoluteEpisodeNumber guesses: ${all_cost_aen_guess[*]}." )"
+  cost=($(cut -f2 -d":" <<< "$(printf '%s\n' "${fuzzy_ename[@]}")"))
+  debugcont "$( IFS=','; printf '%s' "Cost: ${cost[*]}." )"
+  #Determine lowest cost match
+  local -i min_cost=42
+  for (( i = 0; i < ${#all_cost_aen_guess[@]}; i++ )) ; do
+    ((cost[i] < min_cost)) && min_cost="${cost[i]}"
+  done
+  #Only keep AEN guesses that have the lowest cost
+  local -i counter=0
+  for (( i = 0; i < ${#cost[@]}; i++ )) ; do
+    if ((cost[i] == min_cost)); then
+      AENguess[counter]="${all_cost_aen_guess[i]}"
+      ((++counter))
+    fi
+  done
+  #Check that multiple matches are actually the same episode
+  multi_match_check
+  return "$?"
 }
 
 #Use agrep to match the whole guide-data plot against Plots in myth2kodi-DB.
@@ -3298,7 +3331,7 @@ msg_operation_summary(){
   informcont "NewShowName=$NewShowName-"
   debugcont  "AbsoluteEpisodeNumber=$AbsoluteEpisodeNumber-"
   informcont "EpisodeSubtitle=$EpisodeSubtitle-"
-  informcont "HasSxxExx=HasSxxExx-"
+  informcont "HasSxxExx=$HasSxxExx-"
   informcont "Sxx=$Sxx- Exx=$Exx-"
   informcont "MoveFileSize=$MoveFileSize MB"
   informcont "ConfidenceRating=$ConfidenceRating-"

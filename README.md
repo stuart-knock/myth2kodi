@@ -14,9 +14,7 @@ For usage and command line options see: `myth2kodi --help`
 ### Quick Start Guide
   + Download the [release tarball](https://github.com/stuart-knock/myth2kodi/releases/latest).
   + Make sure you have the dependencies installed, see below.
-  + Copy the four scripts (*myth2kodi*, *mythdb_access*, *m2k_notify*, and
-    *bashlogging*) into the appropriate directory, these first three steps
-    are covered in a little more detail in [INSTALL.md](./doc/INSTALL.md).
+  + Run `./install.sh`, for more information see [INSTALL.md](./doc/INSTALL.md).
   + Modify the user settings for your setup, see [CONFIGURE.md](./doc/CONFIGURE.md).
   + Check basic functionality with: `myth2kodi --diagnostics`
 
@@ -61,6 +59,7 @@ additional functionality see [USAGE.md](./doc/USAGE.md) or type:
 #### Repository Overview
 <p>
   ├── <a href="./myth2kodi">myth2kodi</a> (The main script.) <br>
+  ├── <a href="./install.sh">install.sh</a> (The installation script.) <br>
   ├── <a href="./mythdb_access">mythdb_access</a> (Accesses MythTV-DB using Python bindings.) <br>
   ├── <a href="./m2k_notify">m2k_notify</a> (Sends desktop notifications.) <br>
   ├── <a href="./bashlogging">bashlogging</a> (Provides a configurable logging mechanism.) <br>

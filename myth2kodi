@@ -3088,6 +3088,7 @@ chunked_fuzzy_plot_match(){
     debugcont "ChunkLengths[$i]='${ChunkLengths[i]}'"
     #~10% error is always ~3 as agrep PATTERN is limited to 29 chars.#len10per=$(( ChunkLengths[i] / 10 ))
     #Some systems have an agrep that limits PATTERN to < 32 characters...
+    #TODO: Consider only doing the below conditionally on, say, ChunkLengths > 18 -- I know of one case in my ~2000 recording test set that gets a false positive match due to a short final chunk.
     fuzzychunk=($(agrep -iBynsk -e "${chunk:0:29}" "$m2kdir/$NewShowName/$NewShowName.Plot.txt"))
     FuzzyChunks[i]="${fuzzychunk[0]}"
     debugcont "FuzzyChunks[$i]='${FuzzyChunks[i]}'"

@@ -8,6 +8,13 @@ then I recommend you simplify your life by having a single user function
 as your media librarian. This user should own your media directories, run
 `mythbackend` and be the user to run `myth2kodi`.
 
+### As of release v1.4.0 there is an install script, just run:
+
+    ./install.sh
+and follow the instructions.
+
+
+## Manual Install
 ### Copy scripts to an appropriate bin directory (Default: `/usr/local/bin`):
 See the `bindir` user setting in myth2kodi.conf:
 

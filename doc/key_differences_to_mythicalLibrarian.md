@@ -1,4 +1,4 @@
-#Key Differences to [mythicalLibrarian](https://github.com/adamoutler/mythicallibrarian)
+# Key Differences to [mythicalLibrarian](https://github.com/adamoutler/mythicallibrarian)
 
 ## Call signature
 When processing a recording, optional arguments for providing season and
@@ -8,7 +8,8 @@ episode number have been added. It now has the form:
 
 ## Scripts
 ### Added:
-**bashlogging**: *Provides configurable logging functionality.*
+**bashlogging**: *Provides configurable logging functionality.*  
+**install.sh**: *A basic installation script.*
 
 ### Renamed:
 *mythicalLibrarian* ==> **myth2kodi**  
@@ -29,7 +30,7 @@ episode number have been added. It now has the form:
             processing of a specified recording and displays them in a pager.*  
 **--series-info**: *Updates our local database tables for a specified series.*  
 **--delete**: *Deletes a specified recording and its associated database entry.*  
-**--rerecord**: *Same as --delete, but, also requests mythbackend to rerecord.*
+**--rerecord**: *Same as --delete, but, also requests mythbackend to rerecord.*  
 **--disconnect**: *Disconnects a specified recording from MythTV, deleting the
                    MythTV-DB entry.*  
 **--cleanse**: *Delete archived log files, myth2kodi database files, and daily
@@ -37,6 +38,9 @@ episode number have been added. It now has the form:
                 their associated user setting. (This is a subset of --maintenance,
                 intended for when you want to clean-up myth2kodi's working files
                 but not files associated with your processed recordings.)*
+
+### Modified:
+**--undo**: *Now supports single recording undo. Old behaviour is achieved with `--undo 'all'`.*
 
 ### Renamed:
 *--mythicalDiagnostics* ==> **--diagnostics**  
@@ -66,7 +70,8 @@ only increased. So, it seemed safer, and easier, just to drop them.*
 **M2K_DB_LIFE**: *How long to persist archived myth2kodi database files in months.*  
 **DAILYREPORT_LIFE**: *How long to persist daily report files in months.*  
 **LOGTYPE**: *Defines where to direct logging messages -- stdout, stderr, file.*  
-**CREATE_RSS**: *Whether to create an RSS entry.*
+**CREATE_RSS**: *Whether to create an RSS entry.*  
+**RSS_DIRECTORY**: *The directory to place the RSS file.*
 
 ### Renamed:
 *mythicalLibrarian* ==> **m2kdir**  
@@ -76,7 +81,8 @@ only increased. So, it seemed safer, and easier, just to drop them.*
 *XBMCUpdate* ==> **KODIUpdate**  
 *XBMCNotify* ==> **KODINotify**  
 *XBMCClean* ==>  **KODIClean**  
-*maxItems* ==> **RSSmaxItems**
+*maxItems* ==> **RSSmaxItems**  
+*DirTracking* ==> **DIR_TRACKING_CLEANUP**
 
 ### Removed:
 **SYMLINK**: *See the entries in the* **Added** *section above.*  

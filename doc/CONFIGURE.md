@@ -1,4 +1,4 @@
-#Configure
+# Configure
 There are two places you can configure the user settings for myth2kodi,
 in the `myth2kodi` script directly or using the `myth2kodi.conf` file in
 the working directory. The latter (`myth2kodi.conf`) is preferred.
@@ -56,15 +56,19 @@ Additionally:
 `DAILYREPORT_LIFE` -- How long to persist daily report files in months.  
 
 #### Notifications:
-######Kodi:  
+###### Kodi:  
 `KODINotify` -- Whether to send notifications to the KODI UI.  
 `KODIUpdate` -- Whether to ask KODI to Update library upon Successful move job.  
-`KODIClean` -- Whether to ask KODI to cleanup its library.  
-You can also create the directory `/var/www/myth2kodi-rss` and point Kodi
-at it to have recently added recordings show up in the RSS feed scrolling across
-the bottom of Kodi.
+`KODIClean` -- Whether to ask KODI to cleanup its library.
 
-######Desktop:  
+###### RSS:  
+An RSS feed summarising recently processed recordings can be generated. You can point Kodi
+at it to have recently added recordings show up in the RSS feed scrolling across
+the bottom of Kodi.  
+`CREATE_RSS` -- Whether to create the RSS feed.  
+`RSS_DIRECTORY` -- The directory containing the RSS feed, default: `/var/www/myth2kodi-rss`.
+
+###### Desktop:  
 `Notify` -- Whether to send a notification to the Desktop.  
 `NotifyUserName` -- User name to send the notifications to.
 

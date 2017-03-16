@@ -12,7 +12,7 @@ from your MythTV database, as required, so that Kodi can make use of them.
 For usage and command line options see: `myth2kodi --help`
 
 ### Quick Start Guide
-  + Download the [release tarball](https://github.com/stuart-knock/myth2kodi/releases/latest).
+  + Download the [release tarball](https://github.com/stuart-knock/myth2kodi/releases/latest) or clone the repo.
   + Make sure you have the dependencies installed, see below.
   + Run `./install.sh`, for more information see [INSTALL.md](./doc/INSTALL.md).
   + Modify the user settings for your setup, see [CONFIGURE.md](./doc/CONFIGURE.md).

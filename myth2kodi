@@ -2034,6 +2034,12 @@ delete_mythtv_database_entry_mysql(){
   debug "MySQLuser: '$MySQLuser'"
   debug "MySQLpass: '$MySQLpass'"
   debug "MySQLMythDb: '$MySQLMythDb'"
+
+  if [[ -z "$InputPath" ]]; then
+    err "${FUNCNAME[1]}():${FUNCNAME[0]}(): Called with empty InputPath."
+    return 1
+  fi
+
   #Make sure we got input arguments and file is valid
   if [[ ! -e "$InputPath" ]]; then
     #Remove recording entry from mysql database
@@ -5370,7 +5376,7 @@ delete_recording_from_mythtv(){
         [[ -z "$DISCONNECT" && -f "$RECORDING_FILE" ]] && rm -f "$RECORDING_FILE"
 
         #Delete the associated database entry and thumbnails.
-        delete_mythtv_database_entry_mysql
+        delete_mythtv_database_entry_mysql #TODO: catch/return on any error state here
       fi
       ;;
     PythonBindings)
@@ -6210,6 +6216,7 @@ if [[ "$PROCESS_RECORDING_MODE" = 'MOVE' ]]; then
           debug "SYMLINK='Disabled' and does not require doover, so MythTV-DB info will be removed."
           RECORDING_NAME="$InputFileBasename" #Set here so we won't needlessly run identify_recording_files().
           delete_recording_from_mythtv
+          #TODO: [[ "$?" != 0 ]] && exit_job "$EXIT_JOB_TYPE" #This will require delete_recording_from_mythtv and sub functions to properly set EXIT_JOB_TYPE and NOTIFY_MSG...
         else
           warn "Job requires doover, so attempting to create symlink in SYMLINK='Disabled' mode."
           ln -s "$MoveDir/$ShowFileName.$OriginalExt" "$InputPath"

@@ -662,7 +662,7 @@ m2k_init(){
   ((LOGLEVEL>=3)) && printf '%s\n' "Config complete." >> "$pre_logging_file"
 
   #What am I...
-  m2kVersion="myth2kodi Version 1.4.0a" ; declare -gr m2kVersion
+  m2kVersion="myth2kodi Version 1.4.0b" ; declare -gr m2kVersion
   m2kPlatform="$(uname)" ; declare -gr m2kPlatform
   ((LOGLEVEL>=3)) && printf '%s\n' "Running $m2kVersion on $m2kPlatform." >> "$pre_logging_file"
 
@@ -1131,15 +1131,40 @@ pre_process_check(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   debugcont "arg1: '$1'"
   #Takes a single argument
-  (( "$#" > 1 )) && { err "${FUNCNAME[0]}() only takes one arg."; return 1 ; }
+  (( "$#" > 1 )) && { err "${FUNCNAME[0]}() only takes one arg."; return 1; }
   local FILE="$1"
   [[ -f "$FILE" ]] || { err "${FUNCNAME[0]}(): Not a file: $FILE"; return 1; }
+  local file_basename
+  file_basename="${FILE##*/}"
   #A regex that should match MythTVs file naming, for the 21st century.
-  local RECPATTERN='[0-9]{4}_20[0-9]{2}[0-1][0-9][0-3][0-9][0-2][0-9][0-5][0-9]{3}'
+  local RECPATTERN='[0-9]{4}_20[0-9]{2}[0-1][0-9][0-3][0-9][0-2][0-9][0-5][0-9]{3}\.'
 
-  #Is FILE named like a MythTV recording
-  if [[ "$FILE" =~ $RECPATTERN ]]; then #NOTE: Don't quote the RHS
+  #Is FILE named like a MythTV recording, or is there enough info to process without MythTV-DB.
+  if [[ "$file_basename" =~ ^$RECPATTERN ]]; then #NOTE: Don't quote the RHS
     debug "Looks ok, FILE is named like a MythTV recording: '$FILE'"
+  elif [[ -n "$m2karg2" ]]; then
+    warn "${FUNCNAME[0]}(): This does not look like a MythTV recording: '$FILE'"
+    debug "m2karg2:'$m2karg2'"
+    if [[ -n "$m2karg3" ]] || [[ -n "$m2karg4" && -n "$m2karg5" ]]; then
+      inform "But we seem to have enough info from the command line to process it as an episode."
+      debug "m2karg3:'$m2karg3'"
+      debug "m2karg4:'$m2karg4'"
+      debug "m2karg5:'$m2karg5'"
+      debug "Setting  Database='Disabled'"
+      [[ "$Database" = 'Enabled' ]] && inform "Disabling access to MythTV-DB -- trying to process non-MythTV file."
+      m2kProgramIDCheck='EP'
+      Database='Disabled'
+    elif [[ "$ShowCategory" = 'Movie' ]]; then
+      inform "But we seem to have enough info from the command line to process it as a movie."
+      [[ "$Database" = 'Enabled' ]] && inform "Disabling access to MythTV-DB -- trying to process non-MythTV file."
+      m2kProgramIDCheck="MV"
+      Database='Disabled'
+    else
+      NOTIFY_MSG="This does not look like a MythTV recording: '$FILE'"
+      err "${FUNCNAME[0]}() CALLED FROM: ${FUNCNAME[1]}(): $NOTIFY_MSG"
+      EXIT_JOB_TYPE='FileIsNotRecording'
+      return 1
+    fi
   else
     NOTIFY_MSG="This does not look like a MythTV recording: '$FILE'"
     err "${FUNCNAME[0]}() CALLED FROM: ${FUNCNAME[1]}(): $NOTIFY_MSG"
@@ -1411,7 +1436,7 @@ find_file_link_pairs(){
   local FILE="$1"
   [[ -e "$FILE" ]] || { err "${FUNCNAME[0]}(): Does not exist: '$FILE'"; return 1; }
   #A regex that should match MythTVs file naming, for the 21st century.
-  local RECPATTERN='[0-9]{4}_20[0-9]{2}[0-1][0-9][0-3][0-9][0-2][0-9][0-5][0-9]{3}'
+  local RECPATTERN='[0-9]{4}_20[0-9]{2}[0-1][0-9][0-3][0-9][0-2][0-9][0-5][0-9]{3}\.'
   #Is FILE a link or a file
   if [[ -L "$FILE" ]]; then
     #FILE is a link, grab its target. #TODO: maybe "$(realpath --strip "$FILE")" ~ "$(cd "$(dirname "$FILE")" ; pwd)"
@@ -1419,12 +1444,16 @@ find_file_link_pairs(){
     RECORDING_FILE="$(readlink "$FILE")"
     [[ -f "$RECORDING_FILE" ]] || { err "${FUNCNAME[0]}(): Broken link: $RECORDING_FILE"; return 1; }
     [[ -L "$RECORDING_FILE" ]] && { err "${FUNCNAME[0]}(): Multiple links, not following: $RECORDING_FILE"; return 1; }
-    if [[ "$RECORDING_FILE" =~ $RECPATTERN ]]; then #NOTE: Don't quote the RHS.
+    if [[ "${RECORDING_FILE##*/}" =~ ^$RECPATTERN ]]; then #NOTE: Don't quote the RHS.
       RECORDING_FILE_OWNER='MythTV'
       RECORDING_LINK_OWNER='myth2kodi'
-    elif [[ "$RECORDING_LINK" =~ $RECPATTERN ]]; then #NOTE: Don't quote the RHS.
+    elif [[ "${RECORDING_LINK##*/}" =~ ^$RECPATTERN ]]; then #NOTE: Don't quote the RHS.
       RECORDING_FILE_OWNER='myth2kodi'
       RECORDING_LINK_OWNER='MythTV'
+    #else
+    #  debug "This must be a non-MythTV file, so assuming the file we were provided is the effective MythTV file."
+    #  RECORDING_FILE_OWNER='myth2kodi'
+    #  RECORDING_LINK_OWNER='MythTV'
     fi
     return 0
   elif [[ -f "$FILE" ]]; then
@@ -1433,30 +1462,32 @@ find_file_link_pairs(){
     local -i found=1 #Use exit code convention of 0=success 1=failure.
     local -a check_dirs
     local LINK_NAME
-    if [[ "$RECORDING_FILE" =~ $RECPATTERN ]]; then #NOTE: Don't quote the RHS.
+    if [[ "${RECORDING_FILE##*/}" =~ ^$RECPATTERN ]]; then #NOTE: Don't quote the RHS.
       #FILE is a MythTV file name, check if there is a link to FILE from a myth2kodi target directory
       RECORDING_FILE_OWNER='MythTV'
       RECORDING_LINK_OWNER='myth2kodi'
       check_dirs=("$MoveDir" "$PrimaryMovieDir" "$PrimaryShowDir" "$AlternateMoveDir" "$AlternateMovieDir" "$AlternateShowDir")
-    else
+    else #elif [[ "$Database" = 'Enabled' ]]; then
       #FILE is a moved file name, check if there is a link to FILE from a StorageGroup Directory
       RECORDING_FILE_OWNER='myth2kodi'
       RECORDING_LINK_OWNER='MythTV'
-      check_dirs=($("$binpath"/mythdb_access --storagegroups            \
-                                             --SecurityPin="$DBPin"     \
-                                             --DBHostName="$DBHostName" \
-                                             --DBName="$MySQLMythDb"    \
-                                             --DBUserName="$MySQLuser"  \
-                                             --DBPassword="$MySQLpass"))
-      #TODO: should check return state...
+      get_mythtvdb_storagegroups
+      check_dirs=("${STORAGEGROUP_DIRS[@]}")
+    #else
+    #  debug "This must be a non-MythTV file, so assuming the file we were provided is the effective MythTV file."
+    #  RECORDING_FILE_OWNER='MythTV'
+    #  RECORDING_LINK_OWNER='myth2kodi'
+    #  check_dirs=("$MoveDir" "$PrimaryMovieDir" "$PrimaryShowDir" "$AlternateMoveDir" "$AlternateMovieDir" "$AlternateShowDir")
     fi
+    #if [[ -n "${check_dirs[@]}" ]]; then
     for check_dir in "${check_dirs[@]}" ; do
       LINK_NAME="$(find -L "$check_dir" -samefile "$RECORDING_FILE")"
       [[ -L "$LINK_NAME" ]] && { found=0 ; break ; }
     done
+    #fi
     #TODO: realpath may be heading toward deprecation, so maybe: "$(cd "$(dirname "$LINK_NAME")" ; pwd)". THough not sure about the robustness of dirname here...
     (( found == 0 )) && { RECORDING_LINK="$(realpath --strip "$LINK_NAME")"; return 0; }
-    if [[ ! "$RECORDING_FILE" =~ $RECPATTERN ]]; then
+    if [[ ! "${RECORDING_FILE##*/}" =~ ^$RECPATTERN ]]; then
       warn "${FUNCNAME[0]}(): No link found to: '$RECORDING_FILE'"
       warncont "Assuming recording has been disconnected from MythTV."
       RECORDING_LINK=''
@@ -1478,33 +1509,34 @@ find_file_link_pairs(){
 set_recording_name(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   debugcont "arg1: '$1'"
+  local file_name="$1"
   #Takes a single argument
   (( "$#" > 1 )) && { err "${FUNCNAME[0]}() only takes one arg."; return 1 ; }
   #A regex that should match MythTVs file naming, for the 21st century.
-  local RECPATTERN='[0-9]{4}_20[0-9]{2}[0-1][0-9][0-3][0-9][0-2][0-9][0-5][0-9]{3}'
+  local RECPATTERN='[0-9]{4}_20[0-9]{2}[0-1][0-9][0-3][0-9][0-2][0-9][0-5][0-9]{3}\.'
   local -i found=1 #Use exit code convention of: 0=success; 1=failure.
-  if [[ "$1" =~ $RECPATTERN ]]; then #NOTE: Don't quote the RHS.
+  if [[ "${file_name##*/}" =~ ^$RECPATTERN ]]; then #NOTE: Don't quote the RHS.
     #Is a MythTV recording.
     found=0
-    RECORDING_NAME="$1"
+    RECORDING_NAME="$file_name"
   else
     #In this case we need a full or relative path
-    [[ -f "$1" ]] || { err "${FUNCNAME[0]}(): arg1 is not a file."; return 1; }
-    #Check if it's a moved file name that's still tracked by MythTV
-    local -a sg_dirs
+    [[ -f "$file_name" ]] || { err "${FUNCNAME[0]}(): arg1 is not a file."; return 1; }
+    #if [[ "$Database" = 'Enabled' ]]; then
     #Get the storage group directories defined in MythTV-DB
-    sg_dirs=($("$binpath"/mythdb_access --storagegroups            \
-                                        --SecurityPin="$DBPin"     \
-                                        --DBHostName="$DBHostName" \
-                                        --DBName="$MySQLMythDb"    \
-                                        --DBUserName="$MySQLuser"  \
-                                        --DBPassword="$MySQLpass"))
+    get_mythtvdb_storagegroups
     #TODO: should check return state...
-    for sg_dir in "${sg_dirs[@]}" ; do
-      RECORDING_NAME="$(find -L "$sg_dir" -samefile "$1")"
-      [[ "$RECORDING_NAME" =~ $RECPATTERN ]] && { found=0 ; break ; }
+    #Check if it's a moved file name that's still tracked by MythTV
+    for sg_dir in "${STORAGEGROUP_DIRS[@]}" ; do
+      RECORDING_NAME="$(find -L "$sg_dir" -samefile "$file_name")"
+      [[ "${RECORDING_NAME##*/}" =~ ^$RECPATTERN ]] && { found=0 ; break ; }
     done
-    (( found == 0 )) && inform "$1 <==> $RECORDING_NAME"
+    (( found == 0 )) && inform "$file_name <==> $RECORDING_NAME"
+    #else
+    #  debug "This must be a non-MythTV file, so assuming the file we were provided is the effective MythTV file."
+    #  RECORDING_NAME="$file_name"
+    #  found=0
+    #fi
   fi
   if (( found == 0 )); then
     RECORDING_PATH="$(realpath --strip "$RECORDING_NAME")"
@@ -2000,29 +2032,83 @@ get_mythtvdb_info_pythonbindings(){
 
 get_mythtvdb_info(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  #Access the database entry using the requested grabber
-  case "$DATABASE_ACCESS" in
-    MySQL)
-      get_mythtvdb_info_mysql
-      return "$?"
-      ;;
-    PythonBindings)
-      get_mythtvdb_info_pythonbindings
-      returnstatus="$?"
-      if [[ "$returnstatus" != 0 ]]; then
-        NOTIFY_MSG="Call to MythTV-DB Python bindings failed."
-        EXIT_JOB_TYPE='MythTVdatabaseFailure'
+  if [[ "$Database" = 'Enabled' ]]; then
+    #Access the database entry using the requested grabber
+    case "$DATABASE_ACCESS" in
+      MySQL)
+        get_mythtvdb_info_mysql
+        return "$?"
+        ;;
+      PythonBindings)
+        get_mythtvdb_info_pythonbindings
+        returnstatus="$?"
+        if [[ "$returnstatus" != 0 ]]; then
+          NOTIFY_MSG="Call to MythTV-DB Python bindings failed."
+          EXIT_JOB_TYPE='MythTVdatabaseFailure'
+          return 1
+        fi
+        return 0
+        ;;
+      *)
+        NOTIFY_MSG="DATABASE_ACCESS incorrectly specified."
+        err "${FUNCNAME[0]}() CALLED FROM: ${FUNCNAME[1]}(): $NOTIFY_MSG"
+        EXIT_JOB_TYPE='UserSettingError'
         return 1
-      fi
-      return 0
-      ;;
-    *)
-      NOTIFY_MSG="DATABASE_ACCESS incorrectly specified."
-      err "${FUNCNAME[0]}() CALLED FROM: ${FUNCNAME[1]}(): $NOTIFY_MSG"
-      EXIT_JOB_TYPE='UserSettingError'
-      return 1
-      ;;
-  esac
+        ;;
+    esac
+  else
+    NOTIFY_MSG="Trying to access recording info with Database='Disabled'."
+    err "${FUNCNAME[0]}() CALLED FROM: ${FUNCNAME[1]}(): $NOTIFY_MSG"
+    EXIT_JOB_TYPE='InsufficientInformationProvided'
+    return 1
+  fi
+}
+
+get_mythtvdb_storagegroups(){
+  debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
+  if [[ "$Database" = 'Enabled' ]]; then
+    declare -ga STORAGEGROUP_DIRS
+    local returnstatus
+    #Access the database entry using the requested grabber
+    case "$DATABASE_ACCESS" in
+      MySQL)
+        STORAGEGROUP_DIRS=($(mysql -u"$MySQLuser" -p"$MySQLpass" -e "USE $MySQLMythDb ; SELECT dirname FROM storagegroup; " | sed -n '2~1p'))
+        returnstatus="$?"
+        if [[ "$returnstatus" != 0 ]]; then
+          NOTIFY_MSG="Accessing storagegroup table from MythTV-DB using MySQL failed."
+          EXIT_JOB_TYPE='MythTVdatabaseFailure'
+          return 1
+        fi
+        return 0
+        ;;
+      PythonBindings)
+        STORAGEGROUP_DIRS=($("$binpath"/mythdb_access --storagegroups            \
+                                                      --SecurityPin="$DBPin"     \
+                                                      --DBHostName="$DBHostName" \
+                                                      --DBName="$MySQLMythDb"    \
+                                                      --DBUserName="$MySQLuser"  \
+                                                      --DBPassword="$MySQLpass"))
+        returnstatus="$?"
+        if [[ "$returnstatus" != 0 ]]; then
+          NOTIFY_MSG="Accessing storagegroup table from MythTV-DB using Python-bindings failed."
+          EXIT_JOB_TYPE='MythTVdatabaseFailure'
+          return 1
+        fi
+        return 0
+        ;;
+      *)
+        NOTIFY_MSG="DATABASE_ACCESS incorrectly specified."
+        err "${FUNCNAME[0]}() CALLED FROM: ${FUNCNAME[1]}(): $NOTIFY_MSG"
+        EXIT_JOB_TYPE='UserSettingError'
+        return 1
+        ;;
+    esac
+  else
+    NOTIFY_MSG="Trying to access storagegroups with Database='Disabled'."
+    err "${FUNCNAME[0]}() CALLED FROM: ${FUNCNAME[1]}(): $NOTIFY_MSG"
+    EXIT_JOB_TYPE='InsufficientInformationProvided'
+    return 1
+  fi
 }
 
 #Remove recording's pictures and database entries from MythTV-DB.
@@ -2622,7 +2708,7 @@ download_series_info(){
   local tvmazeJsonFile="$dbdir/${NewShowName}_tvmaze.json"
   # to get the matching tvmaze id, then
   if ((tvmaze_id != 0)) ; then
-    debug "Found matchiong tvmaze id: '$tvmaze_id'"
+    debug "Found matching tvmaze id: '$tvmaze_id'"
     local tvmazeShowJson="http://api.tvmaze.com/shows/$tvmaze_id/episodes"
     [[ -f "$tvmazeJsonFile" ]] && mv "$tvmazeJsonFile" "$dbdir/${Today}_${NewShowName}_tvmaze.json"
     debug "Getting new tvmaze show info from: '$tvmazeShowJson'"
@@ -3213,6 +3299,8 @@ get_absolute_episode_number_fuzzy_plot(){
   debugcont "AbsoluteEpisodeNumber: '$AbsoluteEpisodeNumber'"
   debugcont "NewShowName: '$NewShowName'"
   debugcont "Plot: '$Plot'"
+
+  [[ -z "$Plot" ]] && { err "We do not have any Plot info."; return 1; }
 
   if [[ ! -f "$m2kdir/$NewShowName/$NewShowName.Plot.txt" ]]; then
     err "Myth2kodi's internal database contains no Plot file for '$NewShowName'."
@@ -5364,62 +5452,71 @@ delete_recording_from_mythtv(){
     [[ "$?" != 0 ]] && return "$?"
   fi
 
-  #Delete the recording file and its associated DB entry
-  case "$DATABASE_ACCESS" in
-    MySQL)
-      if [[ "$RERECORD" = 'Enabled' ]]; then
-        err "${FUNCNAME[0]}(): NotImplemented: You need to use PythonBindings for --rerecord."
+  if [[ "$Database" = 'Enabled' ]]; then
+    #Delete the recording file and its associated DB entry
+    case "$DATABASE_ACCESS" in
+      MySQL)
+        if [[ "$RERECORD" = 'Enabled' ]]; then
+          err "${FUNCNAME[0]}(): NotImplemented: You need to use PythonBindings for --rerecord."
+          return 1
+        else
+          #Delete the recording file and any link to it.
+          [[ -L "$RECORDING_LINK" ]] && rm -f "$RECORDING_LINK"
+          [[ -z "$DISCONNECT" && -f "$RECORDING_FILE" ]] && rm -f "$RECORDING_FILE"
+
+          #Delete the associated database entry and thumbnails.
+          delete_mythtv_database_entry_mysql #TODO: catch/return on any error state here
+        fi
+        ;;
+      PythonBindings)
+        local MTV_RECINFO_FILE
+        MTV_RECINFO_FILE="$(mktemp "$M2K_TMPDIR/m2k_delrecinfo_$FileNameNow"-XXXX)"
+        [[ "$?" != 0 ]] && { err "${FUNCNAME[0]}(): Failed to create temporary delrecinfo file." ; return 1 ; }
+        debug "Deleted recording info will be stored in temporary file: '$MTV_RECINFO_FILE'"
+
+        if [[ "$RERECORD" = 'Enabled' ]]; then
+          #Ask mythbackend to delete and rerecord the recording.
+          "$binpath"/mythdb_access --verbosity="$((LOGLEVEL<3?LOGLEVEL:3))" \
+                                   --filename="$RECORDING_NAME"             \
+                                   --SecurityPin="$DBPin"                   \
+                                   --DBHostName="$DBHostName"               \
+                                   --DBName="$MySQLMythDb"                  \
+                                   --DBUserName="$MySQLuser"                \
+                                   --DBPassword="$MySQLpass"                \
+                                   --output="$MTV_RECINFO_FILE"             \
+                                   --writeFile                              \
+                                   --force                                  \
+                                   --rerecord 2>&1 | err_pipe "mythdb_access: "
+          #TODO: catch/return on any error state here
+        else
+          #Ask mythbackend to delete the recording (there can be a delay of 5-10 min).
+          "$binpath"/mythdb_access --verbosity="$((LOGLEVEL<3?LOGLEVEL:3))" \
+                                   --filename="$RECORDING_NAME"             \
+                                   --SecurityPin="$DBPin"                   \
+                                   --DBHostName="$DBHostName"               \
+                                   --DBName="$MySQLMythDb"                  \
+                                   --DBUserName="$MySQLuser"                \
+                                   --DBPassword="$MySQLpass"                \
+                                   --output="$MTV_RECINFO_FILE"             \
+                                   --writeFile                              \
+                                   --force                                  \
+                                   --delete 2>&1 | err_pipe "mythdb_access: "
+          #TODO: catch/return on any error state here
+        fi
+        ;;
+      *)
+        NOTIFY_MSG="DATABASE_ACCESS incorrectly specified."
+        err "${FUNCNAME[0]}() CALLED FROM: ${FUNCNAME[1]}(): $NOTIFY_MSG"
+        EXIT_JOB_TYPE='UserSettingError'
         return 1
-      else
-        #Delete the recording file and any link to it.
-        [[ -L "$RECORDING_LINK" ]] && rm -f "$RECORDING_LINK"
-        [[ -z "$DISCONNECT" && -f "$RECORDING_FILE" ]] && rm -f "$RECORDING_FILE"
-
-        #Delete the associated database entry and thumbnails.
-        delete_mythtv_database_entry_mysql #TODO: catch/return on any error state here
-      fi
-      ;;
-    PythonBindings)
-      local MTV_RECINFO_FILE
-      MTV_RECINFO_FILE="$(mktemp "$M2K_TMPDIR/m2k_delrecinfo_$FileNameNow"-XXXX)"
-      [[ "$?" != 0 ]] && { err "${FUNCNAME[0]}(): Failed to create temporary delrecinfo file." ; return 1 ; }
-      debug "Deleted recording info will be stored in temporary file: '$MTV_RECINFO_FILE'"
-
-      if [[ "$RERECORD" = 'Enabled' ]]; then
-        #Ask mythbackend to delete and rerecord the recording.
-        "$binpath"/mythdb_access --verbosity="$((LOGLEVEL<3?LOGLEVEL:3))" \
-                                 --filename="$RECORDING_NAME"             \
-                                 --SecurityPin="$DBPin"                   \
-                                 --DBHostName="$DBHostName"               \
-                                 --DBName="$MySQLMythDb"                  \
-                                 --DBUserName="$MySQLuser"                \
-                                 --DBPassword="$MySQLpass"                \
-                                 --output="$MTV_RECINFO_FILE"             \
-                                 --writeFile                              \
-                                 --force                                  \
-                                 --rerecord 2>&1 | err_pipe "mythdb_access: "
-      else
-        #Ask mythbackend to delete the recording (there can be a delay of 5-10 min).
-        "$binpath"/mythdb_access --verbosity="$((LOGLEVEL<3?LOGLEVEL:3))" \
-                                 --filename="$RECORDING_NAME"             \
-                                 --SecurityPin="$DBPin"                   \
-                                 --DBHostName="$DBHostName"               \
-                                 --DBName="$MySQLMythDb"                  \
-                                 --DBUserName="$MySQLuser"                \
-                                 --DBPassword="$MySQLpass"                \
-                                 --output="$MTV_RECINFO_FILE"             \
-                                 --writeFile                              \
-                                 --force                                  \
-                                 --delete 2>&1 | err_pipe "mythdb_access: "
-      fi
-      ;;
-    *)
-      NOTIFY_MSG="DATABASE_ACCESS incorrectly specified."
-      err "${FUNCNAME[0]}() CALLED FROM: ${FUNCNAME[1]}(): $NOTIFY_MSG"
-      EXIT_JOB_TYPE='UserSettingError'
-      return 1
-      ;;
-  esac
+        ;;
+    esac
+  else
+    NOTIFY_MSG="Trying to delete a recording with Database='Disabled'."
+    err "${FUNCNAME[0]}() CALLED FROM: ${FUNCNAME[1]}(): $NOTIFY_MSG"
+    EXIT_JOB_TYPE='InsufficientInformationProvided'
+    return 1
+  fi
 
   #Remove the undo and doover entries associated with the recording. If there
   #was no RECORDING_LINK found then there should not be undo or doover entries.
@@ -6116,10 +6213,10 @@ filesystem_state="$?"
 msg_operation_summary
 
 ######PRE-NAMING CHECKS#####
-#if no episode data and it's not a movie or a test
-if [[ -z "$Exx" && "$InputPath" != "$m2kdir/6666_20420101084242.tst" ]]; then
-  if [[ -z "$ChanID" && -n "$InputPath" ]]; then #TODO: check this...
-    NOTIFY_MSG="Episode could not be matched based on supplied Title and SubTitle."
+#if no episode data and it's not a test
+if [[ "$HasSxxExx" != '1' && "$InputPath" != "$m2kdir/6666_20420101084242.tst" ]]; then
+  if [[ "$m2kProgramIDCheck" = "EP" ]]; then
+    NOTIFY_MSG="Episode could not be matched with supplied information."
     warn "$NOTIFY_MSG"
     exit_job 'NameCouldNotBeAssigned'
   elif [[ "$m2kProgramIDCheck" = "MV" ]]; then

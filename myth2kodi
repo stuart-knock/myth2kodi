@@ -267,6 +267,7 @@ CommercialMarkupCleanup='Enabled'
 #myth2kodi's modifications to our Kodi library when we want to use myth2kodi
 #with PROCESS_RECORDING_MODE='COPY' to put nicely named copies of our MythTV
 #recordings on a removable media. See, 'example_copy_to_removable_media_myth2kodi.conf'.
+#It's also automatically set to 'Disabled' if you process a non-MyhtTV recording.
 #Options: ['Enabled'(DEFAULT)|'Disabled']
 TRACKING='Enabled'
 
@@ -558,7 +559,7 @@ exit_job(){
       exitstatus=0
       ;;
     #Information was not obtainable
-    TheTVDBIsIncomplete)
+    TheTVDBIsIncomplete|FileIsNotRecording)
       warn "INSUFFICIENT INFORMATION WAS SUPPLIED: $jobtype"
       exitstatus=0
       ;;
@@ -1154,11 +1155,15 @@ pre_process_check(){
       [[ "$Database" = 'Enabled' ]] && inform "Disabling access to MythTV-DB -- trying to process non-MythTV file."
       m2kProgramIDCheck='EP'
       Database='Disabled'
+      debug "Setting  TRACKING='Disabled'"
+      TRACKING='Disabled'
     elif [[ "$ShowCategory" = 'Movie' ]]; then
       inform "But we seem to have enough info from the command line to process it as a movie."
       [[ "$Database" = 'Enabled' ]] && inform "Disabling access to MythTV-DB -- trying to process non-MythTV file."
       m2kProgramIDCheck="MV"
       Database='Disabled'
+      debug "Setting  TRACKING='Disabled'"
+      TRACKING='Disabled'
     else
       NOTIFY_MSG="This does not look like a MythTV recording: '$FILE'"
       err "${FUNCNAME[0]}() CALLED FROM: ${FUNCNAME[1]}(): $NOTIFY_MSG"
@@ -4340,9 +4345,9 @@ success_postprocessing(){
   [[ "$RequiresNFO" = "1" ]] && generate_episode_nfo
   kodi_newshow
   add_undo
-  [[ "$RequiresDoover" = "1" ]] && add_doover
+  [[ "$RequiresDoover" = "1" && "$TRACKING" != 'Disabled' ]] && add_doover
   dailyreport
-  [[ "$CREATE_RSS" = 'Enabled' && "$TRACKING" != 'Disabled' ]] && generaterss
+  [[ "$CREATE_RSS" = 'Enabled' ]] && generaterss
   if [[ "$PROCESS_RECORDING_MODE" = 'MOVE' && "$SYMLINK" = 'Disabled' ]]; then
     set_group_permission
   fi
@@ -5340,7 +5345,7 @@ remove_undo_doover_entries(){
   (( LOGLEVEL < 3 )) && rm -f "$m2kdir/undo.sh.bak"
 
   #Delete doover.sh entries associated with $RECORDING_NAME
-  if [[ -f "$m2kdir/doover.sh" ]]; then
+  if [[ -f "$m2kdir/doover.sh" && -n "$RECORDING_NAME" ]]; then
     debug "Removing lines related to '$RECORDING_NAME' == '$RECORDING_LINK' from '$m2kdir/doover.sh'"
     if [[ "$RECORDING_LINK_OWNER" = 'myth2kodi' ]]; then
       #Was processed in LINK mode, so find and delete LINK removal line
@@ -5354,6 +5359,11 @@ remove_undo_doover_entries(){
     (( doover_entry_remove_status+=PIPESTATUS[0] ))
     debug "doover_entry_remove_status='$doover_entry_remove_status'"
     (( LOGLEVEL < 3 )) && rm -f "$m2kdir/doover.sh.bak"
+  else
+    warn "The MythTV-recording-file name was not identified, so we cannot remove doover entries."
+    warncont "This should only occur for --undo of non-MythTV files, and in that case there should not"
+    warncont "be any associated doover entries anyway. If you think this is a MythTV-recording then you"
+    warncont "may have encountered a bug, so check your logs."
   fi
   return "$(( undo_entry_remove_status + doover_entry_remove_status ))"
 }
@@ -5452,6 +5462,12 @@ delete_recording_from_mythtv(){
   if [[ -z "$RECORDING_NAME" ]]; then
     #Identify file, link, who owns what, and the MythTV path and basename.
     if ! identify_recording_files "$inputarg"; then return "$?"; fi
+  fi
+
+  #Cannot sensibly delete a recording from MythTV that is not a MythTV recording.
+  if [[ -z "$RECORDING_NAME" ]]; then
+    err "${FUNCNAME[1]}():${FUNCNAME[0]}(): Cannot delete non-MythTV file."
+    return 1
   fi
 
   if [[ "$Database" = 'Enabled' ]]; then
@@ -5579,8 +5595,7 @@ switch_delete_recording(){
   printf '\n'
   [[ "$yesorno" != 'y' ]] && { inform "You must press 'y' to continue, aborting."; return 1 ; }
 
-  delete_recording_from_mythtv "$1"
-  [[ "$?" != 0 ]] && return 1
+  if ! delete_recording_from_mythtv "$1"; then return "$?"; fi
 
   #Delete any comskip or NFO files associated with the recording.
   if [[ "$RECORDING_FILE_OWNER" = 'myth2kodi' ]]; then
@@ -5608,12 +5623,20 @@ disconnect_recording(){
   local returnstatus
 
   #Identify file, link, who owns what, and the MythTV path and basename.
-  identify_recording_files "$inputarg"
-  [[ "$?" != 0 ]] && return "$?"
+  if ! identify_recording_files "$inputarg"; then return "$?"; fi
 
   #Cannot sensibly "disconnect" a recording that has not been processed or has
   #already been disconnected.
-  [[ -z "$RECORDING_LINK" ]] && return 1
+  if [[ -z "$RECORDING_LINK" ]]; then
+    err "${FUNCNAME[1]}():${FUNCNAME[0]}(): Cannot disconnect unprocessed or already disconnected recording."
+    return 1
+  fi
+
+  #Cannot sensibly "disconnect" a recording from MythTV that is not a MythTV recording.
+  if [[ -z "$RECORDING_NAME" ]]; then
+    err "${FUNCNAME[1]}():${FUNCNAME[0]}(): Cannot disconnect non-MythTV file."
+    return 1
+  fi
 
   #Remove link associated with recording.
   if [[ -L "$RECORDING_LINK" ]]; then
@@ -6133,7 +6156,7 @@ fi
 
 #TODO: The following few blocks will run even if we haven't properly identified the series, which doesn't make
 #      sense for the things trying to set SxxExx...
-
+#TODO: makes no sense to run this block if this is a movie.
 #If we already have Sxx and Exx from MythTV-DB, use them. If we also had a Subtitle, then do some verification.
 if [[ "$HasSxxExx" = '1' ]] ; then
   #TODO: If the confidence rating from the above is good, and we have an
@@ -6341,9 +6364,19 @@ if [[ "$PROCESS_RECORDING_MODE" = 'MOVE' ]]; then
         #Set permissions as rw-rw-r-- (664)
         chmod 664 "$MoveDir/$ShowFileName.$OriginalExt"
         if [[ "$RequiresDoover" != '1' ]]; then
-          debug "SYMLINK='Disabled' and does not require doover, so MythTV-DB info will be removed."
-          RECORDING_NAME="$InputFileBasename" #Set here so we won't needlessly run identify_recording_files().
-          if ! delete_recording_from_mythtv; then exit_job "$EXIT_JOB_TYPE"; fi
+          if [[ "$Database" = 'Enabled' ]]; then
+            debug "SYMLINK='Disabled' and does not require doover, so MythTV-DB info will be removed."
+            RECORDING_NAME="$InputFileBasename" #Set here so we won't needlessly run identify_recording_files().
+            if ! delete_recording_from_mythtv; then exit_job "$EXIT_JOB_TYPE"; fi
+          else
+            warn "Moved recording file with SYMLINK='Disabled' and Database='Disabled'."
+            warncont "If this was a MythTV recording file, then the MythTV-DB will now"
+            warncont "reference a recording for which the file no longer exists. You will"
+            warncont "need to set Database='Enabled' and then run:"
+            warncont "    RECORDING_NAME='$InputFileBasename'"
+            warncont "    myth2kodi --delete '$InputFileBasename'"
+            warncont "to remove the MythTV-DB entry. You should rethink your settings."
+          fi
         else
           warn "Job requires doover, so attempting to create symlink in SYMLINK='Disabled' mode."
           ln -s "$MoveDir/$ShowFileName.$OriginalExt" "$InputPath"

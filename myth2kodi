@@ -563,7 +563,7 @@ exit_job(){
       exitstatus=0
       ;;
     #File system error occurred #TODO: clean-up...
-    PermissionError|ZeroLengthFile|FileOrPathDoesNotExist|MoveFailed|CopyFailed|LinkingFailed|NoTargetPathAvailable|NotFileOrDirectory)
+    PermissionError|ZeroLengthFile|FileOrPathDoesNotExist|MoveFailed|CopyFailed|RemoveFailed|LinkingFailed|NoTargetPathAvailable|NotFileOrDirectory)
       err "$ERR_HEADER FILE SYSTEM ERROR: $jobtype"
       exitstatus=1
       ;;
@@ -577,9 +577,9 @@ exit_job(){
       err "$ERR_HEADER UNKNOWN ERROR OCCOURED: $jobtype"
       exitstatus=1
       ;;
-    #User elected not to process jobs which can not be properly categorized
+    #
     MythTVdatabaseFailure)
-      err "$ERR_HEADER COULDN'T EXTRACT RECORDING INFO FROM MythTV-DB: $jobtype"
+      err "$ERR_HEADER FAILED WHILE ACCESSING MythTV-DB: $jobtype"
       exitstatus=1
       ;;
     #User elected not to process jobs which can not be properly categorized
@@ -1402,16 +1402,14 @@ identify_recording_files(){
   local inputarg="$1"
   if [[ -f "$inputarg" ]]; then
     #Find the recording file and any link to it.
-    find_file_link_pairs "$inputarg"
-    [[ "$?" != 0 ]] && return "$?"
+    if ! find_file_link_pairs "$inputarg"; then return $?; fi
     debug "RECORDING_LINK: '$RECORDING_LINK'"
     debug "RECORDING_LINK_OWNER: '$RECORDING_LINK_OWNER'"
     debug "RECORDING_FILE: '$RECORDING_FILE'"
     debug "RECORDING_FILE_OWNER: '$RECORDING_FILE_OWNER'"
 
     #Find the MythTV recording file name and its path.
-    set_recording_name "$inputarg"
-    [[ "$?" != 0 ]] && return "$?"
+    if ! set_recording_name "$inputarg"; then return $?; fi
     debug "RECORDING_PATH: '$RECORDING_PATH'"
     debug "RECORDING_NAME: '$RECORDING_NAME'"
     InputPath="$RECORDING_PATH"
@@ -1440,8 +1438,8 @@ find_file_link_pairs(){
   #Is FILE a link or a file
   if [[ -L "$FILE" ]]; then
     #FILE is a link, grab its target. #TODO: maybe "$(realpath --strip "$FILE")" ~ "$(cd "$(dirname "$FILE")" ; pwd)"
-    RECORDING_LINK="$(realpath --strip "$FILE")"
-    RECORDING_FILE="$(readlink "$FILE")"
+    if ! RECORDING_LINK="$(realpath --strip "$FILE")"; then return $?; fi
+    if ! RECORDING_FILE="$(readlink "$FILE")"; then return $?; fi
     [[ -f "$RECORDING_FILE" ]] || { err "${FUNCNAME[0]}(): Broken link: $RECORDING_FILE"; return 1; }
     [[ -L "$RECORDING_FILE" ]] && { err "${FUNCNAME[0]}(): Multiple links, not following: $RECORDING_FILE"; return 1; }
     if [[ "${RECORDING_FILE##*/}" =~ ^$RECPATTERN ]]; then #NOTE: Don't quote the RHS.
@@ -1458,7 +1456,7 @@ find_file_link_pairs(){
     return 0
   elif [[ -f "$FILE" ]]; then
     #FILE is a file, #TODO: realpath == readlink -f
-    RECORDING_FILE="$(realpath "$FILE")"
+    if ! RECORDING_FILE="$(realpath "$FILE")"; then return $?; fi
     local -i found=1 #Use exit code convention of 0=success 1=failure.
     local -a check_dirs
     local LINK_NAME
@@ -1471,7 +1469,7 @@ find_file_link_pairs(){
       #FILE is a moved file name, check if there is a link to FILE from a StorageGroup Directory
       RECORDING_FILE_OWNER='myth2kodi'
       RECORDING_LINK_OWNER='MythTV'
-      get_mythtvdb_storagegroups
+      if ! get_mythtvdb_storagegroups; then return $?; fi
       check_dirs=("${STORAGEGROUP_DIRS[@]}")
     #else
     #  debug "This must be a non-MythTV file, so assuming the file we were provided is the effective MythTV file."
@@ -1486,7 +1484,10 @@ find_file_link_pairs(){
     done
     #fi
     #TODO: realpath may be heading toward deprecation, so maybe: "$(cd "$(dirname "$LINK_NAME")" ; pwd)". THough not sure about the robustness of dirname here...
-    (( found == 0 )) && { RECORDING_LINK="$(realpath --strip "$LINK_NAME")"; return 0; }
+    if (( found == 0 )); then
+      if ! RECORDING_LINK="$(realpath --strip "$LINK_NAME")"; then return $?; fi
+      return 0
+    fi
     if [[ ! "${RECORDING_FILE##*/}" =~ ^$RECPATTERN ]]; then
       warn "${FUNCNAME[0]}(): No link found to: '$RECORDING_FILE'"
       warncont "Assuming recording has been disconnected from MythTV."
@@ -1524,8 +1525,7 @@ set_recording_name(){
     [[ -f "$file_name" ]] || { err "${FUNCNAME[0]}(): arg1 is not a file."; return 1; }
     #if [[ "$Database" = 'Enabled' ]]; then
     #Get the storage group directories defined in MythTV-DB
-    get_mythtvdb_storagegroups
-    #TODO: should check return state...
+    if ! get_mythtvdb_storagegroups; then return $?; fi
     #Check if it's a moved file name that's still tracked by MythTV
     for sg_dir in "${STORAGEGROUP_DIRS[@]}" ; do
       RECORDING_NAME="$(find -L "$sg_dir" -samefile "$file_name")"
@@ -1539,8 +1539,8 @@ set_recording_name(){
     #fi
   fi
   if (( found == 0 )); then
-    RECORDING_PATH="$(realpath --strip "$RECORDING_NAME")"
-    RECORDING_NAME="$(basename "$RECORDING_NAME")"
+    if ! RECORDING_PATH="$(realpath --strip "$RECORDING_NAME")"; then return $?; fi
+    if ! RECORDING_NAME="$(basename "$RECORDING_NAME")"; then return $?; fi
     debug "Setting RECORDING_PATH='$RECORDING_PATH'"
     debug "Setting RECORDING_NAME='$RECORDING_NAME'"
     return 0
@@ -3757,11 +3757,13 @@ target_file_exists(){
   errcont "Plot: $Plot"
 
   EXIT_JOB_TYPE='FileAlreadyExists'
+  local -i recording_name_return_state
 
   #Identify any MythTV file name associated with the already existing move target.
   set_recording_name "$MoveDir/$ShowFileName.$OriginalExt"
+  recording_name_return_state="$?"
 
-  if [[ "$?" == 0 && -n "$RECORDING_NAME" ]]; then
+  if [[ "$recording_name_return_state" == 0 && -n "$RECORDING_NAME" ]]; then
     if [[ "$RECORDING_NAME" == "$InputFileBasename" ]]; then
       err "This is because we've already processed this recording."
       NOTIFY_MSG="Recording has already been processed: $InputFileBasename"
@@ -3779,7 +3781,7 @@ target_file_exists(){
   #Write an entry in the duplicates file, for easy check/removal of duplicates.
   printf '"%s" "%s" "%s" "%s"\n' "$InputTitle" "$ShowStartTime" "$InputPath" "$ShowFileName" >> "$DuplicatesFile"
   NOTIFY_MSG="Recording identified as possible duplicate of: $MoveDir/$ShowFileName.$OriginalExt"
-  return 0
+  return "$recording_name_return_state"
 }
 
 ############################### HELP MESSAGES ################################
@@ -5444,12 +5446,12 @@ delete_recording_from_mythtv(){
   debugcont "RERECORD='$RERECORD'"
 
   local inputarg="$1"
+  local returnstatus
 
   #If we haven't already...
   if [[ -z "$RECORDING_NAME" ]]; then
     #Identify file, link, who owns what, and the MythTV path and basename.
-    identify_recording_files "$inputarg"
-    [[ "$?" != 0 ]] && return "$?"
+    if ! identify_recording_files "$inputarg"; then return "$?"; fi
   fi
 
   if [[ "$Database" = 'Enabled' ]]; then
@@ -5462,10 +5464,24 @@ delete_recording_from_mythtv(){
         else
           #Delete the recording file and any link to it.
           [[ -L "$RECORDING_LINK" ]] && rm -f "$RECORDING_LINK"
-          [[ -z "$DISCONNECT" && -f "$RECORDING_FILE" ]] && rm -f "$RECORDING_FILE"
+          if [[ -z "$DISCONNECT" && -f "$RECORDING_FILE" ]]; then
+            if ! rm -f "$RECORDING_FILE"; then
+              returnstatus="$?"
+              NOTIFY_MSG="Failed deleting recording file."
+              err "${FUNCNAME[1]}():${FUNCNAME[0]}(): $NOTIFY_MSG"
+              EXIT_JOB_TYPE='RemoveFailed'
+              return "$returnstatus"
+            fi
+          fi
 
           #Delete the associated database entry and thumbnails.
-          delete_mythtv_database_entry_mysql #TODO: catch/return on any error state here
+          if ! delete_mythtv_database_entry_mysql; then
+            returnstatus="$?"
+            NOTIFY_MSG="Failed deleting MythTV-DB entry using MySQL."
+            err "${FUNCNAME[1]}():${FUNCNAME[0]}(): $NOTIFY_MSG"
+            EXIT_JOB_TYPE='MythTVdatabaseFailure'
+            return "$returnstatus"
+          fi
         fi
         ;;
       PythonBindings)
@@ -5487,7 +5503,7 @@ delete_recording_from_mythtv(){
                                    --writeFile                              \
                                    --force                                  \
                                    --rerecord 2>&1 | err_pipe "mythdb_access: "
-          #TODO: catch/return on any error state here
+          returnstatus="${PIPESTATUS[0]}"
         else
           #Ask mythbackend to delete the recording (there can be a delay of 5-10 min).
           "$binpath"/mythdb_access --verbosity="$((LOGLEVEL<3?LOGLEVEL:3))" \
@@ -5501,7 +5517,13 @@ delete_recording_from_mythtv(){
                                    --writeFile                              \
                                    --force                                  \
                                    --delete 2>&1 | err_pipe "mythdb_access: "
-          #TODO: catch/return on any error state here
+          returnstatus="${PIPESTATUS[0]}"
+        fi
+        if [[ "$returnstatus" != '0' ]]; then
+          NOTIFY_MSG="Failed deleting recording with Python-bindings."
+          err "${FUNCNAME[1]}():${FUNCNAME[0]}(): $NOTIFY_MSG"
+          EXIT_JOB_TYPE='MythTVdatabaseFailure'
+          return "$returnstatus"
         fi
         ;;
       *)
@@ -5583,13 +5605,24 @@ disconnect_recording(){
   [[ "$yesorno" != 'y' ]] && { inform "You must press 'y' to continue, aborting."; return 1 ; }
 
   local inputarg="$1"
+  local returnstatus
 
   #Identify file, link, who owns what, and the MythTV path and basename.
   identify_recording_files "$inputarg"
   [[ "$?" != 0 ]] && return "$?"
 
+  #Cannot sensibly "disconnect" a recording that has not been processed or has
+  #already been disconnected.
+  [[ -z "$RECORDING_LINK" ]] && return 1
+
   #Remove link associated with recording.
-  [[ -L "$RECORDING_LINK" ]] && rm -f "$RECORDING_LINK"
+  if [[ -L "$RECORDING_LINK" ]]; then
+    if ! rm -f "$RECORDING_LINK"; then
+      returnstatus="$?"
+      err "${FUNCNAME[1]}():${FUNCNAME[0]}(): Failed deleting recording link."
+      return "$returnstatus"
+    fi
+  fi
 
   #If recording file still has a MythTV name ('moved' in LINK mode) then
   #actually move it to myth2kodi name.
@@ -5605,8 +5638,7 @@ disconnect_recording(){
   fi
 
   declare -g DISCONNECT='true'
-  delete_recording_from_mythtv "$inputarg"
-  [[ "$?" != 0 ]] && return 1
+  if ! delete_recording_from_mythtv "$inputarg"; then return "$?"; fi
 
   return 0
 }
@@ -5627,8 +5659,7 @@ recording_log(){
   local LOGFILELIST_FILE
   local TEMPLOG_FILE
   #Find the MythTV recording file name and its path.
-  set_recording_name "$1"
-  [[ "$?" != 0 ]] && return "$?"
+  if ! set_recording_name "$1"; then return "$?"; fi
   debug "RECORDING_PATH: '$RECORDING_PATH'"
   debug "RECORDING_NAME: '$RECORDING_NAME'"
   LOGFILELIST_FILE="$(mktemp "$M2K_TMPDIR"/m2k_logfilelist-XXXX)"
@@ -6312,8 +6343,7 @@ if [[ "$PROCESS_RECORDING_MODE" = 'MOVE' ]]; then
         if [[ "$RequiresDoover" != '1' ]]; then
           debug "SYMLINK='Disabled' and does not require doover, so MythTV-DB info will be removed."
           RECORDING_NAME="$InputFileBasename" #Set here so we won't needlessly run identify_recording_files().
-          delete_recording_from_mythtv
-          #TODO: [[ "$?" != 0 ]] && exit_job "$EXIT_JOB_TYPE" #This will require delete_recording_from_mythtv and sub functions to properly set EXIT_JOB_TYPE and NOTIFY_MSG...
+          if ! delete_recording_from_mythtv; then exit_job "$EXIT_JOB_TYPE"; fi
         else
           warn "Job requires doover, so attempting to create symlink in SYMLINK='Disabled' mode."
           ln -s "$MoveDir/$ShowFileName.$OriginalExt" "$InputPath"

@@ -924,8 +924,7 @@ parse_command_flags(){
       debug "Recognised command line switch '--recording-info'"
       #Example usage: myth2kodi --recording-info "1070_20160331073100.mpg"
       inform "Attempting to access recording info for: $m2karg2"
-      set_recording_name "$m2karg2"
-      [[ "$?" != 0 ]] && return "$?"
+      if ! set_recording_name "$m2karg2"; then return "$?"; fi
       InputFileBasename="$RECORDING_NAME"
       InputTitle=''
       process_mythtvdb
@@ -954,16 +953,14 @@ parse_command_flags(){
     ;;
     --maintenance)
       debug "Recognised command line switch '--maintenance'"
-      maintenance_warning
-      [[ "$?" != 0 ]] && return $?
+      if ! maintenance_warning ; then return "$?"; fi
       declare -gi removedead=1
       m2k_maintenance
       return $?
     ;;
     --cleanse)
       debug "Recognised command line switch '--cleanse'"
-      cleanse_warning
-      [[ "$?" != 0 ]] && return $?
+      if ! cleanse_warning ; then return "$?"; fi
       m2k_cleanse
       return $?
     ;;
@@ -1117,8 +1114,7 @@ validate_args(){
 
     #Do not reprocess a recording we already processed, unless forced to.
     if [[ "$FORCE_PROCESS" != 'Enabled' ]]; then
-      pre_process_check "$m2karg1"
-      [[ "$?" != 0 ]] && return 1
+      if ! pre_process_check "$m2karg1"; then return "$?"; fi
     fi
 
   fi
@@ -1678,8 +1674,10 @@ m2k_maintenance(){
   if [[ "$DIR_TRACKING_CLEANUP" = 'Enabled' && -f "$m2kdir/dir.tracking" ]]; then
     inform "PERFORMING CLEANUP OF EMPTY DIRECTORIES."
     local SORTED_DIR_TRACKING_FILE
-    SORTED_DIR_TRACKING_FILE="$(mktemp "$M2K_TMPDIR"/m2k_sorted_dir_tracking-XXXX)"
-    [[ "$?" != 0 ]] && { err "${FUNCNAME[0]}(): Failed to create temporary sorted-dir-tracking file." ; return 1 ; }
+    if ! SORTED_DIR_TRACKING_FILE="$(mktemp "$M2K_TMPDIR"/m2k_sorted_dir_tracking-XXXX)"; then
+      err "${FUNCNAME[0]}(): Failed to create temporary sorted-dir-tracking file."
+      return 1
+    fi
     debug "Created a temporary sorted dir,tracking file: '$SORTED_DIR_TRACKING_FILE'"
     #Reverse dictionary sort the tracked dirs, should have the effect of depth first.
     sort -dr "$m2kdir/dir.tracking" > "$SORTED_DIR_TRACKING_FILE"
@@ -1774,12 +1772,18 @@ m2k_cleanse(){
 
   #Create cleanup files for archived logs, myth2kodi database, and daily report files.
   local CLEANUP_LOGS CLEANUP_M2K_DB CLEANUP_DAILYREPORT
-  CLEANUP_LOGS="$(mktemp "$M2K_TMPDIR/m2k_cleanup_logs_$FileNameNow"-XXXX)"
-  [[ "$?" != 0 ]] && { err "${FUNCNAME[0]}(): Failed to create temporary cleanup-logs file." ; return 1 ; }
-  CLEANUP_M2K_DB="$(mktemp "$M2K_TMPDIR/m2k_cleanup_m2k_db_$FileNameNow"-XXXX)"
-  [[ "$?" != 0 ]] && { err "${FUNCNAME[0]}(): Failed to create temporary cleanup-m2k-db file." ; return 1 ; }
-  CLEANUP_DAILYREPORT="$(mktemp "$M2K_TMPDIR/m2k_cleanup_dailyreport_$FileNameNow"-XXXX)"
-  [[ "$?" != 0 ]] && { err "${FUNCNAME[0]}(): Failed to create temporary cleanup-daily reportfile." ; return 1 ; }
+  if ! CLEANUP_LOGS="$(mktemp "$M2K_TMPDIR/m2k_cleanup_logs_$FileNameNow"-XXXX)"; then
+    err "${FUNCNAME[0]}(): Failed to create temporary cleanup-logs file."
+    return 1
+  fi
+  if ! CLEANUP_M2K_DB="$(mktemp "$M2K_TMPDIR/m2k_cleanup_m2k_db_$FileNameNow"-XXXX)"; then
+    err "${FUNCNAME[0]}(): Failed to create temporary cleanup-m2k-db file."
+    return 1
+  fi
+  if ! CLEANUP_DAILYREPORT="$(mktemp "$M2K_TMPDIR/m2k_cleanup_dailyreport_$FileNameNow"-XXXX)"; then
+    err "${FUNCNAME[0]}(): Failed to create temporary cleanup-daily reportfile."
+    return 1
+  fi
   find "$m2kdir" -maxdepth 1 -type f -name '*20[0-9][0-9]-[0-1][0-9]-[0-3][0-9]*' > "$CLEANUP_LOGS"
   find "$m2kdir" -mindepth 2 -type f ! -path "*DailyReport*" -name '*20[0-9][0-9]-[0-1][0-9]-[0-3][0-9]*' > "$CLEANUP_M2K_DB"
   find "$m2kdir/DailyReport" -type f -name '*20[0-9][0-9]-[0-1][0-9]-[0-3][0-9]*' > "$CLEANUP_DAILYREPORT"
@@ -1884,13 +1888,17 @@ get_mythtvdb_info_mysql(){
   #####COMSKIP DATA#####
   #Set up counter, remove old markup data and generate new markup file from markupstart and stop
   if [[ "$CommercialMarkup" = 'Enabled' ]]; then
-    MARKUPSTART_TMP="$(mktemp "$M2K_TMPDIR/m2k_markupstart_$FileNameNow"-XXXX)"
-    [[ "$?" != 0 ]] && { err "${FUNCNAME[0]}(): Failed to create temporary markupstart file." ; return 1 ; }
+    if ! MARKUPSTART_TMP="$(mktemp "$M2K_TMPDIR/m2k_markupstart_$FileNameNow"-XXXX)"; then
+      err "${FUNCNAME[0]}(): Failed to create temporary markupstart file."
+      return 1
+    fi
     debug "Created a temporary comskip markupstart file: '$MARKUPSTART_TMP'"
     declare -gr MARKUPSTART_TMP
 
-    MARKUPSTOP_TMP="$(mktemp "$M2K_TMPDIR/m2k_markupstop_$FileNameNow"-XXXX)"
-    [[ "$?" != 0 ]] && { err "${FUNCNAME[0]}(): Failed to create temporary markupstop file." ; return 1 ; }
+    if ! MARKUPSTOP_TMP="$(mktemp "$M2K_TMPDIR/m2k_markupstop_$FileNameNow"-XXXX)"; then
+      err "${FUNCNAME[0]}(): Failed to create temporary markupstop file."
+      return 1
+    fi
     debug "Created a temporary comskip markupstop file: '$MARKUPSTOP_TMP'"
     declare -gr MARKUPSTOP_TMP
 
@@ -1926,8 +1934,10 @@ get_mythtvdb_info_pythonbindings(){
 
   local pythonExitStatus
   local MTV_RECINFO_FILE
-  MTV_RECINFO_FILE="$(mktemp "$M2K_TMPDIR/m2k_recinfo_$FileNameNow"-XXXX)"
-  [[ "$?" != 0 ]] && { err "${FUNCNAME[0]}(): Failed to create temporary recinfo file." ; return 1 ; }
+  if ! MTV_RECINFO_FILE="$(mktemp "$M2K_TMPDIR/m2k_recinfo_$FileNameNow"-XXXX)"; then
+    err "${FUNCNAME[0]}(): Failed to create temporary recinfo file."
+    return 1
+  fi
   debug "Storing MythTV-DB info in temporary file: '$MTV_RECINFO_FILE'"
 
   #TODO: Temporary hack to clean-up shellcheck so it's easier to see actual
@@ -1980,13 +1990,17 @@ get_mythtvdb_info_pythonbindings(){
   done < "$MTV_RECINFO_FILE"
 
   if [[ "$CommercialMarkup" = 'Enabled' ]]; then
-    MARKUPSTART_TMP="$(mktemp "$M2K_TMPDIR/m2k_markupstart_$FileNameNow"-XXXX)"
-    [[ "$?" != 0 ]] && { err "${FUNCNAME[0]}(): Failed to create temporary markupstart file." ; return 1 ; }
+    if ! MARKUPSTART_TMP="$(mktemp "$M2K_TMPDIR/m2k_markupstart_$FileNameNow"-XXXX)"; then
+      err "${FUNCNAME[0]}(): Failed to create temporary markupstart file."
+      return 1
+    fi
     debug "Created a temporary comskip markupstart file: '$MARKUPSTART_TMP'"
     declare -gr MARKUPSTART_TMP
 
-    MARKUPSTOP_TMP="$(mktemp "$M2K_TMPDIR/m2k_markupstop_$FileNameNow"-XXXX)"
-    [[ "$?" != 0 ]] && { err "${FUNCNAME[0]}(): Failed to create temporary markupstop file." ; return 1 ; }
+    if ! MARKUPSTOP_TMP="$(mktemp "$M2K_TMPDIR/m2k_markupstop_$FileNameNow"-XXXX)"; then
+      err "${FUNCNAME[0]}(): Failed to create temporary markupstop file."
+      return 1
+    fi
     debug "Created a temporary comskip markupstop file: '$MARKUPSTOP_TMP'"
     declare -gr MARKUPSTOP_TMP
 
@@ -2158,8 +2172,7 @@ process_mythtvdb(){
 
   if [[ "$Database" = 'Enabled' ]]; then
     #Access the database entry using the requested grabber
-    get_mythtvdb_info
-    [[ "$?" != 0 ]] && return "$?"
+    if ! get_mythtvdb_info; then return "$?"; fi
 
     #Do appropriate, guide-data specific, processing.
     case "$GuideDataType" in
@@ -2569,8 +2582,10 @@ download_series_identification(){
 
   #Create temporary file to hold the show data from TheTVDB
   local WORKING_FILE
-  WORKING_FILE="$(mktemp "$M2K_TMPDIR/m2k_working_$FileNameNow"-XXXX)"
-  [[ "$?" != 0 ]] && { err "${FUNCNAME[0]}(): Failed to create temporary working file." ; return 1 ; }
+  if ! WORKING_FILE="$(mktemp "$M2K_TMPDIR/m2k_working_$FileNameNow"-XXXX)"; then
+    err "${FUNCNAME[0]}(): Failed to create temporary working file."
+    return 1
+  fi
 
   #Search TheTVDB and return an XML file with results
   curl -L -s -m"$Timeout" "www.thetvdb.com/api/GetSeries.php?seriesname=$tvdbshowname" > "$WORKING_FILE"
@@ -2583,10 +2598,14 @@ download_series_identification(){
   fi
 
   #Create temporary files to hold the show ID and show name
-  TMP_SID_FILE="$(mktemp "$M2K_TMPDIR/m2k_sid_$FileNameNow"-XXXX)"
-  [[ "$?" != 0 ]] && { err "${FUNCNAME[0]}(): Failed to create temporary sid file." ; return 1 ; }
-  TMP_SHN_FILE="$(mktemp "$M2K_TMPDIR/m2k_shn_$FileNameNow"-XXXX)"
-  [[ "$?" != 0 ]] && { err "${FUNCNAME[0]}(): Failed to create temporary shn file." ; return 1 ; }
+  if ! TMP_SID_FILE="$(mktemp "$M2K_TMPDIR/m2k_sid_$FileNameNow"-XXXX)"; then
+    err "${FUNCNAME[0]}(): Failed to create temporary sid file."
+    return 1
+  fi
+  if ! TMP_SHN_FILE="$(mktemp "$M2K_TMPDIR/m2k_shn_$FileNameNow"-XXXX)"; then
+    err "${FUNCNAME[0]}(): Failed to create temporary shn file."
+    return 1
+  fi
   declare -gr TMP_SID_FILE TMP_SHN_FILE
 
   #Separate the XML into textual DBs containing SeriesID, ShowName and Zap2it IDs
@@ -2604,8 +2623,10 @@ download_series_identification(){
                                             -e 's/&gt;/>/g' > "$TMP_SHN_FILE"
 
   #Create a temporary file to contain zap2it info
-  TMP_ZAP2IT_FILE="$(mktemp "$M2K_TMPDIR/m2k_zap2it_$FileNameNow"-XXXX)"
-  [[ "$?" != 0 ]] && { err "${FUNCNAME[0]}(): Failed to create temporary zap2it file." ; return 1 ; }
+  if ! TMP_ZAP2IT_FILE="$(mktemp "$M2K_TMPDIR/m2k_zap2it_$FileNameNow"-XXXX)"; then
+    err "${FUNCNAME[0]}(): Failed to create temporary zap2it file."
+    return 1
+  fi
   declare -gr TMP_ZAP2IT_FILE
   debug "Created a temporary zap2it file: '$TMP_ZAP2IT_FILE'"
 
@@ -2706,7 +2727,8 @@ download_series_info(){
   local TheTVDBShowXML="http://www.thetvdb.com/api/$APIkey/series/$SeriesID/all/$Language.xml"
   local FieldsWeWant="(</?Series>|</?seriesid>|</?Status>|</?lastupdated>|</?Episode>|</?SeasonNumber>|</?EpisodeNumber>|</?EpisodeName>|</?Overview>|</?FirstAired>)"
   curl -L -s -m"$Timeout" "$TheTVDBShowXML" | grep -E "$FieldsWeWant" > "$dbdir/$NewShowName.xmlTest"
-  [[ $? != 0 ]] && warn "${FUNCNAME[0]}(): Issue accessing: $TheTVDBShowXML"
+  [[ "${PIPESTATUS[0]}" != '0' ]] && warn "${FUNCNAME[0]}(): Issue accessing: $TheTVDBShowXML"
+  [[ "${PIPESTATUS[1]}" != '0' ]] && warn "${FUNCNAME[0]}(): Failed to match any of the fields we want."
 
   local -i tvmaze_id
   tvmaze_id=$(curl -L -s -m"$Timeout" http://api.tvmaze.com/lookup/shows?thetvdb="$SeriesID" | jq '.id')
@@ -4157,22 +4179,22 @@ set_target_dir_as_input_path_dir(){
   #For directory names: No trailing / is accepted eg. "~/videos" not "~/videos/"
   #MoveDir is the folder which myth2kodi will move the file.
   MoveDir="$originaldirname/Episodes"
-  test ! -d "$MoveDir" && mkdir "$MoveDir"
+  [[ -d "$MoveDir" ]] || mkdir "$MoveDir"
   #AlternateMoveDir will act as a secondary MoveDir if the primary MoveDir fails.
   AlternateMoveDir="$originaldirname/Episodes"
-  test ! -d "$AlternateMoveDir" && mkdir "$AlternateMoveDir"
+  [[ -d "$AlternateMoveDir" ]] || mkdir "$AlternateMoveDir"
   #Primary Movie Dir. myth2kodi will attempt to move to this dir first.
   PrimaryMovieDir="$originaldirname/Movies"
-  test ! -d "$PrimaryMovieDir" && mkdir "$PrimaryMovieDir"
+  [[ -d "$PrimaryMovieDir" ]] || mkdir "$PrimaryMovieDir"
   #AlternateMovieDir will act as a Secondary move dir if the primary move dir fails.
   AlternateMovieDir="$originaldirname/Movies"
-  test ! -d "$AlternateMovieDir" && mkdir "$AlternateMovieDir"
+  [[ -d "$AlternateMovieDir" ]] || mkdir "$AlternateMovieDir"
   #PrimaryShowDir is where generic episodes will be placed.
   PrimaryShowDir="$originaldirname/Showings"
-  test ! -d "$PrimaryShowDir" && mkdir "$PrimaryShowDir"
+  [[ -d "$PrimaryShowDir" ]] || mkdir "$PrimaryShowDir"
   #AlternateShowDir will act as a Secondary Show Dir if the primary show dir fails.
   AlternateShowDir="$originaldirname/Showings"
-  test ! -d "$AlternateShowDir" && mkdir "$AlternateShowDir"
+  [[ -d "$AlternateShowDir" ]] || mkdir "$AlternateShowDir"
 }
 
 #Create a comskip.txt file from MythTV database information for use by Kodi.
@@ -4181,8 +4203,10 @@ generate_comskip(){
   local -i Counter=0
   local StartData
   local StopData
-  MARKUPFRAMES_TMP="$(mktemp "$M2K_TMPDIR/m2k_markupframes_$FileNameNow"-XXXX)"
-  [[ "$?" != 0 ]] && { err "${FUNCNAME[0]}(): Failed to create temporary markupframes file." ; return 1 ; }
+  if ! MARKUPFRAMES_TMP="$(mktemp "$M2K_TMPDIR/m2k_markupframes_$FileNameNow"-XXXX)"; then
+    err "${FUNCNAME[0]}(): Failed to create temporary markupframes file."
+    return 1
+  fi
   debug "Created a temporary comskip markupframes file: '$MARKUPFRAMES_TMP'"
   declare -gr MARKUPFRAMES_TMP
   #Set up comskip file
@@ -4801,8 +4825,10 @@ m2k_scan(){
       [[ "$yesorno" != "y" ]] && return "$dooverstatus"
     fi
     local SCAN_FILE
-    SCAN_FILE="$(mktemp "$M2K_TMPDIR/m2k_scan_$FileNameNow"-XXXX)"
-    [[ "$?" != 0 ]] && { err "${FUNCNAME[0]}(): Failed to create temporary scan file." ; return 1 ; }
+    if ! SCAN_FILE="$(mktemp "$M2K_TMPDIR/m2k_scan_$FileNameNow"-XXXX)"; then
+      err "${FUNCNAME[0]}(): Failed to create temporary scan file."
+      return 1
+    fi
     debug "Created a temporary scan file: '$SCAN_FILE'"
     ls -1 "$scanpath"/*."$checkext" > "$SCAN_FILE"
     inform "Scanning '$scanpath' for '$checkext' files."
@@ -5377,9 +5403,7 @@ m2k_undo_rec(){
   #it from undo if we were successful...
 
   #Identify the recording file, recording link, and who owns what.
-  identify_recording_files "$1"
-
-  if [[ "$?" == 0 && -n "$RECORDING_LINK" ]]; then
+  if identify_recording_files "$1" && [[ -n "$RECORDING_LINK" ]]; then
     local recording_undo_file
     recording_undo_file="$(mktemp "$M2K_TMPDIR/m2k_recording_undo_$FileNameNow"-XXXX)"
 
@@ -5422,8 +5446,7 @@ get_series_info(){
   ShowName="$InputTitle"
   local tvdbshowname
   tvdbshowname="$(sed 's/ /%20/g' <<< "$ShowName" | sed 's/&/%26/g')"
-  download_series_identification
-  (( $? != 0 )) && return 1
+  if ! download_series_identification; then return 1; fi
   get_serieslinenumber_showname_fuzzy
   #if we have a series line number then translate that into a series id
   if [[ -n "$serieslinenumber" ]] && ((serieslinenumber > 0)); then
@@ -5502,8 +5525,10 @@ delete_recording_from_mythtv(){
         ;;
       PythonBindings)
         local MTV_RECINFO_FILE
-        MTV_RECINFO_FILE="$(mktemp "$M2K_TMPDIR/m2k_delrecinfo_$FileNameNow"-XXXX)"
-        [[ "$?" != 0 ]] && { err "${FUNCNAME[0]}(): Failed to create temporary delrecinfo file." ; return 1 ; }
+        if ! MTV_RECINFO_FILE="$(mktemp "$M2K_TMPDIR/m2k_delrecinfo_$FileNameNow"-XXXX)"; then
+          err "${FUNCNAME[0]}(): Failed to create temporary delrecinfo file."
+          return 1
+        fi
         debug "Deleted recording info will be stored in temporary file: '$MTV_RECINFO_FILE'"
 
         if [[ "$RERECORD" = 'Enabled' ]]; then
@@ -5685,11 +5710,15 @@ recording_log(){
   if ! set_recording_name "$1"; then return "$?"; fi
   debug "RECORDING_PATH: '$RECORDING_PATH'"
   debug "RECORDING_NAME: '$RECORDING_NAME'"
-  LOGFILELIST_FILE="$(mktemp "$M2K_TMPDIR"/m2k_logfilelist-XXXX)"
-  [[ "$?" != 0 ]] && { err "${FUNCNAME[0]}(): Failed to create temporary logfilelist file." ; return 1 ; }
+  if ! LOGFILELIST_FILE="$(mktemp "$M2K_TMPDIR"/m2k_logfilelist-XXXX)"; then
+    err "${FUNCNAME[0]}(): Failed to create temporary logfilelist file."
+    return 1
+  fi
   debug "Created a temporary list of logfiles file: '$LOGFILELIST_FILE'"
-  TEMPLOG_FILE="$(mktemp "$M2K_TMPDIR"/m2k_templog-XXXX)"
-  [[ "$?" != 0 ]] && { err "${FUNCNAME[0]}(): Failed to create temporary templog file." ; return 1 ; }
+  if ! TEMPLOG_FILE="$(mktemp "$M2K_TMPDIR"/m2k_templog-XXXX)"; then
+    err "${FUNCNAME[0]}(): Failed to create temporary templog file."
+    return 1
+  fi
   debug "Created a temporary recording-specific log file: '$TEMPLOG_FILE'"
   #Start a log file list with the current log file
   printf '%s\n' "$LOGFILE" > "$LOGFILELIST_FILE"
@@ -5742,8 +5771,7 @@ recreate_comskip(){
     inform "Regenerating comskip file for $inputarg"
 
     #Identify file, link, who owns what, and the MythTV path and basename.
-    identify_recording_files "$inputarg"
-    [[ "$?" != 0 ]] && return "$?"
+    if ! identify_recording_files "$inputarg"; then return "$?"; fi
 
     #Identify the target for the comskip file
     if [[ "$RECORDING_FILE_OWNER" = 'myth2kodi' ]]; then
@@ -5756,8 +5784,7 @@ recreate_comskip(){
     fi
 
     #Get the MythTV-DB info, which includes the comskip info.
-    get_mythtvdb_info
-    [[ "$?" != 0 ]] && return "$?"
+    if ! get_mythtvdb_info; then return "$?"; fi
 
     #Move the comskip file into place
     inform "Moving new comskip file to: ${ShowComSkip}"
@@ -5781,8 +5808,10 @@ recreate_comskip(){
       scanpath="${inputarg%*/}"
       debug "Checking for files with names of the form: '$scanpath/filename.$checkext'"
       local COMSKIP_SCAN_FILE
-      COMSKIP_SCAN_FILE="$(mktemp "$M2K_TMPDIR/m2k_comskip_scan_$FileNameNow"-XXXX)"
-      [[ "$?" != 0 ]] && { err "${FUNCNAME[0]}(): Failed to create temporary comskip-scan file." ; return 1 ; }
+      if ! COMSKIP_SCAN_FILE="$(mktemp "$M2K_TMPDIR/m2k_comskip_scan_$FileNameNow"-XXXX)"; then
+        err "${FUNCNAME[0]}(): Failed to create temporary comskip-scan file."
+        return 1
+      fi
       debug "Created a temporary comskip_scan file: '$COMSKIP_SCAN_FILE'"
       ls -1 "$scanpath"/*."$checkext" > "$COMSKIP_SCAN_FILE"
       inform "Scanning $scanpath for already moved $checkext files"
@@ -5843,8 +5872,7 @@ main(){
   m2k_init
 
   #Basic tests to make sure we were called correctly.
-  validate_args
-  [[ "$?" != 0 ]] && exit_job "$EXIT_JOB_TYPE"
+  if ! validate_args; then exit_job "$EXIT_JOB_TYPE"; fi
 
   #If the first arg is a command line switch, figure out what to do.
   if [[ "${m2karg1:0:1}" = "-" ]]; then
@@ -5893,8 +5921,7 @@ InputEpisodeNum="$5"
 #  Issue warnings for any conflicts. but don't override command line arguments...
 
 #Some basic tests to make sure we were called correctly
-validate_args
-[[ "$?" != 0 ]] && exit_job "$EXIT_JOB_TYPE"
+if ! validate_args; then exit_job "$EXIT_JOB_TYPE"; fi
 
 #If the first arg is a command line switch, figure out what to do.
 if [[ "${m2karg1:0:1}" = "-" ]]; then
@@ -5915,8 +5942,7 @@ InputFileBasename="$(basename "$InputPath")" #"${InputPath##*/}"
 
 #As long as we're not in diagnostics mode, gather info from MythTV-DB.
 if [[ "$m2kDiagnosticsMode" != "True" ]]; then
-  process_mythtvdb
-  [[ "$?" != 0 ]] && exit_job "$EXIT_JOB_TYPE"
+  if ! process_mythtvdb; then exit_job "$EXIT_JOB_TYPE"; fi
 else
   [[ "$Database" = 'Enabled' ]] && inform "Temporarily disabling access to MythTV-DB -- for diagnostics."
   Database='Disabled'
@@ -5934,8 +5960,7 @@ fi
 show_translation
 
 #Do not process files in files categoricIgnore or titleIgnore, just exit
-process_ignore_lists
-[[ "$?" != 0 ]] && exit_job "$EXIT_JOB_TYPE"
+if ! process_ignore_lists; then exit_job "$EXIT_JOB_TYPE"; fi
 
 #TODO: check whether the split on semicolon here and elsewhere should be in process_mythtvdb_schedulesdirect
 #split on semicolon, there will only be one episode looked up.
@@ -5973,8 +5998,7 @@ periodic_maintenace
 #Process as though it's an episode of a tv series.
 if [[ "$m2kProgramIDCheck" != "SH" && "$m2kProgramIDCheck" != "MV" ]]; then
   #Query TheTVDB on show title, then return a list of Zap2itID, ShowName and seriesid.
-  download_series_identification
-  if [[ "$?" = 0 ]]; then
+  if download_series_identification; then
     #Start by trying to match on Zap2itID
     ConfidenceReasoning="$ConfidenceReasoning Attempted Match On Zap2itID:"
     [[ -n "$Zap2itSeriesID" ]] && { get_serieslinenumber_zap2itid ; zap2itid_exitstatus="$?" ; }
@@ -5991,16 +6015,14 @@ if [[ "$m2kProgramIDCheck" != "SH" && "$m2kProgramIDCheck" != "MV" ]]; then
     #If Zap2itSeriesID match failed to find the SeriesLineNumber
     if (( SeriesConfidenceRating <= 0 )); then
       ConfidenceReasoning="$ConfidenceReasoning Attempted match on Standard Logic:"
-      [[ -n "$ShowName" ]] && get_serieslinenumber_showname
-      if [[ "$?" = 0 ]]; then
+      if [[ -n "$ShowName" ]] && get_serieslinenumber_showname; then
         ConfidenceReasoning="$ConfidenceReasoning Successful;"
       else
         warn "FAILED to get series line number from table with standard logic, requiring doover."
         RequiresDoover=1
         ((--SeriesConfidenceRating))
         ConfidenceReasoning="$ConfidenceReasoning Failed; Attempted Title match on Fuzzy Logic:"
-        [[ -n "$ShowName" ]] && get_serieslinenumber_showname_fuzzy
-        if [[ "$?" = 0 ]]; then
+        if [[ -n "$ShowName" ]] && get_serieslinenumber_showname_fuzzy; then
           ConfidenceReasoning="$ConfidenceReasoning Successful;"
         else
           ((--SeriesConfidenceRating))
@@ -6038,10 +6060,8 @@ if [[ -n "$SeriesID" ]]; then
   #  Series that have finished, so we don't keep updating for TV Series that
   #  that finished years ago -- see the Status field for the series in the
   #  ShowName.xml in the $m2kdir dir. Also enable using existing data if update fails.
-  check_m2k_database_up_to_date
-  if [[ $? != 0 ]]; then
-    download_series_info
-    if [[ $? != 0 ]]; then
+  if ! check_m2k_database_up_to_date; then
+    if ! download_series_info; then
       warn "COULD NOT DOWNLOAD UP-TO-DATE INFORMATION FROM TheTVDB! requiring doover."
       RequiresDoover=1
     fi
@@ -6087,16 +6107,14 @@ if [[ -n "$SeriesID" ]]; then
 
   if ((GotEpisodeNumber != 1)) && [[ -n "$EpisodeSubtitle" ]]; then
     ConfidenceReasoning="$ConfidenceReasoning Attempted SubTitle match on Standard logic:"
-    set_absolute_episode_number_by_ename
-    if [ "$?" = "0" ]; then
+    if set_absolute_episode_number_by_ename; then
       ConfidenceReasoning="$ConfidenceReasoning Successful; "
     else
       warn "AIRDATE/STANDARD LOGIC FAILED. FUZZY LOGIC ABSOLUTE: $AbsoluteEpisodeNumber. Requiring doover."
       RequiresDoover=1
       ((--EpisodeConfidenceRating))
       ConfidenceReasoning="$ConfidenceReasoning Failed; Attempted SubTitle match on Fuzzy logic:"
-      set_absolute_episode_number_by_ename_fuzzy
-      if [ "$?" = "0" ]; then
+      if set_absolute_episode_number_by_ename_fuzzy; then
         ConfidenceReasoning="$ConfidenceReasoning Successful; "
       else
         ((--EpisodeConfidenceRating))
@@ -6168,8 +6186,7 @@ if [[ "$HasSxxExx" = '1' ]] ; then
   #If we don't have a Subtitle, then use Sxx & Exx to get it from the TVDb info.
   if [[ -z "$EpisodeSubtitle" ]]; then
     AbsoluteEpisodeNumberBackup=$AbsoluteEpisodeNumber
-    set_absolute_episode_number_by_sxxexx
-    if [ "$?" = "0" ]; then
+    if set_absolute_episode_number_by_sxxexx; then
       EpisodeSubtitle=$(sed -n "$AbsoluteEpisodeNumber"'p' "$m2kdir/$NewShowName/$NewShowName.actualEname.txt")
       inform "MythTV-DB did not have an EpisodeSubtitle, using '$EpisodeSubtitle' from TheTVDB."
     else
@@ -6213,8 +6230,7 @@ fi
 if [[ "$PlotMatchFallback" = 'Enabled' ]]; then
   debug "PlotMatchFallback is Enabled"
   if [[ "$m2kProgramIDCheck" = "EP" && "$HasSxxExx" != '1' ]] ; then
-    get_absolute_episode_number_fuzzy_plot
-    if [[ "$?" = "0" && -n "$AbsoluteEpisodeNumber" ]]; then
+    if get_absolute_episode_number_fuzzy_plot && [[ -n "$AbsoluteEpisodeNumber" ]]; then
       inform "Setting Sxx, Exx, and EpisodeSubtitle based on FuzzyPlotMatch:"
       #NOTE: set_sxxexx_absolute_episode_number also sets EpisodeSubtitle and SeasonNumber
       set_sxxexx_absolute_episode_number
@@ -6297,8 +6313,7 @@ fi
 #      Though may need to recall it as part of StorageGroupFallback
 #Set MoveDir, using alternates if necessary, falling back to FailSafeState, and
 #finally exit if there is nowhere to write to.
-set_move_location
-[[ "$?" != 0 ]] && exit_job "$EXIT_JOB_TYPE"
+if ! set_move_location; then exit_job "$EXIT_JOB_TYPE"; fi
 
 #####OUTPUT FILE NAME FORMATTING#####
 #Format Shows

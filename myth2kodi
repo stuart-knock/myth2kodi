@@ -5277,7 +5277,7 @@ m2k_doover(){
     chmod +x "$m2kdir/doover.sh"
     #TODO: Need to fix err_pipe for subcalls to myth2kodi # 2>&1 | err_pipe "doover: "
     "$m2kdir/doover.sh"
-    dooverstatus="${PIPESTATUS[0]}"
+    dooverstatus="$?" #Change back if address above TODO: "${PIPESTATUS[0]}"
     #TODO: The dooverstatus is most likely the myth2kodi exit status for the
     #      last recording processed by doover.sh...
     if [[ "$dooverstatus" != 0 ]]; then

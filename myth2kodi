@@ -291,9 +291,12 @@ FORCE_PROCESS='Disabled'
 #      must be set in the script -- as it is used to find 'myth2kodi.conf'.
 m2kdir="$HOME/.myth2kodi"
 
+#TODO: make this to just be used for essential sudo stuff, at the moment, I think,
+#      this is only Notify... then require caller add the location they choose to
+#      be in there path... recommend a default of /home/$Librarian/bin, see other related TODOs...
 #The path which contains myth2kodi and associated scripts default=/usr/local/bin
-#TODO: make this to just be used for essential sudo stuff, at the moment, I think, this is only Notify...
-#      then require caller add the location they choose to be in there path... recommend a default of /home/$Librarian/bin, see other related TODOs...
+#NOTE: While this can be set in myth2kodi.conf, it doesn't make much sense to
+#      do so as the script should know where it is.
 binpath='/usr/local/bin'
 
 #The directory where myth2kodi writes its temporary files, Default='/tmp'

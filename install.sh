@@ -201,7 +201,7 @@ prepare_installation(){
 
     #Make sure we are in master
     debug "Make sure we start from master."
-    git checkout master 2>&1 | err_pipe "${FUNCNAME[0]}(): "
+    git checkout master 2>&1 | err_pipe "${FUNCNAME[0]}():git: "
     [[ "${PIPESTATUS[0]}" != '0' ]] && return 1
 
     #Get the latest release tag
@@ -214,7 +214,7 @@ prepare_installation(){
 
     #Switch to a temporary "detached HEAD" state
     debug "Switch to 'detached HEAD' state at the latest release tag."
-    git checkout tags/"$latest_release" 2>&1 | err_pipe "${FUNCNAME[0]}(): "
+    git checkout tags/"$latest_release" 2>&1 | err_pipe "${FUNCNAME[0]}():git: "
     [[ "${PIPESTATUS[0]}" != '0' ]] && return 1
 
     #Copy the release version of the scripts and .conf file
@@ -229,7 +229,7 @@ prepare_installation(){
 
     #Put things back where they were
     debug "Switch back to the branch we started on."
-    git checkout "$original_branch" 2>&1 | err_pipe "${FUNCNAME[0]}(): "
+    git checkout "$original_branch" 2>&1 | err_pipe "${FUNCNAME[0]}():git: "
     [[ "${PIPESTATUS[0]}" != '0' ]] && return 1
 
     #Change back to where we started
@@ -739,7 +739,7 @@ if [[ "$INSTALL_TYPE" != 'Quick' ]]; then
   printf ' %s\n' 'or:'
   printf '     %s\n\n' 'https://github.com/stuart-knock/myth2kodi/blob/master/doc/CONFIGURE.md'
   printf ' %s\n' 'For usage help see:'
-  printf '     %s\n\n' ' myth2kodi --help'
+  printf '     %s\n' ' myth2kodi --help'
   printf ' %s\n' 'and:'
   printf '     %s\n' 'doc/USAGE.md'
   printf ' %s\n' 'or:'

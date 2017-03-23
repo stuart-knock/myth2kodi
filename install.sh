@@ -478,7 +478,7 @@ make_customisations(){
   #Modify the $binpath if we were provided with a custom install directory.
   if [[ "$INSTALL_DIRECTORY" != '/usr/local/bin' ]]; then
     debug "Adding custom install directory to the myth2kodi script's settings."
-    sed -i "s|^binpath='/usr/local/bin/'|binpath='${INSTALL_DIRECTORY}'|" "$M2K_INSTALL_MYTH2KODI_FILE" 2>&1 | err_pipe "${FUNCNAME[0]}(): "
+    sed -i "s|^binpath='/usr/local/bin'|binpath='${INSTALL_DIRECTORY}'|" "$M2K_INSTALL_MYTH2KODI_FILE" 2>&1 | err_pipe "${FUNCNAME[0]}(): "
     [[ "${PIPESTATUS[0]}" != '0' ]] && return 1
   fi
 

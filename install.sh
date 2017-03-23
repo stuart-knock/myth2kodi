@@ -71,6 +71,8 @@ LOGLEVEL=2
 #LOGTYPE defines where to direct logging messages.
 #Options: ['filestderr'|'stderr'|'file'(DEFAULT)]:
 #NOTE: This is made read only within the bashlogging script.
+#NOTE: The install script is written with the expectation of LOGTYPE='file',
+#      the other options are only supported for dev/debugging purposes.
 LOGTYPE='file'
 
 
@@ -724,9 +726,11 @@ if [[ "$INSTALL_TYPE" != 'Quick' ]]; then
     fi
   fi
   if [[ -d "$M2K_WORKING_DIRECTORY" ]]; then
-    printf ' %s\n' "Placed installation log at: $M2K_WORKING_DIRECTORY/m2k_install_${FILE_NAME_NOW}_log.txt"
-    printf ' %s\n\n' "Be sure to check the log for any WARNINGS or ERRORS."
+    printf ' %s\n\n' "Placed installation log at: $M2K_WORKING_DIRECTORY/m2k_install_${FILE_NAME_NOW}_log.txt"
+  else
+    printf ' %s\n\n' "Temporary installation log at: $LOGFILE"
   fi
+  printf ' %s\n\n' "Be sure to check the log for any WARNINGS or ERRORS."
   #
   printf ' %s\n' 'For configuration and setup help see:'
   printf '     %s\n' 'myth2kodi --config-help'

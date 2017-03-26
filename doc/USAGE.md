@@ -65,7 +65,7 @@ step of installation, is the `--diagnostics` flag. Running:
 
 causes basic tests for the presence of dependencies to be run, it also does
 some checks of the configuration and core functionality. Summaries of what is
-found are printed via the logging system (by default this means both to stdout
+found are printed via the logging system (by default this means both to stderr
 and a file called `diagnostics.log` in the myth2kodi working directory).
 
 *PROBABLY SHOULD PUT A DESCRIPTION OF ALL COMMAND FLAGS HERE...*

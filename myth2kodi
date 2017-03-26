@@ -355,7 +355,7 @@ UpdateDatabase=264920
 
 #MythTV database access allows addition of movies, comskip data, and improves
 #accuracy of episode recognition. Options: ['Enabled'(DEFAULT)|'Disabled']
-Database='Enabled'  #TODO: Review this: I'm not clear on the purpose/function in the absence of MythTV-DB...
+Database='Enabled'
 
 #Database access method for MythTV-DB ['PythonBindings'(DEFAULT)|'MySQL']
 DATABASE_ACCESS='PythonBindings'
@@ -429,7 +429,7 @@ KODIIPs=( '127.0.0.1:8080' )                 #<------THIS VALUE MUST BE SET-----
 CREATE_RSS='Enabled'
 
 #The directory to write the RSS file to when CREATE_RSS='Enabled'. The directory
-#must exist and Librarian needs rwx permission to it. #TODO: Add to diagnostics...
+#must exist and Librarian needs rwx permission to it.
 #Default: '/var/www/myth2kodi-rss'
 RSS_DIRECTORY='/var/www/myth2kodi-rss'
 
@@ -666,7 +666,7 @@ m2k_init(){
   ((LOGLEVEL>=3)) && printf '%s\n' "Config complete." >> "$pre_logging_file"
 
   #What am I...
-  m2kVersion="myth2kodi Version 1.4.1a" ; declare -gr m2kVersion
+  m2kVersion="myth2kodi Version 1.4.1b" ; declare -gr m2kVersion
   m2kPlatform="$(uname)" ; declare -gr m2kPlatform
   ((LOGLEVEL>=3)) && printf '%s\n' "Running $m2kVersion on $m2kPlatform." >> "$pre_logging_file"
 
@@ -836,7 +836,7 @@ parse_command_flags(){
     ;;
     --diagnostics)
       debug "Recognised command line switch '--diagnostics'"
-      export m2kDiagnosticsMode="True"
+      export M2K_DIAGNOSTICS_MODE="True"
       local PreCallLogFile="$LOGFILE"
       local PreCallLogLevel="$LOGLEVEL"
       (( LOGLEVEL < 2 )) && LOGLEVEL=2 && inform "Escalating LOGLEVEL to Info (2)."
@@ -860,7 +860,7 @@ parse_command_flags(){
       fi
       #Reset LOGLEVEL after 'Finished...' so it and 'Running...' are written consistently to LOGFILE.
       LOGLEVEL="$PreCallLogLevel"
-      unset m2kDiagnosticsMode
+      unset M2K_DIAGNOSTICS_MODE
       return $diagnosticsreturnstatus
     ;;
     --confidence)
@@ -4629,7 +4629,7 @@ generaterss(){
   local lineBreak='&lt;br /&gt;'
 
   #test if rssFile directory is writeable
-  if [ ! -w "$RSS_DIRECTORY" ]; then
+  if [[ ! -w "$RSS_DIRECTORY" ]]; then
     err "${FUNCNAME[0]}(): RSS generation failed: Directory not writeable ($RSS_DIRECTORY)"
     return 5
   fi
@@ -5109,6 +5109,16 @@ m2k_diagnostics(){
     err "Communication failed for $KODI_COMM_FAILURES of ${#KODIIPs[@]} Kodi instances."
   fi
 
+  #A minimal RSS check.
+  local RSSchecks=''
+  if [[ "$CREATE_RSS" = 'Enabled' ]]; then
+    if check_path_permission "$RSS_DIRECTORY" 'rwx'; then
+      RSSchecks='***PASSED***'
+    else
+      RSSchecks='***FAILED***'
+    fi
+  fi
+
   #Check file system permissions
   read -r -n1 -p "Press any key to test file system permissions..."
   printf '\n'
@@ -5135,7 +5145,7 @@ m2k_diagnostics(){
     folderchecks="***FAILED***"
     err "Critical Filesystem checks $folderchecks"
   fi
-  if [ "$packagecheck" = "***PASSED***" ] && [ "$folderchecks" = "***PASSED***" ] ; then
+  if [[ "$packagecheck" = "***PASSED***" && "$folderchecks" = "***PASSED***" ]]; then
     overallchecks="***PASSED***"
   else
     overallchecks="***FAILED***"
@@ -5188,24 +5198,24 @@ m2k_diagnostics(){
   printf '\n' | tee -a "$DIAGNOSTICS_FILE"
 
   #Logging for failure messages
-  if [ "$DBTest" = "***FAILED***" ]; then
+  if [[ "$DBTest" = "***FAILED***" ]]; then
     err "Database tests failed"
     errcont "When interfacing MythTV >=0.24, myth2kodi can use MythTV's Python"
     errcont "Bindings. These must be configured and working for proper access"
     errcont "to data required by myth2kodi."
     errcont "Could not connect to the database. Check username and password."
     printf '\n' | tee -a "$DIAGNOSTICS_FILE"
-  #TODO: add more information on how to install
   fi
 
-  if [ "$notifytest" = "***FAILED***" ]; then
+  if [[ "$notifytest" = "***FAILED***" ]]; then
     err "Notify tests failed"
     errcont "Notifications to the DBUS have failed. myth2kodi relies upon"
     errcont "m2k_notify and package lib-notify to display messages on"
     errcont "GNOME desktop interface. These messages will not be displayed. "
     printf '\n' | tee -a "$DIAGNOSTICS_FILE"
   fi
-  if [ "$KODIcomm" = "***FAILED***" ]; then
+
+  if [[ "$KODIcomm" = "***FAILED***" ]]; then
     err "Kodi communication tests failed: $KODI_COMM_FAILURES of ${#KODIIPs[@]}."
     errcont "This will not prevent myth2kodi from functioning, it just means"
     errcont "that myth2kodi can not send messages or library update requests"
@@ -5224,7 +5234,19 @@ m2k_diagnostics(){
     errcont ""
     printf '\n' | tee -a "$DIAGNOSTICS_FILE"
   fi
-  if [ "$folderchecks" = "***FAILED***" ]; then
+
+  if [[ "$RSSchecks" = "***FAILED***" ]]; then
+    err "RSS tests failed"
+    errcont "This either means the RSS_DIRECTORY: '$RSS_DIRECTORY'"
+    errcont "does not exist, or you do not have sufficient permissions to write"
+    errcont "to it. If you want to generate an RSS feed, then either ceate the"
+    errcont "directory and give it rwxr-xr-x permissions, or set RSS_DIRECTORY"
+    errcont "to a directory that exists and that you have write permission for."
+    errcont "If you do not want an RSS feed then set CREATE_RSS='Disabled'."
+    printf '\n' | tee -a "$DIAGNOSTICS_FILE"
+  fi
+
+  if [[ "$folderchecks" = "***FAILED***" ]]; then
     err "The filesystem checks failed."
     errcont "First check that the Librarian user setting is correct, and that"
     errcont "you're running myth2kodi as that user. Currently Librarian='$Librarian'."
@@ -5242,14 +5264,16 @@ m2k_diagnostics(){
     errcont "  mkdir /Name/of/My_failed_folder"
     printf '\n' | tee -a "$DIAGNOSTICS_FILE"
   fi
-  if [ "$mythicaltest" != "***PASSED***" ]; then
+
+  if [[ "$mythicaltest" != "***PASSED***" ]]; then
     err "Test run of myth2kodi failed."
     errcont "myth2kodi has encountered an error. This may be due to a"
     errcont "lack of network connection. If the problem persists, try"
     errcont "reading then asking at: http://forum.kodi.tv/showthread.php?tid=301925"
     printf '\n' | tee -a "$DIAGNOSTICS_FILE"
   fi
-  if [ "$overallchecks" = "***FAILED***" ]; then
+
+  if [[ "$overallchecks" = "***FAILED***" ]]; then
     inform "The issues mentioned above must be corrected for myth2kodi to perform correctly."
   fi
 
@@ -5946,7 +5970,7 @@ inform "Processing: $InputPath"
 InputFileBasename="$(basename "$InputPath")" #"${InputPath##*/}"
 
 #As long as we're not in diagnostics mode, gather info from MythTV-DB.
-if [[ "$m2kDiagnosticsMode" != "True" ]]; then
+if [[ "$M2K_DIAGNOSTICS_MODE" != "True" ]]; then
   if ! process_mythtvdb; then exit_job "$EXIT_JOB_TYPE"; fi
 else
   [[ "$Database" = 'Enabled' ]] && inform "Temporarily disabling access to MythTV-DB -- for diagnostics."

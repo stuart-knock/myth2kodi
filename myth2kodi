@@ -27,6 +27,8 @@
 #  MythTV database, as required, so that Kodi can make use of them.
 #
 #Installation:
+#  There is an install.sh script that supports local and system installs.
+#  If you would prefer manual installation it is fairly straight-forward.
 #  The myth2kodi file should be placed in the users path, see the binpath
 #  variable in user settings (Default: /usr/local/bin). Some of the
 #  functionality of this script is provided in other files, these will also

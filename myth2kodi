@@ -1625,20 +1625,22 @@ periodic_maintenace(){
 m2k_maintenance(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   inform "PERFORMING MAINTENANCE ROUTINE..."
+  local -i counter=0
 
   #Check for comskip (.txt) and .nfo files listed in created.tracking and
   #remove them if their associated "main" file (.mpg) is missing.
   if [[ "$CommercialMarkupCleanup" = 'Enabled' && -f "$m2kdir/created.tracking" ]]; then
-    local -i Counter=0
     inform "PERFORMING CLEANUP OF ORPHANED SUPPORT FILES."
     local support_file=""
     local main_file=""
+    #Initialise counter for use in created.tracking
+    counter=0
     while read -r line ; do
-      (( ++Counter ))
+      (( ++counter ))
       support_file="$(cut -d"'" -f2 <<< "$line")"
-      debug "Support file (record $Counter): ${support_file}"
+      debug "Support file (record $counter): ${support_file}"
       main_file="$(cut -d"'" -f4 <<< "$line")"
-      debug "Main file (record $Counter): ${main_file}"
+      debug "Main file (record $counter): ${main_file}"
       if [[ -e "$main_file" ]]; then
         #If the main_file is actually the original MythTV recording file (it was
         #processed in LINK mode) and the support_file no longer exists, then
@@ -1688,9 +1690,11 @@ m2k_maintenance(){
     #Reverse dictionary sort the tracked dirs, should have the effect of depth first.
     sort -dr "$m2kdir/dir.tracking" > "$sorted_dir_tracking_file"
     local contains
+    #Initialise counter for use in dir.tracking
+    counter=0
     while read -r dirtocheck ; do
-      (( ++Counter ))
-      debug "Folder record $Counter: $dirtocheck"
+      (( ++counter ))
+      debug "Folder record $counter: $dirtocheck"
       if [[ -d "$dirtocheck" ]]; then
         #Is there something in the directory other than 'tvshow.nfo'
         contains="$(find "$dirtocheck" -mindepth 1 ! -name 'tvshow.nfo' -print -quit)"
@@ -1700,7 +1704,7 @@ m2k_maintenance(){
           rmdir "$dirtocheck"
           printf '%s\n' "$dirtocheck" >> "$m2kdir/dir.tracking.old"
         else
-          debugcont "Continuing to track folder record $Counter, it contains, at least: $contains"
+          debugcont "Continuing to track folder record $counter, it contains, at least: $contains"
           printf '%s\n' "$dirtocheck" >> "$m2kdir/dir.tracking2"
         fi
       else

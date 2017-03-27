@@ -3448,6 +3448,7 @@ msg_operation_summary(){
   debugcont  "FailSafeDir=$FailSafeDir-"
   debugcont  "Notify=$Notify-"
 
+  #TODO: consider only displaying this here when debug is enabled, ie ((LOGLEVEL>2)) &&
   #Print a summary table of writeable directories.
   msg_dir_summary
 
@@ -3469,7 +3470,7 @@ msg_operation_summary(){
   informcont "MoveFileSize=$MoveFileSize MB"
   informcont "ConfidenceRating=$ConfidenceRating-"
   informcont "ConfidenceReasoning=$ConfidenceReasoning-"
-  if [ "$Database" = 'Enabled' ]; then
+  if [[ "$Database" = 'Enabled' ]]; then
     debugcont  "XMLTVGrabber=$XMLTVGrabber-"
     informcont "ShowStartTime=$ShowStartTime-"
     debugcont  "MovieAirDate=$MovieAirDate-"
@@ -4151,8 +4152,10 @@ make_show_dir(){
   #If specified, make $MoveDir = $MoveDir/show name
   if [[ -n "$NewShowName" ]]; then
     MoveDir="$MoveDir/$NewShowName"
-    if [ ! -d "$MoveDir" ]; then
-      inform "CREATING SERIES FOLDER: '$MoveDir'"
+    if [[ ! -d "$MoveDir" ]]; then
+      [[ "$m2kProgramIDCheck" = 'EP' ]] && inform "CREATING SERIES FOLDER: '$MoveDir'"
+      [[ "$m2kProgramIDCheck" = 'MV' ]] && inform "CREATING MOVIE FOLDER: '$MoveDir'"
+      [[ "$m2kProgramIDCheck" = 'SH' ]] && inform "CREATING SHOWING FOLDER: '$MoveDir'"
       [[ "$TRACKING" != 'Disabled' ]] && printf '%s\n' "$MoveDir" >> "$m2kdir/dir.tracking"
       mkdir "$MoveDir"
       chmod 775 "$MoveDir"

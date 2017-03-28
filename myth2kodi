@@ -1185,13 +1185,13 @@ pre_process_check(){
     EXIT_JOB_TYPE='RecordingAlreadyProcessed'
     return 1
   else #check if it was processed in LINK mode
-    RECORDING_FILE="$(realpath "$file_path" 2> >(err_pipe "${FUNCNAME[0]}(): Line $LINENO: "))"
+    if ! RECORDING_FILE="$(realpath "$file_path" 2> >(err_pipe "ERROR: ${FUNCNAME[0]}(): Line $LINENO: "))"; then return $?; fi
     local -i found=1 #We'll be trying to find a link: 0=success; 1=failure.
     local -a check_dirs
     local link_name
     check_dirs=("$MoveDir" "$PrimaryMovieDir" "$PrimaryShowDir" "$AlternateMoveDir" "$AlternateMovieDir" "$AlternateShowDir")
     for check_dir in "${check_dirs[@]}" ; do
-      link_name="$(find -L "$check_dir" -samefile "$RECORDING_FILE")"
+      link_name="$(find -L "$check_dir" -samefile "$RECORDING_FILE" 2> >(err_pipe "ERROR: ${FUNCNAME[0]}(): Line $LINENO: "))"
       [[ -L "$link_name" ]] && { found=0 ; break ; }
     done
     if (( found == 0 )); then
@@ -1290,8 +1290,8 @@ check_path_permission(){
   fi
 
   #Who owns this thing
-  path_owner="$(find "$path_to_check" -maxdepth 0 -printf %u)"
-  path_group="$(find "$path_to_check" -maxdepth 0 -printf %g)"
+  path_owner="$(find "$path_to_check" -maxdepth 0 -printf %u 2> >(err_pipe "ERROR: ${FUNCNAME[0]}(): Line $LINENO: "))"
+  path_group="$(find "$path_to_check" -maxdepth 0 -printf %g 2> >(err_pipe "ERROR: ${FUNCNAME[0]}(): Line $LINENO: "))"
 
   #Log some ownership related info
   if [[ "$path_owner" = "$Librarian" ]]; then
@@ -1445,8 +1445,8 @@ find_file_link_pairs(){
   #Is file_path a link or a file
   if [[ -L "$file_path" ]]; then
     #file_path is a link, grab its target. #TODO: maybe "$(realpath --strip "$file_path")" ~ "$(cd "$(dirname "$file_path")" ; pwd)"
-    if ! RECORDING_LINK="$(realpath --strip "$file_path")"; then return $?; fi
-    if ! RECORDING_FILE="$(readlink "$file_path")"; then return $?; fi
+    if ! RECORDING_LINK="$(realpath --strip "$file_path" 2> >(err_pipe "ERROR: ${FUNCNAME[0]}(): Line $LINENO: "))"; then return $?; fi
+    if ! RECORDING_FILE="$(readlink "$file_path" 2> >(err_pipe "ERROR: ${FUNCNAME[0]}(): Line $LINENO: "))"; then return $?; fi
     [[ -f "$RECORDING_FILE" ]] || { err "${FUNCNAME[0]}(): Broken link: $RECORDING_FILE"; return 1; }
     [[ -L "$RECORDING_FILE" ]] && { err "${FUNCNAME[0]}(): Multiple links, not following: $RECORDING_FILE"; return 1; }
     if [[ "${RECORDING_FILE##*/}" =~ ^$recpattern ]]; then #NOTE: Don't quote the RHS.
@@ -1463,7 +1463,7 @@ find_file_link_pairs(){
     return 0
   elif [[ -f "$file_path" ]]; then
     #file_path is a file, #TODO: realpath == readlink -f
-    if ! RECORDING_FILE="$(realpath "$file_path")"; then return $?; fi
+    if ! RECORDING_FILE="$(realpath "$file_path" 2> >(err_pipe "ERROR: ${FUNCNAME[0]}(): Line $LINENO: "))"; then return $?; fi
     local -i found=1 #Use exit code convention of 0=success 1=failure.
     local -a check_dirs
     local link_name
@@ -1486,13 +1486,13 @@ find_file_link_pairs(){
     fi
     #if [[ -n "${check_dirs[@]}" ]]; then
     for check_dir in "${check_dirs[@]}" ; do
-      link_name="$(find -L "$check_dir" -samefile "$RECORDING_FILE")"
+      link_name="$(find -L "$check_dir" -samefile "$RECORDING_FILE" 2> >(err_pipe "ERROR: ${FUNCNAME[0]}(): Line $LINENO: "))"
       [[ -L "$link_name" ]] && { found=0 ; break ; }
     done
     #fi
     #TODO: realpath may be heading toward deprecation, so maybe: "$(cd "$(dirname "$link_name")" ; pwd)". THough not sure about the robustness of dirname here...
     if (( found == 0 )); then
-      if ! RECORDING_LINK="$(realpath --strip "$link_name")"; then return $?; fi
+      if ! RECORDING_LINK="$(realpath --strip "$link_name" 2> >(err_pipe "ERROR: ${FUNCNAME[0]}(): Line $LINENO: "))"; then return $?; fi
       return 0
     fi
     if [[ ! "${RECORDING_FILE##*/}" =~ ^$recpattern ]]; then
@@ -1535,7 +1535,7 @@ set_recording_name(){
     if ! get_mythtvdb_storagegroups; then return $?; fi
     #Check if it's a moved file name that's still tracked by MythTV
     for sg_dir in "${STORAGEGROUP_DIRS[@]}" ; do
-      RECORDING_NAME="$(find -L "$sg_dir" -samefile "$file_name")"
+      RECORDING_NAME="$(find -L "$sg_dir" -samefile "$file_name" 2> >(err_pipe "ERROR: ${FUNCNAME[0]}(): Line $LINENO: "))"
       [[ "${RECORDING_NAME##*/}" =~ ^$recpattern ]] && { found=0 ; break ; }
     done
     (( found == 0 )) && inform "$file_name <==> $RECORDING_NAME"
@@ -1546,8 +1546,8 @@ set_recording_name(){
     #fi
   fi
   if (( found == 0 )); then
-    if ! RECORDING_PATH="$(realpath --strip "$RECORDING_NAME")"; then return $?; fi
-    if ! RECORDING_NAME="$(basename "$RECORDING_NAME")"; then return $?; fi
+    if ! RECORDING_PATH="$(realpath --strip "$RECORDING_NAME" 2> >(err_pipe "ERROR: ${FUNCNAME[0]}(): Line $LINENO: "))"; then return $?; fi
+    if ! RECORDING_NAME="$(basename "$RECORDING_NAME" 2> >(err_pipe "ERROR: ${FUNCNAME[0]}(): Line $LINENO: "))"; then return $?; fi
     debug "Setting RECORDING_PATH='$RECORDING_PATH'"
     debug "Setting RECORDING_NAME='$RECORDING_NAME'"
     return 0
@@ -5403,7 +5403,7 @@ remove_undo_doover_entries(){
   #NOTE: In LINK mode, RECORDING_LINK => myth2kodi file name;
   #      In MOVE with SYMLINKing='Enabled', RECORDING_LINK => MythTV file name.
   debug "Removing lines mentioning '$RECORDING_LINK' from '$m2kdir/undo.sh'"
-  sed -i.bak "\#$RECORDING_LINK#d" "$m2kdir/undo.sh" 2>&1 | err_pipe "${FUNCNAME[0]}(): Line $LINENO: "
+  sed -i.bak "\#$RECORDING_LINK#d" "$m2kdir/undo.sh" 2>&1 | err_pipe "ERROR: ${FUNCNAME[0]}(): Line $LINENO: "
   undo_entry_remove_status="${PIPESTATUS[0]}"
   debug "undo_entry_remove_status='$undo_entry_remove_status'"
   (( LOGLEVEL < 3 )) && rm -f "$m2kdir/undo.sh.bak"
@@ -5413,13 +5413,13 @@ remove_undo_doover_entries(){
     debug "Removing lines related to '$RECORDING_NAME' == '$RECORDING_LINK' from '$m2kdir/doover.sh'"
     if [[ "$RECORDING_LINK_OWNER" = 'myth2kodi' ]]; then
       #Was processed in LINK mode, so find and delete LINK removal line
-      sed -i.bak "\#$RECORDING_LINK#d" "$m2kdir/doover.sh" 2>&1 | err_pipe "${FUNCNAME[0]}(): Line $LINENO: "
+      sed -i.bak "\#$RECORDING_LINK#d" "$m2kdir/doover.sh" 2>&1 | err_pipe "ERROR: ${FUNCNAME[0]}(): Line $LINENO: "
       (( doover_entry_remove_status+=PIPESTATUS[0] ))
       debug "doover_entry_remove_status='$doover_entry_remove_status'"
       (( LOGLEVEL < 3 )) && rm -f "$m2kdir/doover.sh.bak"
     fi
     #Find and delete all lines in MOVE mode or just the myth2kodi line in LINK mode
-    sed -i.bak "\#$RECORDING_NAME#d" "$m2kdir/doover.sh" 2>&1 | err_pipe "${FUNCNAME[0]}(): Line $LINENO: "
+    sed -i.bak "\#$RECORDING_NAME#d" "$m2kdir/doover.sh" 2>&1 | err_pipe "ERROR: ${FUNCNAME[0]}(): Line $LINENO: "
     (( doover_entry_remove_status+=PIPESTATUS[0] ))
     debug "doover_entry_remove_status='$doover_entry_remove_status'"
     (( LOGLEVEL < 3 )) && rm -f "$m2kdir/doover.sh.bak"
@@ -5631,11 +5631,11 @@ delete_recording_from_mythtv(){
   if [[ "$RECORDING_FILE_OWNER" = 'myth2kodi' ]]; then
     debug "File tracked by myth2kodi."
     debug "Removing lines mentioning '$RECORDING_FILE' from '$m2kdir/created.tracking'"
-    sed -i.bak "\#$RECORDING_FILE#d" "$m2kdir/created.tracking" 2>&1 | err_pipe "${FUNCNAME[0]}(): Line $LINENO: "
+    sed -i.bak "\#$RECORDING_FILE#d" "$m2kdir/created.tracking" 2>&1 | err_pipe "ERROR: ${FUNCNAME[0]}(): Line $LINENO: "
   elif [[ "$RECORDING_LINK_OWNER" = 'myth2kodi' && -n "$RECORDING_LINK" ]]; then
     debug "Link tracked by myth2kodi."
     debug "Removing lines mentioning '$RECORDING_LINK' from '$m2kdir/created.tracking'"
-    sed -i.bak "\#$RECORDING_LINK#d" "$m2kdir/created.tracking" 2>&1 | err_pipe "${FUNCNAME[0]}(): Line $LINENO: "
+    sed -i.bak "\#$RECORDING_LINK#d" "$m2kdir/created.tracking" 2>&1 | err_pipe "ERROR: ${FUNCNAME[0]}(): Line $LINENO: "
   fi
   (( LOGLEVEL < 3 )) && [[ -f "$m2kdir/created.tracking.bak" ]] && rm -f "$m2kdir/created.tracking.bak"
 

@@ -668,7 +668,7 @@ m2k_init(){
   ((LOGLEVEL>=3)) && printf '%s\n' "Config complete." >> "$pre_logging_file"
 
   #What am I...
-  m2kVersion="myth2kodi Version 1.4.1b" ; declare -gr m2kVersion
+  m2kVersion="myth2kodi Version 1.4.1c" ; declare -gr m2kVersion
   m2kPlatform="$(uname)" ; declare -gr m2kPlatform
   ((LOGLEVEL>=3)) && printf '%s\n' "Running $m2kVersion on $m2kPlatform." >> "$pre_logging_file"
 
@@ -929,15 +929,13 @@ parse_command_flags(){
       debug "Recognised command line switch '--recording-info'"
       #Example usage: myth2kodi --recording-info "1070_20160331073100.mpg"
       inform "Attempting to access recording info for: $M2KARG2"
-      if ! set_recording_name "$M2KARG2"; then return "$?"; fi
+      if ! set_recording_name "$M2KARG2"; then return 1; fi
       InputFileBasename="$RECORDING_NAME"
       InputTitle=''
-      process_mythtvdb
-      declare -i recordinginforeturnstatus="$?"
-      [[ "$recordinginforeturnstatus" != 0 ]] && return "$recordinginforeturnstatus"
+      if ! process_mythtvdb; then return 1; fi
       msg_recording_info
       (( LOGLEVEL < 3 )) && rm -rf "$MARKUPFRAMES_TMP"
-      return "$recordinginforeturnstatus"
+      return 0
     ;;
     --about)
       debug "Recognised command line switch '--about'"
@@ -958,14 +956,14 @@ parse_command_flags(){
     ;;
     --maintenance)
       debug "Recognised command line switch '--maintenance'"
-      if ! maintenance_warning ; then return "$?"; fi
+      if ! maintenance_warning ; then return 1; fi
       declare -gi removedead=1
       m2k_maintenance
       return $?
     ;;
     --cleanse)
       debug "Recognised command line switch '--cleanse'"
-      if ! cleanse_warning ; then return "$?"; fi
+      if ! cleanse_warning ; then return 1; fi
       m2k_cleanse
       return $?
     ;;
@@ -1119,7 +1117,7 @@ validate_args(){
 
     #Do not reprocess a recording we already processed, unless forced to.
     if [[ "$FORCE_PROCESS" != 'Enabled' ]]; then
-      if ! pre_process_check "$M2KARG1"; then return "$?"; fi
+      if ! pre_process_check "$M2KARG1"; then return 1; fi
     fi
 
   fi
@@ -1185,7 +1183,7 @@ pre_process_check(){
     EXIT_JOB_TYPE='RecordingAlreadyProcessed'
     return 1
   else #check if it was processed in LINK mode
-    if ! RECORDING_FILE="$(realpath "$file_path" 2> >(err_pipe "ERROR: ${FUNCNAME[0]}(): Line $LINENO: "))"; then return $?; fi
+    if ! RECORDING_FILE="$(realpath "$file_path" 2> >(err_pipe "ERROR: ${FUNCNAME[0]}(): Line $LINENO: "))"; then return 1; fi
     local -i found=1 #We'll be trying to find a link: 0=success; 1=failure.
     local -a check_dirs
     local link_name
@@ -1409,14 +1407,14 @@ identify_recording_files(){
   local inputarg="$1"
   if [[ -f "$inputarg" ]]; then
     #Find the recording file and any link to it.
-    if ! find_file_link_pairs "$inputarg"; then return $?; fi
+    if ! find_file_link_pairs "$inputarg"; then return 1; fi
     debug "RECORDING_LINK: '$RECORDING_LINK'"
     debug "RECORDING_LINK_OWNER: '$RECORDING_LINK_OWNER'"
     debug "RECORDING_FILE: '$RECORDING_FILE'"
     debug "RECORDING_FILE_OWNER: '$RECORDING_FILE_OWNER'"
 
     #Find the MythTV recording file name and its path.
-    if ! set_recording_name "$inputarg"; then return $?; fi
+    if ! set_recording_name "$inputarg"; then return 1; fi
     debug "RECORDING_PATH: '$RECORDING_PATH'"
     debug "RECORDING_NAME: '$RECORDING_NAME'"
     InputPath="$RECORDING_PATH"
@@ -1445,8 +1443,8 @@ find_file_link_pairs(){
   #Is file_path a link or a file
   if [[ -L "$file_path" ]]; then
     #file_path is a link, grab its target. #TODO: maybe "$(realpath --strip "$file_path")" ~ "$(cd "$(dirname "$file_path")" ; pwd)"
-    if ! RECORDING_LINK="$(realpath --strip "$file_path" 2> >(err_pipe "ERROR: ${FUNCNAME[0]}(): Line $LINENO: "))"; then return $?; fi
-    if ! RECORDING_FILE="$(readlink "$file_path" 2> >(err_pipe "ERROR: ${FUNCNAME[0]}(): Line $LINENO: "))"; then return $?; fi
+    if ! RECORDING_LINK="$(realpath --strip "$file_path" 2> >(err_pipe "ERROR: ${FUNCNAME[0]}(): Line $LINENO: "))"; then return 1; fi
+    if ! RECORDING_FILE="$(readlink "$file_path" 2> >(err_pipe "ERROR: ${FUNCNAME[0]}(): Line $LINENO: "))"; then return 1; fi
     [[ -f "$RECORDING_FILE" ]] || { err "${FUNCNAME[0]}(): Broken link: $RECORDING_FILE"; return 1; }
     [[ -L "$RECORDING_FILE" ]] && { err "${FUNCNAME[0]}(): Multiple links, not following: $RECORDING_FILE"; return 1; }
     if [[ "${RECORDING_FILE##*/}" =~ ^$recpattern ]]; then #NOTE: Don't quote the RHS.
@@ -1463,7 +1461,7 @@ find_file_link_pairs(){
     return 0
   elif [[ -f "$file_path" ]]; then
     #file_path is a file, #TODO: realpath == readlink -f
-    if ! RECORDING_FILE="$(realpath "$file_path" 2> >(err_pipe "ERROR: ${FUNCNAME[0]}(): Line $LINENO: "))"; then return $?; fi
+    if ! RECORDING_FILE="$(realpath "$file_path" 2> >(err_pipe "ERROR: ${FUNCNAME[0]}(): Line $LINENO: "))"; then return 1; fi
     local -i found=1 #Use exit code convention of 0=success 1=failure.
     local -a check_dirs
     local link_name
@@ -1476,7 +1474,7 @@ find_file_link_pairs(){
       #file_path is a moved file name, check if there is a link to file_path from a StorageGroup Directory
       RECORDING_FILE_OWNER='myth2kodi'
       RECORDING_LINK_OWNER='MythTV'
-      if ! get_mythtvdb_storagegroups; then return $?; fi
+      if ! get_mythtvdb_storagegroups; then return 1; fi
       check_dirs=("${STORAGEGROUP_DIRS[@]}")
     #else
     #  debug "This must be a non-MythTV file, so assuming the file we were provided is the effective MythTV file."
@@ -1492,7 +1490,7 @@ find_file_link_pairs(){
     #fi
     #TODO: realpath may be heading toward deprecation, so maybe: "$(cd "$(dirname "$link_name")" ; pwd)". THough not sure about the robustness of dirname here...
     if (( found == 0 )); then
-      if ! RECORDING_LINK="$(realpath --strip "$link_name" 2> >(err_pipe "ERROR: ${FUNCNAME[0]}(): Line $LINENO: "))"; then return $?; fi
+      if ! RECORDING_LINK="$(realpath --strip "$link_name" 2> >(err_pipe "ERROR: ${FUNCNAME[0]}(): Line $LINENO: "))"; then return 1; fi
       return 0
     fi
     if [[ ! "${RECORDING_FILE##*/}" =~ ^$recpattern ]]; then
@@ -1532,7 +1530,7 @@ set_recording_name(){
     [[ -f "$file_name" ]] || { err "${FUNCNAME[0]}(): arg1 is not a file."; return 1; }
     #if [[ "$Database" = 'Enabled' ]]; then
     #Get the storage group directories defined in MythTV-DB
-    if ! get_mythtvdb_storagegroups; then return $?; fi
+    if ! get_mythtvdb_storagegroups; then return 1; fi
     #Check if it's a moved file name that's still tracked by MythTV
     for sg_dir in "${STORAGEGROUP_DIRS[@]}" ; do
       RECORDING_NAME="$(find -L "$sg_dir" -samefile "$file_name" 2> >(err_pipe "ERROR: ${FUNCNAME[0]}(): Line $LINENO: "))"
@@ -1546,8 +1544,8 @@ set_recording_name(){
     #fi
   fi
   if (( found == 0 )); then
-    if ! RECORDING_PATH="$(realpath --strip "$RECORDING_NAME" 2> >(err_pipe "ERROR: ${FUNCNAME[0]}(): Line $LINENO: "))"; then return $?; fi
-    if ! RECORDING_NAME="$(basename "$RECORDING_NAME" 2> >(err_pipe "ERROR: ${FUNCNAME[0]}(): Line $LINENO: "))"; then return $?; fi
+    if ! RECORDING_PATH="$(realpath --strip "$RECORDING_NAME" 2> >(err_pipe "ERROR: ${FUNCNAME[0]}(): Line $LINENO: "))"; then return 1; fi
+    if ! RECORDING_NAME="$(basename "$RECORDING_NAME" 2> >(err_pipe "ERROR: ${FUNCNAME[0]}(): Line $LINENO: "))"; then return 1; fi
     debug "Setting RECORDING_PATH='$RECORDING_PATH'"
     debug "Setting RECORDING_NAME='$RECORDING_NAME'"
     return 0
@@ -2183,7 +2181,7 @@ process_mythtvdb(){
 
   if [[ "$Database" = 'Enabled' ]]; then
     #Access the database entry using the requested grabber
-    if ! get_mythtvdb_info; then return "$?"; fi
+    if ! get_mythtvdb_info; then return 1; fi
 
     #Do appropriate, guide-data specific, processing.
     case "$GuideDataType" in
@@ -2244,8 +2242,6 @@ process_mythtvdb_schedulesdirect(){
   [[ "$m2kProgramIDCheck" = "EP" ]] && ProgramIDType="Series With Episode Data"
   [[ "$m2kProgramIDCheck" = "SP" ]] && ProgramIDType="Sports Programming" && m2kProgramIDCheck=SH
 
-  #TODO: Consider calling set_sxxexx_season_episode_numbers here
-
   #account for .0123's in EITonly data type
   ProgramID="$(cut -f1 -d"." <<< "$ProgramID")"
 
@@ -2295,8 +2291,6 @@ process_mythtvdb_nolookup(){
   test "$m2kProgramIDCheck" = "SH" && ProgramIDType="Generic Episode With No Data"
   test "$m2kProgramIDCheck" = "MV" && ProgramIDType="Movie"
   test "$m2kProgramIDCheck" = "SP" && ProgramIDType="Sports Programming" && m2kProgramIDCheck=SH
-
-  #TODO: Consider calling set_sxxexx_season_episode_numbers here
 
   #account for .0123's in EITonly data type
   ProgramID=$(cut -f1 -d"." <<< "$ProgramID")
@@ -2384,7 +2378,7 @@ process_mythtvdb_sydfta(){
   #  sensible use of whatever it contains...
 
   #If the information is already available, set the Sxx & Exx variables
-  if [ "$m2kProgramIDCheck" = "EP" ]; then
+  if [[ "$m2kProgramIDCheck" = "EP" ]]; then
     debug "The MythTV Guide data Plot before we messed with it:"
     debugcont "Plot:'$Plot'"
     get_sxxexx_from_plot
@@ -2454,11 +2448,11 @@ set_sxxexx_season_episode_numbers(){
   debugcont "SeasonEpisode='$SeasonEpisode'"
 
   if [[ -n "$InputSeasonNum" && -n "$InputEpisodeNum" ]]; then
-    debug 'Using season & episode information from MythTV-DB season & episode fields.'
+    debug 'Using season & episode information from MythTV-DB or command-line.'
     Sxx="$InputSeasonNum"
     Exx="$InputEpisodeNum"
   elif [[ -n "$SeasonEpisode" ]]; then
-    debug 'Extracted season & episode information from Plot.'
+    debug 'Using season & episode information extracted from Plot.'
     Sxx="$(echo "$SeasonEpisode" | grep -E -i --only-matching '(s\.?[0-9]?[0-9])|([0-9]?[0-9]x)' | sed 's/s\.\?\|x//I')"
     Exx="$(echo "$SeasonEpisode" | grep -E -i --only-matching '((e|ep)\.?[0-9][0-9]?)|(x[0-9][0-9]?)' | sed 's/\(E\.\?\|Ep\.\?\)\|x//I')"
     #Strip leading zero
@@ -2479,27 +2473,29 @@ set_sxxexx_season_episode_numbers(){
 #Use regex to check for and make use of SxxExx info in Plot.
 get_sxxexx_from_plot(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  #TODO: localise the SeasonEpisode variable, consider refactor the *_sxxexx_from_plot() functions.
   debugcont "SeasonEpisode: '$SeasonEpisode'"
   debugcont "InputSeasonNum: '$InputSeasonNum'"
   debugcont "InputEpisodeNum: '$InputEpisodeNum'"
   debugcont "Plot: '$Plot'"
-  #TODO: Maybe add warning in the case of 4x4 in case it's not actually an SxxExx
-  #If available use the season and episode fields from MythTV database, otherwise,
-  #use or attempt to determine $SeasonEpisode
-  #extract a season number Sxx and episode number Exx
-  #Assumes season and episode numbers in range 1-99
-  if [[ -z "$SeasonEpisode" && -z "$InputSeasonNum" && -z "$InputEpisodeNum" ]]; then
+  #If either InputSeasonNum or InputEpisodeNum have not been set, the season or
+  #episode fields from MythTV database or command line, then attempt to extract
+  #SeasonEpisode from Plot, SBS is big on including it in the plot/description
+  #field instead of where it belongs.
+  if [[ -z "$SeasonEpisode" ]] && [[ -z "$InputSeasonNum" || -z "$InputEpisodeNum" ]]; then
     debug 'Searching Plot for season & episode information.'
-    #Check the Plot field for the SeasonEpisode info, SBS is big on
-    #including it in the plot/description field instead of where it belongs
-    #The below should work for any of the following forms:
+    #The below should work for any of the following forms, assumes season and
+    #episode numbers in range 0-99:
     #S01E42 | (01x42) | s01e42 | 1X2 | S1E4 | (S01Ep42) | (S1Ep42) | 42x1 | (S.01Ep.42) | (S.01,Ep.42) | S1 E42
-    SeasonEpisode="$(grep -E -i --only-matching '(s\.?[0-9]?[0-9]\,?\s?(e|ep)\.?[0-9][0-9]?)|([0-9]?[0-9]x[0-9][0-9]?)' <<< "$Plot")"
+    local pattern='(s\.?[0-9]?[0-9]\,?\s?(e|ep)\.?[0-9][0-9]?)|([0-9]?[0-9]x[0-9][0-9]?)'
+    if ! SeasonEpisode="$(grep -E -i --only-matching "$pattern" <<< "$Plot")"; then
+      debug "Failed to extract season and episode info from Plot."
+      return 1
+    else
+      debug "Found SeasonEpisode='$SeasonEpisode' in Plot."
+      #TODO: Maybe add warning in the case of 4x4 in case it's not actually an SxxExx
+    fi
   fi
-
-  set_sxxexx_season_episode_numbers
-  return "$?"
+  return 0
 }
 
 #If we already have season and episode info, remove it from the Plot field.
@@ -2739,7 +2735,8 @@ download_series_info(){
   local FieldsWeWant="(</?Series>|</?seriesid>|</?Status>|</?lastupdated>|</?Episode>|</?SeasonNumber>|</?EpisodeNumber>|</?EpisodeName>|</?Overview>|</?FirstAired>)"
   curl -L -s -m"$Timeout" "$TheTVDBShowXML" | grep -E "$FieldsWeWant" > "$dbdir/$NewShowName.xmlTest"
   [[ "${PIPESTATUS[0]}" != '0' ]] && warn "${FUNCNAME[0]}(): Issue accessing: $TheTVDBShowXML"
-  [[ "${PIPESTATUS[1]}" != '0' ]] && warn "${FUNCNAME[0]}(): Failed to match any of the fields we want."
+  (( PIPESTATUS[1] >= 2 )) && err "${FUNCNAME[0]}(): Error status returned by grep for FieldsWeWant from '$TheTVDBShowXML'."
+  [[ "${PIPESTATUS[1]}" = '1' ]] && warn "${FUNCNAME[0]}(): Failed to match any of the fields we want."
 
   local -i tvmaze_id
   tvmaze_id=$(curl -L -s -m"$Timeout" http://api.tvmaze.com/lookup/shows?thetvdb="$SeriesID" | jq '.id')
@@ -3405,7 +3402,7 @@ set_sxxexx_absolute_episode_number(){
 #Appends an entry to today's DailyReport file for the show just processed.
 dailyreport(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  if [ "$DailyReport" = 'Enabled' ]; then
+  if [[ "$DailyReport" = 'Enabled' ]]; then
     [[ ! -d "$m2kdir/DailyReport" ]] && mkdir "$m2kdir/DailyReport"
     debug "Writing to DailyReport file: ${TODAY}"
     printf '%s\n' "$SCRIPT_START_TIME - $ShowFileName" >> "$m2kdir/DailyReport/${TODAY}"
@@ -3737,9 +3734,17 @@ msg_merged_input_mythtvdb(){
   else
     debugcont "InputSubtitle: UNKNOWN"
   fi
-  if [[ -n "$Sxx" ]]; then debugcont "Sxx:'$Sxx'"; else debugcont "Sxx: UNKNOWN"; fi
-  if [[ -n "$Exx" ]]; then debugcont "Exx:'$Exx'"; else debugcont "Exx: UNKNOWN"; fi
-  [[ "$Database" = 'Enabled' ]] && debugcont "PLOT: '$Plot'"
+  if [[ -n "$InputSeasonNum" ]]; then
+    debugcont "InputSeasonNum:'$InputSeasonNum'"
+  else
+    debugcont "InputSeasonNum: UNKNOWN"
+  fi
+  if [[ -n "$InputEpisodeNum" ]]; then
+    debugcont "InputEpisodeNum:'$InputEpisodeNum'"
+  else
+    debugcont "InputEpisodeNum: UNKNOWN"
+  fi
+  [[ "$Database" = 'Enabled' ]] && debugcont "Plot: \"$Plot\""
 }
 
 #A warning message about performing maintenance that waits on user input
@@ -5517,12 +5522,11 @@ delete_recording_from_mythtv(){
   debugcont "RERECORD='$RERECORD'"
 
   local inputarg="$1"
-  local returnstatus
 
   #If we haven't already...
   if [[ -z "$RECORDING_NAME" ]]; then
     #Identify file, link, who owns what, and the MythTV path and basename.
-    if ! identify_recording_files "$inputarg"; then return "$?"; fi
+    if ! identify_recording_files "$inputarg"; then return 1; fi
   fi
 
   #Cannot sensibly delete a recording from MythTV that is not a MythTV recording.
@@ -5543,21 +5547,19 @@ delete_recording_from_mythtv(){
           [[ -L "$RECORDING_LINK" ]] && rm -f "$RECORDING_LINK"
           if [[ -z "$DISCONNECT" && -f "$RECORDING_FILE" ]]; then
             if ! rm -f "$RECORDING_FILE"; then
-              returnstatus="$?"
               NOTIFY_MSG="Failed deleting recording file."
               err "${FUNCNAME[1]}():${FUNCNAME[0]}(): $NOTIFY_MSG"
               EXIT_JOB_TYPE='RemoveFailed'
-              return "$returnstatus"
+              return 1
             fi
           fi
 
           #Delete the associated database entry and thumbnails.
           if ! delete_mythtv_database_entry_mysql; then
-            returnstatus="$?"
             NOTIFY_MSG="Failed deleting MythTV-DB entry using MySQL."
             err "${FUNCNAME[1]}():${FUNCNAME[0]}(): $NOTIFY_MSG"
             EXIT_JOB_TYPE='MythTVdatabaseFailure'
-            return "$returnstatus"
+            return 1
           fi
         fi
         ;;
@@ -5658,7 +5660,7 @@ switch_delete_recording(){
   printf '\n'
   [[ "$yesorno" != 'y' ]] && { inform "You must press 'y' to continue, aborting."; return 1 ; }
 
-  if ! delete_recording_from_mythtv "$1"; then return "$?"; fi
+  if ! delete_recording_from_mythtv "$1"; then return 1; fi
 
   #Delete any comskip or NFO files associated with the recording.
   if [[ "$RECORDING_FILE_OWNER" = 'myth2kodi' ]]; then
@@ -5683,10 +5685,9 @@ disconnect_recording(){
   [[ "$yesorno" != 'y' ]] && { inform "You must press 'y' to continue, aborting."; return 1 ; }
 
   local inputarg="$1"
-  local returnstatus
 
   #Identify file, link, who owns what, and the MythTV path and basename.
-  if ! identify_recording_files "$inputarg"; then return "$?"; fi
+  if ! identify_recording_files "$inputarg"; then return 1; fi
 
   #Cannot sensibly "disconnect" a recording that has not been processed or has
   #already been disconnected.
@@ -5704,9 +5705,8 @@ disconnect_recording(){
   #Remove link associated with recording.
   if [[ -L "$RECORDING_LINK" ]]; then
     if ! rm -f "$RECORDING_LINK"; then
-      returnstatus="$?"
       err "${FUNCNAME[1]}():${FUNCNAME[0]}(): Failed deleting recording link."
-      return "$returnstatus"
+      return 1
     fi
   fi
 
@@ -5724,7 +5724,7 @@ disconnect_recording(){
   fi
 
   declare -g DISCONNECT='true'
-  if ! delete_recording_from_mythtv "$inputarg"; then return "$?"; fi
+  if ! delete_recording_from_mythtv "$inputarg"; then return 1; fi
 
   return 0
 }
@@ -5745,7 +5745,7 @@ recording_log(){
   local logfilelist_file
   local templog_file
   #Find the MythTV recording file name and its path.
-  if ! set_recording_name "$1"; then return "$?"; fi
+  if ! set_recording_name "$1"; then return 1; fi
   debug "RECORDING_PATH: '$RECORDING_PATH'"
   debug "RECORDING_NAME: '$RECORDING_NAME'"
   if ! logfilelist_file="$(mktemp "$M2K_TMPDIR"/m2k_logfilelist-XXXX)"; then
@@ -5809,7 +5809,7 @@ recreate_comskip(){
     inform "Regenerating comskip file for $inputarg"
 
     #Identify file, link, who owns what, and the MythTV path and basename.
-    if ! identify_recording_files "$inputarg"; then return "$?"; fi
+    if ! identify_recording_files "$inputarg"; then return 1; fi
 
     #Identify the target for the comskip file
     if [[ "$RECORDING_FILE_OWNER" = 'myth2kodi' ]]; then
@@ -5822,7 +5822,7 @@ recreate_comskip(){
     fi
 
     #Get the MythTV-DB info, which includes the comskip info.
-    if ! get_mythtvdb_info; then return "$?"; fi
+    if ! get_mythtvdb_info; then return 1; fi
 
     #Move the comskip file into place
     inform "Moving new comskip file to: ${ShowComSkip}"
@@ -5986,6 +5986,9 @@ else
   Database='Disabled'
 fi
 msg_merged_input_mythtvdb
+
+#Try to set Sxx and Exx using InputSeasonNum, InputEpisodeNum, or SeasonEpisode.
+[[ "$m2kProgramIDCheck" = "EP" ]] && set_sxxexx_season_episode_numbers
 
 #At this point we should have an initial show name, if not then abort.
 ShowName="$InputTitle"

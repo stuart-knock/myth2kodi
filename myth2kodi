@@ -2734,9 +2734,10 @@ download_series_info(){
   local TheTVDBShowXML="http://www.thetvdb.com/api/$APIkey/series/$SeriesID/all/$Language.xml"
   local FieldsWeWant="(</?Series>|</?seriesid>|</?Status>|</?lastupdated>|</?Episode>|</?SeasonNumber>|</?EpisodeNumber>|</?EpisodeName>|</?Overview>|</?FirstAired>)"
   curl -L -s -m"$Timeout" "$TheTVDBShowXML" | grep -E "$FieldsWeWant" > "$dbdir/$NewShowName.xmlTest"
-  [[ "${PIPESTATUS[0]}" != '0' ]] && warn "${FUNCNAME[0]}(): Issue accessing: $TheTVDBShowXML"
-  (( PIPESTATUS[1] >= 2 )) && err "${FUNCNAME[0]}(): Error status returned by grep for FieldsWeWant from '$TheTVDBShowXML'."
-  [[ "${PIPESTATUS[1]}" = '1' ]] && warn "${FUNCNAME[0]}(): Failed to match any of the fields we want."
+  local curl_grep_status=("${PIPESTATUS[@]}")
+  [[ "${curl_grep_status[0]}" != '0' ]] && warn "${FUNCNAME[0]}(): Issue accessing: $TheTVDBShowXML"
+  (( curl_grep_status[1] >= 2 )) && err "${FUNCNAME[0]}(): Error status returned by grep for FieldsWeWant from '$TheTVDBShowXML'."
+  [[ "${curl_grep_status[1]}" = '1' ]] && warn "${FUNCNAME[0]}(): Failed to match any of the fields we want."
 
   local -i tvmaze_id
   tvmaze_id=$(curl -L -s -m"$Timeout" http://api.tvmaze.com/lookup/shows?thetvdb="$SeriesID" | jq '.id')

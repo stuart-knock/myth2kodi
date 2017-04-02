@@ -668,7 +668,7 @@ m2k_init(){
   ((LOGLEVEL>=3)) && printf '%s\n' "Config complete." >> "$pre_logging_file"
 
   #What am I...
-  m2kVersion="myth2kodi Version 1.4.2" ; declare -gr m2kVersion
+  m2kVersion="myth2kodi Version 1.4.2a" ; declare -gr m2kVersion
   m2kPlatform="$(uname)" ; declare -gr m2kPlatform
   ((LOGLEVEL>=3)) && printf '%s\n' "Running $m2kVersion on $m2kPlatform." >> "$pre_logging_file"
 
@@ -5179,6 +5179,12 @@ m2k_diagnostics(){
     informcont "Executing: myth2kodi '$test_file' 'mister rogers' 'show 1332'"
     informcont "Testing exit status..."
 
+    #TODO: the expectation is that myth2kodi is in the caller's path, otherwise
+    #      supplemental functionality like doover won't work. While we could add
+    #      $binpath here and in doover, etc, that would mean doover would break
+    #      on reinstall to a new location... So, probably best to just add a
+    #      diagnostic warning/error if myth2kodi is not in caller's path so that
+    #      it is considered part of a proper configuration...
     #Run myth2kodi against the dummy file
     myth2kodi "$test_file" 'mister rogers' 'show 1332'
     exitstatus="$?"

@@ -6401,8 +6401,12 @@ fi
 #If this is a test file, then exit now.
 [[ "$InputPath" = "$m2kdir/6666_20420101084242.tst" ]] && testfile_exit
 
-#Check that we are able to read and write InputPath. #TODO: Consider if LINK or COPY downgrade this to requiring 'r' only
-check_path_permission "$InputPath" 'rw'
+#Check that we are able to read and write InputPath.
+if [[ "$PROCESS_RECORDING_MODE" =~ ^('LINK'|'COPY')$ ]]; then
+  check_path_permission "$InputPath" 'r'
+else
+  check_path_permission "$InputPath" 'rw'
+fi
 
 #If the show is generic programming, this is the best myth2kodi can do.
 [[ "$m2kProgramIDCheck" = "SH" ]] && msg_show_warning

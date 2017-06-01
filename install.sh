@@ -19,6 +19,7 @@
 #  before using the new script on your recordings.
 #
 #REQUIRES:
+#  bash >= 4.2 -- for, at least, the '-g' flag to declare.
 #  git -- only if running from a repository rather than a release tar-ball.
 #
 #DESCRIPTION:
@@ -34,7 +35,14 @@
 # Thanks to jctennis at the Kodi forums for the suggestion/motivation:
 #   http://forum.kodi.tv/showthread.php?tid=301925&pid=2538668#pid2538668
 #
-[[ "$1" =~ ^('-h'|'--help'|'-?')$ ]] && { head -n 29 "${BASH_SOURCE[0]}" ; exit 1 ; }
+
+#Use the header as a basic help message.
+[[ "$1" =~ ^('-h'|'--help'|'-?')$ ]] && { head -n 30 "${BASH_SOURCE[0]}" ; exit 1 ; }
+
+#We need bash >= 4.2 (for, at least, the '-g' flag to declare.).
+THIS_BASH_VER="${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}"
+((THIS_BASH_VER >= 42)) || { printf 'ERROR: %s\n' "REQUIRE: BASH >= 4.2" ; exit 1 ; }
+
 ############################################################################
 ################################# Settings #################################
 ############################################################################

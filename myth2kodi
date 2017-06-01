@@ -6401,7 +6401,7 @@ fi
 #If this is a test file, then exit now.
 [[ "$InputPath" = "$m2kdir/6666_20420101084242.tst" ]] && testfile_exit
 
-#Check that we are able to read and write InputPath.
+#Check that we have the necessary permissions for InputPath.
 if [[ "$PROCESS_RECORDING_MODE" =~ ^('LINK'|'COPY')$ ]]; then
   check_path_permission "$InputPath" 'r'
 else

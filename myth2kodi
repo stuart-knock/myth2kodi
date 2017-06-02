@@ -668,7 +668,7 @@ m2k_init(){
   ((LOGLEVEL>=3)) && printf '%s\n' "Config complete." >> "$pre_logging_file"
 
   #What am I...
-  m2kVersion="myth2kodi Version 1.4.2a" ; declare -gr m2kVersion
+  m2kVersion="myth2kodi Version 1.4.2b" ; declare -gr m2kVersion
   m2kPlatform="$(uname)" ; declare -gr m2kPlatform
   ((LOGLEVEL>=3)) && printf '%s\n' "Running $m2kVersion on $m2kPlatform." >> "$pre_logging_file"
 
@@ -2232,6 +2232,13 @@ process_mythtvdb_schedulesdirect(){
   rating=$(printf "%0.f" "$Stars")
   [[ "$rating" != "" ]] && let rating=$rating*2
   [[ "$rating" = "" ]] && rating=1
+
+  #TODO: This is a temporary quick-fix: review season=0 handling...
+  #The definition of the 'season' and 'episode' fields of a 'recorded' entry
+  #specifies a default value of NULL. But one user has reported SchedulesDirtect
+  #get "no information" value set incorrectly as 0.
+  [[ "$InputSeasonNum" = 0 ]]  && InputSeasonNum=''
+  [[ "$InputEpisodeNum" = 0 ]] && InputEpisodeNum=''
 
   #Create MV/EP/SH Identification Type from ProgramID
   m2kProgramIDCheck="${ProgramID:0:2}"

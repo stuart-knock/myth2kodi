@@ -668,7 +668,7 @@ m2k_init(){
   ((LOGLEVEL>=3)) && printf '%s\n' "Config complete." >> "$pre_logging_file"
 
   #What am I...
-  m2kVersion="myth2kodi Version 1.4.2b" ; declare -gr m2kVersion
+  m2kVersion="myth2kodi Version 1.4.2c" ; declare -gr m2kVersion
   m2kPlatform="$(uname)" ; declare -gr m2kPlatform
   ((LOGLEVEL>=3)) && printf '%s\n' "Running $m2kVersion on $m2kPlatform." >> "$pre_logging_file"
 
@@ -1159,7 +1159,7 @@ pre_process_check(){
     elif [[ "$ShowCategory" = 'Movie' ]]; then
       inform "But we seem to have enough info from the command line to process it as a movie."
       [[ "$Database" = 'Enabled' ]] && inform "Disabling access to MythTV-DB -- trying to process non-MythTV file."
-      m2kProgramIDCheck="MV"
+      m2kProgramIDCheck='MV'
       Database='Disabled'
       debug "Setting  TRACKING='Disabled'"
       TRACKING='Disabled'
@@ -2216,61 +2216,63 @@ process_mythtvdb(){
   return 0
 }
 
-#Processes Zap2it/SchedulesDirect/Tribune data for use in the program
-process_mythtvdb_schedulesdirect(){
+#Gather information from the MythTV database common to guide-data types.
+process_mythtvdb_common(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  inform "Processing MythTV database info as SchedulesDirect."
-  #Check for database permissions
-  [[ "$ChanID" = "" ]] && err "%%%% NO DATABASE INFORMATION. CHECK LOGIN/PASS OR FILE %%%%"
-  #disqualify invalid movie airdates
-  [[ ! -z "$MovieAirDate" ]] && ((MovieAirDate < 1900 )) && MovieAirDate=''
+  #Check for database permissions: assumes ChanID set if DB access successful.
+  [[ -z "$ChanID" ]] && err "${FUNCNAME[0]}(): No MythTV-DB information."
 
-  [[ "$OriginalAirDate" = "None" ]] && OriginalAirDate=""
-  [[ "$OriginalAirDate" = "none" ]] && OriginalAirDate=""
+  #Disqualify invalid movie airdates
+  [[ -n "$MovieAirDate" ]] && (( MovieAirDate < 1900 )) && MovieAirDate=''
+
+  #Some guide-data sources set 'none' instead of '' to mean no-information.
+  [[ "${OriginalAirDate,,}" = 'none' ]] && OriginalAirDate=''
 
   #Get rating from Stars
-  rating=$(printf "%0.f" "$Stars")
-  [[ "$rating" != "" ]] && let rating=$rating*2
-  [[ "$rating" = "" ]] && rating=1
+  rating="$(printf '%0.f' "$Stars")"
+  if [[ -n "$rating" ]]; then ((rating=rating*2)); else rating=1; fi
 
-  #TODO: This is a temporary quick-fix: review season=0 handling...
   #The definition of the 'season' and 'episode' fields of a 'recorded' entry
-  #specifies a default value of NULL. But one user has reported SchedulesDirtect
-  #get "no information" value set incorrectly as 0.
-  [[ "$InputSeasonNum" = 0 ]]  && InputSeasonNum=''
-  [[ "$InputEpisodeNum" = 0 ]] && InputEpisodeNum=''
+  #specifies a default of NULL: https://www.mythtv.org/wiki/Recorded_table
+  #However, it seems common that "no information" is incorrectly indicated
+  #by setting them as 0 instead of NULL (which for us would resolve to '').
+  #Special episodes, not belonging to a particular season, are typically
+  #designated as season=0, however, I'm not aware of a valid use of episode=0.
+  [[ "$InputEpisodeNum" = 0 ]] && { InputSeasonNum=''; InputEpisodeNum=''; }
 
-  #Create MV/EP/SH Identification Type from ProgramID
-  m2kProgramIDCheck="${ProgramID:0:2}"
-
-  #Extrapolate data from Programid
-  [[ "$m2kProgramIDCheck" = "SH" ]] && ProgramIDType="Generic Episode With No Data"
-  [[ "$m2kProgramIDCheck" = "MV" ]] && ProgramIDType="Movie"
-  [[ "$m2kProgramIDCheck" = "EP" ]] && ProgramIDType="Series With Episode Data"
-  [[ "$m2kProgramIDCheck" = "SP" ]] && ProgramIDType="Sports Programming" && m2kProgramIDCheck=SH
-
-  #account for .0123's in EITonly data type
-  ProgramID="$(cut -f1 -d"." <<< "$ProgramID")"
-
-  #Check if database contains enough information to put into doover que
-  GoForDoover=0
-  [[ "$EpisodeSubtitle" != "" ]] && GoForDoover=1
-
-  #Get barebones zap2it series id.
-  Zap2itSeriesID=$(echo "$ProgramID" | tr -d MVSHEP | sed 's/0*//' | sed 's/.\{4\}$//')
-
-  #strip needless chars from date
-  datehour=$(echo "$ShowStartTime" | tr ":" "." | tr " " "@")
-  #get 4 digit year
-  #TODO: Not being used, also assumes not a rerun, check and delete.#seasonyear="${ShowStartTime:0:4}"
-
-  #predefined naming conventions
+  #Predefined naming conventions
   if [[ "$ShowCategory" =~ ^('Sports event'|'News'|'Newsmagazine')$ ]]; then
     NamingConvention="$ShowCategory"
   fi
 
   #If news, bypass Categoric naming convention 1
-  test NamingConvention="News" && UseMethod2=1
+  [[ "$NamingConvention" = 'News' ]] && UseMethod2=1
+
+  #strip needless chars from date
+  datehour="$(printf '%s' "$ShowStartTime" | tr ':' '.' | tr ' ' '@')" #TODO: Consider getting rid of the @ from this, as it's used in file naming... Maybe _ instead
+
+  return 0
+}
+
+#Processes Zap2it/SchedulesDirect/Tribune data for use in the program
+process_mythtvdb_schedulesdirect(){
+  debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
+  inform 'Processing MythTV database info as SchedulesDirect.'
+
+  #Gather information from the MythTV database common to guide-data types.
+  process_mythtvdb_common
+
+  #Create MV/EP/SH Identification Type from ProgramID
+  m2kProgramIDCheck="${ProgramID:0:2}"
+
+  #Extrapolate data from m2kProgramIDCheck
+  set_ProgramIDType
+
+  #account for .0123's in EITonly data type
+  ProgramID="$(cut -f1 -d"." <<< "$ProgramID")"
+
+  #Get barebones zap2it series id.
+  Zap2itSeriesID=$(echo "$ProgramID" | tr -d MVSHEP | sed 's/0*//' | sed 's/.\{4\}$//')
 
   return 0
 }
@@ -2278,43 +2280,24 @@ process_mythtvdb_schedulesdirect(){
 #NoLookup is an alternate mode where TheTVDB is not used for lookups
 process_mythtvdb_nolookup(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  inform "Processing MythTV database info as NoLookup."
-  #Check for database permissions
-  test "$ChanID" = "" && err "%%%% NO DATABASE INFORMATION. CHECK LOGIN/PASS OR FILE %%%%"
-  #disqualify invalid movie airdates
-  [[ -n "$MovieAirDate" ]] && (( MovieAirDate < 1900 )) && MovieAirDate=''
+  inform 'Processing MythTV database info as NoLookup.'
 
-  #Get rating from Stars
-  rating=$(printf "%0.f" "$Stars")
-  test "$rating" != "" && let rating=$rating*2
-  test "$rating" = "" && rating=1
+  #Gather information from the MythTV database common to guide-data types.
+  process_mythtvdb_common
 
   #Create MV/EP/SH Identification Type from ProgramID
   m2kProgramIDCheck="${ProgramID:0:2}"
 
-  #Spoof show as episode to avoid programid
-  test "$m2kProgramIDCheck" = "EP" && ProgramIDType="Generic Episode With No Data" && m2kProgramIDCheck="SH"
-  #Extrapolate data from Programid
-  test "$m2kProgramIDCheck" = "SH" && ProgramIDType="Generic Episode With No Data"
-  test "$m2kProgramIDCheck" = "MV" && ProgramIDType="Movie"
-  test "$m2kProgramIDCheck" = "SP" && ProgramIDType="Sports Programming" && m2kProgramIDCheck=SH
+  #Spoof show as episode to avoid m2kProgramIDCheck='EP'
+  [[ "$m2kProgramIDCheck" = 'EP' ]] && m2kProgramIDCheck='SH'
+  #Extrapolate data from m2kProgramIDCheck
+  set_ProgramIDType
 
   #account for .0123's in EITonly data type
   ProgramID=$(cut -f1 -d"." <<< "$ProgramID")
 
   #This probably isn't necessary, but adding it for the time-being match previous state. #SAK
   Zap2itSeriesID="$LocalSeriesID"
-
-  #strip needless chars from date
-  datehour=$(echo "$ShowStartTime" | tr ":" "." | tr " " "@")
-  #get 4 digit year
-  #TODO: Not being used, also assumes not a rerun, check and delete.#seasonyear="${ShowStartTime:0:4}"
-
-  #predefined naming conventions
-  [[ "$ShowCategory" =~ ^(Sports event|News|Newsmagazine)$ ]] && NamingConvention="$ShowCategory"
-
-  #If news, bypass Categoric naming convention 1
-  test NamingConvention="News" && UseMethod2=1
 
   return 0
 }
@@ -2323,25 +2306,9 @@ process_mythtvdb_nolookup(){
 process_mythtvdb_sydfta(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   inform 'Processing MythTV database info as SydFTA.'
-  #Check for database permissions
-  [[ -z "$ChanID" ]] && err "IN: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}(). NO DATABASE INFORMATION. CHECK LOGIN/PASS OR FILE"
-  #disqualify invalid movie airdates
-  [[ -n "$MovieAirDate" ]] && (( MovieAirDate < 1900 )) && MovieAirDate=''
 
-  #We don't use these, but if they're "none" we still want them changed to ""
-  [[ "${OriginalAirDate,,}" = 'none' ]] && OriginalAirDate=""
-
-  #TODO:#NOTE: Stars field in SydFTA data tends to be empty, consider what to do here.
-  #Get rating from Stars
-  rating=$(printf "%0.f" "$Stars")
-  [[ -n "$rating" ]] && let rating=$rating*2
-  [[ -z "$rating" ]] && rating=1
-
-  #The definition of the 'season' and 'episode' fields of a 'recorded' entry
-  #specifies a default value of NULL. But for SydFTA guide-data we sometimes
-  #get "no information" value set incorrectly as 0, not $null or "".
-  [[ "$InputSeasonNum" = 0 ]]  && InputSeasonNum=''
-  [[ "$InputEpisodeNum" = 0 ]] && InputEpisodeNum=''
+  #Gather information from the MythTV database common to guide-data types.
+  process_mythtvdb_common
 
   #Current (2016-08) issue from 7flix: description in Subtitle field, all-caps cast in Plot...
   #Longest actual subtitle I've seen so far is 84 characters. Rather than assuming Plot field
@@ -2364,11 +2331,11 @@ process_mythtvdb_sydfta(){
   #The ProgramID field from FTA EPG data in Sydney?Australia? doesn't specify MV/EP/SH,
   #the Movie specification is "almost-always" found in the Category field of
   #the MythTV database. So, we'll use that.
-  if [ "$ShowCategory" = "Movie" ]; then
-    inform "Guide data for $InputTitle indicates a Movie."
-    m2kProgramIDCheck="MV"
+  if [[ "$ShowCategory" = 'Movie' ]]; then
+    inform "Guide data for '$InputTitle' indicates a Movie."
+    m2kProgramIDCheck='MV'
     if [[ -n "$InputSubtitle" ]]; then
-      warn "${FUNCNAME[0]}(): Guide data indicates that $InputTitle is a Movie, but has an InputSubtitle: $InputSubtitle"
+      warn "${FUNCNAME[0]}(): Guide data indicates that '$InputTitle' is a Movie, but has an InputSubtitle: '$InputSubtitle'"
       warn "Resetting InputSubtitle to ''"
       InputSubtitle=''
     fi
@@ -2378,15 +2345,15 @@ process_mythtvdb_sydfta(){
     #  and determine whether the Category field reliably distinguishes things
     #  like news, sport, etc
     debug "Recording is not obviously a movie, so assuming episode of series. TODO: Line $LINENO."
-    m2kProgramIDCheck="EP"
+    m2kProgramIDCheck='EP'
   fi
 
   #TODO: Check the SeriesID field in MythTV-DB & see if we can make more
   #  sensible use of whatever it contains...
 
   #If the information is already available, set the Sxx & Exx variables
-  if [[ "$m2kProgramIDCheck" = "EP" ]]; then
-    debug "The MythTV Guide data Plot before we messed with it:"
+  if [[ "$m2kProgramIDCheck" = 'EP' ]]; then
+    debug 'The MythTV Guide data Plot before we messed with it:'
     debugcont "Plot:'$Plot'"
     get_sxxexx_from_plot
     remove_sxxexx_from_plot
@@ -2396,7 +2363,7 @@ process_mythtvdb_sydfta(){
       #TODO: Only makes sense to call remove_subtitle_from_plot if get_subtitle_from_plot found one.
       remove_subtitle_from_plot
     fi
-    debug "The MythTV Guide data Plot after we messed with it:"
+    debug 'The MythTV Guide data Plot after we messed with it:'
     debugcont "Plot:'$Plot'"
   fi
 
@@ -2411,7 +2378,7 @@ process_mythtvdb_sydfta(){
   Plot="$(sed -r 's/[^[:alnum:] &,.-]//g' <<< "$Plot")"
 
   #Strip the Movie: tag that some stations very helpfully put in the title field...
-  if [ "$m2kProgramIDCheck" = "MV" ]; then
+  if [[ "$m2kProgramIDCheck" = 'MV' ]]; then
     InputTitle="$(sed 's/Movie:\s*//I' <<< "$InputTitle")"
   fi
 
@@ -2420,10 +2387,7 @@ process_mythtvdb_sydfta(){
   #  especially important to remove from Title -- to avoid repetition in NewFileName if we use it to generate that name.
 
   #Extrapolate data from m2kProgramIDCheck
-  test "$m2kProgramIDCheck" = "SH" && ProgramIDType="Generic Episode With No Data"
-  test "$m2kProgramIDCheck" = "MV" && ProgramIDType="Movie"
-  test "$m2kProgramIDCheck" = "EP" && ProgramIDType="Series With Episode Data"
-  test "$m2kProgramIDCheck" = "SP" && ProgramIDType="Sports Programming" && m2kProgramIDCheck=SH
+  set_ProgramIDType
 
   #FTA stations providing a ProgramID use CRID: https://en.wikipedia.org/wiki/Crid
   #Remove the leading CRID://
@@ -2436,15 +2400,34 @@ process_mythtvdb_sydfta(){
   ProgramID="$ProgramData"
   #TODO: figure out if anything useful can actually be done with this ProgramID.
 
-  #strip needless chars from date
-  datehour="$(echo "$ShowStartTime" | tr ":" "." | tr " " "@")" #TODO: Consider getting rid of the @ from this, as it's used in file naming... Maybe _ instead
+  return 0
+}
 
-  #predefined naming conventions
-  [[ "$ShowCategory" =~ ^(Sports event|News|Newsmagazine)$ ]] && NamingConvention="$ShowCategory"
-
-  #If news, bypass Categoric naming convention 1
-  test NamingConvention="News" && UseMethod2=1
-
+#Convert m2kProgramIDCheck into ProgramIDType.
+set_ProgramIDType(){
+  debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
+  debugcont "m2kProgramIDCheck='$m2kProgramIDCheck'"
+  case "$m2kProgramIDCheck" in
+    'SH')
+      ProgramIDType='Generic Episode With No Data'
+    ;;
+    'MV')
+      ProgramIDType='Movie'
+    ;;
+    'EP')
+      ProgramIDType='Series With Episode Data'
+    ;;
+    'SP')
+      ProgramIDType='Sports Programming'
+      m2kProgramIDCheck='SH'
+    ;;
+    *)
+      EXIT_JOB_TYPE='UnrecognisedProgramIDType'
+      NOTIFY_MSG="Unrecognised m2kProgramIDCheck: '$m2kProgramIDCheck'."
+      err "${FUNCNAME[0]}() CALLED FROM: ${FUNCNAME[1]}(): $NOTIFY_MSG"
+      return 1
+      ;;
+  esac
   return 0
 }
 
@@ -3484,7 +3467,6 @@ msg_operation_summary(){
     debugcont "ChanID=$ChanID-"
     informcont "StorageGroup=$StorageGroup-"
     informcont "ShowCategory=$ShowCategory-"
-    debugcont  "GoForDoover=$GoForDoover-"
     informcont "ProgramIDType=$ProgramIDType-"
     debugcont  "rating=$rating-"
     informcont "Zap2itSeriesID=$Zap2itSeriesID-"
@@ -4040,13 +4022,13 @@ msg_improve_confidence(){
 set_show_file_name(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   #Format Episodes showname=show name Sxx=season number Exx=episode number EpisodeSubtitle=episode name
-  if [[ -n "$Exx" && "$Exx" != "E" ]]; then
+  if [[ -n "$Exx" && "$Exx" != 'E' ]]; then
     debug "Naming as episode"
     ShowFileName="$NewShowName $Sxx$Exx ($EpisodeSubtitle)$SHOW_FILE_NAME_APPEND"
   #Format Movies
-  elif [ "$m2kProgramIDCheck" = "MV" ]; then
-    debug "Naming as movie"
-    Exx="Movie"
+  elif [[ "$m2kProgramIDCheck" = 'MV' ]]; then
+    debug 'Naming as movie.'
+    Exx='Movie'
     #TODO: If adding a year then we really want original release date so the Kodi metadata lookup works reliably.
     #      Add a MOVIE_RELEASE_YEAR to the processing functions for guide-data that provide this.
     if [[ -n "$MovieAirDate" ]]; then
@@ -4061,7 +4043,7 @@ set_show_file_name(){
     Exx="Generic"
     ShowFileName="$ShowName S0E0 ($EpisodeSubtitle Recorded $datehour on $ChanID)$SHOW_FILE_NAME_APPEND"
     RequiresNFO=1
-    [[ "$m2kProgramIDCheck" = "EP" ]] && RequiresDoover=1
+    [[ "$m2kProgramIDCheck" = 'EP' ]] && RequiresDoover=1
   fi
   inform "Set file name as: $ShowFileName"
 }
@@ -4172,7 +4154,7 @@ make_show_dir(){
       [[ "$TRACKING" != 'Disabled' ]] && printf '%s\n' "$MoveDir" >> "$m2kdir/dir.tracking"
       mkdir "$MoveDir"
       chmod 775 "$MoveDir"
-      [[ "$RequiresNFO" = "1" ]] && generate_series_nfo
+      [[ "$RequiresNFO" = '1' ]] && generate_series_nfo
     fi
 
     #Make the Season folder if it is applicable and does not exist
@@ -4301,8 +4283,10 @@ generate_episode_nfo(){
   #TODO: reconsider this title specification.
   local basetitle="<title>$EpisodeSubtitle Recorded $datehour"
   if [[ -z "$NamingConvention" ]]; then
-    if [ "$GoForDoover" = "1" ]; then
-      printf '%b\n' "\t$basetitle -Episode in --doover Que</title>" >> "$MoveDir/$ShowFileName.nfo"
+    if [[ "${DOOVER_ADDED,,}" = 'true' ]]; then #TODO: review me...
+      printf '%b\n' "\t$basetitle -Episode in --doover Queue</title>" >> "$MoveDir/$ShowFileName.nfo"
+    elif [[ -n "$EpisodeSubtitle" ]]; then #TODO: review me...
+      printf '%b\n' "\t$basetitle -Episode</title>" >> "$MoveDir/$ShowFileName.nfo"
     else
       printf '%b\n' "\t$basetitle -Showing</title>" >> "$MoveDir/$ShowFileName.nfo"
     fi
@@ -4392,11 +4376,11 @@ success_postprocessing(){
     fi
   fi
 
-  #Additional features, notifications, rss, daily report.
-  [[ "$RequiresNFO" = "1" ]] && generate_episode_nfo
-  kodi_newshow
+  #Additional features: undo; doover; NFO; notifications; daily report; rss.
   add_undo
-  [[ "$RequiresDoover" = "1" && "$TRACKING" != 'Disabled' ]] && add_doover
+  [[ "$RequiresDoover" = '1' && "$TRACKING" != 'Disabled' ]] && add_doover
+  [[ "$RequiresNFO" = '1' ]] && generate_episode_nfo #Must be called after add_doover
+  kodi_newshow
   dailyreport
   [[ "$CREATE_RSS" = 'Enabled' ]] && generaterss
   if [[ "$PROCESS_RECORDING_MODE" = 'MOVE' && "$SYMLINK" = 'Disabled' ]]; then
@@ -4452,6 +4436,7 @@ add_doover(){
       err "${FUNCNAME[0]}(): PROCESS_RECORDING_MODE not equal to 'LINK' or 'MOVE' with 'SYMLINK'ing 'Enabled'."
       return 1
     fi
+    DOOVER_ADDED='true'
     #Write doover.sh line that recalls myth2kodi in the same way it was originally called:
     printf '%s\n' "myth2kodi '$M2KARG1' \"$M2KARG2\" \"$M2KARG3\" \"$M2KARG4\" '$M2KARG5' '$M2KARG6'" >> "$m2kdir/doover.sh"
     return "$?"
@@ -6416,7 +6401,7 @@ else
 fi
 
 #If the show is generic programming, this is the best myth2kodi can do.
-[[ "$m2kProgramIDCheck" = "SH" ]] && msg_show_warning
+[[ "$m2kProgramIDCheck" = 'SH' ]] && msg_show_warning
 
 #####MOVE MODE HANDLING#####
 #If processing recording in 'MOVE' mode, move and rename the file.

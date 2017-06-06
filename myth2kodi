@@ -857,7 +857,7 @@ parse_command_flags(){
       #Move current diagnostics file to diagnostics_<Current Date&Time>.log
       debug "Moving '$DIAGNOSTICS_FILE' to '$m2kdir/diagnostics_${FILE_NAME_NOW}.log'"
       [[ -f "$DIAGNOSTICS_FILE" ]] && mv "$DIAGNOSTICS_FILE" "$m2kdir/diagnostics_${FILE_NAME_NOW}.log"
-      if [[ ! "$LOGTYPE" = 'stderr' ]]; then
+      if [[ "$LOGTYPE" != 'stderr' ]]; then
         inform "Finished running diagnostics, see '$m2kdir/diagnostics_${FILE_NAME_NOW}.log'."
       fi
       #Reset LOGLEVEL after 'Finished...' so it and 'Running...' are written consistently to LOGFILE.
@@ -1869,10 +1869,49 @@ get_mythtvdb_info_mysql(){
   #    | sed -n "2p"
   #  found below. Finally, if any of the above processing turns out to be SchedulesDirect specific then it
   #  should be moved to process_mythtvdb_schedulesdirect().
-  [[ -z "$InputTitle" ]]      && InputTitle="$(     dbselect title    | sed -n "2p")"
-  [[ -z "$InputSubtitle" ]]   && InputSubtitle="$(  dbselect subtitle | sed -n "2p")"
-  [[ -z "$InputSeasonNum" ]]  && InputSeasonNum="$( dbselect season   | sed -n "2p")"
-  [[ -z "$InputEpisodeNum" ]] && InputEpisodeNum="$(dbselect episode  | sed -n "2p")"
+  [[ -z "$InputTitle" ]]      && InputTitle="$(     dbselect title    | sed -n "2p")"  #MDB_TITLE
+  [[ -z "$InputSubtitle" ]]   && InputSubtitle="$(  dbselect subtitle | sed -n "2p")"  #MDB_SUBTITLE
+  [[ -z "$InputSeasonNum" ]]  && InputSeasonNum="$( dbselect season   | sed -n "2p")"  #MDB_SEASON
+  [[ -z "$InputEpisodeNum" ]] && InputEpisodeNum="$(dbselect episode  | sed -n "2p")"  #MDB_EPISODE
+
+  # MDB_TITLE="$(          dbselect title           | sed -n "2p")"
+  # MDB_SUBTITLE="$(       dbselect subtitle        | sed -n "2p")"
+  # MDB_SEASON="$(         dbselect season          | sed -n "2p")"
+  # MDB_EPISODE="$(        dbselect episode         | sed -n "2p")"
+  # MDB_CATEGORY="$(       dbselect category        | sed -n "2p")"
+  # MDB_ORIGINALAIRDATE="$(dbselect originalairdate | sed -n "2p")"
+  # MDB_STORAGEGROUP="$(   dbselect storagegroup    | sed -n "2p")"
+  # MDB_STARS="$(          dbselect stars           | sed -n "2p")"
+  # MDB_DESCRIPTION="$(    dbselect description     | sed -n "2p")"
+  # MDB_SERIESID="$(       dbselect seriesid        | sed -n "2p")"
+  # MDB_PROGRAMID="$(      dbselect programid       | sed -n "2p")"
+  # MDB_INETREF ="$(       dbselect inetref         | sed -n "2p")"
+  # MDB_CHANID="$(         dbselect chanid          | sed -n "2p")"
+  # MDB_STARTTIME="$(      dbselect starttime       | sed -n "2p")"
+
+  # MDB_AIRDATE="$(mysql -u"$MySQLuser" -p"$MySQLpass" -e "USE $MySQLMythDb ; SELECT airdate FROM recordedprogram WHERE programid LIKE '$MDB_PROGRAMID' AND chanid LIKE '$MDB_CHANID' ; " | tr -d '/' | sed 's/airdate//g' | sed -n "2p" | tr -d ' ')"
+
+  # MDB_XMLTVGRABBER="$(mysql -u"$MySQLuser" -p"$MySQLpass" -e "USE $MySQLMythDb ; SELECT xmltvgrabber FROM videosource ; " | sed 's/xmltvgrabber//g' | tr -d '/' | sed -n "2p" | tr -d ' ')"
+
+  # #
+  # declare -gr MDB_TITLE
+  # declare -gr MDB_SUBTITLE
+  # declare -gr MDB_SEASON
+  # declare -gr MDB_EPISODE
+  # declare -gr MDB_CATEGORY
+  # declare -gr MDB_ORIGINALAIRDATE
+  # declare -gr MDB_STORAGEGROUP
+  # declare -gr MDB_STARS
+  # declare -gr MDB_DESCRIPTION
+  # declare -gr MDB_SERIESID
+  # declare -gr MDB_PROGRAMID
+  # declare -gr MDB_INETREF
+  # declare -gr MDB_CHANID
+  # declare -gr MDB_STARTTIME
+  # declare -gr MDB_AIRDATE
+  # declare -gr MDB_XMLTVGRABBER
+
+
   ChanID="$(         dbselect chanid          | sed -n "2p")"
   ProgramID="$(      dbselect programid       | sed -n "2p")"
   LocalSeriesID="$(  dbselect seriesid        | sed -n "2p")"
@@ -1889,10 +1928,6 @@ get_mythtvdb_info_mysql(){
   XMLTVGrabber=$(mysql -u"$MySQLuser" -p"$MySQLpass" -e "USE $MySQLMythDb ; SELECT xmltvgrabber FROM videosource ; " | sed 's/xmltvgrabber//g' | tr -d '/' | sed -n "2p" | tr -d ' ')
   #get year for movies
   MovieAirDate=$(mysql -u"$MySQLuser" -p"$MySQLpass" -e "USE $MySQLMythDb ; SELECT airdate FROM recordedprogram WHERE programid LIKE '$ProgramID' AND chanid LIKE '$ChanID' ; " | tr -d '/' | sed 's/airdate//g' | sed -n "2p" | tr -d ' ')
-  #Blank year if it is invalid
-  if [ ! -z "$MovieAirDate" ] && (( MovieAirDate < 1900 )); then
-    MovieAirDate=''
-  fi
 
   #####COMSKIP DATA#####
   #Set up counter, remove old markup data and generate new markup file from markupstart and stop
@@ -1953,23 +1988,26 @@ get_mythtvdb_info_pythonbindings(){
   #      problems... See mdb_ related TODOs for a better solution.
   local startdata stopdata title subtitle season episode category airdate originalairdate storagegroup stars description seriesid programid chanid starttime xmltvgrabber
 
-  #NOTE: the declare also makes them local, so we'd need to mark them global
-  #      with -g to access them outside of the function.
-  # declare -ga mdb_startdata
-  # declare -ga mdb_stopdata
-  # declare -g mdb_title
-  # declare -g mdb_subtitle
-  # declare -g mdb_season
-  # declare -g mdb_episode
-  # declare -g mdb_airdate
-  # declare -g mdb_originalairdate
-  # declare -g mdb_storagegroup
-  # declare -g mdb_stars
-  # declare -g mdb_description
-  # declare -g mdb_seriesid
-  # declare -g mdb_programid
-  # declare -g mdb_chanid
-  # declare -g mdb_starttime
+  # local -a mdb_startdata
+  # local -a mdb_stopdata
+
+  #Declare the MythTV-DB variables we want access to outside of this function.
+  # declare -g MDB_TITLE='access'
+  # declare -g MDB_SUBTITLE='access'
+  # declare -g MDB_SEASON='access'
+  # declare -g MDB_EPISODE='access'
+  # declare -g MDB_CATEGORY='access'
+  # declare -g MDB_ORIGINALAIRDATE='access'
+  # declare -g MDB_STORAGEGROUP='access'
+  # declare -g MDB_STARS='access'
+  # declare -g MDB_DESCRIPTION='access'
+  # declare -g MDB_SERIESID='access'
+  # declare -g MDB_PROGRAMID='access'
+  # declare -g MDB_INETREF='access'
+  # declare -g MDB_CHANID='access'
+  # declare -g MDB_STARTTIME='access'
+  # declare -g MDB_AIRDATE='access'
+  # declare -g MDB_XMLTVGRABBER='access'
 
   #Access MytTV-DB via the python bindings and output to a temporary file.
   "$binpath"/mythdb_access --verbosity="$((LOGLEVEL<3?LOGLEVEL:3))" \
@@ -1991,10 +2029,18 @@ get_mythtvdb_info_pythonbindings(){
 
   #read values from named pipe, remove quotes and declare $Variable=$Value
   debug "Guide data as extracted by: ${FUNCNAME[0]}()"
+  # local this_var
   while read -r var equals value ; do
     value="$(tr -d \" <<< "$value")"
-    #[[ "$equals" = "=" ]] && "mdb_$var=$value" && debugcont "mdb_$var$equals$value"
-    #declare -r "mdb_$var"
+    # if [[ "$equals" = '=' ]]; then
+    #   this_var="MDB_${var^^}"
+    #   if [[ "${!this_var}" = 'access' ]]; then
+    #     declare -gr "$this_var=$value"
+    #     debugcont "$this_var='$value'"
+    #   else
+    #     debugcont "UNUSED: $this_var='$value'"
+    #   fi
+    # fi
     [[ "$equals" = "=" ]] && declare "$var=$value" && debugcont "$var$equals'$value'"
   done < "$mtv_recinfo_file"
 
@@ -2013,19 +2059,19 @@ get_mythtvdb_info_pythonbindings(){
     debug "Created a temporary comskip markupstop file: '$MARKUPSTOP_TMP'"
     declare -gr MARKUPSTOP_TMP
 
-    #Output commercial data to initial files
+    #Output commercial data to temporary files
     printf '%s\n' "${startdata[@]}" > "$MARKUPSTART_TMP"
     printf '%s\n' "${stopdata[@]}"  > "$MARKUPSTOP_TMP"
-    #Combine commercial data into a single comskip file and remove the initial files
+    #Combine commercial data into a single comskip file and remove the temporary files
     generate_comskip
   fi
 
   #TODO: Consider making all the vars set here readonly "declare -r ", even if that means renaming
   #  and tracking down the various inconsistent uses... NOTE: must do in non-python GetMythTV... as well.
-  #GuideTitle InputTitle => Title #Can be Series or Movie or ...
-  #GuideSubtitle InputSubtitle ExtractPlotSubtitle SxxExxSubtitle FuzzyPlotSubtitle nlpPlotSubtitle => EpisodeTitle
-  #GuideSeasonNum InputSeasonNum LogicSubtitleSeasonNum FuzzySubtitleSeasonNum FuzzyPlotSeasonNum nlpPlotSeasonNum => EpisodeSeasonNum
-  #GuideEpisodeNum InputEpisodeNum LogicSubtitleEpisodeNum FuzzySubtitleEpisodeNum FuzzyPlotEpisodeNum nlpPlotEpisodeNum => EpisodeEpisodeNum
+  #MDB_TITLE INPUT_TITLE => TITLE #Can be Series or Movie or ...
+  #MDB_SUBTITLE INPUT_SUBTITLE ExtractPlotSubtitle SxxExxSubtitle FuzzyPlotSubtitle nlpPlotSubtitle => EPISODE_TITLE
+  #MDB_SEASON INPUT_SEASON LogicSubtitleSeasonNum FuzzySubtitleSeasonNum FuzzyPlotSeasonNum nlpPlotSeasonNum => SEASON
+  #MDB_EPISODE INPUT_EPISODE LogicSubtitleEpisodeNum FuzzySubtitleEpisodeNum FuzzyPlotEpisodeNum nlpPlotEpisodeNum => EPISODE
 
   #TODO: Consider grabbing inetref, seems like it'll be a useful shortcut, at least for SchedulesDirect guide-data
 
@@ -2139,8 +2185,7 @@ get_mythtvdb_storagegroups(){
   fi
 }
 
-#Remove recording's pictures and database entries from MythTV-DB.
-#Thanks to barney_1.
+#Remove recording's pictures and entries from MythTV-DB. Thanks to barney_1.
 delete_mythtv_database_entry_mysql(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   debug "InputPath: '$InputPath'"
@@ -2199,14 +2244,14 @@ process_mythtvdb(){
         process_mythtvdb_schedulesdirect
         ;;
     esac
-    if [[ -z "$InputTitle" ]]; then
+    if [[ -z "$InputTitle" ]]; then #[[ -z "$TITLE" ]]
       NOTIFY_MSG="Failed to determine InputTitle from MythTV-DB, and none provided."
       err "${FUNCNAME[0]}() CALLED FROM: ${FUNCNAME[1]}(): $NOTIFY_MSG"
       EXIT_JOB_TYPE='NameCouldNotBeAssigned'
       return 1
     fi
   else
-    if [[ -z "$InputTitle" ]]; then
+    if [[ -z "$InputTitle" ]]; then #[[ -z "$TITLE" ]]
       NOTIFY_MSG="Database disabled and no InputTitle provided on command line."
       err "${FUNCNAME[0]}() CALLED FROM: ${FUNCNAME[1]}(): $NOTIFY_MSG"
       EXIT_JOB_TYPE='InsufficientInformationProvided'
@@ -2220,17 +2265,33 @@ process_mythtvdb(){
 process_mythtvdb_common(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   #Check for database permissions: assumes ChanID set if DB access successful.
-  [[ -z "$ChanID" ]] && err "${FUNCNAME[0]}(): No MythTV-DB information."
+  [[ -z "$ChanID" ]] && err "${FUNCNAME[0]}(): No MythTV-DB information." #TODO: Probably should return 1 here.
+  # [[ -z "$MDB_CHANID" ]] && err "${FUNCNAME[0]}(): No MythTV-DB information." #TODO: Probably should return 1 here.
+
+  # #Command-line arguments take precedence over MythTV-DB (guide-data).
+  # [[ -z "$INPUT_TITLE" ]]    && TITLE="$MDB_TITLE"
+  # [[ -z "$INPUT_SUBTITLE" ]] && SUBTITLE="$MDB_SUBTITLE"
+  # [[ -z "$INPUT_SEASON" ]]   && SEASON="$MDB_SEASON"
+  # [[ -z "$INPUT_EPISODE" ]]  && EPISODE="$MDB_EPISODE"
+  # [[ -z "$CATEGORY" ]]       && CATEGORY="$MDB_CATEGORY" #Support the --movie flag.
+
+  # PLOT="$MDB_DESCRIPTION"
 
   #Disqualify invalid movie airdates
   [[ -n "$MovieAirDate" ]] && (( MovieAirDate < 1900 )) && MovieAirDate=''
+  # AIRDATE="$MDB_AIRDATE"
+  # [[ -n "$AIRDATE" ]] && (( AIRDATE < 1900 )) && AIRDATE=''
 
   #Some guide-data sources set 'none' instead of '' to mean no-information.
   [[ "${OriginalAirDate,,}" = 'none' ]] && OriginalAirDate=''
+  # ORIGINALAIRDATE="$MDB_ORIGINALAIRDATE"
+  # [[ "${ORIGINALAIRDATE,,}" = 'none' ]] && ORIGINALAIRDATE=''
 
   #Get rating from Stars
   rating="$(printf '%0.f' "$Stars")"
   if [[ -n "$rating" ]]; then ((rating=rating*2)); else rating=1; fi
+  # RATING="$(printf '%0.f' "$MDB_STARS")"
+  # if [[ -n "$RATING" ]]; then ((RATING=RATING*2)); else RATING=1; fi
 
   #The definition of the 'season' and 'episode' fields of a 'recorded' entry
   #specifies a default of NULL: https://www.mythtv.org/wiki/Recorded_table
@@ -2239,17 +2300,22 @@ process_mythtvdb_common(){
   #Special episodes, not belonging to a particular season, are typically
   #designated as season=0, however, I'm not aware of a valid use of episode=0.
   [[ "$InputEpisodeNum" = 0 ]] && { InputSeasonNum=''; InputEpisodeNum=''; }
+  # [[ "$EPISODE" = '0' ]] && { SEASON=''; EPISODE=''; }
 
   #Predefined naming conventions
   if [[ "$ShowCategory" =~ ^('Sports event'|'News'|'Newsmagazine')$ ]]; then
     NamingConvention="$ShowCategory"
   fi
+  # if [[ "$CATEGORY" =~ ^('Sports event'|'News'|'Newsmagazine')$ ]]; then
+  #   NamingConvention="$CATEGORY"
+  # fi
 
   #If news, bypass Categoric naming convention 1
   [[ "$NamingConvention" = 'News' ]] && UseMethod2=1
 
   #strip needless chars from date
   datehour="$(printf '%s' "$ShowStartTime" | tr ':' '.' | tr ' ' '@')" #TODO: Consider getting rid of the @ from this, as it's used in file naming... Maybe _ instead
+  # STARTTIME="$(printf '%s' "$MDB_STARTTIME" | tr ':' '.' | tr ' ' '@')" #TODO: Consider getting rid of the @ from this, as it's used in file naming... Maybe _ instead
 
   return 0
 }
@@ -2314,14 +2380,14 @@ process_mythtvdb_sydfta(){
   #Longest actual subtitle I've seen so far is 84 characters. Rather than assuming Plot field
   #is garbage, we'll append the InputSubtitle field to the Plot -- this will almost certainly
   #prevent full Plot fuzzy match from succeeding but chunked match should still match effectively.
-  if (( $(wc --chars <<< "$InputSubtitle") > 84 )) ; then #Probably not a subtitle.
+  if (( $(wc --chars <<< "$InputSubtitle") > 84 )) ; then #Probably not a subtitle.# [[ -z "$INPUT_SUBTITLE" ]] && (( $(wc --chars <<< "$SUBTITLE") > 84 ))
     local PossiblePlot
-    PossiblePlot="$InputSubtitle"
+    PossiblePlot="$InputSubtitle" #"$SUBTITLE"
     warn "${FUNCNAME[0]}(): InputSubtitle field from MythTV-DB appears to contain Plot information."
     debug "Plot: '$Plot'"
     debug "PossiblePlot: '$PossiblePlot'"
     warn "Resetting InputSubtitle to ''"
-    InputSubtitle=''
+    InputSubtitle='' #SUBTITLE=''
     warn "Appending PossiblePlot to Plot."
     Plot="$Plot $PossiblePlot"
     debug "Plot: '$Plot'"
@@ -2334,10 +2400,11 @@ process_mythtvdb_sydfta(){
   if [[ "$ShowCategory" = 'Movie' ]]; then
     inform "Guide data for '$InputTitle' indicates a Movie."
     m2kProgramIDCheck='MV'
-    if [[ -n "$InputSubtitle" ]]; then
+    if [[ -n "$InputSubtitle" ]]; then #[[ -z "$INPUT_SUBTITLE" && -n "$MDB_SUBTITLE" ]]
+      # warn "${FUNCNAME[0]}(): Guide data indicates that '$TITLE' is a Movie, but has an SUBTITLE: '$MDB_SUBTITLE'"
       warn "${FUNCNAME[0]}(): Guide data indicates that '$InputTitle' is a Movie, but has an InputSubtitle: '$InputSubtitle'"
       warn "Resetting InputSubtitle to ''"
-      InputSubtitle=''
+      InputSubtitle='' #SUBTITLE=''
     fi
   else #For now assume that if it's not a Movie it's an episode of a series
     #TODO: For now we mainly/only record Movies and Episodes of TV series,
@@ -2379,7 +2446,7 @@ process_mythtvdb_sydfta(){
 
   #Strip the Movie: tag that some stations very helpfully put in the title field...
   if [[ "$m2kProgramIDCheck" = 'MV' ]]; then
-    InputTitle="$(sed 's/Movie:\s*//I' <<< "$InputTitle")"
+    InputTitle="$(sed 's/Movie:\s*//I' <<< "$InputTitle")" #TITLE MDB_TITLE
   fi
 
   #TODO: If it's a movie, check Title and Plot for a release year, assuming format (YYYY) seems reasonable.
@@ -3008,7 +3075,7 @@ set_seriesid_newshowname_from_serieslinenumber(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   #Get the seriesid based on the showname
   SeriesID="$(sed -n "$serieslinenumber"'p' "$TMP_SID_FILE" | grep -m1 ^)"
-  NewShowName="$(sed -n "$serieslinenumber"'p' "$TMP_SHN_FILE" | grep -m1 ^)"
+  NewShowName="$(sed -n "$serieslinenumber"'p' "$TMP_SHN_FILE" | grep -m1 ^)" #TVDB_TITLE
   NewShowName="${NewShowName//&amp;/&}"
 
   #If we're not in debug mode then cleanup show identification files.
@@ -3714,6 +3781,13 @@ msg_merged_input_mythtvdb(){
   [[ "$Database" = 'Enabled' ]] && debugcont "DATE:'$MovieAirDate' '$OriginalAirDate'"
   [[ "$Database" = 'Enabled' ]] && debugcont "PROGRAMID:'$ProgramID'"
   [[ "$Database" = 'Enabled' ]] && debugcont "ShowCategory:'$ShowCategory'"
+
+  # local var value
+  # for var in 'TITLE' 'SUBTITLE' 'SEASON' 'EPISODE'; do
+  #   if [[ -n "${!var}" ]]; then value="${!var}"; else value='UNKNOWN'; fi
+  #   debugcont "$var:'$value'"
+  # done
+
   if [[ -n "$InputTitle" ]]; then
     debugcont "InputTitle:'$InputTitle'"
   else
@@ -3734,6 +3808,7 @@ msg_merged_input_mythtvdb(){
   else
     debugcont "InputEpisodeNum: UNKNOWN"
   fi
+
   [[ "$Database" = 'Enabled' ]] && debugcont "Plot: \"$Plot\""
 }
 
@@ -5912,11 +5987,48 @@ main(){
   if ! validate_args; then exit_job "$EXIT_JOB_TYPE"; fi
 
   #If the first arg is a command line switch, figure out what to do.
-  if [[ "${M2KARG1:0:1}" = "-" ]]; then
+  if [[ "${M2KARG1:0:1}" = '-' ]]; then
     parse_command_flags
     exit_job "$EXIT_JOB_TYPE"
   fi
   debug "No command flag set. Processing as recording."
+
+  #Initial log entry for the processing of recording, regardless of LOGLEVEL.
+  {
+    printf '%s\n' "@@@@ PROCESSING RECORDING: $(date --rfc-3339=seconds) @@@@"
+    printf '%s\n' "$m2kVersion on $m2kPlatform"
+  } >> "$LOGFILE"
+  PROCESSING_RECORDING="True"
+
+  #No flags, so inputs should be for processing a recording.
+  INPUT_PATH="$M2KARG_1"
+  INPUT_TITLE="$M2KARG_2"
+  INPUT_SUBTITLE="$M2KARG_3"
+  INPUT_SEASON="$M2KARG_4"
+  INPUT_EPISODE="$M2KARG_5"
+  #Make them read-only so we can't accidentally modify them.
+  declare -gr INPUT_PATH INPUT_TITLE INPUT_SUBTITLE INPUT_SEASON INPUT_EPISODE
+  inform "Processing: $INPUT_PATH"
+
+  InputFileBasename="$(basename "$INPUT_PATH")" #"${INPUT_PATH##*/}"
+
+  #Our starting point for the key information is the command line input.
+  TITLE="$INPUT_TITLE"
+  SUBTITLE="$INPUT_SUBTITLE"
+  SEASON="$INPUT_SEASON"
+  EPISODE="$INPUT_EPISODE"
+
+  #As long as we're not in diagnostics mode, gather info from MythTV-DB.
+  if [[ "$M2K_DIAGNOSTICS_MODE" != "True" ]]; then
+    if ! process_mythtvdb; then exit_job "$EXIT_JOB_TYPE"; fi
+  elif [[ "$Database" = 'Enabled' ]]; then
+    inform 'Temporarily disabling access to MythTV-DB -- for diagnostics.'
+    Database='Disabled'
+  fi
+  msg_merged_input_mythtvdb
+
+
+
 
 #    #Now we have all important settings, and know we're not performing some other function,
 #     do filesystem checks etc -- no point doing a lot of work if we can't move anything at the end..
@@ -5961,7 +6073,7 @@ InputEpisodeNum="$5"
 if ! validate_args; then exit_job "$EXIT_JOB_TYPE"; fi
 
 #If the first arg is a command line switch, figure out what to do.
-if [[ "${M2KARG1:0:1}" = "-" ]]; then
+if [[ "${M2KARG1:0:1}" = '-' ]]; then
   parse_command_flags
   exit_job "$EXIT_JOB_TYPE"
 fi
@@ -5987,7 +6099,7 @@ fi
 msg_merged_input_mythtvdb
 
 #Try to set Sxx and Exx using InputSeasonNum, InputEpisodeNum, or SeasonEpisode.
-[[ "$m2kProgramIDCheck" = "EP" ]] && set_sxxexx_season_episode_numbers
+[[ "$m2kProgramIDCheck" = 'EP' ]] && set_sxxexx_season_episode_numbers
 
 #At this point we should have an initial show name, if not then abort.
 ShowName="$InputTitle"

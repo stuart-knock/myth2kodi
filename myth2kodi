@@ -831,10 +831,10 @@ parse_command_flags(){
         return 1
       fi
       #Force processing as a movie.
-      export MDB_CATEGORY="Movie"
+      export CATEGORY="Movie"
       myth2kodi "$M2KARG2" "$M2KARG3"
       declare -i m2kreturnstatus="$?"
-      unset MDB_CATEGORY
+      unset CATEGORY
       return $m2kreturnstatus
     ;;
     --diagnostics)
@@ -937,7 +937,7 @@ parse_command_flags(){
       inform "Attempting to access recording info for: $M2KARG2"
       if ! set_recording_name "$M2KARG2"; then return 1; fi
       INPUT_PATH_BASENAME="$RECORDING_NAME"
-      InputTitle=''
+      TITLE=''
       if ! process_mythtvdb; then return 1; fi
       msg_recording_info
       (( LOGLEVEL < 3 )) && rm -rf "$MARKUPFRAMES_TMP"
@@ -1136,7 +1136,7 @@ validate_args(){
   fi
   debug "Arguments seem valid."
   return 0
-}
+} #validate_args()
 
 #Given a file to process, returns 1 if it's not actually a MythTV recording
 #file or if we have already processed it, otherwise returns 0.
@@ -1169,7 +1169,7 @@ pre_process_check(){
       Database='Disabled'
       debug "Setting  TRACKING='Disabled'"
       TRACKING='Disabled'
-    elif [[ "$MDB_CATEGORY" = 'Movie' ]]; then
+    elif [[ "$CATEGORY" = 'Movie' ]]; then
       inform "But we seem to have enough info from the command line to process it as a movie."
       [[ "$Database" = 'Enabled' ]] && inform "Disabling access to MythTV-DB -- trying to process non-MythTV file."
       RECORDING_TYPE='MV'
@@ -1864,10 +1864,6 @@ get_mythtvdb_info_mysql(){
   debugcont "MySQLMythDb: '$MySQLMythDb'"
   debugcont "MySQLuser: '$MySQLuser'"
   debugcont "MySQLpass: '$MySQLpass'"
-  debugcont "InputTitle: '$InputTitle'"
-  debugcont "InputSubtitle: '$InputSubtitle'"
-  debugcont "InputSeasonNum: '$InputSeasonNum'"
-  debugcont "InputEpisodeNum: '$InputEpisodeNum'"
 
   #Obtain MythTV Database Information
   inform "Accessing MythTV DataBase Using mysql Commands:"
@@ -1883,65 +1879,43 @@ get_mythtvdb_info_mysql(){
   #    | sed -n "2p"
   #  found below. Finally, if any of the above processing turns out to be SchedulesDirect specific then it
   #  should be moved to process_mythtvdb_schedulesdirect().
-  [[ -z "$InputTitle" ]]      && InputTitle="$(     dbselect title    | sed -n "2p")"  #MDB_TITLE
-  [[ -z "$InputSubtitle" ]]   && InputSubtitle="$(  dbselect subtitle | sed -n "2p")"  #MDB_SUBTITLE
-  [[ -z "$InputSeasonNum" ]]  && InputSeasonNum="$( dbselect season   | sed -n "2p")"  #MDB_SEASON
-  [[ -z "$InputEpisodeNum" ]] && InputEpisodeNum="$(dbselect episode  | sed -n "2p")"  #MDB_EPISODE
 
-  # MDB_TITLE="$(          dbselect title           | sed -n "2p")"
-  # MDB_SUBTITLE="$(       dbselect subtitle        | sed -n "2p")"
-  # MDB_SEASON="$(         dbselect season          | sed -n "2p")"
-  # MDB_EPISODE="$(        dbselect episode         | sed -n "2p")"
-  # MDB_CATEGORY="$(       dbselect category        | sed -n "2p")"
-  # MDB_ORIGINALAIRDATE="$(dbselect originalairdate | sed -n "2p")"
-  # MDB_STORAGEGROUP="$(   dbselect storagegroup    | sed -n "2p")"
-  # MDB_STARS="$(          dbselect stars           | sed -n "2p")"
-  # MDB_DESCRIPTION="$(    dbselect description     | sed -n "2p")"
-  # MDB_SERIESID="$(       dbselect seriesid        | sed -n "2p")"
-  # MDB_PROGRAMID="$(      dbselect programid       | sed -n "2p")"
-  # MDB_INETREF ="$(       dbselect inetref         | sed -n "2p")"
-  # MDB_CHANID="$(         dbselect chanid          | sed -n "2p")"
-  # MDB_STARTTIME="$(      dbselect starttime       | sed -n "2p")"
-
-  # MDB_AIRDATE="$(mysql -u"$MySQLuser" -p"$MySQLpass" -e "USE $MySQLMythDb ; SELECT airdate FROM recordedprogram WHERE programid LIKE '$MDB_PROGRAMID' AND chanid LIKE '$MDB_CHANID' ; " | tr -d '/' | sed 's/airdate//g' | sed -n "2p" | tr -d ' ')"
-
-  # MDB_XMLTVGRABBER="$(mysql -u"$MySQLuser" -p"$MySQLpass" -e "USE $MySQLMythDb ; SELECT xmltvgrabber FROM videosource ; " | sed 's/xmltvgrabber//g' | tr -d '/' | sed -n "2p" | tr -d ' ')"
-
-  # #
-  # declare -gr MDB_TITLE
-  # declare -gr MDB_SUBTITLE
-  # declare -gr MDB_SEASON
-  # declare -gr MDB_EPISODE
-  # declare -gr MDB_CATEGORY
-  # declare -gr MDB_ORIGINALAIRDATE
-  # declare -gr MDB_STORAGEGROUP
-  # declare -gr MDB_STARS
-  # declare -gr MDB_DESCRIPTION
-  # declare -gr MDB_SERIESID
-  # declare -gr MDB_PROGRAMID
-  # declare -gr MDB_INETREF
-  # declare -gr MDB_CHANID
-  # declare -gr MDB_STARTTIME
-  # declare -gr MDB_AIRDATE
-  # declare -gr MDB_XMLTVGRABBER
-
-
-  MDB_CHANID="$(         dbselect chanid          | sed -n "2p")"
-  MDB_PROGRAMID="$(      dbselect programid       | sed -n "2p")"
-  MDB_SERIESID="$(  dbselect seriesid        | sed -n "2p")"
-  MDB_DESCRIPTION="$(           dbselect description     | sed -n "2p")"
-  MDB_STARS="$(          dbselect stars           | sed -n "2p")"
-  MDB_STARTTIME="$(  dbselect starttime       | sed -n "2p")"
-  [[ -z "$MDB_CATEGORY" ]] && MDB_CATEGORY="$(   dbselect category    | sed -n "2p")"
-  MDB_STORAGEGROUP="$(   dbselect storagegroup    | sed -n "2p")"
+  MDB_TITLE="$(          dbselect title           | sed -n "2p")"
+  MDB_SUBTITLE="$(       dbselect subtitle        | sed -n "2p")"
+  MDB_SEASON="$(         dbselect season          | sed -n "2p")"
+  MDB_EPISODE="$(        dbselect episode         | sed -n "2p")"
+  MDB_CATEGORY="$(       dbselect category        | sed -n "2p")"
   MDB_ORIGINALAIRDATE="$(dbselect originalairdate | sed -n "2p")"
-  [[ "$MDB_ORIGINALAIRDATE" = "0000-00-00" ]] && MDB_ORIGINALAIRDATE=''
+  MDB_STORAGEGROUP="$(   dbselect storagegroup    | sed -n "2p")"
+  MDB_STARS="$(          dbselect stars           | sed -n "2p")"
+  MDB_DESCRIPTION="$(    dbselect description     | sed -n "2p")"
+  MDB_SERIESID="$(       dbselect seriesid        | sed -n "2p")"
+  MDB_PROGRAMID="$(      dbselect programid       | sed -n "2p")"
+  MDB_INETREF ="$(       dbselect inetref         | sed -n "2p")"
+  MDB_CHANID="$(         dbselect chanid          | sed -n "2p")"
+  MDB_STARTTIME="$(      dbselect starttime       | sed -n "2p")"
 
-  #TODO: Clean up all the following mysql commands, like we've done for the above.
-  #get DataType
-  MDB_XMLTVGRABBER=$(mysql -u"$MySQLuser" -p"$MySQLpass" -e "USE $MySQLMythDb ; SELECT xmltvgrabber FROM videosource ; " | sed 's/xmltvgrabber//g' | tr -d '/' | sed -n "2p" | tr -d ' ')
-  #get year for movies #TODO: Air-date != Release-year, see MOVIE_RELEASE_YEAR
-  MDB_AIRDATE=$(mysql -u"$MySQLuser" -p"$MySQLpass" -e "USE $MySQLMythDb ; SELECT airdate FROM recordedprogram WHERE programid LIKE '$MDB_PROGRAMID' AND chanid LIKE '$MDB_CHANID' ; " | tr -d '/' | sed 's/airdate//g' | sed -n "2p" | tr -d ' ')
+  MDB_AIRDATE="$(mysql -u"$MySQLuser" -p"$MySQLpass" -e "USE $MySQLMythDb ; SELECT airdate FROM recordedprogram WHERE programid LIKE '$MDB_PROGRAMID' AND chanid LIKE '$MDB_CHANID' ; " | tr -d '/' | sed 's/airdate//g' | sed -n "2p" | tr -d ' ')"
+
+  MDB_XMLTVGRABBER="$(mysql -u"$MySQLuser" -p"$MySQLpass" -e "USE $MySQLMythDb ; SELECT xmltvgrabber FROM videosource ; " | sed 's/xmltvgrabber//g' | tr -d '/' | sed -n "2p" | tr -d ' ')"
+
+  #
+  declare -gr MDB_TITLE
+  declare -gr MDB_SUBTITLE
+  declare -gr MDB_SEASON
+  declare -gr MDB_EPISODE
+  declare -gr MDB_CATEGORY
+  declare -gr MDB_ORIGINALAIRDATE
+  declare -gr MDB_STORAGEGROUP
+  declare -gr MDB_STARS
+  declare -gr MDB_DESCRIPTION
+  declare -gr MDB_SERIESID
+  declare -gr MDB_PROGRAMID
+  declare -gr MDB_INETREF
+  declare -gr MDB_CHANID
+  declare -gr MDB_STARTTIME
+  declare -gr MDB_AIRDATE
+  declare -gr MDB_XMLTVGRABBER
 
   #####COMSKIP DATA#####
   #Set up counter, remove old markup data and generate new markup file from markupstart and stop
@@ -1983,10 +1957,6 @@ get_mythtvdb_info_pythonbindings(){
   debugcont "MySQLMythDb: '$MySQLMythDb'"
   debugcont "MySQLuser: '$MySQLuser'"
   debugcont "MySQLpass: '$MySQLpass'"
-  debugcont "InputTitle: '$InputTitle'"
-  debugcont "InputSubtitle: '$InputSubtitle'"
-  debugcont "InputSeasonNum: '$InputSeasonNum'"
-  debugcont "InputEpisodeNum: '$InputEpisodeNum'"
   inform "Accessing MythTV DataBase Using PythonBindings:"
   inform "Attempting to pull database information on '$INPUT_PATH_BASENAME'"
 
@@ -1998,34 +1968,30 @@ get_mythtvdb_info_pythonbindings(){
   fi
   debug "Storing MythTV-DB info in temporary file: '$mtv_recinfo_file'"
 
-  #TODO: Temporary hack to clean-up shellcheck so it's easier to see actual
-  #      problems... See mdb_ related TODOs for a better solution.
-  local startdata stopdata title subtitle season episode category airdate originalairdate storagegroup stars description seriesid programid chanid starttime xmltvgrabber
-
-  # local -a mdb_startdata
-  # local -a mdb_stopdata
+  local MDB_STARTDATA='access'
+  local MDB_STOPDATA='access'
 
   #Declare the MythTV-DB variables we want access to outside of this function.
-  # declare -g MDB_TITLE='access'
-  # declare -g MDB_SUBTITLE='access'
-  # declare -g MDB_SEASON='access'
-  # declare -g MDB_EPISODE='access'
-  # declare -g MDB_CATEGORY='access'
-  # declare -g MDB_ORIGINALAIRDATE='access'
-  # declare -g MDB_STORAGEGROUP='access'
-  # declare -g MDB_STARS='access'
-  # declare -g MDB_DESCRIPTION='access'
-  # declare -g MDB_SERIESID='access'
-  # declare -g MDB_PROGRAMID='access'
-  # declare -g MDB_INETREF='access'
-  # declare -g MDB_CHANID='access'
-  # declare -g MDB_STARTTIME='access'
-  # declare -g MDB_AIRDATE='access'
-  # declare -g MDB_XMLTVGRABBER='access'
+  declare -g MDB_TITLE='access'
+  declare -g MDB_SUBTITLE='access'
+  declare -g MDB_SEASON='access'
+  declare -g MDB_EPISODE='access'
+  declare -g MDB_CATEGORY='access'
+  declare -g MDB_ORIGINALAIRDATE='access'
+  declare -g MDB_STORAGEGROUP='access'
+  declare -g MDB_STARS='access'
+  declare -g MDB_DESCRIPTION='access'
+  declare -g MDB_SERIESID='access'
+  declare -g MDB_PROGRAMID='access'
+  declare -g MDB_INETREF='access'
+  declare -g MDB_CHANID='access'
+  declare -g MDB_STARTTIME='access'
+  declare -g MDB_AIRDATE='access'
+  declare -g MDB_XMLTVGRABBER='access'
 
   #Access MytTV-DB via the python bindings and output to a temporary file.
   "$binpath"/mythdb_access --verbosity="$((LOGLEVEL<3?LOGLEVEL:3))" \
-                           --filename="$INPUT_PATH_BASENAME"          \
+                           --filename="$INPUT_PATH_BASENAME"        \
                            --SecurityPin="$DBPin"                   \
                            --DBHostName="$DBHostName"               \
                            --DBName="$MySQLMythDb"                  \
@@ -2043,19 +2009,19 @@ get_mythtvdb_info_pythonbindings(){
 
   #read values from named pipe, remove quotes and declare $Variable=$Value
   debug "Guide data as extracted by: ${FUNCNAME[0]}()"
-  # local this_var
+  local this_var
   while read -r var equals value ; do
     value="$(tr -d \" <<< "$value")"
-    # if [[ "$equals" = '=' ]]; then
-    #   this_var="MDB_${var^^}"
-    #   if [[ "${!this_var}" = 'access' ]]; then
-    #     declare -gr "$this_var=$value"
-    #     debugcont "$this_var='$value'"
-    #   else
-    #     debugcont "UNUSED: $this_var='$value'"
-    #   fi
-    # fi
-    [[ "$equals" = "=" ]] && declare "$var=$value" && debugcont "$var$equals'$value'"
+    if [[ "$equals" = '=' ]]; then
+      this_var="MDB_${var^^}"
+      if [[ "${!this_var}" = 'access' ]]; then
+        declare -gr "$this_var=$value"
+        debugcont "$this_var='$value'"
+      else
+        debugcont "UNUSED: $this_var='$value'"
+      fi
+    fi
+    # [[ "$equals" = "=" ]] && declare "$var=$value" && debugcont "$var$equals'$value'"
   done < "$mtv_recinfo_file"
 
   if [[ "$CommercialMarkup" = 'Enabled' ]]; then
@@ -2074,41 +2040,11 @@ get_mythtvdb_info_pythonbindings(){
     declare -gr MARKUPSTOP_TMP
 
     #Output commercial data to temporary files
-    printf '%s\n' "${startdata[@]}" > "$MARKUPSTART_TMP"
-    printf '%s\n' "${stopdata[@]}"  > "$MARKUPSTOP_TMP"
+    printf '%s\n' "${MDB_STARTDATA[@]}" > "$MARKUPSTART_TMP"
+    printf '%s\n' "${MDB_STOPDATA[@]}"  > "$MARKUPSTOP_TMP"
     #Combine commercial data into a single comskip file and remove the temporary files
     generate_comskip
   fi
-
-  #TODO: Consider making all the vars set here readonly "declare -r ", even if that means renaming
-  #  and tracking down the various inconsistent uses... NOTE: must do in non-python GetMythTV... as well.
-  #MDB_TITLE INPUT_TITLE => TITLE #Can be Series or Movie or ...
-  #MDB_SUBTITLE INPUT_SUBTITLE ExtractPlotSubtitle SxxExxSubtitle FuzzyPlotSubtitle nlpPlotSubtitle => EPISODE_TITLE
-  #MDB_SEASON INPUT_SEASON LogicSubtitleSeasonNum FuzzySubtitleSeasonNum FuzzyPlotSeasonNum nlpPlotSeasonNum => SEASON
-  #MDB_EPISODE INPUT_EPISODE LogicSubtitleEpisodeNum FuzzySubtitleEpisodeNum FuzzyPlotEpisodeNum nlpPlotEpisodeNum => EPISODE
-
-  #TODO: Consider grabbing inetref, seems like it'll be a useful shortcut, at least for SchedulesDirect guide-data
-
-  debug 'Setting the following variables based on MythTV-DB guide data:'
-  #Import mythtv values into myth2kodi values, don't clobber myth2kodi args title, subtitle, season-number, or episode-number.
-  [[ -z "$InputTitle" ]]      && InputTitle="$title"        && debugcont "InputTitle='$title'"
-  [[ -z "$InputSubtitle" ]]   && InputSubtitle="$subtitle"  && debugcont "InputSubtitle='$subtitle'"
-  [[ -z "$InputSeasonNum" ]]  && InputSeasonNum="$season"   && debugcont "InputSeasonNum='$season'"
-  [[ -z "$InputEpisodeNum" ]] && InputEpisodeNum="$episode" && debugcont "InputEpisodeNum='$episode'"
-  #Support for the --movie flag
-  [[ -z "$MDB_CATEGORY" ]]    && MDB_CATEGORY="$category"   && debugcont "MDB_CATEGORY='$category'"
-
-  #redefine database var names into myth2kodi var names
-  MDB_AIRDATE="$airdate"            && debugcont "MDB_AIRDATE='$airdate'"
-  MDB_ORIGINALAIRDATE="$originalairdate" && debugcont "MDB_ORIGINALAIRDATE='$originalairdate'"
-  MDB_STORAGEGROUP="$storagegroup"       && debugcont "MDB_STORAGEGROUP='$storagegroup'"
-  MDB_STARS="$stars"                     && debugcont "MDB_STARS='$stars'"
-  MDB_DESCRIPTION="$description"                && debugcont "MDB_DESCRIPTION='$description'"
-  MDB_SERIESID="$seriesid"          && debugcont "MDB_SERIESID='$seriesid'"
-  MDB_PROGRAMID="$programid"             && debugcont "MDB_PROGRAMID='$programid'"
-  MDB_CHANID="$chanid"                   && debugcont "MDB_CHANID='$chanid'"
-  MDB_STARTTIME="$starttime"         && debugcont "MDB_STARTTIME='$starttime'"
-  MDB_XMLTVGRABBER="$xmltvgrabber"       && debugcont "MDB_XMLTVGRABBER='$xmltvgrabber'"
 
   #If we're not in debug mode then clean-up the file written by mythdb_access
   if (( LOGLEVEL < 3 )) ; then
@@ -2258,15 +2194,15 @@ process_mythtvdb(){
         process_mythtvdb_schedulesdirect
         ;;
     esac
-    if [[ -z "$InputTitle" ]]; then #[[ -z "$TITLE" ]]
-      NOTIFY_MSG="Failed to determine InputTitle from MythTV-DB, and none provided."
+    if [[ -z "$TITLE" ]]; then
+      NOTIFY_MSG="Failed to determine TITLE from MythTV-DB, and none provided."
       err "${FUNCNAME[0]}() CALLED FROM: ${FUNCNAME[1]}(): $NOTIFY_MSG"
       EXIT_JOB_TYPE='NameCouldNotBeAssigned'
       return 1
     fi
   else
-    if [[ -z "$InputTitle" ]]; then #[[ -z "$TITLE" ]]
-      NOTIFY_MSG="Database disabled and no InputTitle provided on command line."
+    if [[ -z "$TITLE" ]]; then
+      NOTIFY_MSG="Database disabled and no TITLE provided on command line."
       err "${FUNCNAME[0]}() CALLED FROM: ${FUNCNAME[1]}(): $NOTIFY_MSG"
       EXIT_JOB_TYPE='InsufficientInformationProvided'
       return 1
@@ -2281,25 +2217,22 @@ process_mythtvdb_common(){
   #Check for database permissions: assumes MDB_CHANID set if DB access successful.
   [[ -z "$MDB_CHANID" ]] && err "${FUNCNAME[0]}(): No MythTV-DB information." #TODO: Probably should return 1 here.
 
-  # #Command-line arguments take precedence over MythTV-DB (guide-data).
-  # [[ -z "$INPUT_TITLE" ]]    && TITLE="$MDB_TITLE"
-  # [[ -z "$INPUT_SUBTITLE" ]] && SUBTITLE="$MDB_SUBTITLE"
-  # [[ -z "$INPUT_SEASON" ]]   && SEASON="$MDB_SEASON"
-  # [[ -z "$INPUT_EPISODE" ]]  && EPISODE="$MDB_EPISODE"
-  # [[ -z "$CATEGORY" ]]       && CATEGORY="$MDB_CATEGORY" #Support the --movie flag.
+  #Command-line arguments take precedence over MythTV-DB (guide-data).
+  [[ -z "$INPUT_TITLE" ]]    && TITLE="$MDB_TITLE"
+  [[ -z "$INPUT_SUBTITLE" ]] && SUBTITLE="$MDB_SUBTITLE"
+  [[ -z "$INPUT_SEASON" ]]   && SEASON="$MDB_SEASON"
+  [[ -z "$INPUT_EPISODE" ]]  && EPISODE="$MDB_EPISODE"
+  [[ -z "$CATEGORY" ]]       && CATEGORY="$MDB_CATEGORY" #Support the --movie flag.
 
   Plot="$MDB_DESCRIPTION"
 
   #Some guide-data sources set 'none' instead of '' to mean no-information.
-  [[ "${MDB_ORIGINALAIRDATE,,}" = 'none' ]] && MDB_ORIGINALAIRDATE=''
-  # ORIGINALAIRDATE="$MDB_ORIGINALAIRDATE"
-  # [[ "${ORIGINALAIRDATE,,}" = 'none' ]] && ORIGINALAIRDATE=''
+  ORIGINALAIRDATE="$MDB_ORIGINALAIRDATE"
+  [[ "${ORIGINALAIRDATE,,}" = 'none' ]] && ORIGINALAIRDATE=''
 
   #Get rating from MDB_STARS
-  rating="$(printf '%0.f' "$MDB_STARS")"
-  if [[ -n "$rating" ]]; then ((rating=rating*2)); else rating=1; fi
-  # RATING="$(printf '%0.f' "$MDB_STARS")"
-  # if [[ -n "$RATING" ]]; then ((RATING=RATING*2)); else RATING=1; fi
+  RATING="$(printf '%0.f' "$MDB_STARS")"
+  if [[ -n "$RATING" ]]; then ((RATING=RATING*2)); else RATING=1; fi
 
   #The definition of the 'season' and 'episode' fields of a 'recorded' entry
   #specifies a default of NULL: https://www.mythtv.org/wiki/Recorded_table
@@ -2307,16 +2240,12 @@ process_mythtvdb_common(){
   #by setting them as 0 instead of NULL (which for us would resolve to '').
   #Special episodes, not belonging to a particular season, are typically
   #designated as season=0, however, I'm not aware of a valid use of episode=0.
-  [[ "$InputEpisodeNum" = 0 ]] && { InputSeasonNum=''; InputEpisodeNum=''; }
-  # [[ "$EPISODE" = '0' ]] && { SEASON=''; EPISODE=''; }
+  [[ "$EPISODE" = '0' ]] && { SEASON=''; EPISODE=''; }
 
   #Predefined naming conventions
-  if [[ "$MDB_CATEGORY" =~ ^('Sports event'|'News'|'Newsmagazine')$ ]]; then
-    NamingConvention="$MDB_CATEGORY"
+  if [[ "$CATEGORY" =~ ^('Sports event'|'News'|'Newsmagazine')$ ]]; then
+    NamingConvention="$CATEGORY"
   fi
-  # if [[ "$CATEGORY" =~ ^('Sports event'|'News'|'Newsmagazine')$ ]]; then
-  #   NamingConvention="$CATEGORY"
-  # fi
 
   #If news, bypass Categoric naming convention 1
   [[ "$NamingConvention" = 'News' ]] && UseMethod2=1
@@ -2388,16 +2317,16 @@ process_mythtvdb_sydfta(){
 
   #Current (2016-08) issue from 7flix: description in Subtitle field, all-caps cast in Plot...
   #Longest actual subtitle I've seen so far is 84 characters. Rather than assuming Plot field
-  #is garbage, we'll append the InputSubtitle field to the Plot -- this will almost certainly
+  #is garbage, we'll append the SUBTITLE field to the Plot -- this will almost certainly
   #prevent full Plot fuzzy match from succeeding but chunked match should still match effectively.
-  if (( $(wc --chars <<< "$InputSubtitle") > 84 )) ; then #Probably not a subtitle.# [[ -z "$INPUT_SUBTITLE" ]] && (( $(wc --chars <<< "$SUBTITLE") > 84 ))
+  if [[ -z "$INPUT_SUBTITLE" ]] && (( $(wc --chars <<< "$SUBTITLE") > 84 )); then #Probably not a subtitle.
     local PossiblePlot
-    PossiblePlot="$InputSubtitle" #"$SUBTITLE"
-    warn "${FUNCNAME[0]}(): InputSubtitle field from MythTV-DB appears to contain Plot information."
+    PossiblePlot="$SUBTITLE"
+    warn "${FUNCNAME[0]}(): SUBTITLE field from MythTV-DB appears to contain Plot information."
     debug "Plot: '$Plot'"
     debug "PossiblePlot: '$PossiblePlot'"
-    warn "Resetting InputSubtitle to ''"
-    InputSubtitle='' #SUBTITLE=''
+    warn "Resetting SUBTITLE to ''"
+    SUBTITLE=''
     warn "Appending PossiblePlot to Plot."
     Plot="$Plot $PossiblePlot"
     debug "Plot: '$Plot'"
@@ -2407,14 +2336,13 @@ process_mythtvdb_sydfta(){
   #The MDB_PROGRAMID field from FTA EPG data in Sydney?Australia? doesn't specify MV/EP/SH,
   #the Movie specification is "almost-always" found in the Category field of
   #the MythTV database. So, we'll use that.
-  if [[ "$MDB_CATEGORY" = 'Movie' ]]; then
-    inform "Guide data for '$InputTitle' indicates a Movie."
+  if [[ "$CATEGORY" = 'Movie' ]]; then
+    inform "Guide data for '$TITLE' indicates a Movie."
     RECORDING_TYPE='MV'
-    if [[ -n "$InputSubtitle" ]]; then #[[ -z "$INPUT_SUBTITLE" && -n "$MDB_SUBTITLE" ]]
-      # warn "${FUNCNAME[0]}(): Guide data indicates that '$TITLE' is a Movie, but has an SUBTITLE: '$MDB_SUBTITLE'"
-      warn "${FUNCNAME[0]}(): Guide data indicates that '$InputTitle' is a Movie, but has an InputSubtitle: '$InputSubtitle'"
-      warn "Resetting InputSubtitle to ''"
-      InputSubtitle='' #SUBTITLE=''
+    if [[ -z "$INPUT_SUBTITLE" && -n "$MDB_SUBTITLE" ]]; then
+      warn "${FUNCNAME[0]}(): Guide data indicates that '$TITLE' is a Movie, but has a SUBTITLE: '$SUBTITLE'"
+      warn "Resetting SUBTITLE to ''"
+      SUBTITLE=''
     fi
   else #For now assume that if it's not a Movie it's an episode of a series
     #TODO: For now we mainly/only record Movies and Episodes of TV series,
@@ -2435,7 +2363,7 @@ process_mythtvdb_sydfta(){
     get_sxxexx_from_plot
     remove_sxxexx_from_plot
     #If we haven't set a Subtitle yet, try and get one from $Plot
-    if [[ -z "$InputSubtitle" ]]; then
+    if [[ -z "$SUBTITLE" ]]; then
       get_subtitle_from_plot
       #TODO: Only makes sense to call remove_subtitle_from_plot if get_subtitle_from_plot found one.
       remove_subtitle_from_plot
@@ -2456,7 +2384,7 @@ process_mythtvdb_sydfta(){
 
   #Strip the Movie: tag that some stations very helpfully put in the title field...
   if [[ "$RECORDING_TYPE" = 'MV' ]]; then
-    InputTitle="$(sed 's/Movie:\s*//I' <<< "$InputTitle")" #TITLE MDB_TITLE
+    TITLE="$(sed 's/Movie:\s*//I' <<< "$TITLE")"
   fi
 
   #TODO: If it's a movie, check Title and Plot for a release year, assuming format (YYYY) seems reasonable.
@@ -2510,14 +2438,14 @@ set_ProgramIDType(){
 
 set_sxxexx_season_episode_numbers(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  debugcont "InputSeasonNum='$InputSeasonNum'"
-  debugcont "InputEpisodeNum='$InputEpisodeNum'"
+  debugcont "SEASON='$SEASON'"
+  debugcont "EPISODE='$EPISODE'"
   debugcont "SeasonEpisode='$SeasonEpisode'"
 
-  if [[ -n "$InputSeasonNum" && -n "$InputEpisodeNum" ]]; then
+  if [[ -n "$SEASON" && -n "$EPISODE" ]]; then
     debug 'Using season & episode information from MythTV-DB or command-line.'
-    Sxx="$InputSeasonNum"
-    Exx="$InputEpisodeNum"
+    Sxx="$SEASON"
+    Exx="$EPISODE"
   elif [[ -n "$SeasonEpisode" ]]; then
     debug 'Using season & episode information extracted from Plot.'
     Sxx="$(echo "$SeasonEpisode" | grep -E -i --only-matching '(s\.?[0-9]?[0-9])|([0-9]?[0-9]x)' | sed 's/s\.\?\|x//I')"
@@ -2541,14 +2469,14 @@ set_sxxexx_season_episode_numbers(){
 get_sxxexx_from_plot(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   debugcont "SeasonEpisode: '$SeasonEpisode'"
-  debugcont "InputSeasonNum: '$InputSeasonNum'"
-  debugcont "InputEpisodeNum: '$InputEpisodeNum'"
+  debugcont "SEASON: '$SEASON'"
+  debugcont "EPISODE: '$EPISODE'"
   debugcont "Plot: '$Plot'"
-  #If either InputSeasonNum or InputEpisodeNum have not been set, the season or
+  #If either SEASON or EPISODE have not been set, the season or
   #episode fields from MythTV database or command line, then attempt to extract
   #SeasonEpisode from Plot, SBS is big on including it in the plot/description
   #field instead of where it belongs.
-  if [[ -z "$SeasonEpisode" ]] && [[ -z "$InputSeasonNum" || -z "$InputEpisodeNum" ]]; then
+  if [[ -z "$SeasonEpisode" ]] && [[ -z "$SEASON" || -z "$EPISODE" ]]; then
     debug 'Searching Plot for season & episode information.'
     #The below should work for any of the following forms, assumes season and
     #episode numbers in range 0-99:
@@ -2602,11 +2530,11 @@ get_subtitle_from_plot(){
   #TODO: Allowing for a colon as well as the hyphen here causes problems for the various "NCIS: some other place"
   #TODO: Probably should do things conditionally based on whether or not we actually managed
   #  to extract a Subtitle. And maybe return failure state.
-  InputSubtitle="$(grep -E --only-matching '^((((\w+)(.?\s*))|(\&\s*)){1,7})( -|\:)' <<< "$Plot")"
-  #if [[ -n "$InputSubtitle" ]]; then
+  SUBTITLE="$(grep -E --only-matching '^((((\w+)(.?\s*))|(\&\s*)){1,7})( -|\:)' <<< "$Plot")"
+  #if [[ -n "$SUBTITLE" ]]; then
   #Clean off the trailing " -" or ":" that we're using to identify it
-  InputSubtitle="$(grep -E --only-matching '(((\w+)(.?\s*))|(\&\s*)){,7}(\w+)' <<< "$InputSubtitle")"
-  debug "Attempt to extract Subtitle from Plot field gave '$InputSubtitle'"
+  SUBTITLE="$(grep -E --only-matching '(((\w+)(.?\s*))|(\&\s*)){,7}(\w+)' <<< "$SUBTITLE")"
+  debug "Attempt to extract Subtitle from Plot field gave '$SUBTITLE'"
   #TODO: consider calling remove_subtitle_from_plot() from here, instead of return 1 below.
   return 0
   #else
@@ -2619,7 +2547,7 @@ get_subtitle_from_plot(){
 remove_subtitle_from_plot(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   #TODO: If we extracted a subtitle from Plot variable then remove that text from Plot.
-  if [[ -n "$InputSubtitle" ]]; then
+  if [[ -n "$SUBTITLE" ]]; then
     local STstring
     STstring="$(grep -E --only-matching '^((((\w+)(.?\s*))|(\&\s*)){1,7})( -|\:)\s*' <<< "$Plot")"
     if [[ -n "$STstring" ]]; then
@@ -2627,7 +2555,7 @@ remove_subtitle_from_plot(){
       Plot="${Plot/$STstring/}"
     fi
   else
-    debug "InputSubtitle is not currently set, so not going to discard it from Plot field."
+    debug "SUBTITLE is not currently set, so not going to discard it from Plot field."
   fi
 }
 
@@ -3054,7 +2982,7 @@ identify_episode(){
     inform "Processing SeriesID:$SeriesID"
     #####GET ABSOLUTE EPISODE NUMBER#####
     if [[ "$GuideDataType" = "SchedulesDirect" ]]; then
-      ConfidenceReasoning="$ConfidenceReasoning Attempted match on MDB_ORIGINALAIRDATE:"
+      ConfidenceReasoning="$ConfidenceReasoning Attempted match on ORIGINALAIRDATE:"
       set_absolute_episode_number_by_airdate
       AirdateExitStatus=$?
       [[ "$AirdateExitStatus" = "1" && -n "$EpisodeSubtitle" ]] && resolve_multiple_matches_airdate
@@ -3097,7 +3025,7 @@ identify_episode(){
       #####VERIFICATION OF CONFIDENCE RATING#####
       #backup AbsoluteEpisodeNumber for tests
       AbsoluteEpisodeNumberBackup="$AbsoluteEpisodeNumber"
-      if [[ -n "$InputSubtitle" && -n "$MDB_ORIGINALAIRDATE" ]]; then
+      if [[ -n "$SUBTITLE" && -n "$ORIGINALAIRDATE" ]]; then
         #Verify with Standard logic
         set_absolute_episode_number_by_ename
         if (( AbsoluteEpisodeNumber != AbsoluteEpisodeNumberBackup )); then
@@ -3106,7 +3034,7 @@ identify_episode(){
           ConfidenceReasoning="$ConfidenceReasoning Standard Logic came up with Episode Number $AbsoluteEpisodeNumber. This does not match $AbsoluteEpisodeNumberBackup;"
         else
           #TODO For shows which are way off, we need some sort of doover mechanism.
-          #CONFIDENCE:2 LOGIC PATH:  Attempted Match On Zap2itID: Successful; Attempted match on MDB_ORIGINALAIRDATE: Successful;
+          #CONFIDENCE:2 LOGIC PATH:  Attempted Match On Zap2itID: Successful; Attempted match on ORIGINALAIRDATE: Successful;
           #Standard Logic came up with line 76. This does not match 85; Fuzzy Logic test came up with line 76. This does not match 85;
           #JOB: myth2kodi '/home/mythtv/Videos/1035_20101109001500.mpg' 'Aqua Teen Hunger Force' 'Couple Skate'
           #TARGET SET:/home/mythtv/Videos/Episodes/Aqua Teen Hunger Force/Season 6/Aqua Teen Hunger Force S06E03 (She Creature).mpg
@@ -3168,8 +3096,8 @@ identify_episode(){
     #NOTE: this function also sets EpisodeSubtitle and SeasonNumber
     set_sxxexx_absolute_episode_number
   else
-    warn "Could not set Sxx and Exx from MythTV-DB or set them based on InputSubtitle."
-    ConfidenceReasoning="$ConfidenceReasoning Could not get Sxx and Exx from MythTV-DB or set them based on InputSubtitle; "
+    warn "Could not set Sxx and Exx from MythTV-DB or set them based on SUBTITLE."
+    ConfidenceReasoning="$ConfidenceReasoning Could not get Sxx and Exx from MythTV-DB or set them based on SUBTITLE; "
   fi
 } #identify_episode()
 
@@ -3239,7 +3167,7 @@ resolve_multiple_matches_airdate(){
   test -f "$NewShowBasename.InstanceFAiredLineNumbers.txt" && rm "$NewShowBasename.InstanceFAiredLineNumbers.txt"
   test -f "$NewShowBasename.InstanceLineNumbers.txt"       && rm "$NewShowBasename.InstanceLineNumbers.txt"
   #Create a list of line numbers which match original airdate
-  grep -n "$MDB_ORIGINALAIRDATE" "$NewShowBasename.FAired.txt" | cut -d':' -f1 >> "$NewShowBasename.InstanceFAiredLineNumbers.txt"
+  grep -n "$ORIGINALAIRDATE" "$NewShowBasename.FAired.txt" | cut -d':' -f1 >> "$NewShowBasename.InstanceFAiredLineNumbers.txt"
   #Loop through list and create instance matching files
   while read -r line ; do
     echo "$line" >>"$NewShowBasename.InstanceLineNumbers.txt"
@@ -3287,21 +3215,21 @@ set_seriesid_newshowname_from_serieslinenumber(){
   [[ -f "$TMP_SHN_FILE" ]] && (( LOGLEVEL < 3 )) && rm -f "$TMP_SHN_FILE"
 }
 
-#Sets the AbsoluteEpisodeNumber variable by comparing MDB_ORIGINALAIRDATE
+#Sets the AbsoluteEpisodeNumber variable by comparing MythTV's ORIGINALAIRDATE
 #against the first aired information in myth2kodi's local database.
 set_absolute_episode_number_by_airdate(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   AbsoluteEpisodeNumber=''
-  if [[ -n "$MDB_ORIGINALAIRDATE" ]]; then
-    AbsoluteEpisodeNumber="$(grep -n "$MDB_ORIGINALAIRDATE" "$m2kdir/$NewShowName/$NewShowName.FAired.txt" | grep -m1 -o '^[0-9]*')"
+  if [[ -n "$ORIGINALAIRDATE" ]]; then
+    AbsoluteEpisodeNumber="$(grep -n "$ORIGINALAIRDATE" "$m2kdir/$NewShowName/$NewShowName.FAired.txt" | grep -m1 -o '^[0-9]*')"
   fi
   #Account for original series airdate
   if [[ -n "$AbsoluteEpisodeNumber" ]] && ((AbsoluteEpisodeNumber > 0)); then
     local NumberOriginalAirdates
     #Account for original show airdate = first air date
-    NumberOriginalAirdates=$(grep --count "$MDB_ORIGINALAIRDATE" "$m2kdir/$NewShowName/$NewShowName.FAired.txt")
+    NumberOriginalAirdates=$(grep --count "$ORIGINALAIRDATE" "$m2kdir/$NewShowName/$NewShowName.FAired.txt")
     ((NumberOriginalAirdates > 1)) && return 1
-    inform "Absolute Exx NR:$AbsoluteEpisodeNumber BASED ON AIRDATE:$MDB_ORIGINALAIRDATE"
+    inform "Absolute Exx NR:$AbsoluteEpisodeNumber BASED ON AIRDATE:$ORIGINALAIRDATE"
     return 0
   fi
   return 2
@@ -3750,10 +3678,10 @@ msg_operation_summary(){
   msg_dir_summary
 
   informcont "RECORDING_PATH=$RECORDING_PATH-"
-  informcont "InputTitle=$InputTitle-"
-  informcont "InputSubtitle=$InputSubtitle-"
-  informcont "InputSeasonNum=$InputSeasonNum-"
-  informcont "InputEpisodeNum=$InputEpisodeNum-"
+  informcont "TITLE=$TITLE-"
+  informcont "SUBTITLE=$SUBTITLE-"
+  informcont "SEASON=$SEASON-"
+  informcont "EPISODE=$EPISODE-"
   informcont "showtranslation=$showtranslation-"
   informcont "ShowName=$ShowName-"
   debugcont  "LastUpdatedTVDB=$LastUpdatedTVDB-"
@@ -3777,7 +3705,7 @@ msg_operation_summary(){
     informcont "MDB_STORAGEGROUP=$MDB_STORAGEGROUP-"
     informcont "MDB_CATEGORY=$MDB_CATEGORY-"
     informcont "ProgramIDType=$ProgramIDType-"
-    debugcont  "rating=$rating-"
+    debugcont  "RATING=$RATING-"
     informcont "Zap2itSeriesID=$Zap2itSeriesID-"
     debugcont  "MDB_SERIESID=$MDB_SERIESID-"
     informcont "Plot=$Plot-"
@@ -3835,7 +3763,7 @@ msg_show_warning(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   inform     "Recording was tagged as a show, ie, not a movie or a"
   informcont "recognised episode of a series."
-  informcont "TYPE: $ProgramIDType- $InputTitle, $InputSubtitle"
+  informcont "TYPE: $ProgramIDType- $TITLE, $SUBTITLE"
   warn "RECORDING_TYPE='SH', this can occur due to incomplete guide data."
   return 0
 }
@@ -3936,7 +3864,7 @@ msg_unable_to_identify_recording(){
     informcont "#### http://www.thetvdb.com/?tab=series&amp;id=$SeriesID           ####"
   fi
   informcont "To force processing of unrecognised recordings, disable ShowStopper."
-  NOTIFY_MSG="Could not fully identify: $InputTitle."
+  NOTIFY_MSG="Could not fully identify: $TITLE."
 }
 
 #An error message for when the moved file has zero length (either the
@@ -3985,8 +3913,8 @@ msg_symlink_not_created(){
 msg_generic_unspecified_error(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   err  "%%%% OPERATION FAILED: GenericUnspecifiedError %%%%"
-  errcont "NO MATCH FOUND. TROUBLESHOOTING: Check TheTVDB TO SEE IF $InputTitle EXISTS."
-  errcont "CHECK EPISODE NAME $InputSubtitle. CHECK INTERNET CONNECTION. CHECK API KEY."
+  errcont "NO MATCH FOUND. TROUBLESHOOTING: Check TheTVDB TO SEE IF $TITLE EXISTS."
+  errcont "CHECK EPISODE NAME $SUBTITLE. CHECK INTERNET CONNECTION. CHECK API KEY."
   errcont "NOT ENOUGH INFORMATION PULLED FROM DATABASE TO IDENTIFY FILE AS MOVIE OR EPISODE"
   errcont "CHECK www.TheTVDB.com RUN myth2kodi LINK COMMAND PROMPT."
   errcont "FOR MORE INFORMATION SEE http://forum.kodi.tv/showthread.php?tid=301925"
@@ -3997,10 +3925,10 @@ msg_generic_unspecified_error(){
 msg_recording_info(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   printf '\n%s\n\n' "MythTV-DB information for: $INPUT_PATH_BASENAME"
-  printf '%s\n' "  Title=\"$InputTitle\""
-  printf '%s\n' "  Subtitle=\"$InputSubtitle\""
-  printf '%s\n' "  Season='$InputSeasonNum'"
-  printf '%s\n' "  Episode='$InputEpisodeNum'"
+  printf '%s\n' "  Title=\"$MDB_TITLE\""
+  printf '%s\n' "  Subtitle=\"$MDB_SUBTITLE\""
+  printf '%s\n' "  Season='$MDB_SEASON'"
+  printf '%s\n' "  Episode='$MDB_EPISODE'"
   printf '%s\n' "  Airdate='$MDB_AIRDATE'"
   printf '%s\n' "  Originalairdate='$MDB_ORIGINALAIRDATE'"
   printf '%s\n' "  Category='$MDB_CATEGORY'"
@@ -4022,36 +3950,15 @@ msg_recording_info(){
 msg_merged_input_mythtvdb(){
   debug "Input and MythTV-DB guide data for $INPUT_PATH_BASENAME"
   [[ "$Database" = 'Enabled' ]] && debugcont "RECSTART:'$MDB_STARTTIME'"
-  [[ "$Database" = 'Enabled' ]] && debugcont "DATE:'$MDB_AIRDATE' '$MDB_ORIGINALAIRDATE'"
+  [[ "$Database" = 'Enabled' ]] && debugcont "DATE:'$MDB_AIRDATE' '$ORIGINALAIRDATE'"
   [[ "$Database" = 'Enabled' ]] && debugcont "PROGRAMID:'$MDB_PROGRAMID'"
-  [[ "$Database" = 'Enabled' ]] && debugcont "MDB_CATEGORY:'$MDB_CATEGORY'"
+  [[ "$Database" = 'Enabled' ]] && debugcont "CATEGORY:'$CATEGORY'"
 
-  # local var value
-  # for var in 'TITLE' 'SUBTITLE' 'SEASON' 'EPISODE'; do
-  #   if [[ -n "${!var}" ]]; then value="${!var}"; else value='UNKNOWN'; fi
-  #   debugcont "$var:'$value'"
-  # done
-
-  if [[ -n "$InputTitle" ]]; then
-    debugcont "InputTitle:'$InputTitle'"
-  else
-    debugcont "InputTitle: UNKNOWN"
-  fi
-  if [[ -n "$InputSubtitle" ]]; then
-    debugcont "InputSubtitle:'$InputSubtitle'"
-  else
-    debugcont "InputSubtitle: UNKNOWN"
-  fi
-  if [[ -n "$InputSeasonNum" ]]; then
-    debugcont "InputSeasonNum:'$InputSeasonNum'"
-  else
-    debugcont "InputSeasonNum: UNKNOWN"
-  fi
-  if [[ -n "$InputEpisodeNum" ]]; then
-    debugcont "InputEpisodeNum:'$InputEpisodeNum'"
-  else
-    debugcont "InputEpisodeNum: UNKNOWN"
-  fi
+  local var value
+  for var in 'TITLE' 'SUBTITLE' 'SEASON' 'EPISODE'; do
+    if [[ -n "${!var}" ]]; then value="${!var}"; else value='UNKNOWN'; fi
+    debugcont "$var:'$value'"
+  done
 
   [[ "$Database" = 'Enabled' ]] && debugcont "Plot: \"$Plot\""
 }
@@ -4103,10 +4010,10 @@ target_file_exists(){
   err "FILE NAME ALREADY EXISTS:"
   errcont "FILE NAME:$MoveDir/$ShowFileName.$OriginalExt"
   errcont "CALLED AS: myth2kodi '$M2KARG1' \"$M2KARG2\" \"$M2KARG3\" \"$M2KARG4\" '$M2KARG5' '$M2KARG6'"
-  errcont "InputTitle: $InputTitle"
-  errcont "InputSubtitle: $InputSubtitle"
-  errcont "InputSeasonNum: $InputSeasonNum"
-  errcont "InputEpisodeNum: $InputEpisodeNum"
+  errcont "TITLE: $TITLE"
+  errcont "SUBTITLE: $SUBTITLE"
+  errcont "SEASON: $SEASON"
+  errcont "EPISODE: $EPISODE"
   errcont "Plot: $Plot"
 
   EXIT_JOB_TYPE='FileAlreadyExists'
@@ -4132,7 +4039,7 @@ target_file_exists(){
   fi
   warn "Adding an entry identifying this recording as a possible duplicate."
   #Write an entry in the duplicates file, for easy check/removal of duplicates.
-  printf '"%s" "%s" "%s" "%s"\n' "$InputTitle" "$MDB_STARTTIME" "$RECORDING_PATH" "$ShowFileName" >> "$DuplicatesFile"
+  printf '"%s" "%s" "%s" "%s"\n' "$TITLE" "$MDB_STARTTIME" "$RECORDING_PATH" "$ShowFileName" >> "$DuplicatesFile"
   NOTIFY_MSG="Recording identified as possible duplicate of: $MoveDir/$ShowFileName.$OriginalExt"
   return "$recording_name_return_state"
 }
@@ -4372,10 +4279,10 @@ set_show_file_name_categoric(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   local -i testedmethod
   #Method1 - use airdate for season
-  if [[ "${MDB_ORIGINALAIRDATE:0:4}" != "0000" && -n "${MDB_ORIGINALAIRDATE:0:4}" && "$UseMethod2" != "1" ]]; then
-    EventYear="${MDB_ORIGINALAIRDATE:0:4}"
+  if [[ "${ORIGINALAIRDATE:0:4}" != "0000" && -n "${ORIGINALAIRDATE:0:4}" && "$UseMethod2" != "1" ]]; then
+    EventYear="${ORIGINALAIRDATE:0:4}"
     Sxx="$EventYear"
-    EventMonthDay="$(echo "${MDB_ORIGINALAIRDATE:5:5}" | tr -d "-" | sed 's/0*//')"
+    EventMonthDay="$(echo "${ORIGINALAIRDATE:5:5}" | tr -d "-" | sed 's/0*//')"
     Exx="$EventMonthDay"
     [[ -z "$NewShowName" ]] && NewShowName="$ShowName"
   else #Flag failure of Method1
@@ -4401,7 +4308,7 @@ set_show_file_name_categoric(){
 
   #Test final result and assign ShowFileName
   if ((EventYear > 1900)) && ((EventMonthDay > 0)); then
-    ShowFileName="$NewShowName S$EventYear""E$EventMonthDay ($InputSubtitle Recorded $datehour)$SHOW_FILE_NAME_APPEND"
+    ShowFileName="$NewShowName S$EventYear""E$EventMonthDay ($SUBTITLE Recorded $datehour)$SHOW_FILE_NAME_APPEND"
   fi
 
   RequiresNFO=1
@@ -4626,9 +4533,9 @@ generate_episode_nfo(){
   fi
 
   {
-    printf '%b\n' "\t<rating>$rating</rating>"
+    printf '%b\n' "\t<rating>$RATING</rating>"
     printf '%b\n' "\t<plot>$Plot</plot>"
-    printf '%b\n' "\t<genre>$MDB_CATEGORY</genre>"
+    printf '%b\n' "\t<genre>$CATEGORY</genre>"
     printf '%b\n' "\t<aired>${MDB_STARTTIME%% *}</aired>"
     printf '%b\n' "\t<dateadded>$(date --rfc-3339=seconds)</dateadded>"
     printf '%s\n' "</episodedetails>"
@@ -4647,16 +4554,16 @@ process_ignore_lists(){
   local ignoreTest=""
   #Test if the title is in the titleIgnore file
   if [[ -f "$m2kdir/titleIgnore" ]]; then
-    ignoreTest="$(grep "$InputTitle" "$m2kdir/titleIgnore")" #TITLE
-    if [[ "$InputTitle" = "$ignoreTest" ]]; then #TITLE
+    ignoreTest="$(grep "$TITLE" "$m2kdir/titleIgnore")"
+    if [[ "$TITLE" = "$ignoreTest" ]]; then
       EXIT_JOB_TYPE='titleIgnore'
       return 1
     fi
   fi
   #Test if the Category is in the categoricIgnore file
   if [[ -f "$m2kdir/categoricIgnore" ]]; then
-    ignoreTest="$(grep "$MDB_CATEGORY" "$m2kdir/categoricIgnore")" #CATEGORY
-    if [[ "$MDB_CATEGORY" = "$ignoreTest" ]]; then #CATEGORY
+    ignoreTest="$(grep "$CATEGORY" "$m2kdir/categoricIgnore")"
+    if [[ "$CATEGORY" = "$ignoreTest" ]]; then
       EXIT_JOB_TYPE='categoricIgnore'
       return 1
     fi
@@ -4672,7 +4579,7 @@ show_translation(){
     showtranslation="$(grep "^$ShowName = " "$m2kdir/showTranslations" | sed "s/$ShowName = //g")"
     if [[ -n "$showtranslation" ]]; then
       ShowName="$showtranslation"
-      inform "USER TRANSLATION: $InputTitle = $ShowName"
+      inform "USER TRANSLATION: $TITLE = $ShowName"
     elif [[ -z "$showtranslation" ]]; then
       showtranslation="Inactive"
     fi
@@ -5996,8 +5903,8 @@ m2k_undo_rec(){
 #Force an update of the myth2kodi database tables for a specified Series.
 get_series_info(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  inform "Searching for series: $InputTitle"
-  ShowName="$InputTitle" #TITLE="$INPUT_TITLE"
+  inform "Searching for series: $INPUT_TITLE"
+  ShowName="$INPUT_TITLE" #TITLE="$INPUT_TITLE"
   local tvdbshowname
   tvdbshowname="$(sed 's/ /%20/g' <<< "$ShowName" | sed 's/&/%26/g')"
   if ! download_series_identification; then return 1; fi
@@ -6571,10 +6478,10 @@ m2k_init
 #TODO: Make proper arg parser...
 #TODO: Set the inputs as fixed (read-only) parameters, then use different variables consistently if we need to modify them...
 RECORDING_PATH="$1"
-InputTitle="$2"
-InputSubtitle="$3"
-InputSeasonNum="$4"
-InputEpisodeNum="$5"
+INPUT_TITLE="$2"
+INPUT_SUBTITLE="$3"
+INPUT_SEASON="$4"
+INPUT_EPISODE="$5"
 #TODO: With full information all searching should be overridden/bypassed...
 #  Issue warnings for any conflicts. but don't override command line arguments...
 
@@ -6607,11 +6514,11 @@ else
 fi
 msg_merged_input_mythtvdb
 
-#Try to set Sxx and Exx using InputSeasonNum, InputEpisodeNum, or SeasonEpisode.
+#Try to set Sxx and Exx using SEASON, EPISODE, or SeasonEpisode.
 [[ "$RECORDING_TYPE" = 'EP' ]] && set_sxxexx_season_episode_numbers
 
 #At this point we should have an initial show name, if not then abort.
-ShowName="$InputTitle"
+ShowName="$TITLE"
 if [[ -z "$ShowName" ]]; then
   NOTIFY_MSG="Unable to set ShowName."
   msg_usage
@@ -6625,7 +6532,7 @@ if ! process_ignore_lists; then exit_job "$EXIT_JOB_TYPE"; fi
 
 #TODO: check whether the split on semicolon here and elsewhere should be in process_mythtvdb_schedulesdirect
 #split on semicolon, there will only be one episode looked up.
-EpisodeSubtitle="$(sed 's/;.*//' <<< "$InputSubtitle")"
+EpisodeSubtitle="$(sed 's/;.*//' <<< "$SUBTITLE")"
 #Only keep Alpha-numeric characters, space, parenthesis and the four chars & , . -
 EpisodeSubtitle="$(sed -r 's/[^[:alnum:] &,.)(-]//g' <<< "$EpisodeSubtitle")"
 OriginalExt="${INPUT_PATH_BASENAME##*.}"
@@ -6707,7 +6614,7 @@ if [[ "$RECORDING_TYPE" != "SH" && "$RECORDING_TYPE" != "MV" ]]; then
 fi
 
 #If it's not a recognized episode, then we need to assign the name myth2kodi will use.
-[[ -z "$ShowName" ]] && ShowName="$InputTitle"
+[[ -z "$ShowName" ]] && ShowName="$TITLE"
 [[ -z "$NewShowName" ]] && NewShowName="$ShowName"
 
 if [[ -n "$SeriesID" ]]; then
@@ -6729,13 +6636,13 @@ if [[ -n "$SeriesID" ]]; then
 elif [[ -z "$SeriesID" && "$RECORDING_TYPE" != "SH" && "$RECORDING_TYPE" != "MV" ]]; then
   ConfidenceReasoning="$ConfidenceReasoning Failed; "
   warn "SERIES ID WAS NOT FOUND. TheTVDB MAY BE DOWN. IF NOT TRY USING A showTranslations FILE."
-  printf '%s\n' "$InputTitle" >> "$UnrecognizedSeriesFile"
+  printf '%s\n' "$INPUT_TITLE" >> "$UnrecognizedSeriesFile"
   if [[ "$Database" = 'Enabled' ]]; then
     warncont "RECSTART:$MDB_STARTTIME-"
     warncont "Air Date:$MDB_AIRDATE-"
-    warncont "Original Air Date:$MDB_ORIGINALAIRDATE-"
+    warncont "Original Air Date:$ORIGINALAIRDATE-"
     warncont "Channel ID:$MDB_CHANID-"
-    warncont "Show Category:$MDB_CATEGORY-"
+    warncont "Show Category:$CATEGORY-"
     [[ -z "${Exx:2:1}" ]] && Exx=''
   fi
 fi
@@ -6769,7 +6676,7 @@ if [ "$RECORDING_TYPE" = "EP" ] && [[ "$Exx" = "E" || -z "$Exx" ]]; then
 #If it's a movie or a showing, give it a name.
 #TODO: If it's a movie, try using imdb or similar with available $Plot to determine if the Title is correct...
 elif [ "$RECORDING_TYPE" = "MV" ] || [ "$RECORDING_TYPE" = "SH" ] ; then
-  NewShowName="$InputTitle"
+  NewShowName="$TITLE"
   ConfidenceReasoning="$ConfidenceReasoning Guide Data reported this is a $ProgramIDType;"
 fi
 

@@ -276,8 +276,8 @@ TRACKING='Enabled'
 #A string to append to the "ShowFileName" before the suffix. Useful if you want
 #to easily distinguish between recordings moved by myth2kodi and other media.
 #For example, setting SHOW_FILE_NAME_APPEND=' - MYTH2KODI' will produce a
-#processed recording name like 'ShowName S01E01 (EpisodeSubtitle) - MYTH2KODI.mpg'
-#rather than the default which is like 'ShowName S01E01 (EpisodeSubtitle).mpg'.
+#processed recording name like 'TITLE S01E01 (SUBTITLE) - MYTH2KODI.mpg'
+#rather than the default which is like 'TITLE S01E01 (SUBTITLE).mpg'.
 #Default: ''
 SHOW_FILE_NAME_APPEND=''
 
@@ -813,7 +813,7 @@ parse_command_flags(){
 
     --scan) #filetype /path/to/folder
       debug "Recognised command line switch '--scan'"
-      #TODO: Add ability to scan only specific files, eg those for a specific ShowName
+      #TODO: Add ability to scan only specific files, eg those for a specific TITLE
       export m2kScanMode="True"
       m2k_scan
       declare -i scanreturnstatus="$?"
@@ -831,7 +831,7 @@ parse_command_flags(){
         return 1
       fi
       #Force processing as a movie.
-      export CATEGORY="Movie"
+      export CATEGORY='Movie'
       myth2kodi "$M2KARG2" "$M2KARG3"
       declare -i m2kreturnstatus="$?"
       unset CATEGORY
@@ -920,14 +920,12 @@ parse_command_flags(){
         return 1
       fi
     ;;
-    --series-info) #ShowName
+    --series-info) #TITLE
       debug "Recognised command line switch '--series-info'"
       #Example usage: myth2kodi --series-info "Black Books"
-      # TITLE="$M2KARG2"
-      # #Format Show Title for Sending to www.TheTVDB.com
-      # WEB_QUERY_TITLE="$(sed 's/ /%20/g' <<< "$TITLE" | sed 's/&/%26/g')"
-      # ONLINE_LOOKUP='Enabled'
-      # identify_series
+      TITLE="$M2KARG2"
+      ONLINE_LOOKUP='Enabled'
+      identify_series
       get_series_info
       return $?
     ;;
@@ -1364,7 +1362,7 @@ check_filesystem(){
   #Determine the free space available in all the directories we might use.
   WorkingDirFreeSpace=$(df -P "$m2kdir"             | sed -n 2p | awk '{print $4}') || WorkingDirFreeSpace=0
   TempDirFreeSpace=$(df -P "$M2K_TMPDIR"            | sed -n 2p | awk '{print $4}') || TempDirFreeSpace=0
-  OriginalDirFreeSpace=$(df -P "$originaldirname"   | sed -n 2p | awk '{print $4}') || OriginalDirFreeSpace=0
+  OriginalDirFreeSpace=$(df -P "$ORIGINAL_DIRNAME"   | sed -n 2p | awk '{print $4}') || OriginalDirFreeSpace=0
   MoveDirFreeSpace=$(df -P "$MoveDir"               | sed -n 2p | awk '{print $4}') || MoveDirFreeSpace=0
   AltMoveDirFreeSpace=$(df -P "$AlternateMoveDir"   | sed -n 2p | awk '{print $4}') || AltMoveDirFreeSpace=0
   MovieDirFreeSpace=$(df -P "$PrimaryMovieDir"      | sed -n 2p | awk '{print $4}') || MovieDirFreeSpace=0
@@ -1397,7 +1395,7 @@ check_filesystem(){
   check_write "$MoveFileSize" "$AltShowDirFreeSpace"  "$AlternateShowDir"
   AltShowDirWritable="$?" ; ((filesystem_write_state+=AltShowDirWritable))
   if [[ "$PROCESS_RECORDING_MODE" = 'MOVE' ]]; then
-    check_write "1"           "$OriginalDirFreeSpace" "$originaldirname"
+    check_write "1"           "$OriginalDirFreeSpace" "$ORIGINAL_DIRNAME"
     OriginalDirWritable="$?" ; ((filesystem_write_state+=OriginalDirWritable))
   else #Unknown as we won't check, the other modes don't require it.
     OriginalDirWritable='?' #This is intentionally the '?' symbol and not "$?".
@@ -2206,6 +2204,15 @@ process_mythtvdb(){
       err "${FUNCNAME[0]}() CALLED FROM: ${FUNCNAME[1]}(): $NOTIFY_MSG"
       EXIT_JOB_TYPE='InsufficientInformationProvided'
       return 1
+    else
+      #The Database is 'Disabled' but we have a TITLE to work with.
+      if [[ "$CATEGORY" = 'Movie' ]]; then
+        #The --movie flag must have been set.
+        RECORDING_TYPE='MV'
+      else
+        #Default to assuming we're processing an episode.
+        RECORDING_TYPE='EP'
+      fi
     fi
   fi
   return 0
@@ -2580,6 +2587,9 @@ remove_cast_from_plot(){
 download_series_identification(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   local -i next_show=0
+  local tvdbshowname
+  #Format Show TITLE for Sending to www.TheTVDB.com
+  tvdbshowname="$(sed 's/ /%20/g' <<< "$TITLE" | sed 's/&/%26/g')"
   inform "SEARCHING www.TheTVDB.com FOR $tvdbshowname"
 
   #Create temporary file to hold the show data from TheTVDB
@@ -2912,6 +2922,8 @@ identify_series(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   debugcont "RECORDING_TYPE='$RECORDING_TYPE'"
   debugcont "ONLINE_LOOKUP='$ONLINE_LOOKUP'"
+  debugcont "TITLE='$TITLE'"
+  debugcont "Zap2itSeriesID='$Zap2itSeriesID'"
   #Process as though it's an episode of a tv series.
   if [[ "$ONLINE_LOOKUP" != 'Disabled' ]]; then
     #Query TheTVDB on TVDB_TITLE: retrieve fields zap2it_id, SeriesName and seriesid.
@@ -2956,8 +2968,10 @@ identify_series(){
 
     #if we have a series line number then translate that into a series id
     if [[ -n "$serieslinenumber" ]] && ((serieslinenumber > 0)); then
-      set_seriesid_newshowname_from_serieslinenumber
+      set_tvdb_seriesid_title_from_serieslinenumber
       inform "Found: \"$TVDB_TITLE\" ID#: '$TVDB_SERIESID' with CONFIDENCE:'$SeriesConfidenceRating'"
+      #In-case the match was fuzzy, take the title from TheTVDB.
+      [[ -n "$TVDB_TITLE" ]] && TITLE="$TVDB_TITLE"
       return 0
     else
       warn "TVDB_SERIESID could not be determined"
@@ -2985,7 +2999,7 @@ identify_episode(){
       ConfidenceReasoning="$ConfidenceReasoning Attempted match on ORIGINALAIRDATE:"
       set_absolute_episode_number_by_airdate
       AirdateExitStatus=$?
-      [[ "$AirdateExitStatus" = "1" && -n "$EpisodeSubtitle" ]] && resolve_multiple_matches_airdate
+      [[ "$AirdateExitStatus" = "1" && -n "$SUBTITLE" ]] && resolve_multiple_matches_airdate
       test "$?" = "0" && AirdateExitStatus=0
       if [ "$AirdateExitStatus" = "0" ]; then
         ((++EpisodeConfidenceRating))
@@ -2998,7 +3012,7 @@ identify_episode(){
       fi
     fi
 
-    if ((GotEpisodeNumber != 1)) && [[ -n "$EpisodeSubtitle" ]]; then
+    if ((GotEpisodeNumber != 1)) && [[ -n "$SUBTITLE" ]]; then
       ConfidenceReasoning="$ConfidenceReasoning Attempted SubTitle match on Standard logic:"
       if set_absolute_episode_number_by_ename; then
         ConfidenceReasoning="$ConfidenceReasoning Successful; "
@@ -3077,11 +3091,12 @@ identify_episode(){
     #TODO: Probably should only do the following if the Series confidence rating
     #  is ok.
     #If we don't have a Subtitle, then use Sxx & Exx to get it from the TVDb info.
-    if [[ -z "$EpisodeSubtitle" ]]; then
+    if [[ -z "$TVDB_SUBTITLE" ]]; then
       AbsoluteEpisodeNumberBackup=$AbsoluteEpisodeNumber
       if set_absolute_episode_number_by_sxxexx; then
-        EpisodeSubtitle=$(sed -n "$AbsoluteEpisodeNumber"'p' "$m2kdir/$TVDB_TITLE/$TVDB_TITLE.actualEname.txt")
-        inform "MythTV-DB did not have an EpisodeSubtitle, using '$EpisodeSubtitle' from TheTVDB."
+        TVDB_SUBTITLE=$(sed -n "$AbsoluteEpisodeNumber"'p' "$m2kdir/$TVDB_TITLE/$TVDB_TITLE.actualEname.txt")
+        inform "MythTV-DB did not have an TVDB_SUBTITLE, using '$TVDB_SUBTITLE' from TheTVDB."
+
       else
         AbsoluteEpisodeNumber=$AbsoluteEpisodeNumberBackup
       fi
@@ -3093,7 +3108,7 @@ identify_episode(){
 
   #If we don't already have EXX and SXX, set them by matching Absolute Episode Number across myth2kodi's database
   elif [[ -n "$AbsoluteEpisodeNumber" ]]; then
-    #NOTE: this function also sets EpisodeSubtitle and SeasonNumber
+    #NOTE: this function also sets TVDB_SUBTITLE and SeasonNumber
     set_sxxexx_absolute_episode_number
   else
     warn "Could not set Sxx and Exx from MythTV-DB or set them based on SUBTITLE."
@@ -3122,32 +3137,32 @@ get_serieslinenumber_zap2itid(){
   return 1
 }
 
-#Set the serieslinenumber by fuzzy logic matching the current ShowName
+#Set the serieslinenumber by fuzzy logic matching the current TITLE
 #variable against show names returned by querying TheTVDB.
 get_serieslinenumber_showname_fuzzy(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  debugcont "ShowName: '$ShowName'"
+  debugcont "TITLE: '$TITLE'"
   debugcont "TMP_SHN_FILE: '$TMP_SHN_FILE'"
   debugcont "serieslinenumber: '$serieslinenumber'"
   #Some systems (Ubuntu) have an agrep that limits PATTERN to < 32 characters...
-  serieslinenumber=$(agrep -iBynk "${ShowName:0:29}" "$TMP_SHN_FILE" | grep -m1 -o '^[0-9]*')
+  serieslinenumber=$(agrep -iBynk "${TITLE:0:29}" "$TMP_SHN_FILE" | grep -m1 -o '^[0-9]*')
   #Correct for serieslinenumber = ""
   [[ -z "$serieslinenumber" ]] && serieslinenumber=0
 
   #Get the seriesid based on the showname
   if ((serieslinenumber > 0)); then
-    debug "Determined serieslinenumber='$serieslinenumber' for ShowName: '$ShowName'"
+    debug "Determined serieslinenumber='$serieslinenumber' for TITLE: '$TITLE'"
     return 0
   fi
-  err "${FUNCNAME[0]}(): FAILED to determine serieslinenumber for ShowName: '$ShowName'"
+  err "${FUNCNAME[0]}(): FAILED to determine serieslinenumber for TITLE: '$TITLE'"
   return 1
 }
 
-#Set the serieslinenumber by matching the current ShowName variable
+#Set the serieslinenumber by matching the current TITLE variable
 #against show names returned by querying TheTVDB.
 get_serieslinenumber_showname(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  serieslinenumber="$(grep -nix "$ShowName" "$TMP_SHN_FILE" | grep -m1 -o '^[0-9]*')"
+  serieslinenumber="$(grep -nix "$TITLE" "$TMP_SHN_FILE" | grep -m1 -o '^[0-9]*')"
 
   #Correct for serieslinenumber = ""
   [[ -z "$serieslinenumber" ]] && serieslinenumber=0
@@ -3175,7 +3190,7 @@ resolve_multiple_matches_airdate(){
   done < "$NewShowBasename.InstanceFAiredLineNumbers.txt"
 
   #get instance line number
-  IntermediateEpisodeNumber=$(grep -ni "$EpisodeSubtitle" "$NewShowBasename.InstanceEnames.txt" | grep -m1 -o '^[0-9]*')
+  IntermediateEpisodeNumber=$(grep -ni "$SUBTITLE" "$NewShowBasename.InstanceEnames.txt" | grep -m1 -o '^[0-9]*')
   #translate instance line number to actual line number
   if [[ -n "$IntermediateEpisodeNumber" ]]; then
     AbsoluteEpisodeNumber=$(sed -n "$IntermediateEpisodeNumber"'p' "$NewShowBasename.InstanceLineNumbers.txt")
@@ -3186,7 +3201,7 @@ resolve_multiple_matches_airdate(){
   else
     ConfidenceReasoning="$ConfidenceReasoning Failed; Attempted to resolve conflict with Fuzzy Logic:"
     #get instance line number -- Some systems have an agrep that limits PATTERN to < 32 characters...
-    IntermediateEpisodeNumber=$(agrep -iByn "^${EpisodeSubtitle:0:28}" "$NewShowBasename.InstanceEnames.txt" | grep -m1 -o '^[0-9]*')
+    IntermediateEpisodeNumber=$(agrep -iByn "^${SUBTITLE:0:28}" "$NewShowBasename.InstanceEnames.txt" | grep -m1 -o '^[0-9]*')
     #translate instance line number to actual line number
     if [[ -n "$IntermediateEpisodeNumber" ]]; then
       AbsoluteEpisodeNumber=$(sed -n "$IntermediateEpisodeNumber"'p' "$NewShowBasename.InstanceLineNumbers.txt")
@@ -3203,12 +3218,15 @@ resolve_multiple_matches_airdate(){
 }
 
 #Sets the TVDB_SERIESID and TVDB_TITLE variables based on serieslinenumber.
-set_seriesid_newshowname_from_serieslinenumber(){
+set_tvdb_seriesid_title_from_serieslinenumber(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   #Get the seriesid based on the showname
   TVDB_SERIESID="$(sed -n "$serieslinenumber"'p' "$TMP_SID_FILE" | grep -m1 ^)"
   TVDB_TITLE="$(sed -n "$serieslinenumber"'p' "$TMP_SHN_FILE" | grep -m1 ^)"
-  TVDB_TITLE="${TVDB_TITLE//&amp;/&}"
+  if [[ -n "$TVDB_TITLE" ]]; then
+    TVDB_TITLE="${TVDB_TITLE//&amp;/&}"
+    declare -gr TVDB_TITLE
+  fi
 
   #If we're not in debug mode then cleanup show identification files.
   [[ -f "$TMP_SID_FILE" ]] && (( LOGLEVEL < 3 )) && rm -f "$TMP_SID_FILE"
@@ -3240,7 +3258,7 @@ set_absolute_episode_number_by_airdate(){
 set_absolute_episode_number_by_sxxexx(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   debugcont "AbsoluteEpisodeNumber: '$AbsoluteEpisodeNumber'"
-  debugcont "TVDB_TITLE: '$TVDB_TITLE'"
+  debugcont "TVDB_TITLE: \"$TVDB_TITLE\""
   debugcont "Sxx: '$Sxx'"
   debugcont "Exx: '$Exx'"
 
@@ -3265,19 +3283,19 @@ set_absolute_episode_number_by_sxxexx(){
   return 1
 }
 
-#Set the AbsoluteEpisodeNumber by matching EpisodeSubtitle against
+#Set the AbsoluteEpisodeNumber by matching SUBTITLE against
 #the episode names (Ename) in myth2kodi's local database.
 set_absolute_episode_number_by_ename(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  AbsoluteEpisodeNumber=""
-  AbsoluteEpisodeNumber=$(grep -nix "$EpisodeSubtitle" "$m2kdir/$TVDB_TITLE/$TVDB_TITLE.Ename.txt" | grep -m1 -o '^[0-9]*')
+  AbsoluteEpisodeNumber=''
+  AbsoluteEpisodeNumber="$(grep -nix "$SUBTITLE" "$m2kdir/$TVDB_TITLE/$TVDB_TITLE.Ename.txt" | grep -m1 -o '^[0-9]*')"
   if [[ -n "$AbsoluteEpisodeNumber" ]] && ((AbsoluteEpisodeNumber > 0)); then
     return 0
   fi
   return 1
 }
 
-#Set the AbsoluteEpisodeNumber by fuzzy matching EpisodeSubtitle
+#Set the AbsoluteEpisodeNumber by fuzzy matching SUBTITLE
 #against the episode names (Ename) in myth2kodi's local database.
 set_absolute_episode_number_by_ename_fuzzy(){
   #TODO: we need some sort of regex to account for matches like
@@ -3297,12 +3315,12 @@ set_absolute_episode_number_by_ename_fuzzy(){
   #Some systems have an agrep that limits PATTERN to < 32 characters...
   #To avoid "special" episodes of the form "Special: Related Episode Name" first
   #try and match the pattern from the start of the line.
-  fuzzy_ename_0=($(agrep -iByns "^${EpisodeSubtitle:0:28}" "$m2kdir/$TVDB_TITLE/$TVDB_TITLE.Ename.txt"))
+  fuzzy_ename_0=($(agrep -iByns "^${SUBTITLE:0:28}" "$m2kdir/$TVDB_TITLE/$TVDB_TITLE.Ename.txt"))
   #Then, because some shows (eg Gotham) use two part names like "Chapter Name: Episode Name" and
   #guide-data can contain just the "Episode Name" we match without binding to the front of the
-  #line. And as the EpisodeSubtitle can contain character with special meanings in regex, we match
+  #line. And as the SUBTITLE can contain character with special meanings in regex, we match
   #as a string literal (-k).
-  fuzzy_ename_1=($(agrep -iBynsk "${EpisodeSubtitle:0:29}" "$m2kdir/$TVDB_TITLE/$TVDB_TITLE.Ename.txt"))
+  fuzzy_ename_1=($(agrep -iBynsk "${SUBTITLE:0:29}" "$m2kdir/$TVDB_TITLE/$TVDB_TITLE.Ename.txt"))
   fuzzy_ename=("${fuzzy_ename_0[@]}" "${fuzzy_ename_1[@]}")
   #Extract our guessed AbsoluteEpisodeNumbers
   all_cost_aen_guess=($(cut -f1 -d":" <<< "$(printf '%s\n' "${fuzzy_ename[@]}")"))
@@ -3573,7 +3591,7 @@ get_absolute_episode_number_fuzzy_plot(){
 set_sxxexx_absolute_episode_number(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   #if line match is obtained, then gather new episode name, Sxx and Exx
-  EpisodeSubtitle="$(sed -n "$AbsoluteEpisodeNumber"'p' "$m2kdir/$TVDB_TITLE/$TVDB_TITLE.actualEname.txt")"
+  TVDB_SUBTITLE="$(sed -n "$AbsoluteEpisodeNumber"'p' "$m2kdir/$TVDB_TITLE/$TVDB_TITLE.actualEname.txt")"
 
   #gather series and episode names from files created earlier.
   Exx="$(sed -n "$AbsoluteEpisodeNumber"'p' "$m2kdir/$TVDB_TITLE/$TVDB_TITLE.E.txt")"
@@ -3583,7 +3601,7 @@ set_sxxexx_absolute_episode_number(){
   #Single digit episode and show names are not allowed Ex and Sx replaced with Exx Sxx
   if ((Exx < 10)); then Exx="E0$Exx"; else Exx="E$Exx"; fi
   if ((Sxx < 10)); then Sxx="S0$Sxx"; else Sxx="S$Sxx"; fi
-  inform "EPISODE:$EpisodeSubtitle EPISODE NUMBER:$AbsoluteEpisodeNumber $Sxx$Exx WITH CONFIDENCE: $EpisodeConfidenceRating"
+  inform "EPISODE:$TVDB_SUBTITLE EPISODE NUMBER:$AbsoluteEpisodeNumber $Sxx$Exx WITH CONFIDENCE: $EpisodeConfidenceRating"
   HasSxxExx='1'
 }
 
@@ -3594,8 +3612,8 @@ plot_match_fallback(){
     debug "PlotMatchFallback is Enabled"
     if [[ "$RECORDING_TYPE" = "EP" && "$HasSxxExx" != '1' ]] ; then
       if get_absolute_episode_number_fuzzy_plot && [[ -n "$AbsoluteEpisodeNumber" ]]; then
-        inform "Setting Sxx, Exx, and EpisodeSubtitle based on FuzzyPlotMatch:"
-        #NOTE: set_sxxexx_absolute_episode_number also sets EpisodeSubtitle and SeasonNumber
+        inform "Setting Sxx, Exx, and TVDB_SUBTITLE based on FuzzyPlotMatch:"
+        #NOTE: set_sxxexx_absolute_episode_number also sets TVDB_SUBTITLE and SeasonNumber
         set_sxxexx_absolute_episode_number
         ((--ConfidenceRating)) #Decrement confidence, because this is a guess.
         ConfidenceReasoning="$ConfidenceReasoning Found AbsoluteEpisodeNumber with fuzzy plot match, Guess; "
@@ -3646,7 +3664,7 @@ msg_dir_summary(){
   informcont "$(printf '%-18s|%-5s|%-12s|%s\n'     "USER SETTING"      "FLAG"                 "Free Space"               "Folder name"       )"
   informcont "$(printf '%-18s|  %s  | %10s | %s\n' "m2kdir"            "$WorkingDirWritable"  "$WorkingDirFreeSpace MB"  "$m2kdir"           )"
   informcont "$(printf '%-18s|  %s  | %10s | %s\n' "M2K_TMPDIR"        "$TempDirWritable"     "$TempDirFreeSpace MB"     "$M2K_TMPDIR"       )"
-  informcont "$(printf '%-18s|  %s  | %10s | %s\n' "originaldirname"   "$OriginalDirWritable" "$OriginalDirFreeSpace MB" "$originaldirname"  )"
+  informcont "$(printf '%-18s|  %s  | %10s | %s\n' "ORIGINAL_DIRNAME"   "$OriginalDirWritable" "$OriginalDirFreeSpace MB" "$ORIGINAL_DIRNAME"  )"
   informcont "$(printf '%-18s|  %s  | %10s | %s\n' "MoveDir"           "$MoveDirWritable"     "$MoveDirFreeSpace MB"     "$MoveDir"          )"
   informcont "$(printf '%-18s|  %s  | %10s | %s\n' "AlternateMoveDir"  "$AltMoveDirWritable"  "$AltMoveDirFreeSpace MB"  "$AlternateMoveDir" )"
   informcont "$(printf '%-18s|  %s  | %10s | %s\n' "PrimaryMovieDir"   "$MovieDirWritable"    "$MovieDirFreeSpace MB"    "$PrimaryMovieDir"  )"
@@ -3682,14 +3700,13 @@ msg_operation_summary(){
   informcont "SUBTITLE=$SUBTITLE-"
   informcont "SEASON=$SEASON-"
   informcont "EPISODE=$EPISODE-"
-  informcont "showtranslation=$showtranslation-"
-  informcont "ShowName=$ShowName-"
+  informcont "TITLE_TRANSLATION=$TITLE_TRANSLATION-"
   debugcont  "LastUpdatedTVDB=$LastUpdatedTVDB-"
   debugcont  "CurrentTimeTVDB=$CurrentTimeTVDB-"
   informcont "TVDB_SERIESID=$TVDB_SERIESID-"
   informcont "TVDB_TITLE=$TVDB_TITLE-"
   debugcont  "AbsoluteEpisodeNumber=$AbsoluteEpisodeNumber-"
-  informcont "EpisodeSubtitle=$EpisodeSubtitle-"
+  informcont "TVDB_SUBTITLE=$TVDB_SUBTITLE-"
   informcont "HasSxxExx=$HasSxxExx-"
   informcont "Sxx=$Sxx- Exx=$Exx-"
   informcont "MoveFileSize=$MoveFileSize MB"
@@ -3773,10 +3790,10 @@ msg_completed_move(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   inform "Move completed."
   informcont "Moved: $RECORDING_PATH"
-  informcont "To: $MoveDir/$ShowFileName.$OriginalExt"
+  informcont "To: $MoveDir/$ShowFileName.$ORIGINAL_EXT"
   if [[ "$SYMLINK" != 'Disabled' ]]; then
     informcont "Added symbolic link from: $RECORDING_PATH"
-    informcont "To: $MoveDir/$ShowFileName.$OriginalExt"
+    informcont "To: $MoveDir/$ShowFileName.$ORIGINAL_EXT"
   fi
   NOTIFY_MSG="myth2kodi Success $ShowFileName moved to $MoveDir"
   EXIT_JOB_TYPE='MoveModeSuccessful'
@@ -3788,7 +3805,7 @@ msg_completed_copy(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   inform "Copy completed."
   informcont "Copied: $RECORDING_PATH"
-  informcont "To: $MoveDir/$ShowFileName.$OriginalExt"
+  informcont "To: $MoveDir/$ShowFileName.$ORIGINAL_EXT"
   NOTIFY_MSG="myth2kodi Success $ShowFileName copied to $MoveDir"
   EXIT_JOB_TYPE='CopyModeSuccessful'
   return 0
@@ -3871,7 +3888,7 @@ msg_unable_to_identify_recording(){
 #original had zero length or we failed to move it).
 msg_wrote_zero_length_file(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  NOTIFY_MSG="$ShowFileName.$OriginalExt could not be moved to $MoveDir"
+  NOTIFY_MSG="$ShowFileName.$ORIGINAL_EXT could not be moved to $MoveDir"
   err "${FUNCNAME[0]}() CALLED FROM: ${FUNCNAME[1]}(): $NOTIFY_MSG"
   EXIT_JOB_TYPE='ZeroLengthFile'
 }
@@ -4008,7 +4025,7 @@ target_directory_not_writeable(){
 
 target_file_exists(){
   err "FILE NAME ALREADY EXISTS:"
-  errcont "FILE NAME:$MoveDir/$ShowFileName.$OriginalExt"
+  errcont "FILE NAME:$MoveDir/$ShowFileName.$ORIGINAL_EXT"
   errcont "CALLED AS: myth2kodi '$M2KARG1' \"$M2KARG2\" \"$M2KARG3\" \"$M2KARG4\" '$M2KARG5' '$M2KARG6'"
   errcont "TITLE: $TITLE"
   errcont "SUBTITLE: $SUBTITLE"
@@ -4020,7 +4037,7 @@ target_file_exists(){
   local -i recording_name_return_state
 
   #Identify any MythTV file name associated with the already existing move target.
-  set_recording_name "$MoveDir/$ShowFileName.$OriginalExt"
+  set_recording_name "$MoveDir/$ShowFileName.$ORIGINAL_EXT"
   recording_name_return_state="$?"
 
   if [[ "$recording_name_return_state" == 0 && -n "$RECORDING_NAME" ]]; then
@@ -4040,7 +4057,7 @@ target_file_exists(){
   warn "Adding an entry identifying this recording as a possible duplicate."
   #Write an entry in the duplicates file, for easy check/removal of duplicates.
   printf '"%s" "%s" "%s" "%s"\n' "$TITLE" "$MDB_STARTTIME" "$RECORDING_PATH" "$ShowFileName" >> "$DuplicatesFile"
-  NOTIFY_MSG="Recording identified as possible duplicate of: $MoveDir/$ShowFileName.$OriginalExt"
+  NOTIFY_MSG="Recording identified as possible duplicate of: $MoveDir/$ShowFileName.$ORIGINAL_EXT"
   return "$recording_name_return_state"
 }
 
@@ -4247,10 +4264,10 @@ msg_improve_confidence(){
 #Set the name for episode & movie recordings when making them accessible to Kodi
 set_show_file_name(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  #Format Episodes showname=show name Sxx=season number Exx=episode number EpisodeSubtitle=episode name
+  #Format Episodes showname=show name Sxx=season number Exx=episode number SUBTITLE=episode name
   if [[ -n "$Exx" && "$Exx" != 'E' ]]; then
     debug "Naming as episode"
-    ShowFileName="$TVDB_TITLE $Sxx$Exx ($EpisodeSubtitle)$SHOW_FILE_NAME_APPEND"
+    ShowFileName="$TVDB_TITLE $Sxx$Exx ($SUBTITLE)$SHOW_FILE_NAME_APPEND"
   #Format Movies
   elif [[ "$RECORDING_TYPE" = 'MV' ]]; then
     debug 'Naming as movie.'
@@ -4267,7 +4284,7 @@ set_show_file_name(){
   else
     debug "Naming as generic show"
     Exx="Generic"
-    ShowFileName="$ShowName S0E0 ($EpisodeSubtitle Recorded $datehour on $MDB_CHANID)$SHOW_FILE_NAME_APPEND"
+    ShowFileName="$TITLE S0E0 ($SUBTITLE Recorded $datehour on $MDB_CHANID)$SHOW_FILE_NAME_APPEND"
     RequiresNFO=1
     [[ "$RECORDING_TYPE" = 'EP' ]] && RequiresDoover=1
   fi
@@ -4284,7 +4301,7 @@ set_show_file_name_categoric(){
     Sxx="$EventYear"
     EventMonthDay="$(echo "${ORIGINALAIRDATE:5:5}" | tr -d "-" | sed 's/0*//')"
     Exx="$EventMonthDay"
-    [[ -z "$TVDB_TITLE" ]] && TVDB_TITLE="$ShowName"
+    [[ -z "$TVDB_TITLE" ]] && TVDB_TITLE="$TITLE"
   else #Flag failure of Method1
     testedmethod=0
   fi
@@ -4413,22 +4430,22 @@ set_target_dir_as_input_path_dir(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   #For directory names: No trailing / is accepted eg. "~/videos" not "~/videos/"
   #MoveDir is the folder which myth2kodi will move the file.
-  MoveDir="$originaldirname/Episodes"
+  MoveDir="$ORIGINAL_DIRNAME/Episodes"
   [[ -d "$MoveDir" ]] || mkdir "$MoveDir"
   #AlternateMoveDir will act as a secondary MoveDir if the primary MoveDir fails.
-  AlternateMoveDir="$originaldirname/Episodes"
+  AlternateMoveDir="$ORIGINAL_DIRNAME/Episodes"
   [[ -d "$AlternateMoveDir" ]] || mkdir "$AlternateMoveDir"
   #Primary Movie Dir. myth2kodi will attempt to move to this dir first.
-  PrimaryMovieDir="$originaldirname/Movies"
+  PrimaryMovieDir="$ORIGINAL_DIRNAME/Movies"
   [[ -d "$PrimaryMovieDir" ]] || mkdir "$PrimaryMovieDir"
   #AlternateMovieDir will act as a Secondary move dir if the primary move dir fails.
-  AlternateMovieDir="$originaldirname/Movies"
+  AlternateMovieDir="$ORIGINAL_DIRNAME/Movies"
   [[ -d "$AlternateMovieDir" ]] || mkdir "$AlternateMovieDir"
   #PrimaryShowDir is where generic episodes will be placed.
-  PrimaryShowDir="$originaldirname/Showings"
+  PrimaryShowDir="$ORIGINAL_DIRNAME/Showings"
   [[ -d "$PrimaryShowDir" ]] || mkdir "$PrimaryShowDir"
   #AlternateShowDir will act as a Secondary Show Dir if the primary show dir fails.
-  AlternateShowDir="$originaldirname/Showings"
+  AlternateShowDir="$ORIGINAL_DIRNAME/Showings"
   [[ -d "$AlternateShowDir" ]] || mkdir "$AlternateShowDir"
 }
 
@@ -4507,11 +4524,11 @@ generate_episode_nfo(){
     printf '%s\n' '<episodedetails>'
   } > "$MoveDir/$ShowFileName.nfo"
   #TODO: reconsider this title specification.
-  local basetitle="<title>$EpisodeSubtitle Recorded $datehour"
+  local basetitle="<title>$SUBTITLE Recorded $datehour"
   if [[ -z "$NamingConvention" ]]; then
     if [[ "${DOOVER_ADDED,,}" = 'true' ]]; then #TODO: review me...
       printf '%b\n' "\t$basetitle -Episode in --doover Queue</title>" >> "$MoveDir/$ShowFileName.nfo"
-    elif [[ -n "$EpisodeSubtitle" ]]; then #TODO: review me...
+    elif [[ -n "$SUBTITLE" ]]; then #TODO: review me...
       printf '%b\n' "\t$basetitle -Episode</title>" >> "$MoveDir/$ShowFileName.nfo"
     else
       printf '%b\n' "\t$basetitle -Showing</title>" >> "$MoveDir/$ShowFileName.nfo"
@@ -4542,7 +4559,7 @@ generate_episode_nfo(){
   } >> "$MoveDir/$ShowFileName.nfo"
 
   if [[ "$TRACKING" != 'Disabled' ]]; then
-    printf '%s\n' "'$MoveDir/$ShowFileName.nfo' '$MoveDir/$ShowFileName.$OriginalExt'" >> "$m2kdir/created.tracking"
+    printf '%s\n' "'$MoveDir/$ShowFileName.nfo' '$MoveDir/$ShowFileName.$ORIGINAL_EXT'" >> "$m2kdir/created.tracking"
   fi
   inform "Generated episode NFO file: $MoveDir/$ShowFileName.nfo"
   return 0
@@ -4575,27 +4592,16 @@ process_ignore_lists(){
 #The show title will be replaced by the one in the user created showTranslations file
 show_translation(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  if [[ -f "$m2kdir/showTranslations" && -n "$ShowName" ]]; then
-    showtranslation="$(grep "^$ShowName = " "$m2kdir/showTranslations" | sed "s/$ShowName = //g")"
-    if [[ -n "$showtranslation" ]]; then
-      ShowName="$showtranslation"
-      inform "USER TRANSLATION: $TITLE = $ShowName"
-    elif [[ -z "$showtranslation" ]]; then
-      showtranslation="Inactive"
+  if [[ -f "$m2kdir/showTranslations" && -n "$TITLE" ]]; then
+    TITLE_TRANSLATION="$(grep "^$TITLE = " "$m2kdir/showTranslations" | sed "s/$TITLE = //g")"
+    if [[ -n "$TITLE_TRANSLATION" ]]; then
+      inform "USER TRANSLATION: '$TITLE' => '$TITLE_TRANSLATION'"
+      TITLE="$TITLE_TRANSLATION"
+    elif [[ -z "$TITLE_TRANSLATION" ]]; then
+      TITLE_TRANSLATION='Inactive'
     fi
   fi
   return 0
-  # debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  # if [[ -f "$m2kdir/showTranslations" && -n "$TITLE" ]]; then
-  #   TITLE_TRANSLATION="$(grep "^$TITLE = " "$m2kdir/showTranslations" | sed "s/$TITLE = //g")"
-  #   if [[ -n "$TITLE_TRANSLATION" ]]; then
-  #     inform "USER TRANSLATION: '$TITLE' => '$TITLE_TRANSLATION'"
-  #     TITLE="$TITLE_TRANSLATION"
-  #   elif [[ -z "$TITLE_TRANSLATION" ]]; then
-  #     TITLE_TRANSLATION='Inactive'
-  #   fi
-  # fi
-  # return 0
 }
 
 #On successful processing this function is called to: move any comskip file
@@ -4609,7 +4615,7 @@ success_postprocessing(){
     mv "$MARKUPFRAMES_TMP" "$MoveDir/$ShowFileName.txt" 2>&1 | err_pipe "${FUNCNAME[0]}(): "
     chmod 664 "$MoveDir/$ShowFileName.txt" 2>&1 | err_pipe "${FUNCNAME[0]}(): "
     if [[ "$TRACKING" != 'Disabled' ]]; then
-      printf '%s\n' "'$MoveDir/$ShowFileName.txt' '$MoveDir/$ShowFileName.$OriginalExt'" >> "$m2kdir/created.tracking"
+      printf '%s\n' "'$MoveDir/$ShowFileName.txt' '$MoveDir/$ShowFileName.$ORIGINAL_EXT'" >> "$m2kdir/created.tracking"
     fi
   fi
 
@@ -4638,7 +4644,7 @@ add_doover(){
   debugcont "RECORDING_PATH: '$RECORDING_PATH'"
   debugcont "MoveDir: '$MoveDir'"
   debugcont "ShowFileName: '$ShowFileName'"
-  debugcont "OriginalExt: '$OriginalExt'"
+  debugcont "ORIGINAL_EXT: '$ORIGINAL_EXT'"
   debugcont "RequiresDoover: '$RequiresDoover'"
   debugcont "PROCESS_RECORDING_MODE: '$PROCESS_RECORDING_MODE'"
   debugcont "SYMLINK: '$SYMLINK'"
@@ -4654,20 +4660,20 @@ add_doover(){
     if [[ "$PROCESS_RECORDING_MODE" = 'MOVE' && "$SYMLINK" = 'Enabled' ]]; then
       {
         #Write doover.sh line that removes link:
-        printf '%s'    "test -f \"$MoveDir/$ShowFileName.$OriginalExt\" &&"
+        printf '%s'    "test -f \"$MoveDir/$ShowFileName.$ORIGINAL_EXT\" &&"
         printf ' %s'   "test -L \"$RECORDING_PATH\" &&"
         printf ' %s'   "rm -f \"$RECORDING_PATH\" &&"
         printf ' %s\n' "echo Moving \"$RECORDING_PATH\" to original location"
         #Write doover.sh line that moves already-moved-file back to original location:
-        printf '%s'    "test -f \"$MoveDir/$ShowFileName.$OriginalExt\" &&"
-        printf ' %s\n' "mv \"$MoveDir/$ShowFileName.$OriginalExt\" '$RECORDING_PATH'"
+        printf '%s'    "test -f \"$MoveDir/$ShowFileName.$ORIGINAL_EXT\" &&"
+        printf ' %s\n' "mv \"$MoveDir/$ShowFileName.$ORIGINAL_EXT\" '$RECORDING_PATH'"
       } >> "$m2kdir/doover.sh"
     elif [[ "$PROCESS_RECORDING_MODE" = 'LINK' ]]; then
       {
         #Write doover.sh line that removes a link to a recording:
-        printf '%s'    "test -L \"$MoveDir/$ShowFileName.$OriginalExt\" &&"
-        printf ' %s'   "rm -f \"$MoveDir/$ShowFileName.$OriginalExt\" &&"
-        printf ' %s\n' "echo removed link \"$MoveDir/$ShowFileName.$OriginalExt\""
+        printf '%s'    "test -L \"$MoveDir/$ShowFileName.$ORIGINAL_EXT\" &&"
+        printf ' %s'   "rm -f \"$MoveDir/$ShowFileName.$ORIGINAL_EXT\" &&"
+        printf ' %s\n' "echo removed link \"$MoveDir/$ShowFileName.$ORIGINAL_EXT\""
       } >> "$m2kdir/doover.sh"
     else
       err "${FUNCNAME[0]}(): PROCESS_RECORDING_MODE not equal to 'LINK' or 'MOVE' with 'SYMLINK'ing 'Enabled'."
@@ -4691,7 +4697,7 @@ add_undo(){
   debugcont "RECORDING_PATH: '$RECORDING_PATH'"
   debugcont "MoveDir: '$MoveDir'"
   debugcont "ShowFileName: '$ShowFileName'"
-  debugcont "OriginalExt: '$OriginalExt'"
+  debugcont "ORIGINAL_EXT: '$ORIGINAL_EXT'"
   debugcont "PROCESS_RECORDING_MODE: '$PROCESS_RECORDING_MODE'"
   debugcont "SYMLINK: '$SYMLINK'"
 
@@ -4708,21 +4714,21 @@ add_undo(){
       printf ' %s'   "rm -f \"$RECORDING_PATH\" &&"
       printf ' %s\n' "echo removed link \"$RECORDING_PATH\""
       #Write undo.sh line that moves already-moved-file back to original location:
-      printf '%s'    "test -f \"$MoveDir/$ShowFileName.$OriginalExt\" &&"
-      printf ' %s'   "mv \"$MoveDir/$ShowFileName.$OriginalExt\" \"$RECORDING_PATH\" &&"
-      printf ' %s\n' "echo moved \"$MoveDir/$ShowFileName.$OriginalExt\" to \"$RECORDING_PATH\""
+      printf '%s'    "test -f \"$MoveDir/$ShowFileName.$ORIGINAL_EXT\" &&"
+      printf ' %s'   "mv \"$MoveDir/$ShowFileName.$ORIGINAL_EXT\" \"$RECORDING_PATH\" &&"
+      printf ' %s\n' "echo moved \"$MoveDir/$ShowFileName.$ORIGINAL_EXT\" to \"$RECORDING_PATH\""
     } >> "$m2kdir/undo.sh"
   elif [[ "$PROCESS_RECORDING_MODE" = 'LINK' ]]; then
     {
       #Write undo.sh line that removes link:
-      printf '%s'    "test -L \"$MoveDir/$ShowFileName.$OriginalExt\" &&"
-      printf ' %s'   "rm -f \"$MoveDir/$ShowFileName.$OriginalExt\" &&"
-      printf ' %s\n' "echo removed link \"$MoveDir/$ShowFileName.$OriginalExt\""
+      printf '%s'    "test -L \"$MoveDir/$ShowFileName.$ORIGINAL_EXT\" &&"
+      printf ' %s'   "rm -f \"$MoveDir/$ShowFileName.$ORIGINAL_EXT\" &&"
+      printf ' %s\n' "echo removed link \"$MoveDir/$ShowFileName.$ORIGINAL_EXT\""
     } >> "$m2kdir/undo.sh"
   elif [[ "$PROCESS_RECORDING_MODE" = 'MOVE' && "$SYMLINK" = 'Disabled' && "$RequiresDoover" != "1" ]]; then
     debug "'MOVE' mode with SYMLINK=Disabled and does not require doover, so MythTV-DB info has been removed."
     inform "No undo.sh entry will be added for this recording:"
-    informcont "File Name: '$MoveDir/$ShowFileName.$OriginalExt'"
+    informcont "File Name: '$MoveDir/$ShowFileName.$ORIGINAL_EXT'"
   fi
 }
 
@@ -4733,9 +4739,9 @@ failsafe(){
   warncont "Check your permissions, disk usage, and network connection to NAS."
   if [[ "$FailSafeMode" = 'Enabled' &&  "$SYMLINK" = 'Enabled' ]]; then
     warn "ATTEMPTING SYMLINK TO FAILSAFE DIR: $FailSafeDir"
-    inform "FailSafe link name set as: '$FailSafeDir/$ShowFileName.$OriginalExt'"
-    ln -s "$RECORDING_PATH" "$FailSafeDir/$ShowFileName.$OriginalExt"
-    if [[ -f "$FailSafeDir/$ShowFileName.$OriginalExt" ]]; then
+    inform "FailSafe link name set as: '$FailSafeDir/$ShowFileName.$ORIGINAL_EXT'"
+    ln -s "$RECORDING_PATH" "$FailSafeDir/$ShowFileName.$ORIGINAL_EXT"
+    if [[ -f "$FailSafeDir/$ShowFileName.$ORIGINAL_EXT" ]]; then
       inform "FAILSAFE MODE COMPLETE: SYMLINK CREATED"
       #Do post processing as a successful LINK mode move, but require doover.
       MoveDir="$FailSafeDir"
@@ -4761,7 +4767,7 @@ failsafe(){
 
 anti_clobber(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  if [[ -f "$MoveDir/$ShowFileName.$OriginalExt" ]]; then
+  if [[ -f "$MoveDir/$ShowFileName.$ORIGINAL_EXT" ]]; then
     if [[ "$FORCE_PROCESS" = 'Enabled' ]]; then
       increment_target_file_name
     else
@@ -4777,7 +4783,7 @@ set_group_permission(){
   #TODO: review... Why?
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   #Set permission 664 (rw-rw-r--)
-  chmod 664 "$MoveDir/$ShowFileName.$OriginalExt"
+  chmod 664 "$MoveDir/$ShowFileName.$ORIGINAL_EXT"
   return "$?"
 }
 
@@ -4833,7 +4839,7 @@ increment_target_file_name(){
   while (( name_check == 0 )); do
     ((++counter))
     #If file does not exist, then it is a valid target
-    if [[ ! -e "$MoveDir/$ShowFileName-$counter.$OriginalExt" ]]; then
+    if [[ ! -e "$MoveDir/$ShowFileName-$counter.$ORIGINAL_EXT" ]]; then
       name_check=1
       ShowFileName="$ShowFileName-$counter"
       warn "FILE NAME EXISTS. FILE WILL BE KNOWN AS: $ShowFileName"
@@ -4845,21 +4851,21 @@ increment_target_file_name(){
 move_mode_handling(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   #Send notifications, Move the file and rename
-  debug "MOVING FILE: '$RECORDING_PATH' to '$MoveDir/$ShowFileName.$OriginalExt'"
-  mv "$RECORDING_PATH" "$MoveDir/$ShowFileName.$OriginalExt" 2>&1 | err_pipe "'MOVE' mode: "
+  debug "MOVING FILE: '$RECORDING_PATH' to '$MoveDir/$ShowFileName.$ORIGINAL_EXT'"
+  mv "$RECORDING_PATH" "$MoveDir/$ShowFileName.$ORIGINAL_EXT" 2>&1 | err_pipe "'MOVE' mode: "
 
   #Check and report if file was moved
-  if [[ -e "$MoveDir/$ShowFileName.$OriginalExt" ]]; then
-    if [[ -f "$MoveDir/$ShowFileName.$OriginalExt" ]]; then
+  if [[ -e "$MoveDir/$ShowFileName.$ORIGINAL_EXT" ]]; then
+    if [[ -f "$MoveDir/$ShowFileName.$ORIGINAL_EXT" ]]; then
       #Make symlink back to original file
       if [[ "$SYMLINK" = 'Enabled' ]]; then
         inform "Creating symlink in move mode."
-        ln -s "$MoveDir/$ShowFileName.$OriginalExt" "$RECORDING_PATH"
+        ln -s "$MoveDir/$ShowFileName.$ORIGINAL_EXT" "$RECORDING_PATH"
         [[ -L "$RECORDING_PATH" ]] || err "Failed to Create symlink: FILESYSTEM MAY NOT SUPPORT SYMLINKS"
       #If SYMLINK=Disabled, remove database entries
       elif [[ "$SYMLINK" = 'Disabled' ]]; then
         #Set permissions as rw-rw-r-- (664)
-        chmod 664 "$MoveDir/$ShowFileName.$OriginalExt"
+        chmod 664 "$MoveDir/$ShowFileName.$ORIGINAL_EXT"
         if [[ "$RequiresDoover" != '1' ]]; then
           if [[ "$Database" = 'Enabled' ]]; then
             debug "SYMLINK='Disabled' and does not require doover, so MythTV-DB info will be removed."
@@ -4876,7 +4882,7 @@ move_mode_handling(){
           fi
         else
           warn "Job requires doover, so attempting to create symlink in SYMLINK='Disabled' mode."
-          ln -s "$MoveDir/$ShowFileName.$OriginalExt" "$RECORDING_PATH"
+          ln -s "$MoveDir/$ShowFileName.$ORIGINAL_EXT" "$RECORDING_PATH"
           if [[ ! -L "$RECORDING_PATH" ]]; then
             err "Failed to Create symlink: FILESYSTEM MAY NOT SUPPORT SYMLINKS"
           elif [[ -L "$RECORDING_PATH" ]]; then
@@ -4897,12 +4903,12 @@ move_mode_handling(){
       return 0
 
     #if file was not moved (has zero size), then fail
-    elif [[ ! -s "$MoveDir/$ShowFileName.$OriginalExt" ]]; then
-      rm -f "$MoveDir/$ShowFileName.$OriginalExt"
+    elif [[ ! -s "$MoveDir/$ShowFileName.$ORIGINAL_EXT" ]]; then
+      rm -f "$MoveDir/$ShowFileName.$ORIGINAL_EXT"
       msg_wrote_zero_length_file
       return 1
     fi
-  elif [[ ! -f "$MoveDir/$ShowFileName.$OriginalExt" ]]; then
+  elif [[ ! -f "$MoveDir/$ShowFileName.$ORIGINAL_EXT" ]]; then
     msg_permission_error_while_moving
     return 1
   fi
@@ -4912,13 +4918,13 @@ move_mode_handling(){
 link_mode_handling(){
   debug "Creating link in LINK mode with CONFIDENCE:'$ConfidenceRating'"
 
-  ln -s "$RECORDING_PATH" "$MoveDir/$ShowFileName.$OriginalExt"
+  ln -s "$RECORDING_PATH" "$MoveDir/$ShowFileName.$ORIGINAL_EXT"
 
   #if file was created
-  if [[ -L "$MoveDir/$ShowFileName.$OriginalExt" ]]; then
-    inform "Symlink created: $MoveDir/$ShowFileName.$OriginalExt"
+  if [[ -L "$MoveDir/$ShowFileName.$ORIGINAL_EXT" ]]; then
+    inform "Symlink created: $MoveDir/$ShowFileName.$ORIGINAL_EXT"
     if [[ "$TRACKING" != 'Disabled' ]]; then
-      printf '%s\n' "'$MoveDir/$ShowFileName.$OriginalExt' '$RECORDING_PATH'" >> "$m2kdir/created.tracking"
+      printf '%s\n' "'$MoveDir/$ShowFileName.$ORIGINAL_EXT' '$RECORDING_PATH'" >> "$m2kdir/created.tracking"
     fi
 
     #Generate supporting files, add undo and doover entries, notify Kodi.
@@ -4930,7 +4936,7 @@ link_mode_handling(){
     return 0
 
   #If link failure, send notification and fail
-  elif [[ ! -L "$MoveDir/$ShowFileName.$OriginalExt" ]]; then
+  elif [[ ! -L "$MoveDir/$ShowFileName.$ORIGINAL_EXT" ]]; then
     msg_symlink_not_created
     return 1
   fi
@@ -4940,11 +4946,11 @@ link_mode_handling(){
 copy_mode_handling(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   #Send notifications, Move the file and rename
-  debug "COPYING FILE: '$RECORDING_PATH' to '$MoveDir/$ShowFileName.$OriginalExt'"
-  cp -L "$RECORDING_PATH" "$MoveDir/$ShowFileName.$OriginalExt"
+  debug "COPYING FILE: '$RECORDING_PATH' to '$MoveDir/$ShowFileName.$ORIGINAL_EXT'"
+  cp -L "$RECORDING_PATH" "$MoveDir/$ShowFileName.$ORIGINAL_EXT"
   #Check and report if file was moved
-  if [[ -e "$MoveDir/$ShowFileName.$OriginalExt" ]]; then
-    if [[ -f "$MoveDir/$ShowFileName.$OriginalExt" ]]; then
+  if [[ -e "$MoveDir/$ShowFileName.$ORIGINAL_EXT" ]]; then
+    if [[ -f "$MoveDir/$ShowFileName.$ORIGINAL_EXT" ]]; then
 
       #Generate supporting files, add undo and doover entries, notify Kodi.
       success_postprocessing
@@ -4953,12 +4959,12 @@ copy_mode_handling(){
       msg_completed_copy
       return 0
     #if file was not moved (has zero size), then fail
-    elif [[ ! -s "$MoveDir/$ShowFileName.$OriginalExt" ]]; then
-      rm -f "$MoveDir/$ShowFileName.$OriginalExt"
+    elif [[ ! -s "$MoveDir/$ShowFileName.$ORIGINAL_EXT" ]]; then
+      rm -f "$MoveDir/$ShowFileName.$ORIGINAL_EXT"
       msg_wrote_zero_length_file
       return 1
     fi
-  elif [[ ! -f "$MoveDir/$ShowFileName.$OriginalExt" ]]; then
+  elif [[ ! -f "$MoveDir/$ShowFileName.$ORIGINAL_EXT" ]]; then
     msg_permission_error_while_copying
     return 1
   fi
@@ -5001,7 +5007,7 @@ kodi_newshow(){
   debugcont "KODINotify: '$KODINotify'"
   debugcont "KODIUpdate: '$KODIUpdate'"
   debugcont "$( printf 'KODIIPs: %s' "${KODIIPs[*]/%/ ;}." )"
-  debugcont "ShowName: '$ShowName'"
+  debugcont "TITLE: '$TITLE'"
   local data=""
   local curlPOST=""
   #SEE: http://kodi.wiki/view/HOW-TO:Remotely_update_library and 'man curl'
@@ -5011,12 +5017,12 @@ kodi_newshow(){
   if [[ "$KODINotify" = 'Enabled' ]]; then
     data=\''{"jsonrpc": "2.0",
              "method": "GUI.ShowNotification",
-             "params": {"title": "myth2kodi added", "message": "'"$ShowName"'"},
+             "params": {"title": "myth2kodi added", "message": "'"$TITLE"'"},
              "id": "myth2kodi"}'\'
     for KODIIP in "${KODIIPs[@]}" ; do
       inform "Sending GUI.ShowNotification request to: $KODIIP"
       eval "$curlPOST $data http://$KODIIP/jsonrpc" > /dev/null 2>&1
-      debug "SENT: GUI.ShowNotification for '$ShowName'"
+      debug "SENT: GUI.ShowNotification for '$TITLE'"
     done
   else
     debug 'Kodi notification is disabled.'
@@ -5054,6 +5060,8 @@ generaterss(){
   #HTML line break code for nice formatting
   local lineBreak='&lt;br /&gt;'
 
+  local rss_title rss_subtitle rss_plot
+
   #test if rssFile directory is writeable
   if [[ ! -w "$RSS_DIRECTORY" ]]; then
     err "${FUNCNAME[0]}(): RSS generation failed: Directory not writeable ($RSS_DIRECTORY)"
@@ -5080,33 +5088,33 @@ generaterss(){
   #  The below assumed the first inet addr was the correct one, but that can lead to the loopback, using m2 and removing 127.0.0.1 avoids this problem,
   #  though it's probably better to just set myip in the configuration at top of file. #ifconfigpath="$(command -v ifconfig)"
   which /sbin/ifconfig >/dev/null && myip="$(/sbin/ifconfig | grep 'inet addr' -m2 | cut -d: -f2 | awk '{ print $1}' | grep -v "127.0.0.1")"
-  rssEpisodeSubtitle="${EpisodeSubtitle//&/&amp;}"
-  rssNewShowName="${TVDB_TITLE//&/&amp;}"
-  rssPlot="${Plot//&/&amp;}"
-  mythicalGUID="$(sed 's/(/%28/g' <<< "$CALLER@$myip$MoveDir/$ShowFileName.$OriginalExt" | sed 's/)/%29/g' | sed 's/ /%20/g')"
+  rss_subtitle="${SUBTITLE//&/&amp;}"
+  rss_title="${TITLE//&/&amp;}"
+  rss_plot="${Plot//&/&amp;}"
+  mythicalGUID="$(sed 's/(/%28/g' <<< "$CALLER@$myip$MoveDir/$ShowFileName.$ORIGINAL_EXT" | sed 's/)/%29/g' | sed 's/ /%20/g')"
 
   #write current recording information to first item.
   {
     echo -e "\t\t<item>"
-    echo -e "\t\t\t<title>$rssNewShowName $Sxx$Exx $rssEpisodeSubtitle</title>"
+    echo -e "\t\t\t<title>$rss_title $Sxx$Exx $rss_subtitle</title>"
   } >> "$RSS_DIRECTORY/$TEMPrssFile"
   if [ "$RECORDING_TYPE" = "EP" ]; then
     echo -e "\t\t\t<link>http://www.thetvdb.com/?tab=series&amp;id=$TVDB_SERIESID</link>" >> "$RSS_DIRECTORY/$TEMPrssFile"
   elif [ "$RECORDING_TYPE" = "MV" ]; then
-    echo -e "\t\t\t<link>http://www.imdb.com/search/title?release_date=,$MOVIE_RELEASE_YEAR&amp;title=$ShowName&amp;title_type=feature</link>" >> "$RSS_DIRECTORY/$TEMPrssFile"
+    echo -e "\t\t\t<link>http://www.imdb.com/search/title?release_date=,$MOVIE_RELEASE_YEAR&amp;title=$TITLE&amp;title_type=feature</link>" >> "$RSS_DIRECTORY/$TEMPrssFile"
   else
-    tvdotcomshowname="${ShowName// /%20}"
+    tvdotcomshowname="${TITLE// /%20}"
     echo -e "\t\t\t<link>http://www.tv.com/search.php?type=11&amp;stype=all&amp;tag=search%3Bfrontdoor&amp;qs=$tvdotcomshowname </link>" >> "$RSS_DIRECTORY/$TEMPrssFile"
   fi
   {
     echo -e "\t\t\t<guid>sftp://$mythicalGUID</guid>"
     echo -e "\t\t\t<pubDate>$(date -R -d "$MDB_STARTTIME")</pubDate>"
     echo -e "\t\t\t<description>"
-    echo -e "\t\t\t\tEpisode Title: $rssEpisodeSubtitle$lineBreak"
-    echo -e "\t\t\t\tProgram: $rssNewShowName$lineBreak"
+    echo -e "\t\t\t\tEpisode Title: $rss_subtitle$lineBreak"
+    echo -e "\t\t\t\tProgram: $rss_title$lineBreak"
     echo -e "\t\t\t\tSeason: $Sxx$lineBreak"
     echo -e "\t\t\t\tEpisode: $Exx$lineBreak$lineBreak"
-    echo -e "\t\t\t\tPlot: $rssPlot"
+    echo -e "\t\t\t\tPlot: $rss_plot"
     echo -e "\t\t\t</description>"
     echo -e "\t\t</item>"
   } >> "$RSS_DIRECTORY/$TEMPrssFile"
@@ -5550,8 +5558,8 @@ m2k_diagnostics(){
   printf '\n'
   inform "Testing file system permissions"
 
-  #Set originaldir name if none was supplied
-  [[ "$originaldirname" =~ ^('./'|'.'|'')$ ]] && originaldirname="$(pwd)"
+  #Use current directory as a place-holder for a recording's original dir.
+  ORIGINAL_DIRNAME="$(pwd)"
   if [[ "$TargetPathIsInputPath" = 'Enabled' ]]; then
     inform "TargetPathIsInputPath is selected. Testing with current folder"
     set_target_dir_as_input_path_dir
@@ -5900,35 +5908,24 @@ m2k_undo_rec(){
   fi
 }
 
-#Force an update of the myth2kodi database tables for a specified Series.
+#Update the myth2kodi database tables for a specified Series.
 get_series_info(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  inform "Searching for series: $INPUT_TITLE"
-  ShowName="$INPUT_TITLE" #TITLE="$INPUT_TITLE"
-  local tvdbshowname
-  tvdbshowname="$(sed 's/ /%20/g' <<< "$ShowName" | sed 's/&/%26/g')"
-  if ! download_series_identification; then return 1; fi
-  get_serieslinenumber_showname_fuzzy
-  #if we have a series line number then translate that into a series id
-  if [[ -n "$serieslinenumber" ]] && ((serieslinenumber > 0)); then
-    set_seriesid_newshowname_from_serieslinenumber
-    inform "FOUND: $TVDB_TITLE ID#:$TVDB_SERIESID"
-    make_m2k_database_dir
-  else
-    warn "${FUNCNAME[0]}(): TVDB_SERIESID could not be determined."
-    #If we're not in debug mode then cleanup show identification files.
-    [[ -f "$TMP_SID_FILE" ]] && (( LOGLEVEL < 3 )) && rm -f "$TMP_SID_FILE"
-    [[ -f "$TMP_SHN_FILE" ]] && (( LOGLEVEL < 3 )) && rm -f "$TMP_SHN_FILE"
-    return 1
-  fi
+  debugcont "TVDB_SERIESID='$TVDB_SERIESID'"
+  debugcont "TVDB_TITLE='$TVDB_TITLE'"
   if [[ -n "$TVDB_SERIESID" ]]; then
-    download_series_info
-    return "$?"
-  else
-    err "${FUNCNAME[0]}(): We had serieslinenumber: '$serieslinenumber' but could not get a TVDB_SERIESID."
-    return 1
+    make_m2k_database_dir
+    if ! check_m2k_database_up_to_date; then
+      if ! download_series_info; then
+        warn "Could not download up-to-date information from TheTVDB! Requiring doover."
+        RequiresDoover=1
+        return 1
+      fi
+    else
+      return 0
+    fi
   fi
-}
+} #get_series_info()
 
 #Delete: the recording file and any links to it; associated database entry and
 #        thumbnails; any undo, doover or created.tracking entries; and any
@@ -6295,26 +6292,9 @@ recreate_comskip(){
   fi
 }
 
-########################### END FUNCTION DEFINITIONS ###########################
+############################## MAIN FUNCTION #################################
 
-
-######################### BEGIN MAIN PROGRAM ###################################
-
-#TODO: The permission handling stuff seems a bit convoluted, I also think I've
-#  found at least a few bugs. It would seem far simpler to enforce a dedicated
-#  user to function as the "Librarian". That is add a Librarian= to the user
-#  settings at the start of this file. Probably with the default of
-#  Librarian="mythtv" for maximum compatibility with existing expectations of
-#  the code... Then simply refuse to run with a helpful error message if the
-#  variable $CALLER doesn't equal $Librarian. The requirement would just be
-#  that the user $Librarian be the one running MythTV and that they have write
-#  privileges to the MoveDirs that Kodi can see. Then most/all of the need for
-#  running commands with sudo and the need for undo to be run as root can be
-#  removed... Need to check expectations of mythdb_access and other auxiliary
-#  functions before making this change.
-
-#TODO: At some point this main needs to be cleaned up, at the moment it's a
-#  little bit too organic, final structure should be something like:
+#The main myth2kodi function...
 main(){
 
   #Initial setup: override defaults with myth2kodi.conf; initialise logging system.
@@ -6331,11 +6311,11 @@ main(){
   debug "No command flag set. Processing as recording."
 
   #No flags, so inputs should be for processing a recording.
-  INPUT_PATH="$M2KARG_1"
-  INPUT_TITLE="$M2KARG_2"
-  INPUT_SUBTITLE="$M2KARG_3"
-  INPUT_SEASON="$M2KARG_4"
-  INPUT_EPISODE="$M2KARG_5"
+  INPUT_PATH="$M2KARG1"
+  INPUT_TITLE="$M2KARG2"
+  INPUT_SUBTITLE="$M2KARG3"
+  INPUT_SEASON="$M2KARG4"
+  INPUT_EPISODE="$M2KARG5"
   #Make them read-only so we can't accidentally modify them.
   declare -gr INPUT_PATH INPUT_TITLE INPUT_SUBTITLE INPUT_SEASON INPUT_EPISODE
 
@@ -6375,6 +6355,7 @@ main(){
   elif [[ "$Database" = 'Enabled' ]]; then
     inform 'Temporarily disabling access to MythTV-DB -- for diagnostics.'
     Database='Disabled'
+    RECORDING_TYPE='EP'
   fi
   msg_merged_input_mythtvdb
 
@@ -6399,22 +6380,23 @@ main(){
   TITLE="$(sed -r 's/[^[:alnum:] &,.)(-]//g' <<< "$TITLE")"
   SUBTITLE="$(sed -r 's/[^[:alnum:] &,.)(-]//g' <<< "$SUBTITLE")"
 
-  #Format Show Title for Sending to www.TheTVDB.com and KODI
-  WEB_TITLE="$(sed 's/ /%20/g' <<< "$TITLE" | sed 's/&/%26/g')"
-
   #From time-to-time check created.tracking, dir.tracking, and remove orphans.
   periodic_maintenace
 
   #If it's an episode and ONLINE_LOOKUP is not disabled, check against TheTVDB.
   if [[ "$RECORDING_TYPE" = 'EP' ]]; then
     identify_series
-    get_series_info #TODO: this will need to be modified
+    get_series_info
     identify_episode
-  fi
 
-  #Try fall-back methods.
-  storagegroup_fallback
-  plot_match_fallback
+    #Try fall-back methods.
+    storagegroup_fallback #In-case it is actually a movie
+    plot_match_fallback  #If still unrecognised, try matching against plot.
+
+    #If we identified the episode then use TheTVDB naming.
+    [[ -n "$TVDB_TITLE" ]] && TITLE="$TVDB_TITLE"
+    [[ -n "$TVDB_SUBTITLE" ]] && SUBTITLE="$TVDB_SUBTITLE"
+  fi
 
   #Determine write permissions and free space for Move and Working directories.
   check_filesystem
@@ -6453,366 +6435,28 @@ main(){
     exit_job "$EXIT_JOB_TYPE"
   fi
   #THE END
-}
+
+  #Failed to capture the cause of an error...
+  NOTIFY_MSG="myth2kodi operation failed See $LOGFILE for more information"
+  exit_job 'GenericUnspecifiedError'
+
+  err "The exit_job function must be broken for you to see this message..."
+  exit 4
+} #main()
+
+################################################################################
+########################### END FUNCTION DEFINITIONS ###########################
+################################################################################
+
 
 ######################### BEGIN MAIN PROGRAM ###################################
-# #Capture args the script was called with.
-# M2KARG_COUNT="$#"
-# M2KARG1="$1" ; M2KARG2="$2" ; M2KARG3="$3" ; M2KARG4="$4" ; M2KARG5="$5" ; M2KARG6="$6"
 
-# #Make them read-only so we can't accidentally modify them.
-# declare -gr M2KARG_COUNT M2KARG1 M2KARG2 M2KARG3 M2KARG4 M2KARG5 M2KARG6
-
-# #Run the main function
-# main
-
-#Capture args the script was called with. #NOTE: $6 is a buffer for when we're called all 5 args but a command switch takes $1
+#Capture args the script was called with.
 M2KARG_COUNT="$#"
 M2KARG1="$1" ; M2KARG2="$2" ; M2KARG3="$3" ; M2KARG4="$4" ; M2KARG5="$5" ; M2KARG6="$6"
+
 #Make them read-only so we can't accidentally modify them.
-declare -r M2KARG_COUNT M2KARG1 M2KARG2 M2KARG3 M2KARG4 M2KARG5 M2KARG6
+declare -gr M2KARG_COUNT M2KARG1 M2KARG2 M2KARG3 M2KARG4 M2KARG5 M2KARG6
 
-#Do initial setup: override defaults with myth2kodi.conf; initialise logging system.
-m2k_init
-
-#TODO: Make proper arg parser...
-#TODO: Set the inputs as fixed (read-only) parameters, then use different variables consistently if we need to modify them...
-RECORDING_PATH="$1"
-INPUT_TITLE="$2"
-INPUT_SUBTITLE="$3"
-INPUT_SEASON="$4"
-INPUT_EPISODE="$5"
-#TODO: With full information all searching should be overridden/bypassed...
-#  Issue warnings for any conflicts. but don't override command line arguments...
-
-#Some basic tests to make sure we were called correctly
-if ! validate_args; then exit_job "$EXIT_JOB_TYPE"; fi
-
-#If the first arg is a command line switch, figure out what to do.
-if [[ "${M2KARG1:0:1}" = '-' ]]; then
-  parse_command_flags
-  exit_job "$EXIT_JOB_TYPE"
-fi
-debug "No command flag set. Processing as recording."
-
-#Initial log entry for the processing of recording, regardless of LOGLEVEL.
-{
-  printf '%s\n' "@@@@ PROCESSING RECORDING: $(date --rfc-3339=seconds) @@@@"
-  printf '%s\n' "$m2kVersion on $m2kPlatform"
-} >> "$LOGFILE"
-PROCESSING_RECORDING="True"
-inform "Processing: $RECORDING_PATH"
-
-  #Initialise key variables with command line args, necessary if Database='Disabled'.
-  TITLE="$INPUT_TITLE"
-  SUBTITLE="$INPUT_SUBTITLE"
-  SEASON="$INPUT_SEASON"
-  EPISODE="$INPUT_EPISODE"
-
-INPUT_PATH_BASENAME="$(basename "$RECORDING_PATH")" #"${RECORDING_PATH##*/}"
-
-#As long as we're not in diagnostics mode, gather info from MythTV-DB.
-if [[ "$M2K_DIAGNOSTICS_MODE" != "True" ]]; then
-  if ! process_mythtvdb; then exit_job "$EXIT_JOB_TYPE"; fi
-else
-  [[ "$Database" = 'Enabled' ]] && inform "Temporarily disabling access to MythTV-DB -- for diagnostics."
-  Database='Disabled'
-fi
-msg_merged_input_mythtvdb
-
-#Try to set Sxx and Exx using SEASON, EPISODE, or SeasonEpisode.
-[[ "$RECORDING_TYPE" = 'EP' ]] && set_sxxexx_season_episode_numbers
-
-#At this point we should have an initial show name, if not then abort.
-ShowName="$TITLE"
-if [[ -z "$ShowName" ]]; then
-  NOTIFY_MSG="Unable to set ShowName."
-  msg_usage
-  exit_job 'GenericUnspecifiedError'
-fi
-#Check for show Title translations relating to the show in question.
-show_translation
-
-#Do not process files in files categoricIgnore or titleIgnore, just exit
-if ! process_ignore_lists; then exit_job "$EXIT_JOB_TYPE"; fi
-
-#TODO: check whether the split on semicolon here and elsewhere should be in process_mythtvdb_schedulesdirect
-#split on semicolon, there will only be one episode looked up.
-EpisodeSubtitle="$(sed 's/;.*//' <<< "$SUBTITLE")"
-#Only keep Alpha-numeric characters, space, parenthesis and the four chars & , . -
-EpisodeSubtitle="$(sed -r 's/[^[:alnum:] &,.)(-]//g' <<< "$EpisodeSubtitle")"
-OriginalExt="${INPUT_PATH_BASENAME##*.}"
-originaldirname="$(dirname "$RECORDING_PATH")"
-#Set originaldir name if none was supplied
-[[ "$originaldirname" =~ ^('./'|'.'|'')$ ]] && originaldirname="$(pwd)"
-
-#TODO: Again with the split on semicolon???
-SafeShowName=$(sed 's/;.*//' <<< "$ShowName") #TODO: ??? ${ShowName%%;*}
-#Only keep Alpha-numeric characters, space, parenthesis and the four chars & , . -
-SafeShowName="$(sed -r 's/[^[:alnum:] &,.)(-]//g' <<< "$SafeShowName")"
-#Format Show name for Sending to www.TheTVDB.com and KODI
-tvdbshowname=$(sed 's/ /%20/g' <<< "$ShowName" | sed 's/&/%26/g')
-
-#TODO: consider moving this up to straight after parse_command_flags...
-#Reset move paths if TargetPathIsInputPath is active, creating dirs as needed.
-if [[ "$TargetPathIsInputPath" = 'Enabled' ]]; then
-  inform "TargetPathIsInputPath=Enabled. Resetting paths, creating directories."
-  set_target_dir_as_input_path_dir
-fi
-
-#####MAINTENANCE#####
-
-#From time-to-time check created.tracking, dir.tracking, and remove orphans.
-periodic_maintenace
-
-#####SEARCH FOR SHOW AND BUILD INFORMATION#####
-
-#Process as though it's an episode of a tv series.
-if [[ "$RECORDING_TYPE" != "SH" && "$RECORDING_TYPE" != "MV" ]]; then
-  #Query TheTVDB on show title, then return a list of Zap2itID, ShowName and seriesid.
-  if download_series_identification; then
-    #Start by trying to match on Zap2itID
-    ConfidenceReasoning="$ConfidenceReasoning Attempted Match On Zap2itID:"
-    [[ -n "$Zap2itSeriesID" ]] && { get_serieslinenumber_zap2itid ; zap2itid_exitstatus="$?" ; }
-    (( LOGLEVEL < 3 )) && rm -f "$TMP_ZAP2IT_FILE"
-    if [[ "$zap2itid_exitstatus" = 0 ]]; then
-      ((++SeriesConfidenceRating))
-      ConfidenceReasoning="$ConfidenceReasoning Successful;"
-      inform "MATCH FOUND BASED ON Zap2itID: $TVDB_TITLE"
-    else
-      ((--SeriesConfidenceRating))
-      ConfidenceReasoning="$ConfidenceReasoning Failed;"
-    fi
-
-    #If Zap2itSeriesID match failed to find the SeriesLineNumber
-    if (( SeriesConfidenceRating <= 0 )); then
-      ConfidenceReasoning="$ConfidenceReasoning Attempted match on Standard Logic:"
-      if [[ -n "$ShowName" ]] && get_serieslinenumber_showname; then
-        ConfidenceReasoning="$ConfidenceReasoning Successful;"
-      else
-        warn "FAILED to get series line number from table with standard logic, requiring doover."
-        RequiresDoover=1
-        ((--SeriesConfidenceRating))
-        ConfidenceReasoning="$ConfidenceReasoning Failed; Attempted Title match on Fuzzy Logic:"
-        if [[ -n "$ShowName" ]] && get_serieslinenumber_showname_fuzzy; then
-          ConfidenceReasoning="$ConfidenceReasoning Successful;"
-        else
-          ((--SeriesConfidenceRating))
-          ConfidenceReasoning="$ConfidenceReasoning Failed; Information not obtainable;"
-        fi
-      fi
-    fi
-  else
-    SeriesConfidenceRating=-3
-    ConfidenceReasoning="$ConfidenceReasoning Download series identification: Failed;"
-  fi
-
-  #if we have a series line number then translate that into a series id
-  if [[ -n "$serieslinenumber" ]] && ((serieslinenumber > 0)); then
-    set_seriesid_newshowname_from_serieslinenumber
-    inform "FOUND:$TVDB_TITLE ID#:$TVDB_SERIESID WITH CONFIDENCE:$SeriesConfidenceRating"
-  else
-    warn "TVDB_SERIESID could not be determined."
-    #If we're not in debug mode then cleanup show identification files.
-    [[ -f "$TMP_SID_FILE" ]] && (( LOGLEVEL < 3 )) && rm -f "$TMP_SID_FILE"
-    [[ -f "$TMP_SHN_FILE" ]] && (( LOGLEVEL < 3 )) && rm -f "$TMP_SHN_FILE"
-  fi
-fi
-
-#If it's not a recognized episode, then we need to assign the name myth2kodi will use.
-[[ -z "$ShowName" ]] && ShowName="$TITLE"
-[[ -z "$TVDB_TITLE" ]] && TVDB_TITLE="$ShowName"
-
-if [[ -n "$TVDB_SERIESID" ]]; then
-  make_m2k_database_dir
-
-  #If database is out of date, download new database
-  #TODO: Without internet connection, this fails to run properly even when local
-  #  information should be sufficient to properly name episode. Add a flag for
-  #  Series that have finished, so we don't keep updating for TV Series that
-  #  that finished years ago -- see the Status field for the series in the
-  #  ShowName.xml in the $m2kdir dir. Also enable using existing data if update fails.
-  if ! check_m2k_database_up_to_date; then
-    if ! download_series_info; then
-      warn "COULD NOT DOWNLOAD UP-TO-DATE INFORMATION FROM TheTVDB! requiring doover."
-      RequiresDoover=1
-    fi
-  fi
-#if series id is not obtained send failure message
-elif [[ -z "$TVDB_SERIESID" && "$RECORDING_TYPE" != "SH" && "$RECORDING_TYPE" != "MV" ]]; then
-  ConfidenceReasoning="$ConfidenceReasoning Failed; "
-  warn "SERIES ID WAS NOT FOUND. TheTVDB MAY BE DOWN. IF NOT TRY USING A showTranslations FILE."
-  printf '%s\n' "$INPUT_TITLE" >> "$UnrecognizedSeriesFile"
-  if [[ "$Database" = 'Enabled' ]]; then
-    warncont "RECSTART:$MDB_STARTTIME-"
-    warncont "Air Date:$MDB_AIRDATE-"
-    warncont "Original Air Date:$ORIGINALAIRDATE-"
-    warncont "Channel ID:$MDB_CHANID-"
-    warncont "Show Category:$CATEGORY-"
-    [[ -z "${Exx:2:1}" ]] && Exx=''
-  fi
-fi
-
-#TODO: If we haven't identified the Series, try NLP match $Plot against possible plots to guess a Series.
-
-#####PROCESS EPISODE INFORMATION#####
-#If we have a TVDB_SERIESID but don't already have Season and Episode information
-identify_episode
-
-#If it's not tagged as a Movie but lacking SxxExx and then as a fallback check storagegroup in case it's a Movie we missed
-storagegroup_fallback
-
-#TODO: Need to add checks for existence of myth2kodi database files for $TVDB_TITLE and/or check that we've identified the series before bothering with the following
-
-#TODO: Assuming we have identified the Series, but have no Subtitle, try NLP match $Plot against possible plots to guess a subtitle
-
-#TODO: If this works reliably, then consider moving it up to directly below fuzzy match on subtitle
-#As a last resort, if we still think it's an episode but have no episode info, try fuzzy match on plot
-plot_match_fallback
-
-
-#######SANITY CHECKS#####
-
-if [ "$RECORDING_TYPE" = "EP" ] && [[ "$Exx" = "E" || -z "$Exx" ]]; then
-  ConfidenceReasoning="$ConfidenceReasoning Guide Data did not match a specific Episode;"
-  warn "Identified recording as episode but failed to determine episode number, requiring doover."
-  RequiresDoover=1
-  #TODO come up with a way to have a variable like DataWasNotObtainable to check and make it a SH later
-
-#If it's a movie or a showing, give it a name.
-#TODO: If it's a movie, try using imdb or similar with available $Plot to determine if the Title is correct...
-elif [ "$RECORDING_TYPE" = "MV" ] || [ "$RECORDING_TYPE" = "SH" ] ; then
-  TVDB_TITLE="$TITLE"
-  ConfidenceReasoning="$ConfidenceReasoning Guide Data reported this is a $ProgramIDType;"
-fi
-
-#if the confidence was low, then show requires a doover
-((ConfidenceRating <= -4)) && RequiresDoover=1 && warn "ConfidenceRating low. Requiring doover."
-
-#TODO: review this, is it still necessary now that we abort when target already exists???
-#If file is a link then activate link mode so the original link is not screwed up.
-if [[ -L "$RECORDING_PATH" && "$PROCESS_RECORDING_MODE" != 'COPY' ]]; then
-  warn "FILE IS A LINK FORCING PROCESS_RECORDING_MODE='LINK'."
-  PROCESS_RECORDING_MODE='LINK'
-  SYMLINK='Enabled'
-fi
-
-#If user wants database data deleted, then we will do that if the match was a good confidence level
-if [[ "$PROCESS_RECORDING_MODE" = 'MOVE' && "$SYMLINK" = 'Disabled' ]]; then
-  ((ConfidenceRating > -4)) && RequiresDoover=0
-fi
-
-#TODO: Consider moving this up to straight after the parse_command_flags block for early abort.
-#Determine write permissions and free space for Move and Working directories.
-check_filesystem
-filesystem_state="$?"
-
-msg_operation_summary
-
-######PRE-NAMING CHECKS#####
-#if no episode data and it's not a test
-if [[ "$HasSxxExx" != '1' && "$RECORDING_PATH" != "$m2kdir/6666_20420101084242.tst" ]]; then
-  if [[ "$RECORDING_TYPE" = "EP" ]]; then
-    NOTIFY_MSG="Episode could not be matched with supplied information."
-    warn "$NOTIFY_MSG"
-    exit_job 'NameCouldNotBeAssigned'
-  elif [[ "$RECORDING_TYPE" = "MV" ]]; then
-    #Ensures the doover value was not set for the movie and use safe show name
-    RequiresDoover=0
-    TVDB_TITLE="$SafeShowName"
-  #If user has determined that they do not want unrecognisable tv shows in their library
-  elif [[ "$ShowStopper" = 'Enabled' ]]; then
-    msg_unable_to_identify_recording
-    exit_job 'NameCouldNotBeAssigned'
-  elif [[ "$RECORDING_TYPE" = "SH" ]]; then
-    #Ensures the doover value was not set for the show and use safe show name
-    TVDB_TITLE="$SafeShowName"
-    msg_show_warning
-  else
-    #change the show to a Generic type
-    TVDB_TITLE="$SafeShowName"
-    msg_epishow
-  fi
-fi
-
-#TODO: Consider moving this up to directly after set_target_dir_as_input_path_dir,
-#      and abort early if there will be nowhere to write to.
-#      Though may need to recall it as part of StorageGroupFallback
-#Set MoveDir, using alternates if necessary, falling back to FailSafeState, and
-#finally exit if there is nowhere to write to.
-if ! set_move_location; then exit_job "$EXIT_JOB_TYPE"; fi
-
-#####OUTPUT FILE NAME FORMATTING#####
-#Format Shows
-#Only keep Alpha-numeric characters, space, parenthesis and the four chars & , . -
-EpisodeSubtitle="$(sed -r 's/[^[:alnum:] &,.)(-]//g' <<< "$EpisodeSubtitle")"
-TVDB_TITLE="$(sed -r 's/[^[:alnum:] &,.)(-]//g' <<< "$TVDB_TITLE")"
-ShowName="$(sed -r 's/[^[:alnum:] &,.)(-]//g' <<< "$ShowName")"
-
-#Format Episodes showname=show name Sxx=season number Exx=episode number EpisodeSubtitle=episode name
-if [[ -z "$NamingConvention" ]]; then
-  set_show_file_name
-else
-  [[ -z "$TVDB_TITLE" ]] && TVDB_TITLE="$ShowName"
-  set_show_file_name_categoric
-fi
-
-#### MAKE THE DIRECTORY WE'LL MOVE THE RECORDING TO ####
-make_show_dir
-
-#### FAILSAFE HANDLING ####
-#If failsafe state is set then try to create link in FailSafeMode
-if [[ "$FailSafeState" = "1" ]]; then
-  failsafe
-  exit_job "$EXIT_JOB_TYPE"
-fi
-
-#### ANTI-CLOBBER ####
-if [[ -f "$MoveDir/$ShowFileName.$OriginalExt" ]]; then
-  if [[ "$FORCE_PROCESS" = 'Enabled' ]]; then
-    increment_target_file_name
-  else
-    target_file_exists
-    exit_job "$EXIT_JOB_TYPE"
-  fi
-fi
-
-#If this is a test file, then exit now.
-[[ "$RECORDING_PATH" = "$m2kdir/6666_20420101084242.tst" ]] && testfile_exit
-
-#Check that we have the necessary permissions for RECORDING_PATH.
-if [[ "$PROCESS_RECORDING_MODE" =~ ^('LINK'|'COPY')$ ]]; then
-  check_path_permission "$RECORDING_PATH" 'r'
-else
-  check_path_permission "$RECORDING_PATH" 'rw'
-fi
-
-#If the show is generic programming, this is the best myth2kodi can do.
-[[ "$RECORDING_TYPE" = 'SH' ]] && msg_show_warning
-
-#Process the recording file.
-if [[ "$PROCESS_RECORDING_MODE" = 'MOVE' ]]; then
-  #Move and rename the recording file.
-  move_mode_handling
-  exit_job "$EXIT_JOB_TYPE"
-
-elif [[ "$PROCESS_RECORDING_MODE" = 'LINK' ]]; then
-  #Create a symbolic-link to the recording file.
-  link_mode_handling
-  exit_job "$EXIT_JOB_TYPE"
-
-elif [[ "$PROCESS_RECORDING_MODE" = 'COPY' ]]; then
-  #Copy and rename the recording file.
-  copy_mode_handling
-  exit_job "$EXIT_JOB_TYPE"
-fi
-
-#if no match is found then send error messages
-[[ -z "$Exx" ]] && msg_generic_unspecified_error
-
-#send notification if enabled
-NOTIFY_MSG="myth2kodi operation failed See $LOGFILE for more information"
-exit_job 'GenericUnspecifiedError'
-
-err "The exit_job function must be broken for you to see this message..."
-exit 4
+#Run the main function
+main

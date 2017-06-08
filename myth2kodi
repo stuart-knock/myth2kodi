@@ -831,10 +831,10 @@ parse_command_flags(){
         return 1
       fi
       #Force processing as a movie.
-      export ShowCategory="Movie"
+      export MDB_CATEGORY="Movie"
       myth2kodi "$M2KARG2" "$M2KARG3"
       declare -i m2kreturnstatus="$?"
-      unset ShowCategory
+      unset MDB_CATEGORY
       return $m2kreturnstatus
     ;;
     --diagnostics)
@@ -1169,7 +1169,7 @@ pre_process_check(){
       Database='Disabled'
       debug "Setting  TRACKING='Disabled'"
       TRACKING='Disabled'
-    elif [[ "$ShowCategory" = 'Movie' ]]; then
+    elif [[ "$MDB_CATEGORY" = 'Movie' ]]; then
       inform "But we seem to have enough info from the command line to process it as a movie."
       [[ "$Database" = 'Enabled' ]] && inform "Disabling access to MythTV-DB -- trying to process non-MythTV file."
       RECORDING_TYPE='MV'
@@ -1483,7 +1483,7 @@ find_file_link_pairs(){
       RECORDING_LINK_OWNER='myth2kodi'
       check_dirs=("$MoveDir" "$PrimaryMovieDir" "$PrimaryShowDir" "$AlternateMoveDir" "$AlternateMovieDir" "$AlternateShowDir")
     else #elif [[ "$Database" = 'Enabled' ]]; then
-      #file_path is a moved file name, check if there is a link to file_path from a StorageGroup Directory
+      #file_path is a moved file name, check if there is a link to file_path from a MDB_STORAGEGROUP Directory
       RECORDING_FILE_OWNER='myth2kodi'
       RECORDING_LINK_OWNER='MythTV'
       if ! get_mythtvdb_storagegroups; then return 1; fi
@@ -1926,22 +1926,22 @@ get_mythtvdb_info_mysql(){
   # declare -gr MDB_XMLTVGRABBER
 
 
-  ChanID="$(         dbselect chanid          | sed -n "2p")"
-  ProgramID="$(      dbselect programid       | sed -n "2p")"
-  LocalSeriesID="$(  dbselect seriesid        | sed -n "2p")"
-  Plot="$(           dbselect description     | sed -n "2p")"
-  Stars="$(          dbselect stars           | sed -n "2p")"
-  ShowStartTime="$(  dbselect starttime       | sed -n "2p")"
-  [[ -z "$ShowCategory" ]] && ShowCategory="$(   dbselect category    | sed -n "2p")"
-  StorageGroup="$(   dbselect storagegroup    | sed -n "2p")"
-  OriginalAirDate="$(dbselect originalairdate | sed -n "2p")"
-  [[ "$OriginalAirDate" = "0000-00-00" ]] && OriginalAirDate=''
+  MDB_CHANID="$(         dbselect chanid          | sed -n "2p")"
+  MDB_PROGRAMID="$(      dbselect programid       | sed -n "2p")"
+  MDB_SERIESID="$(  dbselect seriesid        | sed -n "2p")"
+  MDB_DESCRIPTION="$(           dbselect description     | sed -n "2p")"
+  MDB_STARS="$(          dbselect stars           | sed -n "2p")"
+  MDB_STARTTIME="$(  dbselect starttime       | sed -n "2p")"
+  [[ -z "$MDB_CATEGORY" ]] && MDB_CATEGORY="$(   dbselect category    | sed -n "2p")"
+  MDB_STORAGEGROUP="$(   dbselect storagegroup    | sed -n "2p")"
+  MDB_ORIGINALAIRDATE="$(dbselect originalairdate | sed -n "2p")"
+  [[ "$MDB_ORIGINALAIRDATE" = "0000-00-00" ]] && MDB_ORIGINALAIRDATE=''
 
   #TODO: Clean up all the following mysql commands, like we've done for the above.
   #get DataType
-  XMLTVGrabber=$(mysql -u"$MySQLuser" -p"$MySQLpass" -e "USE $MySQLMythDb ; SELECT xmltvgrabber FROM videosource ; " | sed 's/xmltvgrabber//g' | tr -d '/' | sed -n "2p" | tr -d ' ')
-  #get year for movies
-  MovieAirDate=$(mysql -u"$MySQLuser" -p"$MySQLpass" -e "USE $MySQLMythDb ; SELECT airdate FROM recordedprogram WHERE programid LIKE '$ProgramID' AND chanid LIKE '$ChanID' ; " | tr -d '/' | sed 's/airdate//g' | sed -n "2p" | tr -d ' ')
+  MDB_XMLTVGRABBER=$(mysql -u"$MySQLuser" -p"$MySQLpass" -e "USE $MySQLMythDb ; SELECT xmltvgrabber FROM videosource ; " | sed 's/xmltvgrabber//g' | tr -d '/' | sed -n "2p" | tr -d ' ')
+  #get year for movies #TODO: Air-date != Release-year, see MOVIE_RELEASE_YEAR
+  MDB_AIRDATE=$(mysql -u"$MySQLuser" -p"$MySQLpass" -e "USE $MySQLMythDb ; SELECT airdate FROM recordedprogram WHERE programid LIKE '$MDB_PROGRAMID' AND chanid LIKE '$MDB_CHANID' ; " | tr -d '/' | sed 's/airdate//g' | sed -n "2p" | tr -d ' ')
 
   #####COMSKIP DATA#####
   #Set up counter, remove old markup data and generate new markup file from markupstart and stop
@@ -1962,10 +1962,10 @@ get_mythtvdb_info_mysql(){
 
     #Remove old and generate a comskip Start list
     echo "" > "$MARKUPSTART_TMP" #TODO: Compare this against what's returned by the python bindings version.
-    mysql -u"$MySQLuser" -p"$MySQLpass" -e "USE $MySQLMythDb ; SELECT mark FROM recordedmarkup WHERE starttime LIKE '$ShowStartTime' AND chanid LIKE '$ChanID' AND type LIKE 4 ; " | sed 's/mark//g' | tr -d ' ' >> "$MARKUPSTART_TMP"
+    mysql -u"$MySQLuser" -p"$MySQLpass" -e "USE $MySQLMythDb ; SELECT mark FROM recordedmarkup WHERE starttime LIKE '$MDB_STARTTIME' AND chanid LIKE '$MDB_CHANID' AND type LIKE 4 ; " | sed 's/mark//g' | tr -d ' ' >> "$MARKUPSTART_TMP"
     #Remove old and generate comskip Stop list
     echo "" > "$MARKUPSTOP_TMP"
-    mysql -u"$MySQLuser" -p"$MySQLpass" -e "USE $MySQLMythDb ; SELECT mark FROM recordedmarkup WHERE starttime LIKE '$ShowStartTime' AND chanid LIKE '$ChanID' AND type LIKE 5 ; " | sed 's/mark//g' | tr -d ' ' >> "$MARKUPSTOP_TMP"
+    mysql -u"$MySQLuser" -p"$MySQLpass" -e "USE $MySQLMythDb ; SELECT mark FROM recordedmarkup WHERE starttime LIKE '$MDB_STARTTIME' AND chanid LIKE '$MDB_CHANID' AND type LIKE 5 ; " | sed 's/mark//g' | tr -d ' ' >> "$MARKUPSTOP_TMP"
     #Combine commercial data into a single comskip file and remove the initial files
     generate_comskip
   fi
@@ -2096,19 +2096,19 @@ get_mythtvdb_info_pythonbindings(){
   [[ -z "$InputSeasonNum" ]]  && InputSeasonNum="$season"   && debugcont "InputSeasonNum='$season'"
   [[ -z "$InputEpisodeNum" ]] && InputEpisodeNum="$episode" && debugcont "InputEpisodeNum='$episode'"
   #Support for the --movie flag
-  [[ -z "$ShowCategory" ]]    && ShowCategory="$category"   && debugcont "ShowCategory='$category'"
+  [[ -z "$MDB_CATEGORY" ]]    && MDB_CATEGORY="$category"   && debugcont "MDB_CATEGORY='$category'"
 
   #redefine database var names into myth2kodi var names
-  MovieAirDate="$airdate"            && debugcont "MovieAirDate='$airdate'"
-  OriginalAirDate="$originalairdate" && debugcont "OriginalAirDate='$originalairdate'"
-  StorageGroup="$storagegroup"       && debugcont "StorageGroup='$storagegroup'"
-  Stars="$stars"                     && debugcont "Stars='$stars'"
-  Plot="$description"                && debugcont "Plot='$description'"
-  LocalSeriesID="$seriesid"          && debugcont "LocalSeriesID='$seriesid'"
-  ProgramID="$programid"             && debugcont "ProgramID='$programid'"
-  ChanID="$chanid"                   && debugcont "ChanID='$chanid'"
-  ShowStartTime="$starttime"         && debugcont "ShowStartTime='$starttime'"
-  XMLTVGrabber="$xmltvgrabber"       && debugcont "XMLTVGrabber='$xmltvgrabber'"
+  MDB_AIRDATE="$airdate"            && debugcont "MDB_AIRDATE='$airdate'"
+  MDB_ORIGINALAIRDATE="$originalairdate" && debugcont "MDB_ORIGINALAIRDATE='$originalairdate'"
+  MDB_STORAGEGROUP="$storagegroup"       && debugcont "MDB_STORAGEGROUP='$storagegroup'"
+  MDB_STARS="$stars"                     && debugcont "MDB_STARS='$stars'"
+  MDB_DESCRIPTION="$description"                && debugcont "MDB_DESCRIPTION='$description'"
+  MDB_SERIESID="$seriesid"          && debugcont "MDB_SERIESID='$seriesid'"
+  MDB_PROGRAMID="$programid"             && debugcont "MDB_PROGRAMID='$programid'"
+  MDB_CHANID="$chanid"                   && debugcont "MDB_CHANID='$chanid'"
+  MDB_STARTTIME="$starttime"         && debugcont "MDB_STARTTIME='$starttime'"
+  MDB_XMLTVGRABBER="$xmltvgrabber"       && debugcont "MDB_XMLTVGRABBER='$xmltvgrabber'"
 
   #If we're not in debug mode then clean-up the file written by mythdb_access
   if (( LOGLEVEL < 3 )) ; then
@@ -2278,9 +2278,8 @@ process_mythtvdb(){
 #Gather information from the MythTV database common to guide-data types.
 process_mythtvdb_common(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  #Check for database permissions: assumes ChanID set if DB access successful.
-  [[ -z "$ChanID" ]] && err "${FUNCNAME[0]}(): No MythTV-DB information." #TODO: Probably should return 1 here.
-  # [[ -z "$MDB_CHANID" ]] && err "${FUNCNAME[0]}(): No MythTV-DB information." #TODO: Probably should return 1 here.
+  #Check for database permissions: assumes MDB_CHANID set if DB access successful.
+  [[ -z "$MDB_CHANID" ]] && err "${FUNCNAME[0]}(): No MythTV-DB information." #TODO: Probably should return 1 here.
 
   # #Command-line arguments take precedence over MythTV-DB (guide-data).
   # [[ -z "$INPUT_TITLE" ]]    && TITLE="$MDB_TITLE"
@@ -2289,20 +2288,15 @@ process_mythtvdb_common(){
   # [[ -z "$INPUT_EPISODE" ]]  && EPISODE="$MDB_EPISODE"
   # [[ -z "$CATEGORY" ]]       && CATEGORY="$MDB_CATEGORY" #Support the --movie flag.
 
-  # PLOT="$MDB_DESCRIPTION"
-
-  #Disqualify invalid movie airdates
-  [[ -n "$MovieAirDate" ]] && (( MovieAirDate < 1900 )) && MovieAirDate=''
-  # AIRDATE="$MDB_AIRDATE"
-  # [[ -n "$AIRDATE" ]] && (( AIRDATE < 1900 )) && AIRDATE=''
+  Plot="$MDB_DESCRIPTION"
 
   #Some guide-data sources set 'none' instead of '' to mean no-information.
-  [[ "${OriginalAirDate,,}" = 'none' ]] && OriginalAirDate=''
+  [[ "${MDB_ORIGINALAIRDATE,,}" = 'none' ]] && MDB_ORIGINALAIRDATE=''
   # ORIGINALAIRDATE="$MDB_ORIGINALAIRDATE"
   # [[ "${ORIGINALAIRDATE,,}" = 'none' ]] && ORIGINALAIRDATE=''
 
-  #Get rating from Stars
-  rating="$(printf '%0.f' "$Stars")"
+  #Get rating from MDB_STARS
+  rating="$(printf '%0.f' "$MDB_STARS")"
   if [[ -n "$rating" ]]; then ((rating=rating*2)); else rating=1; fi
   # RATING="$(printf '%0.f' "$MDB_STARS")"
   # if [[ -n "$RATING" ]]; then ((RATING=RATING*2)); else RATING=1; fi
@@ -2317,8 +2311,8 @@ process_mythtvdb_common(){
   # [[ "$EPISODE" = '0' ]] && { SEASON=''; EPISODE=''; }
 
   #Predefined naming conventions
-  if [[ "$ShowCategory" =~ ^('Sports event'|'News'|'Newsmagazine')$ ]]; then
-    NamingConvention="$ShowCategory"
+  if [[ "$MDB_CATEGORY" =~ ^('Sports event'|'News'|'Newsmagazine')$ ]]; then
+    NamingConvention="$MDB_CATEGORY"
   fi
   # if [[ "$CATEGORY" =~ ^('Sports event'|'News'|'Newsmagazine')$ ]]; then
   #   NamingConvention="$CATEGORY"
@@ -2328,7 +2322,7 @@ process_mythtvdb_common(){
   [[ "$NamingConvention" = 'News' ]] && UseMethod2=1
 
   #strip needless chars from date
-  datehour="$(printf '%s' "$ShowStartTime" | tr ':' '.' | tr ' ' '@')" #TODO: Consider getting rid of the @ from this, as it's used in file naming... Maybe _ instead
+  datehour="$(printf '%s' "$MDB_STARTTIME" | tr ':' '.' | tr ' ' '@')" #TODO: Consider getting rid of the @ from this, as it's used in file naming... Maybe _ instead
   # STARTTIME="$(printf '%s' "$MDB_STARTTIME" | tr ':' '.' | tr ' ' '@')" #TODO: Consider getting rid of the @ from this, as it's used in file naming... Maybe _ instead
 
   return 0
@@ -2342,19 +2336,21 @@ process_mythtvdb_schedulesdirect(){
   #Gather information from the MythTV database common to guide-data types.
   process_mythtvdb_common
 
-  #Create MV/EP/SH Identification Type from ProgramID
-  RECORDING_TYPE="${ProgramID:0:2}"
+  #Create MV/EP/SH Identification Type from MDB_PROGRAMID
+  RECORDING_TYPE="${MDB_PROGRAMID:0:2}"
+
+  #TODO: Does SchedulesDirect contain a Movie's release year in the MDB_AIRDATE field
+  # MOVIE_RELEASE_YEAR="$MDB_AIRDATE"
+  # [[ -n "$MOVIE_RELEASE_YEAR" ]] && (( MOVIE_RELEASE_YEAR < 1900 )) && MOVIE_RELEASE_YEAR=''
 
   #Extrapolate data from RECORDING_TYPE
   set_ProgramIDType
 
   #account for .0123's in EITonly data type
-  ProgramID="$(cut -f1 -d"." <<< "$ProgramID")"
-  #Zap2itSeriesID="$(cut -f1 -d"." <<< "$MDB_PROGRAMID")"
+  Zap2itSeriesID="$(cut -f1 -d"." <<< "$MDB_PROGRAMID")"
 
   #Get barebones zap2it series id.
-  Zap2itSeriesID=$(echo "$ProgramID" | tr -d MVSHEP | sed 's/0*//' | sed 's/.\{4\}$//')
-  #Zap2itSeriesID=$(echo "$Zap2itSeriesID" | tr -d MVSHEP | sed 's/0*//' | sed 's/.\{4\}$//')
+  Zap2itSeriesID=$(echo "$Zap2itSeriesID" | tr -d MVSHEP | sed 's/0*//' | sed 's/.\{4\}$//')
 
   return 0
 }
@@ -2368,20 +2364,16 @@ process_mythtvdb_nolookup(){
   #Gather information from the MythTV database common to guide-data types.
   process_mythtvdb_common
 
-  #Create MV/EP/SH Identification Type from ProgramID
-  RECORDING_TYPE="${ProgramID:0:2}"
+  #Create MV/EP/SH Identification Type from MDB_PROGRAMID
+  RECORDING_TYPE="${MDB_PROGRAMID:0:2}"
 
   #Spoof show as episode to avoid RECORDING_TYPE='EP'
   [[ "$RECORDING_TYPE" = 'EP' ]] && RECORDING_TYPE='SH'
   #Extrapolate data from RECORDING_TYPE
   set_ProgramIDType
 
-  #account for .0123's in EITonly data type
-  ProgramID=$(cut -f1 -d"." <<< "$ProgramID")
-
   #This probably isn't necessary, but adding it for the time-being to match previous state. #SAK
-  Zap2itSeriesID="$LocalSeriesID"
-  #Zap2itSeriesID="$MDB_SERIESID"
+  Zap2itSeriesID="$MDB_SERIESID"
 
   return 0
 }
@@ -2412,10 +2404,10 @@ process_mythtvdb_sydfta(){
     debug "Full Plot match will almost certainly fail, though chunked match should still work."
   fi
 
-  #The ProgramID field from FTA EPG data in Sydney?Australia? doesn't specify MV/EP/SH,
+  #The MDB_PROGRAMID field from FTA EPG data in Sydney?Australia? doesn't specify MV/EP/SH,
   #the Movie specification is "almost-always" found in the Category field of
   #the MythTV database. So, we'll use that.
-  if [[ "$ShowCategory" = 'Movie' ]]; then
+  if [[ "$MDB_CATEGORY" = 'Movie' ]]; then
     inform "Guide data for '$InputTitle' indicates a Movie."
     RECORDING_TYPE='MV'
     if [[ -n "$InputSubtitle" ]]; then #[[ -z "$INPUT_SUBTITLE" && -n "$MDB_SUBTITLE" ]]
@@ -2474,16 +2466,16 @@ process_mythtvdb_sydfta(){
   #Extrapolate data from RECORDING_TYPE
   set_ProgramIDType
 
-  #FTA stations providing a ProgramID use CRID: https://en.wikipedia.org/wiki/Crid
+  #FTA stations providing a MDB_PROGRAMID use CRID: https://en.wikipedia.org/wiki/Crid
   #Remove the leading CRID://
-  ProgramID="$(sed 's#crid://##I' <<< "$ProgramID")"
+  SydFTA_ProgramID="$(sed 's#crid://##I' <<< "$MDB_PROGRAMID")"
   #Extract the Authority, ie the station broadcasting the show
-  ProgramAuthority="$(cut -f1 -d"/" <<< "$ProgramID")"
+  ProgramAuthority="$(cut -f1 -d"/" <<< "$SydFTA_ProgramID")"
   #Extract the show specific information, removing the leading /
-  ProgramData="$(sed "s#$ProgramAuthority/##" <<< "$ProgramID")"
-  #Populate the ProgramID variable with the ProgramData field of CRID
-  ProgramID="$ProgramData"
-  #TODO: figure out if anything useful can actually be done with this ProgramID.
+  ProgramData="$(sed "s#$ProgramAuthority/##" <<< "$SydFTA_ProgramID")"
+  #Populate the SydFTA_ProgramID variable with the ProgramData field of CRID
+  SydFTA_ProgramID="$ProgramData"
+  #TODO: figure out if anything useful can actually be done with this SydFTA_ProgramID.
 
   return 0
 }
@@ -2892,7 +2884,7 @@ download_series_info(){
           Ename="${actualEname/;*/}" #TODO: This strips everything following the first ";" (semi-colon). Is that intentional because there are sometimes multiple EpisodeNames separated by semi-colons???
           #Only keep Alpha-numeric characters, space, parenthesis and the four chars & , . -
           Ename="$(sed -r 's/[^[:alnum:] &,.)(-]//g' <<< "$Ename")"
-        #Get OriginalAirDate
+        #Get First Aired Date
         elif [[ "$line" == "<FirstAired>"* ]]; then
           line="${line/"</FirstAired>"/}"
           line="${line/<FirstAired>/}"
@@ -3062,7 +3054,7 @@ identify_episode(){
     inform "Processing SeriesID:$SeriesID"
     #####GET ABSOLUTE EPISODE NUMBER#####
     if [[ "$GuideDataType" = "SchedulesDirect" ]]; then
-      ConfidenceReasoning="$ConfidenceReasoning Attempted match on OriginalAirDate:"
+      ConfidenceReasoning="$ConfidenceReasoning Attempted match on MDB_ORIGINALAIRDATE:"
       set_absolute_episode_number_by_airdate
       AirdateExitStatus=$?
       [[ "$AirdateExitStatus" = "1" && -n "$EpisodeSubtitle" ]] && resolve_multiple_matches_airdate
@@ -3105,7 +3097,7 @@ identify_episode(){
       #####VERIFICATION OF CONFIDENCE RATING#####
       #backup AbsoluteEpisodeNumber for tests
       AbsoluteEpisodeNumberBackup="$AbsoluteEpisodeNumber"
-      if [[ -n "$InputSubtitle" && -n "$OriginalAirDate" ]]; then
+      if [[ -n "$InputSubtitle" && -n "$MDB_ORIGINALAIRDATE" ]]; then
         #Verify with Standard logic
         set_absolute_episode_number_by_ename
         if (( AbsoluteEpisodeNumber != AbsoluteEpisodeNumberBackup )); then
@@ -3114,7 +3106,7 @@ identify_episode(){
           ConfidenceReasoning="$ConfidenceReasoning Standard Logic came up with Episode Number $AbsoluteEpisodeNumber. This does not match $AbsoluteEpisodeNumberBackup;"
         else
           #TODO For shows which are way off, we need some sort of doover mechanism.
-          #CONFIDENCE:2 LOGIC PATH:  Attempted Match On Zap2itID: Successful; Attempted match on OriginalAirDate: Successful;
+          #CONFIDENCE:2 LOGIC PATH:  Attempted Match On Zap2itID: Successful; Attempted match on MDB_ORIGINALAIRDATE: Successful;
           #Standard Logic came up with line 76. This does not match 85; Fuzzy Logic test came up with line 76. This does not match 85;
           #JOB: myth2kodi '/home/mythtv/Videos/1035_20101109001500.mpg' 'Aqua Teen Hunger Force' 'Couple Skate'
           #TARGET SET:/home/mythtv/Videos/Episodes/Aqua Teen Hunger Force/Season 6/Aqua Teen Hunger Force S06E03 (She Creature).mpg
@@ -3247,7 +3239,7 @@ resolve_multiple_matches_airdate(){
   test -f "$NewShowBasename.InstanceFAiredLineNumbers.txt" && rm "$NewShowBasename.InstanceFAiredLineNumbers.txt"
   test -f "$NewShowBasename.InstanceLineNumbers.txt"       && rm "$NewShowBasename.InstanceLineNumbers.txt"
   #Create a list of line numbers which match original airdate
-  grep -n "$OriginalAirDate" "$NewShowBasename.FAired.txt" | cut -d':' -f1 >> "$NewShowBasename.InstanceFAiredLineNumbers.txt"
+  grep -n "$MDB_ORIGINALAIRDATE" "$NewShowBasename.FAired.txt" | cut -d':' -f1 >> "$NewShowBasename.InstanceFAiredLineNumbers.txt"
   #Loop through list and create instance matching files
   while read -r line ; do
     echo "$line" >>"$NewShowBasename.InstanceLineNumbers.txt"
@@ -3295,21 +3287,21 @@ set_seriesid_newshowname_from_serieslinenumber(){
   [[ -f "$TMP_SHN_FILE" ]] && (( LOGLEVEL < 3 )) && rm -f "$TMP_SHN_FILE"
 }
 
-#Sets the AbsoluteEpisodeNumber variable by comparing OriginalAirDate
+#Sets the AbsoluteEpisodeNumber variable by comparing MDB_ORIGINALAIRDATE
 #against the first aired information in myth2kodi's local database.
 set_absolute_episode_number_by_airdate(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   AbsoluteEpisodeNumber=''
-  if [[ -n "$OriginalAirDate" ]]; then
-    AbsoluteEpisodeNumber="$(grep -n "$OriginalAirDate" "$m2kdir/$NewShowName/$NewShowName.FAired.txt" | grep -m1 -o '^[0-9]*')"
+  if [[ -n "$MDB_ORIGINALAIRDATE" ]]; then
+    AbsoluteEpisodeNumber="$(grep -n "$MDB_ORIGINALAIRDATE" "$m2kdir/$NewShowName/$NewShowName.FAired.txt" | grep -m1 -o '^[0-9]*')"
   fi
   #Account for original series airdate
   if [[ -n "$AbsoluteEpisodeNumber" ]] && ((AbsoluteEpisodeNumber > 0)); then
     local NumberOriginalAirdates
     #Account for original show airdate = first air date
-    NumberOriginalAirdates=$(grep --count "$OriginalAirDate" "$m2kdir/$NewShowName/$NewShowName.FAired.txt")
+    NumberOriginalAirdates=$(grep --count "$MDB_ORIGINALAIRDATE" "$m2kdir/$NewShowName/$NewShowName.FAired.txt")
     ((NumberOriginalAirdates > 1)) && return 1
-    inform "Absolute Exx NR:$AbsoluteEpisodeNumber BASED ON AIRDATE:$OriginalAirDate"
+    inform "Absolute Exx NR:$AbsoluteEpisodeNumber BASED ON AIRDATE:$MDB_ORIGINALAIRDATE"
     return 0
   fi
   return 2
@@ -3693,8 +3685,8 @@ storagegroup_fallback(){
   if [[ "$StorageGroupFallback" = 'Enabled' ]]; then
     debug "StorageGroupFallback is Enabled"
     if [[ "$RECORDING_TYPE" != 'MV' && "$HasSxxExx" != '1' ]] ; then
-      if grep -iq '\(Movies*\|Films*\)' <<< "$StorageGroup" ; then
-        inform "GUESSING that this is a Movie based on being in storagegroup: '$StorageGroup'"
+      if grep -iq '\(Movies*\|Films*\)' <<< "$MDB_STORAGEGROUP" ; then
+        inform "GUESSING that this is a Movie based on being in storagegroup: '$MDB_STORAGEGROUP'"
         RECORDING_TYPE="MV"
         ProgramIDType="Movie"
         ((--ConfidenceRating)) #Decrement confidence, because this is a guess.
@@ -3776,18 +3768,18 @@ msg_operation_summary(){
   informcont "ConfidenceRating=$ConfidenceRating-"
   informcont "ConfidenceReasoning=$ConfidenceReasoning-"
   if [[ "$Database" = 'Enabled' ]]; then
-    debugcont  "XMLTVGrabber=$XMLTVGrabber-"
-    informcont "ShowStartTime=$ShowStartTime-"
-    debugcont  "MovieAirDate=$MovieAirDate-"
-    debugcont  "OriginalAirDate=$OriginalAirDate-"
-    informcont "ProgramID=$ProgramID-"
-    debugcont "ChanID=$ChanID-"
-    informcont "StorageGroup=$StorageGroup-"
-    informcont "ShowCategory=$ShowCategory-"
+    debugcont  "MDB_XMLTVGRABBER=$MDB_XMLTVGRABBER-"
+    informcont "MDB_STARTTIME=$MDB_STARTTIME-"
+    debugcont  "MDB_AIRDATE=$MDB_AIRDATE-"
+    debugcont  "MDB_ORIGINALAIRDATE=$MDB_ORIGINALAIRDATE-"
+    informcont "MDB_PROGRAMID=$MDB_PROGRAMID-"
+    debugcont "MDB_CHANID=$MDB_CHANID-"
+    informcont "MDB_STORAGEGROUP=$MDB_STORAGEGROUP-"
+    informcont "MDB_CATEGORY=$MDB_CATEGORY-"
     informcont "ProgramIDType=$ProgramIDType-"
     debugcont  "rating=$rating-"
     informcont "Zap2itSeriesID=$Zap2itSeriesID-"
-    debugcont  "LocalSeriesID=$LocalSeriesID-"
+    debugcont  "MDB_SERIESID=$MDB_SERIESID-"
     informcont "Plot=$Plot-"
     if [[ -n "$AbsoluteEpisodeNumber" ]]; then
       informcont "Matched Plot=$(sed -n "$AbsoluteEpisodeNumber"'p' "$m2kdir/$NewShowName/$NewShowName.Plot.txt")-"
@@ -4009,16 +4001,16 @@ msg_recording_info(){
   printf '%s\n' "  Subtitle=\"$InputSubtitle\""
   printf '%s\n' "  Season='$InputSeasonNum'"
   printf '%s\n' "  Episode='$InputEpisodeNum'"
-  printf '%s\n' "  Airdate='$MovieAirDate'"
-  printf '%s\n' "  Originalairdate='$OriginalAirDate'"
-  printf '%s\n' "  Category='$ShowCategory'"
-  printf '%s\n' "  Storagegroup='$StorageGroup'"
-  printf '%s\n' "  Stars='$Stars'"
-  printf '%s\n' "  Description=\"$Plot\""
+  printf '%s\n' "  Airdate='$MDB_AIRDATE'"
+  printf '%s\n' "  Originalairdate='$MDB_ORIGINALAIRDATE'"
+  printf '%s\n' "  Category='$MDB_CATEGORY'"
+  printf '%s\n' "  Storagegroup='$MDB_STORAGEGROUP'"
+  printf '%s\n' "  MDB_STARS='$MDB_STARS'"
+  printf '%s\n' "  Description=\"$MDB_DESCRIPTION\""
   printf '%s\n' "  Seriesid='$SeriesID'"
-  printf '%s\n' "  Programid='$ProgramID'"
-  printf '%s\n' "  Chanid='$ChanID'"
-  printf '%s\n' "  Starttime='$ShowStartTime'"
+  printf '%s\n' "  Programid='$MDB_PROGRAMID'"
+  printf '%s\n' "  Chanid='$MDB_CHANID'"
+  printf '%s\n' "  Starttime='$MDB_STARTTIME'"
   if [[ "$CommercialMarkup" = "Created" ]]; then
     printf '\n%s\n' "Commercial Skip Info"
     tail -n +2 "$MARKUPFRAMES_TMP"
@@ -4029,10 +4021,10 @@ msg_recording_info(){
 #Report the combination of command line input and MythTV-DB data.
 msg_merged_input_mythtvdb(){
   debug "Input and MythTV-DB guide data for $INPUT_PATH_BASENAME"
-  [[ "$Database" = 'Enabled' ]] && debugcont "RECSTART:'$ShowStartTime'"
-  [[ "$Database" = 'Enabled' ]] && debugcont "DATE:'$MovieAirDate' '$OriginalAirDate'"
-  [[ "$Database" = 'Enabled' ]] && debugcont "PROGRAMID:'$ProgramID'"
-  [[ "$Database" = 'Enabled' ]] && debugcont "ShowCategory:'$ShowCategory'"
+  [[ "$Database" = 'Enabled' ]] && debugcont "RECSTART:'$MDB_STARTTIME'"
+  [[ "$Database" = 'Enabled' ]] && debugcont "DATE:'$MDB_AIRDATE' '$MDB_ORIGINALAIRDATE'"
+  [[ "$Database" = 'Enabled' ]] && debugcont "PROGRAMID:'$MDB_PROGRAMID'"
+  [[ "$Database" = 'Enabled' ]] && debugcont "MDB_CATEGORY:'$MDB_CATEGORY'"
 
   # local var value
   # for var in 'TITLE' 'SUBTITLE' 'SEASON' 'EPISODE'; do
@@ -4140,7 +4132,7 @@ target_file_exists(){
   fi
   warn "Adding an entry identifying this recording as a possible duplicate."
   #Write an entry in the duplicates file, for easy check/removal of duplicates.
-  printf '"%s" "%s" "%s" "%s"\n' "$InputTitle" "$ShowStartTime" "$RECORDING_PATH" "$ShowFileName" >> "$DuplicatesFile"
+  printf '"%s" "%s" "%s" "%s"\n' "$InputTitle" "$MDB_STARTTIME" "$RECORDING_PATH" "$ShowFileName" >> "$DuplicatesFile"
   NOTIFY_MSG="Recording identified as possible duplicate of: $MoveDir/$ShowFileName.$OriginalExt"
   return "$recording_name_return_state"
 }
@@ -4358,9 +4350,9 @@ set_show_file_name(){
     Exx='Movie'
     #TODO: If adding a year then we really want original release date so the Kodi metadata lookup works reliably.
     #      Add a MOVIE_RELEASE_YEAR to the processing functions for guide-data that provide this.
-    if [[ -n "$MovieAirDate" ]]; then
-      warn "${FUNCNAME[0]}(): Currently forcing bypass of adding MovieAirDate to Movie file names."
-      ShowFileName="$NewShowName$SHOW_FILE_NAME_APPEND" # ShowFileName="$NewShowName ($MovieAirDate)$SHOW_FILE_NAME_APPEND"
+    if [[ -n "$MOVIE_RELEASE_YEAR" ]]; then
+      warn "${FUNCNAME[0]}(): Currently forcing bypass of adding MOVIE_RELEASE_YEAR to Movie file names."
+      ShowFileName="$NewShowName$SHOW_FILE_NAME_APPEND" # ShowFileName="$NewShowName ($MOVIE_RELEASE_YEAR)$SHOW_FILE_NAME_APPEND"
     else
       ShowFileName="$NewShowName$SHOW_FILE_NAME_APPEND"
     fi
@@ -4368,7 +4360,7 @@ set_show_file_name(){
   else
     debug "Naming as generic show"
     Exx="Generic"
-    ShowFileName="$ShowName S0E0 ($EpisodeSubtitle Recorded $datehour on $ChanID)$SHOW_FILE_NAME_APPEND"
+    ShowFileName="$ShowName S0E0 ($EpisodeSubtitle Recorded $datehour on $MDB_CHANID)$SHOW_FILE_NAME_APPEND"
     RequiresNFO=1
     [[ "$RECORDING_TYPE" = 'EP' ]] && RequiresDoover=1
   fi
@@ -4380,10 +4372,10 @@ set_show_file_name_categoric(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   local -i testedmethod
   #Method1 - use airdate for season
-  if [[ "${OriginalAirDate:0:4}" != "0000" && -n "${OriginalAirDate:0:4}" && "$UseMethod2" != "1" ]]; then
-    EventYear="${OriginalAirDate:0:4}"
+  if [[ "${MDB_ORIGINALAIRDATE:0:4}" != "0000" && -n "${MDB_ORIGINALAIRDATE:0:4}" && "$UseMethod2" != "1" ]]; then
+    EventYear="${MDB_ORIGINALAIRDATE:0:4}"
     Sxx="$EventYear"
-    EventMonthDay="$(echo "${OriginalAirDate:5:5}" | tr -d "-" | sed 's/0*//')"
+    EventMonthDay="$(echo "${MDB_ORIGINALAIRDATE:5:5}" | tr -d "-" | sed 's/0*//')"
     Exx="$EventMonthDay"
     [[ -z "$NewShowName" ]] && NewShowName="$ShowName"
   else #Flag failure of Method1
@@ -4398,9 +4390,9 @@ set_show_file_name_categoric(){
 
   #Method2 -
   if ((testedmethod != 1)); then
-    if [[ "${ShowStartTime:0:4}" != 0000 && -n "${ShowStartTime:0:4}" ]] ; then
-      EventYear="${ShowStartTime:0:4}"
-      EventMonthDay="$(echo "${ShowStartTime:5:5}" | tr -d "-" | sed 's/0*//')"
+    if [[ "${MDB_STARTTIME:0:4}" != 0000 && -n "${MDB_STARTTIME:0:4}" ]] ; then
+      EventYear="${MDB_STARTTIME:0:4}"
+      EventMonthDay="$(echo "${MDB_STARTTIME:5:5}" | tr -d "-" | sed 's/0*//')"
     fi
     Exx="$EventMonthDay"
     Sxx="$EventYear"
@@ -4636,8 +4628,8 @@ generate_episode_nfo(){
   {
     printf '%b\n' "\t<rating>$rating</rating>"
     printf '%b\n' "\t<plot>$Plot</plot>"
-    printf '%b\n' "\t<genre>$ShowCategory</genre>"
-    printf '%b\n' "\t<aired>${ShowStartTime%% *}</aired>"
+    printf '%b\n' "\t<genre>$MDB_CATEGORY</genre>"
+    printf '%b\n' "\t<aired>${MDB_STARTTIME%% *}</aired>"
     printf '%b\n' "\t<dateadded>$(date --rfc-3339=seconds)</dateadded>"
     printf '%s\n' "</episodedetails>"
   } >> "$MoveDir/$ShowFileName.nfo"
@@ -4663,8 +4655,8 @@ process_ignore_lists(){
   fi
   #Test if the Category is in the categoricIgnore file
   if [[ -f "$m2kdir/categoricIgnore" ]]; then
-    ignoreTest="$(grep "$ShowCategory" "$m2kdir/categoricIgnore")" #CATEGORY
-    if [[ "$ShowCategory" = "$ignoreTest" ]]; then #CATEGORY
+    ignoreTest="$(grep "$MDB_CATEGORY" "$m2kdir/categoricIgnore")" #CATEGORY
+    if [[ "$MDB_CATEGORY" = "$ignoreTest" ]]; then #CATEGORY
       EXIT_JOB_TYPE='categoricIgnore'
       return 1
     fi
@@ -5194,14 +5186,14 @@ generaterss(){
   if [ "$RECORDING_TYPE" = "EP" ]; then
     echo -e "\t\t\t<link>http://www.thetvdb.com/?tab=series&amp;id=$SeriesID</link>" >> "$RSS_DIRECTORY/$TEMPrssFile"
   elif [ "$RECORDING_TYPE" = "MV" ]; then
-    echo -e "\t\t\t<link>http://www.imdb.com/search/title?release_date=,$MovieAirDate&amp;title=$ShowName&amp;title_type=feature</link>" >> "$RSS_DIRECTORY/$TEMPrssFile"
+    echo -e "\t\t\t<link>http://www.imdb.com/search/title?release_date=,$MOVIE_RELEASE_YEAR&amp;title=$ShowName&amp;title_type=feature</link>" >> "$RSS_DIRECTORY/$TEMPrssFile"
   else
     tvdotcomshowname="${ShowName// /%20}"
     echo -e "\t\t\t<link>http://www.tv.com/search.php?type=11&amp;stype=all&amp;tag=search%3Bfrontdoor&amp;qs=$tvdotcomshowname </link>" >> "$RSS_DIRECTORY/$TEMPrssFile"
   fi
   {
     echo -e "\t\t\t<guid>sftp://$mythicalGUID</guid>"
-    echo -e "\t\t\t<pubDate>$(date -R -d "$ShowStartTime")</pubDate>"
+    echo -e "\t\t\t<pubDate>$(date -R -d "$MDB_STARTTIME")</pubDate>"
     echo -e "\t\t\t<description>"
     echo -e "\t\t\t\tEpisode Title: $rssEpisodeSubtitle$lineBreak"
     echo -e "\t\t\t\tProgram: $rssNewShowName$lineBreak"
@@ -6739,11 +6731,11 @@ elif [[ -z "$SeriesID" && "$RECORDING_TYPE" != "SH" && "$RECORDING_TYPE" != "MV"
   warn "SERIES ID WAS NOT FOUND. TheTVDB MAY BE DOWN. IF NOT TRY USING A showTranslations FILE."
   printf '%s\n' "$InputTitle" >> "$UnrecognizedSeriesFile"
   if [[ "$Database" = 'Enabled' ]]; then
-    warncont "RECSTART:$ShowStartTime-"
-    warncont "Movie Air Date:$MovieAirDate-"
-    warncont "Original Air Date:$OriginalAirDate-"
-    warncont "Channel ID:$ChanID-"
-    warncont "Show Category:$ShowCategory-"
+    warncont "RECSTART:$MDB_STARTTIME-"
+    warncont "Air Date:$MDB_AIRDATE-"
+    warncont "Original Air Date:$MDB_ORIGINALAIRDATE-"
+    warncont "Channel ID:$MDB_CHANID-"
+    warncont "Show Category:$MDB_CATEGORY-"
     [[ -z "${Exx:2:1}" ]] && Exx=''
   fi
 fi

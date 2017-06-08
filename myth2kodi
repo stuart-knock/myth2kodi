@@ -936,7 +936,7 @@ parse_command_flags(){
       #Example usage: myth2kodi --recording-info "1070_20160331073100.mpg"
       inform "Attempting to access recording info for: $M2KARG2"
       if ! set_recording_name "$M2KARG2"; then return 1; fi
-      InputFileBasename="$RECORDING_NAME"
+      INPUT_PATH_BASENAME="$RECORDING_NAME"
       InputTitle=''
       if ! process_mythtvdb; then return 1; fi
       msg_recording_info
@@ -1430,7 +1430,7 @@ identify_recording_files(){
     if ! set_recording_name "$inputarg"; then return 1; fi
     debug "RECORDING_PATH: '$RECORDING_PATH'"
     debug "RECORDING_NAME: '$RECORDING_NAME'"
-    InputFileBasename="$RECORDING_NAME"
+    INPUT_PATH_BASENAME="$RECORDING_NAME"
   else
     EXIT_JOB_TYPE='FileOrPathDoesNotExist'
     NOTIFY_MSG="Provided argument is not a file: '$inputarg'"
@@ -1853,14 +1853,14 @@ m2k_cleanse(){
 dbselect(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   debugcont "arg 1 = '$1'"
-  mysql -u"$MySQLuser" -p"$MySQLpass" -e "USE $MySQLMythDb ; SELECT $1 FROM recorded WHERE basename LIKE '$InputFileBasename' ; "
+  mysql -u"$MySQLuser" -p"$MySQLpass" -e "USE $MySQLMythDb ; SELECT $1 FROM recorded WHERE basename LIKE '$INPUT_PATH_BASENAME' ; "
 }
 
 #Use mysql commands to get MythTV-DB entry for the current recording.
 get_mythtvdb_info_mysql(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   debugcont "m2kdir: '$m2kdir'"
-  debugcont "InputFileBasename: '$InputFileBasename'"
+  debugcont "INPUT_PATH_BASENAME: '$INPUT_PATH_BASENAME'"
   debugcont "MySQLMythDb: '$MySQLMythDb'"
   debugcont "MySQLuser: '$MySQLuser'"
   debugcont "MySQLpass: '$MySQLpass'"
@@ -1871,7 +1871,7 @@ get_mythtvdb_info_mysql(){
 
   #Obtain MythTV Database Information
   inform "Accessing MythTV DataBase Using mysql Commands:"
-  inform "Attempting to pull database information on '$InputFileBasename'"
+  inform "Attempting to pull database information on '$INPUT_PATH_BASENAME'"
   #NOTE: Previously the info retrieved from the MythTV-DB was also passed through additional sed commands
   #  where "/", the thing being selected (eg "title") and occasionally spaces were stripped. At least for
   #  mythtv 0.27.5 and "mysql Ver 15.1 Distrib 10.0.22-MariaDB, for Linux (x86_64) using readline 5.2",
@@ -1977,7 +1977,7 @@ get_mythtvdb_info_pythonbindings(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   debugcont "m2kdir: '$m2kdir'"
   debugcont "binpath: '$binpath'"
-  debugcont "InputFileBasename: '$InputFileBasename'"
+  debugcont "INPUT_PATH_BASENAME: '$INPUT_PATH_BASENAME'"
   debugcont "DBPin: '$DBPin'"
   debugcont "DBHostName: '$DBHostName'"
   debugcont "MySQLMythDb: '$MySQLMythDb'"
@@ -1988,7 +1988,7 @@ get_mythtvdb_info_pythonbindings(){
   debugcont "InputSeasonNum: '$InputSeasonNum'"
   debugcont "InputEpisodeNum: '$InputEpisodeNum'"
   inform "Accessing MythTV DataBase Using PythonBindings:"
-  inform "Attempting to pull database information on '$InputFileBasename'"
+  inform "Attempting to pull database information on '$INPUT_PATH_BASENAME'"
 
   local python_exit_status
   local mtv_recinfo_file
@@ -2025,7 +2025,7 @@ get_mythtvdb_info_pythonbindings(){
 
   #Access MytTV-DB via the python bindings and output to a temporary file.
   "$binpath"/mythdb_access --verbosity="$((LOGLEVEL<3?LOGLEVEL:3))" \
-                           --filename="$InputFileBasename"          \
+                           --filename="$INPUT_PATH_BASENAME"          \
                            --SecurityPin="$DBPin"                   \
                            --DBHostName="$DBHostName"               \
                            --DBName="$MySQLMythDb"                  \
@@ -2203,7 +2203,7 @@ get_mythtvdb_storagegroups(){
 delete_mythtv_database_entry_mysql(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   debug "RECORDING_PATH: '$RECORDING_PATH'"
-  debug "InputFileBasename: '$InputFileBasename'"
+  debug "INPUT_PATH_BASENAME: '$INPUT_PATH_BASENAME'"
   debug "MySQLuser: '$MySQLuser'"
   debug "MySQLpass: '$MySQLpass'"
   debug "MySQLMythDb: '$MySQLMythDb'"
@@ -2216,10 +2216,10 @@ delete_mythtv_database_entry_mysql(){
   #Make sure we got input arguments and file is valid
   if [[ ! -e "$RECORDING_PATH" ]]; then
     #Remove recording entry from mysql database
-    inform "${FUNCNAME[0]}(): REMOVING: '$InputFileBasename'; THUMBNAILS; DATABASE ENTRIES."
-    mysql -u"$MySQLuser" -p"$MySQLpass" -e "USE $MySQLMythDb ; DELETE FROM recorded WHERE basename LIKE '$InputFileBasename' ; "
+    inform "${FUNCNAME[0]}(): REMOVING: '$INPUT_PATH_BASENAME'; THUMBNAILS; DATABASE ENTRIES."
+    mysql -u"$MySQLuser" -p"$MySQLpass" -e "USE $MySQLMythDb ; DELETE FROM recorded WHERE basename LIKE '$INPUT_PATH_BASENAME' ; "
     if [[ "$?" != 0 ]]; then
-      err "${FUNCNAME[0]}(): Failed to delete DB entry for: $InputFileBasename"
+      err "${FUNCNAME[0]}(): Failed to delete DB entry for: $INPUT_PATH_BASENAME"
       return 1
     fi
     #Remove thumbnails
@@ -4004,7 +4004,7 @@ msg_generic_unspecified_error(){
 #--recording-info
 msg_recording_info(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  printf '\n%s\n\n' "MythTV-DB information for: $InputFileBasename"
+  printf '\n%s\n\n' "MythTV-DB information for: $INPUT_PATH_BASENAME"
   printf '%s\n' "  Title=\"$InputTitle\""
   printf '%s\n' "  Subtitle=\"$InputSubtitle\""
   printf '%s\n' "  Season='$InputSeasonNum'"
@@ -4028,7 +4028,7 @@ msg_recording_info(){
 
 #Report the combination of command line input and MythTV-DB data.
 msg_merged_input_mythtvdb(){
-  debug "Input and MythTV-DB guide data for $InputFileBasename"
+  debug "Input and MythTV-DB guide data for $INPUT_PATH_BASENAME"
   [[ "$Database" = 'Enabled' ]] && debugcont "RECSTART:'$ShowStartTime'"
   [[ "$Database" = 'Enabled' ]] && debugcont "DATE:'$MovieAirDate' '$OriginalAirDate'"
   [[ "$Database" = 'Enabled' ]] && debugcont "PROGRAMID:'$ProgramID'"
@@ -4125,9 +4125,9 @@ target_file_exists(){
   recording_name_return_state="$?"
 
   if [[ "$recording_name_return_state" == 0 && -n "$RECORDING_NAME" ]]; then
-    if [[ "$RECORDING_NAME" == "$InputFileBasename" ]]; then
+    if [[ "$RECORDING_NAME" == "$INPUT_PATH_BASENAME" ]]; then
       err "This is because we've already processed this recording."
-      NOTIFY_MSG="Recording has already been processed: $InputFileBasename"
+      NOTIFY_MSG="Recording has already been processed: $INPUT_PATH_BASENAME"
       return 0
     else
       inform "The recording we're processing is different to the one associated"
@@ -4882,6 +4882,41 @@ set_group_permission(){
   return "$?"
 }
 
+naming_checks(){
+  debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
+  #If no episode data and it's not a test
+  if [[ "$HasSxxExx" != '1' && "$INPUT_PATH" != "$m2kdir/6666_20420101084242.tst" ]]; then
+    if [[ "$RECORDING_TYPE" = 'EP' ]]; then
+      NOTIFY_MSG="Episode could not be matched with supplied information."
+      warn "$NOTIFY_MSG"
+      EXIT_JOB_TYPE='NameCouldNotBeAssigned'
+      return 1
+    elif [[ "$RECORDING_TYPE" = 'MV' ]]; then
+      #Ensures the doover value was not set for the movie.
+      RequiresDoover=0
+    #If user has determined that they do not want unrecognisable tv shows in their library.
+    elif [[ "$ShowStopper" = 'Enabled' ]]; then
+      msg_unable_to_identify_recording
+      EXIT_JOB_TYPE='NameCouldNotBeAssigned'
+      return 1
+    elif [[ "$RECORDING_TYPE" = 'SH' ]]; then
+      msg_show_warning
+    else
+      msg_epishow
+    fi
+  fi
+
+  #Set MoveDir, using alternates if necessary, falling back to FailSafeState, and
+  #finally exit if there is nowhere to write to.
+  if ! set_move_location; then return 1; fi
+
+  #Only keep Alpha-numeric characters, space, parenthesis and the four chars & , . -
+  TITLE="$(sed -r 's/[^[:alnum:] &,.)(-]//g' <<< "$TITLE")"
+  SUBTITLE="$(sed -r 's/[^[:alnum:] &,.)(-]//g' <<< "$SUBTITLE")"
+
+  return 0
+} #naming_checks()
+
 format_filename(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   if [[ -z "$NamingConvention" ]]; then
@@ -4929,15 +4964,15 @@ move_mode_handling(){
         if [[ "$RequiresDoover" != '1' ]]; then
           if [[ "$Database" = 'Enabled' ]]; then
             debug "SYMLINK='Disabled' and does not require doover, so MythTV-DB info will be removed."
-            RECORDING_NAME="$InputFileBasename" #Set here so we won't needlessly run identify_recording_files().
+            RECORDING_NAME="$INPUT_PATH_BASENAME" #Set here so we won't needlessly run identify_recording_files().
             if ! delete_recording_from_mythtv; then return 1; fi
           else
             warn "Moved recording file with SYMLINK='Disabled' and Database='Disabled'."
             warncont "If this was a MythTV recording file, then the MythTV-DB will now"
             warncont "reference a recording for which the file no longer exists. You will"
             warncont "need to set Database='Enabled' and then run:"
-            warncont "    RECORDING_NAME='$InputFileBasename'"
-            warncont "    myth2kodi --delete '$InputFileBasename'"
+            warncont "    RECORDING_NAME='$INPUT_PATH_BASENAME'"
+            warncont "    myth2kodi --delete '$INPUT_PATH_BASENAME'"
             warncont "to remove the MythTV-DB entry. You should rethink your settings."
           fi
         else
@@ -6488,7 +6523,7 @@ main(){
   msg_operation_summary
 
   #Checks before setting the new file-name.
-  naming_checks
+  if ! naming_checks; then exit_job "$EXIT_JOB_TYPE"; fi
 
   format_filename
 
@@ -6569,7 +6604,7 @@ debug "No command flag set. Processing as recording."
 PROCESSING_RECORDING="True"
 inform "Processing: $RECORDING_PATH"
 
-InputFileBasename="$(basename "$RECORDING_PATH")" #"${RECORDING_PATH##*/}"
+INPUT_PATH_BASENAME="$(basename "$RECORDING_PATH")" #"${RECORDING_PATH##*/}"
 
 #As long as we're not in diagnostics mode, gather info from MythTV-DB.
 if [[ "$M2K_DIAGNOSTICS_MODE" != "True" ]]; then
@@ -6601,7 +6636,7 @@ if ! process_ignore_lists; then exit_job "$EXIT_JOB_TYPE"; fi
 EpisodeSubtitle="$(sed 's/;.*//' <<< "$InputSubtitle")"
 #Only keep Alpha-numeric characters, space, parenthesis and the four chars & , . -
 EpisodeSubtitle="$(sed -r 's/[^[:alnum:] &,.)(-]//g' <<< "$EpisodeSubtitle")"
-OriginalExt="${InputFileBasename##*.}"
+OriginalExt="${INPUT_PATH_BASENAME##*.}"
 originaldirname="$(dirname "$RECORDING_PATH")"
 #Set originaldir name if none was supplied
 [[ "$originaldirname" =~ ^('./'|'.'|'')$ ]] && originaldirname="$(pwd)"

@@ -2955,10 +2955,10 @@ download_series_info(){
       chmod 644 "$dbdir/$NewShowName.Plot.txt"
       ProcessingSuccesful=1
 
-    elif [ "$GotNewInformation" = "2" ]; then
+    elif (( GotNewInformation == 2 )); then
       err "${FUNCNAME[0]}(): UNEXPECTED ERROR comparing new to old information for '$NewShowName'"
       return 1
-    elif [ "$GotNewInformation" = "0" ]; then
+    elif (( GotNewInformation == 0 )); then
       inform "TheTVDB information for $NewShowName has not changed since last download."
       return 0
     fi
@@ -2969,7 +2969,7 @@ download_series_info(){
   if ((ProcessingSuccesful == 1)) ; then
     inform "LOCAL DATABASE UPDATED: $dbdir"
     return 0
-  elif [ ! -f "$dbdir/$NewShowName.Ename.txt" ]; then
+  elif [[ ! -f "$dbdir/$NewShowName.Ename.txt" ]]; then
     err "${FUNCNAME[0]}(): PERMISSION ERROR for $dbdir"
     return 1
   fi
@@ -3051,7 +3051,136 @@ identify_series(){
     debug 'Series identification via TheTVDB is disabled.'
     return 0
   fi
-}
+} #identify_series()
+
+identify_episode(){
+  debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
+  debugcont "RECORDING_TYPE='$RECORDING_TYPE'"
+  debugcont "ONLINE_LOOKUP='$ONLINE_LOOKUP'"
+  debugcont "SeriesID='$SeriesID'"
+
+  if [[ -n "$SeriesID" ]]; then
+    inform "Processing SeriesID:$SeriesID"
+    #####GET ABSOLUTE EPISODE NUMBER#####
+    if [[ "$GuideDataType" = "SchedulesDirect" ]]; then
+      ConfidenceReasoning="$ConfidenceReasoning Attempted match on OriginalAirDate:"
+      set_absolute_episode_number_by_airdate
+      AirdateExitStatus=$?
+      [[ "$AirdateExitStatus" = "1" && -n "$EpisodeSubtitle" ]] && resolve_multiple_matches_airdate
+      test "$?" = "0" && AirdateExitStatus=0
+      if [ "$AirdateExitStatus" = "0" ]; then
+        ((++EpisodeConfidenceRating))
+        ConfidenceReasoning="$ConfidenceReasoning Successful; "
+        GotEpisodeNumber=1
+      else
+        warn "AIRDATE FAILED. TITLE MATCH ON ABSOLUTE EPISODE NUMBER: $AbsoluteEpisodeNumber"
+        ((--EpisodeConfidenceRating))
+        ConfidenceReasoning="$ConfidenceReasoning Failed;"
+      fi
+    fi
+
+    if ((GotEpisodeNumber != 1)) && [[ -n "$EpisodeSubtitle" ]]; then
+      ConfidenceReasoning="$ConfidenceReasoning Attempted SubTitle match on Standard logic:"
+      if set_absolute_episode_number_by_ename; then
+        ConfidenceReasoning="$ConfidenceReasoning Successful; "
+      else
+        warn "AIRDATE/STANDARD LOGIC FAILED. FUZZY LOGIC ABSOLUTE: $AbsoluteEpisodeNumber. Requiring doover."
+        RequiresDoover=1
+        ((--EpisodeConfidenceRating))
+        ConfidenceReasoning="$ConfidenceReasoning Failed; Attempted SubTitle match on Fuzzy logic:"
+        if set_absolute_episode_number_by_ename_fuzzy; then
+          ConfidenceReasoning="$ConfidenceReasoning Successful; "
+        else
+          ((--EpisodeConfidenceRating))
+          ConfidenceReasoning="$ConfidenceReasoning Failed;"
+        fi
+      fi
+    fi
+
+    #update confidence total
+    ((ConfidenceRating = EpisodeConfidenceRating + SeriesConfidenceRating))
+
+    #Verification only makes sense if we got AbsoluteEpisodeNumber from a method
+    # other than Standard or Fuzzy logic above.
+    if ((GotEpisodeNumber == 1)) && [[ -n "$AbsoluteEpisodeNumber" ]]; then
+      #####VERIFICATION OF CONFIDENCE RATING#####
+      #backup AbsoluteEpisodeNumber for tests
+      AbsoluteEpisodeNumberBackup="$AbsoluteEpisodeNumber"
+      if [[ -n "$InputSubtitle" && -n "$OriginalAirDate" ]]; then
+        #Verify with Standard logic
+        set_absolute_episode_number_by_ename
+        if (( AbsoluteEpisodeNumber != AbsoluteEpisodeNumberBackup )); then
+          msg_standard_logic_warning
+          [[ -z "$AbsoluteEpisodeNumber" ]] && AbsoluteEpisodeNumber="Nothing"
+          ConfidenceReasoning="$ConfidenceReasoning Standard Logic came up with Episode Number $AbsoluteEpisodeNumber. This does not match $AbsoluteEpisodeNumberBackup;"
+        else
+          #TODO For shows which are way off, we need some sort of doover mechanism.
+          #CONFIDENCE:2 LOGIC PATH:  Attempted Match On Zap2itID: Successful; Attempted match on OriginalAirDate: Successful;
+          #Standard Logic came up with line 76. This does not match 85; Fuzzy Logic test came up with line 76. This does not match 85;
+          #JOB: myth2kodi '/home/mythtv/Videos/1035_20101109001500.mpg' 'Aqua Teen Hunger Force' 'Couple Skate'
+          #TARGET SET:/home/mythtv/Videos/Episodes/Aqua Teen Hunger Force/Season 6/Aqua Teen Hunger Force S06E03 (She Creature).mpg
+          increment_fuzzy_logic_error_count
+          ConfidenceReasoning="$ConfidenceReasoning Verified with Standard logic;"
+          (( ++ConfidenceRating ))
+        fi
+
+        #Verify with Fuzzy
+        set_absolute_episode_number_by_ename_fuzzy
+        if (( AbsoluteEpisodeNumber != AbsoluteEpisodeNumberBackup )); then
+          [[ -z "$AbsoluteEpisodeNumber" ]] && AbsoluteEpisodeNumber="Nothing"
+          ConfidenceReasoning="$ConfidenceReasoning Fuzzy Logic test came up with Episode Number $AbsoluteEpisodeNumber. This does not match $AbsoluteEpisodeNumberBackup;"
+          msg_fuzzy_logic_warning
+        else
+          increment_fuzzy_logic_error_count
+          ConfidenceReasoning="$ConfidenceReasoning Verified with Fuzzy logic;"
+          (( ++ConfidenceRating ))
+        fi
+      fi
+      #Restore AbsoluteEpisodeNumber after testing
+      AbsoluteEpisodeNumber="$AbsoluteEpisodeNumberBackup"
+    fi
+
+    #Statistical Fuzzy Logic monitoring
+    increment_total_matches
+    debug "TOTAL FUZZY LOGIC MATCHES:'$FuzzyLogicMatches'"
+    debug "TOTAL VERIFIED FUZZY ERRORS:'${FuzzyLogicError:-0}'"
+  fi
+
+  #TODO: The following few blocks will run even if we haven't properly identified the series, which doesn't make
+  #      sense for the things trying to set SxxExx...
+  #TODO: makes no sense to run this block if this is a movie.
+  #If we already have Sxx and Exx from MythTV-DB, use them. If we also had a Subtitle, then do some verification.
+  if [[ "$HasSxxExx" = '1' ]] ; then
+    #TODO: If the confidence rating from the above is good, and we have an
+    #  AbsoluteEpisodeNumber then use it to validate the Sxx, Exx & Subtitle from
+    #  the MythTV-DB.
+    inform "Using episode number: '$Sxx$Exx', extracted from the MythTV-DB."
+    #TODO: Probably should only do the following if the Series confidence rating
+    #  is ok.
+    #If we don't have a Subtitle, then use Sxx & Exx to get it from the TVDb info.
+    if [[ -z "$EpisodeSubtitle" ]]; then
+      AbsoluteEpisodeNumberBackup=$AbsoluteEpisodeNumber
+      if set_absolute_episode_number_by_sxxexx; then
+        EpisodeSubtitle=$(sed -n "$AbsoluteEpisodeNumber"'p' "$m2kdir/$NewShowName/$NewShowName.actualEname.txt")
+        inform "MythTV-DB did not have an EpisodeSubtitle, using '$EpisodeSubtitle' from TheTVDB."
+      else
+        AbsoluteEpisodeNumber=$AbsoluteEpisodeNumberBackup
+      fi
+    fi
+    #Strip the leading "S" from Sxx,
+    SeasonNumber="${Sxx#S}"
+    #and any leading "0"
+    SeasonNumber="${SeasonNumber#0}"
+
+  #If we don't already have EXX and SXX, set them by matching Absolute Episode Number across myth2kodi's database
+  elif [[ -n "$AbsoluteEpisodeNumber" ]]; then
+    #NOTE: this function also sets EpisodeSubtitle and SeasonNumber
+    set_sxxexx_absolute_episode_number
+  else
+    warn "Could not set Sxx and Exx from MythTV-DB or set them based on InputSubtitle."
+    ConfidenceReasoning="$ConfidenceReasoning Could not get Sxx and Exx from MythTV-DB or set them based on InputSubtitle; "
+  fi
+} #identify_episode()
 
 #Set the serieslinenumber by matching the Zap2itSeriesID from MythTV-DB
 #against the zap2it ids returned by querying TheTVDB.
@@ -3107,6 +3236,7 @@ get_serieslinenumber_showname(){
   if ((serieslinenumber >= 1)); then return 0; else return 1; fi
 }
 
+#TODO: review, possibly remove...
 #Resolve multiple matches on the same airdate, the conflict is
 #resolved by matching the airdate by title.
 resolve_multiple_matches_airdate(){
@@ -3170,7 +3300,7 @@ set_seriesid_newshowname_from_serieslinenumber(){
 #against the first aired information in myth2kodi's local database.
 set_absolute_episode_number_by_airdate(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  AbsoluteEpisodeNumber=""
+  AbsoluteEpisodeNumber=''
   if [[ -n "$OriginalAirDate" ]]; then
     AbsoluteEpisodeNumber="$(grep -n "$OriginalAirDate" "$m2kdir/$NewShowName/$NewShowName.FAired.txt" | grep -m1 -o '^[0-9]*')"
   fi
@@ -6588,127 +6718,7 @@ fi
 
 #####PROCESS EPISODE INFORMATION#####
 #If we have a SeriesID but don't already have Season and Episode information
-if [[ -n "$SeriesID" ]]; then
-  inform "Processing SeriesID:$SeriesID"
-  #####GET ABSOLUTE EPISODE NUMBER#####
-  if [ "$GuideDataType" = "SchedulesDirect" ] ; then
-    ConfidenceReasoning="$ConfidenceReasoning Attempted match on OriginalAirDate:"
-    set_absolute_episode_number_by_airdate
-    AirdateExitStatus=$?
-    [[ "$AirdateExitStatus" = "1" && -n "$EpisodeSubtitle" ]] && resolve_multiple_matches_airdate
-    test "$?" = "0" && AirdateExitStatus=0
-    if [ "$AirdateExitStatus" = "0" ]; then
-      ((++EpisodeConfidenceRating))
-      ConfidenceReasoning="$ConfidenceReasoning Successful; "
-      GotEpisodeNumber=1
-    else
-      warn "AIRDATE FAILED. TITLE MATCH ON ABSOLUTE EPISODE NUMBER: $AbsoluteEpisodeNumber"
-      ((--EpisodeConfidenceRating))
-      ConfidenceReasoning="$ConfidenceReasoning Failed;"
-    fi
-  fi
-
-  if ((GotEpisodeNumber != 1)) && [[ -n "$EpisodeSubtitle" ]]; then
-    ConfidenceReasoning="$ConfidenceReasoning Attempted SubTitle match on Standard logic:"
-    if set_absolute_episode_number_by_ename; then
-      ConfidenceReasoning="$ConfidenceReasoning Successful; "
-    else
-      warn "AIRDATE/STANDARD LOGIC FAILED. FUZZY LOGIC ABSOLUTE: $AbsoluteEpisodeNumber. Requiring doover."
-      RequiresDoover=1
-      ((--EpisodeConfidenceRating))
-      ConfidenceReasoning="$ConfidenceReasoning Failed; Attempted SubTitle match on Fuzzy logic:"
-      if set_absolute_episode_number_by_ename_fuzzy; then
-        ConfidenceReasoning="$ConfidenceReasoning Successful; "
-      else
-        ((--EpisodeConfidenceRating))
-        ConfidenceReasoning="$ConfidenceReasoning Failed;"
-      fi
-    fi
-  fi
-
-  #update confidence total
-  let ConfidenceRating=EpisodeConfidenceRating+SeriesConfidenceRating
-
-  #Verification only makes sense if we got AbsoluteEpisodeNumber from a method
-  # other than Standard or Fuzzy logic above.
-  if ((GotEpisodeNumber == 1)) && [[ -n "$AbsoluteEpisodeNumber" ]]; then
-    #####VERIFICATION OF CONFIDENCE RATING#####
-    #backup AbsoluteEpisodeNumber for tests
-    AbsoluteEpisodeNumberBackup="$AbsoluteEpisodeNumber"
-    if [[ -n "$InputSubtitle" && -n "$OriginalAirDate" ]]; then
-      #Verify with Standard logic
-      set_absolute_episode_number_by_ename
-      if [ "$AbsoluteEpisodeNumber" != "$AbsoluteEpisodeNumberBackup" ]; then
-        msg_standard_logic_warning
-        [[ -z "$AbsoluteEpisodeNumber" ]] && AbsoluteEpisodeNumber="Nothing"
-        ConfidenceReasoning="$ConfidenceReasoning Standard Logic came up with Episode Number $AbsoluteEpisodeNumber. This does not match $AbsoluteEpisodeNumberBackup;"
-      else
-        #TODO For shows which are way off, we need some sort of doover mechanism.
-        #CONFIDENCE:2 LOGIC PATH:  Attempted Match On Zap2itID: Successful; Attempted match on OriginalAirDate: Successful;
-        #Standard Logic came up with line 76. This does not match 85; Fuzzy Logic test came up with line 76. This does not match 85;
-        #JOB: myth2kodi '/home/mythtv/Videos/1035_20101109001500.mpg' 'Aqua Teen Hunger Force' 'Couple Skate'
-        #TARGET SET:/home/mythtv/Videos/Episodes/Aqua Teen Hunger Force/Season 6/Aqua Teen Hunger Force S06E03 (She Creature).mpg
-        increment_fuzzy_logic_error_count
-        ConfidenceReasoning="$ConfidenceReasoning Verified with Standard logic;"
-        (( ++ConfidenceRating ))
-      fi
-
-      #Verify with Fuzzy
-      set_absolute_episode_number_by_ename_fuzzy
-      if [ "$AbsoluteEpisodeNumber" != "$AbsoluteEpisodeNumberBackup" ]; then
-        [[ -z "$AbsoluteEpisodeNumber" ]] && AbsoluteEpisodeNumber="Nothing"
-        ConfidenceReasoning="$ConfidenceReasoning Fuzzy Logic test came up with Episode Number $AbsoluteEpisodeNumber. This does not match $AbsoluteEpisodeNumberBackup;"
-        msg_fuzzy_logic_warning
-      else
-        increment_fuzzy_logic_error_count
-        ConfidenceReasoning="$ConfidenceReasoning Verified with Fuzzy logic;"
-        (( ++ConfidenceRating ))
-      fi
-    fi
-    #Restore AbsoluteEpisodeNumber after testing
-    AbsoluteEpisodeNumber="$AbsoluteEpisodeNumberBackup"
-  fi
-
-  #Statistical Fuzzy Logic monitoring
-  increment_total_matches
-  debug "TOTAL FUZZY LOGIC MATCHES:'$FuzzyLogicMatches'"
-  debug "TOTAL VERIFIED FUZZY ERRORS:'${FuzzyLogicError:-0}'"
-fi
-
-#TODO: The following few blocks will run even if we haven't properly identified the series, which doesn't make
-#      sense for the things trying to set SxxExx...
-#TODO: makes no sense to run this block if this is a movie.
-#If we already have Sxx and Exx from MythTV-DB, use them. If we also had a Subtitle, then do some verification.
-if [[ "$HasSxxExx" = '1' ]] ; then
-  #TODO: If the confidence rating from the above is good, and we have an
-  #  AbsoluteEpisodeNumber then use it to validate the Sxx, Exx & Subtitle from
-  #  the MythTV-DB.
-  inform "Using episode number: '$Sxx$Exx', extracted from the MythTV-DB."
-  #TODO: Probably should only do the following if the Series confidence rating
-  #  is ok.
-  #If we don't have a Subtitle, then use Sxx & Exx to get it from the TVDb info.
-  if [[ -z "$EpisodeSubtitle" ]]; then
-    AbsoluteEpisodeNumberBackup=$AbsoluteEpisodeNumber
-    if set_absolute_episode_number_by_sxxexx; then
-      EpisodeSubtitle=$(sed -n "$AbsoluteEpisodeNumber"'p' "$m2kdir/$NewShowName/$NewShowName.actualEname.txt")
-      inform "MythTV-DB did not have an EpisodeSubtitle, using '$EpisodeSubtitle' from TheTVDB."
-    else
-      AbsoluteEpisodeNumber=$AbsoluteEpisodeNumberBackup
-    fi
-  fi
-  #Strip the leading "S" from Sxx,
-  SeasonNumber="${Sxx#S}"
-  #and any leading "0"
-  SeasonNumber="${SeasonNumber#0}"
-
-#If we don't already have EXX and SXX, set them by matching Absolute Episode Number across myth2kodi's database
-elif [[ -n "$AbsoluteEpisodeNumber" ]]; then
-  #NOTE: this function also sets EpisodeSubtitle and SeasonNumber
-  set_sxxexx_absolute_episode_number
-else
-  warn "Could not set Sxx and Exx from MythTV-DB or set them based on InputSubtitle."
-  ConfidenceReasoning="$ConfidenceReasoning Could not get Sxx and Exx from MythTV-DB or set them based on InputSubtitle; "
-fi
+identify_episode
 
 #If it's not tagged as a Movie but lacking SxxExx and then as a fallback check storagegroup in case it's a Movie we missed
 storagegroup_fallback

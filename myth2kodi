@@ -668,7 +668,7 @@ m2k_init(){
   ((LOGLEVEL>=3)) && printf '%s\n' "Config complete." >> "$pre_logging_file"
 
   #What am I...
-  m2kVersion="myth2kodi Version 1.4.2c" ; declare -gr m2kVersion
+  m2kVersion='myth2kodi Version 1.4.2d' ; declare -gr m2kVersion
   m2kPlatform="$(uname)" ; declare -gr m2kPlatform
   ((LOGLEVEL>=3)) && printf '%s\n' "Running $m2kVersion on $m2kPlatform." >> "$pre_logging_file"
 
@@ -6363,7 +6363,7 @@ main(){
   PROCESSING_RECORDING='True'
   inform "Processing: $INPUT_PATH"
 
-  #Our starting point for the key information is the command line input.
+  #Initialise key variables with command line args, necessary if Database='Disabled'.
   TITLE="$INPUT_TITLE"
   SUBTITLE="$INPUT_SUBTITLE"
   SEASON="$INPUT_SEASON"
@@ -6502,6 +6502,12 @@ debug "No command flag set. Processing as recording."
 } >> "$LOGFILE"
 PROCESSING_RECORDING="True"
 inform "Processing: $RECORDING_PATH"
+
+  #Initialise key variables with command line args, necessary if Database='Disabled'.
+  TITLE="$INPUT_TITLE"
+  SUBTITLE="$INPUT_SUBTITLE"
+  SEASON="$INPUT_SEASON"
+  EPISODE="$INPUT_EPISODE"
 
 INPUT_PATH_BASENAME="$(basename "$RECORDING_PATH")" #"${RECORDING_PATH##*/}"
 

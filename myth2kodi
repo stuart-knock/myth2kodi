@@ -1165,14 +1165,14 @@ pre_process_check(){
       debug "M2KARG5:'$M2KARG5'"
       debug "Setting  Database='Disabled'"
       [[ "$Database" = 'Enabled' ]] && inform "Disabling access to MythTV-DB -- trying to process non-MythTV file."
-      m2kProgramIDCheck='EP'
+      RECORDING_TYPE='EP'
       Database='Disabled'
       debug "Setting  TRACKING='Disabled'"
       TRACKING='Disabled'
     elif [[ "$ShowCategory" = 'Movie' ]]; then
       inform "But we seem to have enough info from the command line to process it as a movie."
       [[ "$Database" = 'Enabled' ]] && inform "Disabling access to MythTV-DB -- trying to process non-MythTV file."
-      m2kProgramIDCheck='MV'
+      RECORDING_TYPE='MV'
       Database='Disabled'
       debug "Setting  TRACKING='Disabled'"
       TRACKING='Disabled'
@@ -2343,9 +2343,9 @@ process_mythtvdb_schedulesdirect(){
   process_mythtvdb_common
 
   #Create MV/EP/SH Identification Type from ProgramID
-  m2kProgramIDCheck="${ProgramID:0:2}" #RECORDING_TYPE
+  RECORDING_TYPE="${ProgramID:0:2}"
 
-  #Extrapolate data from m2kProgramIDCheck
+  #Extrapolate data from RECORDING_TYPE
   set_ProgramIDType
 
   #account for .0123's in EITonly data type
@@ -2369,11 +2369,11 @@ process_mythtvdb_nolookup(){
   process_mythtvdb_common
 
   #Create MV/EP/SH Identification Type from ProgramID
-  m2kProgramIDCheck="${ProgramID:0:2}" #RECORDING_TYPE
+  RECORDING_TYPE="${ProgramID:0:2}"
 
-  #Spoof show as episode to avoid m2kProgramIDCheck='EP'
-  [[ "$m2kProgramIDCheck" = 'EP' ]] && m2kProgramIDCheck='SH' #RECORDING_TYPE
-  #Extrapolate data from m2kProgramIDCheck
+  #Spoof show as episode to avoid RECORDING_TYPE='EP'
+  [[ "$RECORDING_TYPE" = 'EP' ]] && RECORDING_TYPE='SH'
+  #Extrapolate data from RECORDING_TYPE
   set_ProgramIDType
 
   #account for .0123's in EITonly data type
@@ -2417,7 +2417,7 @@ process_mythtvdb_sydfta(){
   #the MythTV database. So, we'll use that.
   if [[ "$ShowCategory" = 'Movie' ]]; then
     inform "Guide data for '$InputTitle' indicates a Movie."
-    m2kProgramIDCheck='MV' #RECORDING_TYPE
+    RECORDING_TYPE='MV'
     if [[ -n "$InputSubtitle" ]]; then #[[ -z "$INPUT_SUBTITLE" && -n "$MDB_SUBTITLE" ]]
       # warn "${FUNCNAME[0]}(): Guide data indicates that '$TITLE' is a Movie, but has an SUBTITLE: '$MDB_SUBTITLE'"
       warn "${FUNCNAME[0]}(): Guide data indicates that '$InputTitle' is a Movie, but has an InputSubtitle: '$InputSubtitle'"
@@ -2430,14 +2430,14 @@ process_mythtvdb_sydfta(){
     #  and determine whether the Category field reliably distinguishes things
     #  like news, sport, etc
     debug "Recording is not obviously a movie, so assuming episode of series. TODO: Line $LINENO."
-    m2kProgramIDCheck='EP'
+    RECORDING_TYPE='EP'
   fi
 
   #TODO: Check the SeriesID field in MythTV-DB & see if we can make more
   #  sensible use of whatever it contains...
 
   #If the information is already available, set the Sxx & Exx variables
-  if [[ "$m2kProgramIDCheck" = 'EP' ]]; then #RECORDING_TYPE
+  if [[ "$RECORDING_TYPE" = 'EP' ]]; then
     debug 'The MythTV Guide data Plot before we messed with it:'
     debugcont "Plot:'$Plot'"
     get_sxxexx_from_plot
@@ -2463,7 +2463,7 @@ process_mythtvdb_sydfta(){
   Plot="$(sed -r 's/[^[:alnum:] &,.-]//g' <<< "$Plot")"
 
   #Strip the Movie: tag that some stations very helpfully put in the title field...
-  if [[ "$m2kProgramIDCheck" = 'MV' ]]; then
+  if [[ "$RECORDING_TYPE" = 'MV' ]]; then
     InputTitle="$(sed 's/Movie:\s*//I' <<< "$InputTitle")" #TITLE MDB_TITLE
   fi
 
@@ -2471,7 +2471,7 @@ process_mythtvdb_sydfta(){
   #  If we find it, check its between 1942 & ThisYear, then store it and remove it from where we found it,
   #  especially important to remove from Title -- to avoid repetition in NewFileName if we use it to generate that name.
 
-  #Extrapolate data from m2kProgramIDCheck
+  #Extrapolate data from RECORDING_TYPE
   set_ProgramIDType
 
   #FTA stations providing a ProgramID use CRID: https://en.wikipedia.org/wiki/Crid
@@ -2488,11 +2488,11 @@ process_mythtvdb_sydfta(){
   return 0
 }
 
-#Convert m2kProgramIDCheck into ProgramIDType.
+#Convert RECORDING_TYPE into ProgramIDType.
 set_ProgramIDType(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  debugcont "m2kProgramIDCheck='$m2kProgramIDCheck'"
-  case "$m2kProgramIDCheck" in #RECORDING_TYPE
+  debugcont "RECORDING_TYPE='$RECORDING_TYPE'"
+  case "$RECORDING_TYPE" in
     'SH')
       ProgramIDType='Generic Episode With No Data'
     ;;
@@ -2504,11 +2504,11 @@ set_ProgramIDType(){
     ;;
     'SP')
       ProgramIDType='Sports Programming'
-      m2kProgramIDCheck='SH'
+      RECORDING_TYPE='SH'
     ;;
     *)
       EXIT_JOB_TYPE='UnrecognisedProgramIDType'
-      NOTIFY_MSG="Unrecognised m2kProgramIDCheck: '$m2kProgramIDCheck'."
+      NOTIFY_MSG="Unrecognised RECORDING_TYPE: '$RECORDING_TYPE'."
       err "${FUNCNAME[0]}() CALLED FROM: ${FUNCNAME[1]}(): $NOTIFY_MSG"
       return 1
       ;;
@@ -3672,7 +3672,7 @@ plot_match_fallback(){
   #As a last resort, if we still think it's an episode but have no episode info, try fuzzy match on plot
   if [[ "$PlotMatchFallback" = 'Enabled' ]]; then
     debug "PlotMatchFallback is Enabled"
-    if [[ "$m2kProgramIDCheck" = "EP" && "$HasSxxExx" != '1' ]] ; then
+    if [[ "$RECORDING_TYPE" = "EP" && "$HasSxxExx" != '1' ]] ; then
       if get_absolute_episode_number_fuzzy_plot && [[ -n "$AbsoluteEpisodeNumber" ]]; then
         inform "Setting Sxx, Exx, and EpisodeSubtitle based on FuzzyPlotMatch:"
         #NOTE: set_sxxexx_absolute_episode_number also sets EpisodeSubtitle and SeasonNumber
@@ -3692,10 +3692,10 @@ storagegroup_fallback(){
   #If it's not tagged as a Movie but lacking SxxExx and then as a fallback check storagegroup in case it's a Movie we missed
   if [[ "$StorageGroupFallback" = 'Enabled' ]]; then
     debug "StorageGroupFallback is Enabled"
-    if [[ "$m2kProgramIDCheck" != 'MV' && "$HasSxxExx" != '1' ]] ; then
+    if [[ "$RECORDING_TYPE" != 'MV' && "$HasSxxExx" != '1' ]] ; then
       if grep -iq '\(Movies*\|Films*\)' <<< "$StorageGroup" ; then
         inform "GUESSING that this is a Movie based on being in storagegroup: '$StorageGroup'"
-        m2kProgramIDCheck="MV"
+        RECORDING_TYPE="MV"
         ProgramIDType="Movie"
         ((--ConfidenceRating)) #Decrement confidence, because this is a guess.
         ConfidenceReasoning="$ConfidenceReasoning Possible misidentified Movie, overriding Guide Data, Guess; "
@@ -3838,13 +3838,13 @@ msg_userjob_outside_mythtv_error(){
 }
 
 #TODO: review this message function...
-#A warning message for when m2kProgramIDCheck="SH"
+#A warning message for when RECORDING_TYPE="SH"
 msg_show_warning(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   inform     "Recording was tagged as a show, ie, not a movie or a"
   informcont "recognised episode of a series."
   informcont "TYPE: $ProgramIDType- $InputTitle, $InputSubtitle"
-  warn "m2kProgramIDCheck='SH', this can occur due to incomplete guide data."
+  warn "RECORDING_TYPE='SH', this can occur due to incomplete guide data."
   return 0
 }
 
@@ -4353,7 +4353,7 @@ set_show_file_name(){
     debug "Naming as episode"
     ShowFileName="$NewShowName $Sxx$Exx ($EpisodeSubtitle)$SHOW_FILE_NAME_APPEND"
   #Format Movies
-  elif [[ "$m2kProgramIDCheck" = 'MV' ]]; then
+  elif [[ "$RECORDING_TYPE" = 'MV' ]]; then
     debug 'Naming as movie.'
     Exx='Movie'
     #TODO: If adding a year then we really want original release date so the Kodi metadata lookup works reliably.
@@ -4370,7 +4370,7 @@ set_show_file_name(){
     Exx="Generic"
     ShowFileName="$ShowName S0E0 ($EpisodeSubtitle Recorded $datehour on $ChanID)$SHOW_FILE_NAME_APPEND"
     RequiresNFO=1
-    [[ "$m2kProgramIDCheck" = 'EP' ]] && RequiresDoover=1
+    [[ "$RECORDING_TYPE" = 'EP' ]] && RequiresDoover=1
   fi
   inform "Set file name as: $ShowFileName"
 }
@@ -4425,14 +4425,14 @@ set_move_location(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
 
   #Episode & uncategorised handling: Determine where File will fit
-  if [[ -z "$m2kProgramIDCheck" || "$m2kProgramIDCheck" = 'EP' ]]; then
+  if [[ -z "$RECORDING_TYPE" || "$RECORDING_TYPE" = 'EP' ]]; then
     if [[ "$MoveDirWritable" != '0' && "$AltMoveDirWritable" = '0' ]]; then
       MoveDir="$AlternateMoveDir"
     elif [[ "$MoveDirWritable" != '0' && "$AltMoveDirWritable" != '0' ]]; then
       target_directory_not_writeable "Move"
     fi
   #Movie handling: Determine where file will fit
-  elif [[ "$m2kProgramIDCheck" = 'MV' ]]; then
+  elif [[ "$RECORDING_TYPE" = 'MV' ]]; then
     if [[ "$MovieDirWritable" = '0' ]]; then
       MoveDir="$PrimaryMovieDir"
     elif [[ "$AltMovieDirWritable" = '0' ]]; then
@@ -4441,7 +4441,7 @@ set_move_location(){
       target_directory_not_writeable "Movie"
     fi
   #Show Handling: Determining Where File will fit
-  elif [[ "$m2kProgramIDCheck" = 'SH' ]]; then
+  elif [[ "$RECORDING_TYPE" = 'SH' ]]; then
     if [[ "$ShowDirWritable" = '0' ]]; then
       MoveDir="$PrimaryShowDir"
     elif [[ "$AltShowDirWritable" = '0' ]]; then
@@ -4475,9 +4475,9 @@ make_show_dir(){
   if [[ -n "$NewShowName" ]]; then
     MoveDir="$MoveDir/$NewShowName"
     if [[ ! -d "$MoveDir" ]]; then
-      [[ "$m2kProgramIDCheck" = 'EP' ]] && inform "CREATING SERIES FOLDER: '$MoveDir'"
-      [[ "$m2kProgramIDCheck" = 'MV' ]] && inform "CREATING MOVIE FOLDER: '$MoveDir'"
-      [[ "$m2kProgramIDCheck" = 'SH' ]] && inform "CREATING SHOWING FOLDER: '$MoveDir'"
+      [[ "$RECORDING_TYPE" = 'EP' ]] && inform "CREATING SERIES FOLDER: '$MoveDir'"
+      [[ "$RECORDING_TYPE" = 'MV' ]] && inform "CREATING MOVIE FOLDER: '$MoveDir'"
+      [[ "$RECORDING_TYPE" = 'SH' ]] && inform "CREATING SHOWING FOLDER: '$MoveDir'"
       [[ "$TRACKING" != 'Disabled' ]] && printf '%s\n' "$MoveDir" >> "$m2kdir/dir.tracking"
       mkdir "$MoveDir"
       chmod 775 "$MoveDir"
@@ -5191,9 +5191,9 @@ generaterss(){
     echo -e "\t\t<item>"
     echo -e "\t\t\t<title>$rssNewShowName $Sxx$Exx $rssEpisodeSubtitle</title>"
   } >> "$RSS_DIRECTORY/$TEMPrssFile"
-  if [ "$m2kProgramIDCheck" = "EP" ]; then
+  if [ "$RECORDING_TYPE" = "EP" ]; then
     echo -e "\t\t\t<link>http://www.thetvdb.com/?tab=series&amp;id=$SeriesID</link>" >> "$RSS_DIRECTORY/$TEMPrssFile"
-  elif [ "$m2kProgramIDCheck" = "MV" ]; then
+  elif [ "$RECORDING_TYPE" = "MV" ]; then
     echo -e "\t\t\t<link>http://www.imdb.com/search/title?release_date=,$MovieAirDate&amp;title=$ShowName&amp;title_type=feature</link>" >> "$RSS_DIRECTORY/$TEMPrssFile"
   else
     tvdotcomshowname="${ShowName// /%20}"
@@ -6537,7 +6537,7 @@ main(){
   [[ "$RECORDING_PATH" = "$m2kdir/6666_20420101084242.tst" ]] && testfile_exit
 
   #If the show is generic programming, this is the best myth2kodi can do.
-  [[ "$m2kProgramIDCheck" = 'SH' ]] && msg_show_warning
+  [[ "$RECORDING_TYPE" = 'SH' ]] && msg_show_warning
 
   #Process the recording file.
   if [[ "$PROCESS_RECORDING_MODE" = 'MOVE' ]]; then
@@ -6616,7 +6616,7 @@ fi
 msg_merged_input_mythtvdb
 
 #Try to set Sxx and Exx using InputSeasonNum, InputEpisodeNum, or SeasonEpisode.
-[[ "$m2kProgramIDCheck" = 'EP' ]] && set_sxxexx_season_episode_numbers
+[[ "$RECORDING_TYPE" = 'EP' ]] && set_sxxexx_season_episode_numbers
 
 #At this point we should have an initial show name, if not then abort.
 ShowName="$InputTitle"
@@ -6663,7 +6663,7 @@ periodic_maintenace
 #####SEARCH FOR SHOW AND BUILD INFORMATION#####
 
 #Process as though it's an episode of a tv series.
-if [[ "$m2kProgramIDCheck" != "SH" && "$m2kProgramIDCheck" != "MV" ]]; then
+if [[ "$RECORDING_TYPE" != "SH" && "$RECORDING_TYPE" != "MV" ]]; then
   #Query TheTVDB on show title, then return a list of Zap2itID, ShowName and seriesid.
   if download_series_identification; then
     #Start by trying to match on Zap2itID
@@ -6734,7 +6734,7 @@ if [[ -n "$SeriesID" ]]; then
     fi
   fi
 #if series id is not obtained send failure message
-elif [[ -z "$SeriesID" && "$m2kProgramIDCheck" != "SH" && "$m2kProgramIDCheck" != "MV" ]]; then
+elif [[ -z "$SeriesID" && "$RECORDING_TYPE" != "SH" && "$RECORDING_TYPE" != "MV" ]]; then
   ConfidenceReasoning="$ConfidenceReasoning Failed; "
   warn "SERIES ID WAS NOT FOUND. TheTVDB MAY BE DOWN. IF NOT TRY USING A showTranslations FILE."
   printf '%s\n' "$InputTitle" >> "$UnrecognizedSeriesFile"
@@ -6768,7 +6768,7 @@ plot_match_fallback
 
 #######SANITY CHECKS#####
 
-if [ "$m2kProgramIDCheck" = "EP" ] && [[ "$Exx" = "E" || -z "$Exx" ]]; then
+if [ "$RECORDING_TYPE" = "EP" ] && [[ "$Exx" = "E" || -z "$Exx" ]]; then
   ConfidenceReasoning="$ConfidenceReasoning Guide Data did not match a specific Episode;"
   warn "Identified recording as episode but failed to determine episode number, requiring doover."
   RequiresDoover=1
@@ -6776,7 +6776,7 @@ if [ "$m2kProgramIDCheck" = "EP" ] && [[ "$Exx" = "E" || -z "$Exx" ]]; then
 
 #If it's a movie or a showing, give it a name.
 #TODO: If it's a movie, try using imdb or similar with available $Plot to determine if the Title is correct...
-elif [ "$m2kProgramIDCheck" = "MV" ] || [ "$m2kProgramIDCheck" = "SH" ] ; then
+elif [ "$RECORDING_TYPE" = "MV" ] || [ "$RECORDING_TYPE" = "SH" ] ; then
   NewShowName="$InputTitle"
   ConfidenceReasoning="$ConfidenceReasoning Guide Data reported this is a $ProgramIDType;"
 fi
@@ -6807,11 +6807,11 @@ msg_operation_summary
 ######PRE-NAMING CHECKS#####
 #if no episode data and it's not a test
 if [[ "$HasSxxExx" != '1' && "$RECORDING_PATH" != "$m2kdir/6666_20420101084242.tst" ]]; then
-  if [[ "$m2kProgramIDCheck" = "EP" ]]; then
+  if [[ "$RECORDING_TYPE" = "EP" ]]; then
     NOTIFY_MSG="Episode could not be matched with supplied information."
     warn "$NOTIFY_MSG"
     exit_job 'NameCouldNotBeAssigned'
-  elif [[ "$m2kProgramIDCheck" = "MV" ]]; then
+  elif [[ "$RECORDING_TYPE" = "MV" ]]; then
     #Ensures the doover value was not set for the movie and use safe show name
     RequiresDoover=0
     NewShowName="$SafeShowName"
@@ -6819,7 +6819,7 @@ if [[ "$HasSxxExx" != '1' && "$RECORDING_PATH" != "$m2kdir/6666_20420101084242.t
   elif [[ "$ShowStopper" = 'Enabled' ]]; then
     msg_unable_to_identify_recording
     exit_job 'NameCouldNotBeAssigned'
-  elif [[ "$m2kProgramIDCheck" = "SH" ]]; then
+  elif [[ "$RECORDING_TYPE" = "SH" ]]; then
     #Ensures the doover value was not set for the show and use safe show name
     NewShowName="$SafeShowName"
     msg_show_warning
@@ -6883,7 +6883,7 @@ else
 fi
 
 #If the show is generic programming, this is the best myth2kodi can do.
-[[ "$m2kProgramIDCheck" = 'SH' ]] && msg_show_warning
+[[ "$RECORDING_TYPE" = 'SH' ]] && msg_show_warning
 
 #Process the recording file.
 if [[ "$PROCESS_RECORDING_MODE" = 'MOVE' ]]; then

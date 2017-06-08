@@ -247,7 +247,7 @@ FailSafeMode='Disabled'
 StorageGroupFallback='Disabled'
 
 #PlotMatchFallback can be used to enable/disable a bit of code that, if a
-#SeriesID has been determined but no subtitle nor Season & Episode numbers
+#TVDB_SERIESID has been determined but no subtitle nor Season & Episode numbers
 #have been identified, falls back to fuzzy matching the Plot field from the
 #Guide data in MythTV-DB against the Plot data for the series, which we
 #retrieved from TheTVDB and tvmaze.
@@ -775,8 +775,8 @@ m2k_init(){
   [[ "$settings_status" != '0' ]] && exit "$settings_status"
 
   #Set defaults for searching Series information
-  SeriesID=''
-  NewShowName=''
+  TVDB_SERIESID=''
+  TVDB_TITLE=''
   RequiresDoover=0
   ConfidenceRating=0
   SeriesConfidenceRating=0
@@ -2353,7 +2353,7 @@ process_mythtvdb_sydfta(){
     RECORDING_TYPE='EP'
   fi
 
-  #TODO: Check the SeriesID field in MythTV-DB & see if we can make more
+  #TODO: Check the seriesid field in MythTV-DB & see if we can make more
   #  sensible use of whatever it contains...
 
   #If the information is already available, set the Sxx & Exx variables
@@ -2610,7 +2610,7 @@ download_series_identification(){
   fi
   declare -gr TMP_SID_FILE TMP_SHN_FILE
 
-  #Separate the XML into textual DBs containing SeriesID, ShowName and Zap2it IDs
+  #Separate the XML into textual DBs containing seriesid, SeriesName and zap2it_id
   grep "<seriesid>" "$working_file" | sed -e 's#</\?seriesid>##g' \
                                           -e 's/&quot;/"/g'       \
                                           -e 's/&amp;/\&/g'       \
@@ -2665,7 +2665,7 @@ check_m2k_database_up_to_date(){
   #Return state = 1 means the local database should be updated from TheTVDB
   #Return state = 0 means the local database is up to date with TheTVDB
   local updates_site='http://www.thetvdb.com/api/Updates.php'
-  local dbdir="$m2kdir/$NewShowName"
+  local dbdir="$m2kdir/$TVDB_TITLE"
 
   #Get current server time
   curl -L -s -m"$Timeout" "${updates_site}?type=none" > "$dbdir/TheTVDB_current.time"
@@ -2679,7 +2679,7 @@ check_m2k_database_up_to_date(){
   if [ -f "$dbdir/lastupdated.time" ]; then
     LastUpdatedTVDB=$(cat "$dbdir/lastupdated.time")
   else #no last updated time, so assign a never updated value and update now.
-    debug "Seems we've never updated $NewShowName from TheTVDB -- no lastupdated.time file."
+    debug "Seems we've never updated $TVDB_TITLE from TheTVDB -- no lastupdated.time file."
     LastUpdatedTVDB=42 #A meaningless low number to start from...
     return 1
   fi
@@ -2698,12 +2698,12 @@ check_m2k_database_up_to_date(){
     return 1
     ##########################################################################
     curl -L -s -m"$Timeout" "${updates_site}?type=all&time=$LastUpdatedTVDB" > "$dbdir/UpdatesList.txt"
-    if grep -q "$SeriesID" "$dbdir/UpdatesList.txt" ; then
+    if grep -q "$TVDB_SERIESID" "$dbdir/UpdatesList.txt" ; then
       inform "DATABASE OUT OF DATE. Next update: $next_update. Current: $CurrentTimeTVDB"
       return 1
     else
-      debug "TheTVDB does not appear to have any updates for $NewShowName."
-      #TODO: SeriesID isn't being found in UpdatesList for Grey's Anatomy, Marvel's Agents of S.H.I.E.L.D., and possibly others, so the the local data isn't being updated
+      debug "TheTVDB does not appear to have any updates for $TVDB_TITLE."
+      #TODO: TVDB_SERIESID isn't being found in UpdatesList for Grey's Anatomy, Marvel's Agents of S.H.I.E.L.D., and possibly others, so the the local data isn't being updated
       #inform "DATABASE DOESN'T APPEAR TO BE OUT OF DATE. BUT UNFORTUNATELY WE CURRENTLY HAVE A BUG HERE SO ARE FORCING UPDATE ANYWAY..."
       #return 1 #TODO: This is a current work around for some Series not being found in the UpdatesList from thetvdb, even though updated data is available...
       return 0
@@ -2722,52 +2722,52 @@ check_m2k_database_up_to_date(){
 #myth2kodi's internal database files for the series.
 download_series_info(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  inform "Downloading Series: '$SeriesID'"
+  inform "Downloading Series: '$TVDB_SERIESID'"
   local -i GotNewInformation=0
   local -i ProcessingSuccesful=0
-  local dbdir="$m2kdir/$NewShowName"
-  local TheTVDBShowXML="http://www.thetvdb.com/api/$APIkey/series/$SeriesID/all/$Language.xml"
+  local dbdir="$m2kdir/$TVDB_TITLE"
+  local TheTVDBShowXML="http://www.thetvdb.com/api/$APIkey/series/$TVDB_SERIESID/all/$Language.xml"
   local FieldsWeWant="(</?Series>|</?seriesid>|</?Status>|</?lastupdated>|</?Episode>|</?SeasonNumber>|</?EpisodeNumber>|</?EpisodeName>|</?Overview>|</?FirstAired>)"
-  curl -L -s -m"$Timeout" "$TheTVDBShowXML" | grep -E "$FieldsWeWant" > "$dbdir/$NewShowName.xmlTest"
+  curl -L -s -m"$Timeout" "$TheTVDBShowXML" | grep -E "$FieldsWeWant" > "$dbdir/$TVDB_TITLE.xmlTest"
   local curl_grep_status=("${PIPESTATUS[@]}")
   [[ "${curl_grep_status[0]}" != '0' ]] && warn "${FUNCNAME[0]}(): Issue accessing: $TheTVDBShowXML"
   (( curl_grep_status[1] >= 2 )) && err "${FUNCNAME[0]}(): Error status returned by grep for FieldsWeWant from '$TheTVDBShowXML'."
   [[ "${curl_grep_status[1]}" = '1' ]] && warn "${FUNCNAME[0]}(): Failed to match any of the fields we want."
 
   local -i tvmaze_id
-  tvmaze_id=$(curl -L -s -m"$Timeout" http://api.tvmaze.com/lookup/shows?thetvdb="$SeriesID" | jq '.id')
-  local tvmazeJsonFile="$dbdir/${NewShowName}_tvmaze.json"
+  tvmaze_id=$(curl -L -s -m"$Timeout" http://api.tvmaze.com/lookup/shows?thetvdb="$TVDB_SERIESID" | jq '.id')
+  local tvmazeJsonFile="$dbdir/${TVDB_TITLE}_tvmaze.json"
   # to get the matching tvmaze id, then
   if ((tvmaze_id != 0)) ; then
     debug "Found matching tvmaze id: '$tvmaze_id'"
     local tvmazeShowJson="http://api.tvmaze.com/shows/$tvmaze_id/episodes"
-    [[ -f "$tvmazeJsonFile" ]] && mv "$tvmazeJsonFile" "$dbdir/${TODAY}_${NewShowName}_tvmaze.json"
+    [[ -f "$tvmazeJsonFile" ]] && mv "$tvmazeJsonFile" "$dbdir/${TODAY}_${TVDB_TITLE}_tvmaze.json"
     debug "Getting new tvmaze show info from: '$tvmazeShowJson'"
     curl -L -s -m"$Timeout" "$tvmazeShowJson" > "$tvmazeJsonFile"
   fi
 
   #Validate that the show has at least one EpisodeName tag and is a valid download before clobbering our old download.
-  if grep -q "EpisodeName" "$dbdir/$NewShowName.xmlTest"; then
+  if grep -q "EpisodeName" "$dbdir/$TVDB_TITLE.xmlTest"; then
     printf '%s\n' "$(date +%s)" > "$dbdir/lastupdated.time" && chmod 644 "$dbdir/lastupdated.time"
     #Check the new info is actually new, if there was no old info then it must be new.
-    if [ -f "$dbdir/$NewShowName.xml" ] ; then
-      diff "$dbdir/$NewShowName.xmlTest" "$dbdir/$NewShowName.xml" &> /dev/null
+    if [ -f "$dbdir/$TVDB_TITLE.xml" ] ; then
+      diff "$dbdir/$TVDB_TITLE.xmlTest" "$dbdir/$TVDB_TITLE.xml" &> /dev/null
       GotNewInformation="$?" #NOTE: No-diff = 0; diff = 1; error = 2
     else
       GotNewInformation=1
     fi
     if [ "$GotNewInformation" = "1" ] ; then
       #Clear out the old
-      inform "Downloaded new information for '$NewShowName'"
+      inform "Downloaded new information for '$TVDB_TITLE'"
       debug 'Cleaning up old information before processing.'
-      test -f "$dbdir/$NewShowName.xml" && mv "$dbdir/$NewShowName.xml" "$dbdir/${TODAY}_$NewShowName.xml"
-      mv "$dbdir/$NewShowName.xmlTest" "$dbdir/$NewShowName.xml"
-      test -f "$dbdir/$NewShowName.actualEname.txt" && rm -f "$dbdir/$NewShowName.actualEname.txt"
-      test -f "$dbdir/$NewShowName.Ename.txt"       && rm -f "$dbdir/$NewShowName.Ename.txt"
-      test -f "$dbdir/$NewShowName.FAired.txt"      && rm -f "$dbdir/$NewShowName.FAired.txt"
-      test -f "$dbdir/$NewShowName.S.txt"           && rm -f "$dbdir/$NewShowName.S.txt"
-      test -f "$dbdir/$NewShowName.E.txt"           && rm -f "$dbdir/$NewShowName.E.txt"
-      test -f "$dbdir/$NewShowName.Plot.txt"        && rm -f "$dbdir/$NewShowName.Plot.txt"
+      test -f "$dbdir/$TVDB_TITLE.xml" && mv "$dbdir/$TVDB_TITLE.xml" "$dbdir/${TODAY}_$TVDB_TITLE.xml"
+      mv "$dbdir/$TVDB_TITLE.xmlTest" "$dbdir/$TVDB_TITLE.xml"
+      test -f "$dbdir/$TVDB_TITLE.actualEname.txt" && rm -f "$dbdir/$TVDB_TITLE.actualEname.txt"
+      test -f "$dbdir/$TVDB_TITLE.Ename.txt"       && rm -f "$dbdir/$TVDB_TITLE.Ename.txt"
+      test -f "$dbdir/$TVDB_TITLE.FAired.txt"      && rm -f "$dbdir/$TVDB_TITLE.FAired.txt"
+      test -f "$dbdir/$TVDB_TITLE.S.txt"           && rm -f "$dbdir/$TVDB_TITLE.S.txt"
+      test -f "$dbdir/$TVDB_TITLE.E.txt"           && rm -f "$dbdir/$TVDB_TITLE.E.txt"
+      test -f "$dbdir/$TVDB_TITLE.Plot.txt"        && rm -f "$dbdir/$TVDB_TITLE.Plot.txt"
 
       #create a folder/file "database" Strip XML tags. Series, Exx and Sxx are separated into different files
       local Ename=""
@@ -2777,12 +2777,12 @@ download_series_info(){
       local EpisodeNr=""
       local EpisodeOverview=""
       local -i recordNumber=-1
-      inform "Parsing Downloaded information from TheTVDB: $NewShowName.xml"
+      inform "Parsing Downloaded information from TheTVDB: $TVDB_TITLE.xml"
       while read -r line ; do
         if ((recordNumber < 0)); then
           #TODO: Grab the Series description and first aired date, either here or in download_series_identification(), for use in series NFO
           #TODO:Check for a Status line and if it exists and says Ended then touch
-          #  a file called Status.Ended in the $m2kdir/$NewShowName/
+          #  a file called Status.Ended in the $m2kdir/$TVDB_TITLE/
           #  directory, then add a check for this before we bother trying to
           #  download information again. Also, use the lastupdated field if present.
           #Skip lines until the end series block tag is found, then start processing the episode info
@@ -2791,12 +2791,12 @@ download_series_info(){
           (( ++recordNumber ))
           #Write Episode info to files
           debug "Building Record:$recordNumber -${actualEname}-"
-          printf '%s\n' "$actualEname"     >> "$dbdir/$NewShowName.actualEname.txt"
-          printf '%s\n' "$Ename"           >> "$dbdir/$NewShowName.Ename.txt"
-          printf '%s\n' "$FAired"          >> "$dbdir/$NewShowName.FAired.txt"
-          printf '%s\n' "$SeasonNr"        >> "$dbdir/$NewShowName.S.txt"
-          printf '%s\n' "$EpisodeNr"       >> "$dbdir/$NewShowName.E.txt"
-          printf '%s\n' "$EpisodeOverview" >> "$dbdir/$NewShowName.Plot.txt"
+          printf '%s\n' "$actualEname"     >> "$dbdir/$TVDB_TITLE.actualEname.txt"
+          printf '%s\n' "$Ename"           >> "$dbdir/$TVDB_TITLE.Ename.txt"
+          printf '%s\n' "$FAired"          >> "$dbdir/$TVDB_TITLE.FAired.txt"
+          printf '%s\n' "$SeasonNr"        >> "$dbdir/$TVDB_TITLE.S.txt"
+          printf '%s\n' "$EpisodeNr"       >> "$dbdir/$TVDB_TITLE.E.txt"
+          printf '%s\n' "$EpisodeOverview" >> "$dbdir/$TVDB_TITLE.Plot.txt"
         #Get actual show name
         elif [[ "$line" == "<EpisodeName>"* ]]; then
           line="${line/"</EpisodeName>"/}"
@@ -2845,14 +2845,14 @@ download_series_info(){
           line="${line%%*([[:space:]])}"
           EpisodeOverview="$line"
         fi
-      done < "$dbdir/$NewShowName.xml"
+      done < "$dbdir/$TVDB_TITLE.xml"
 
       #If we also have a json file from tvmaze, then append that info
       if [[ -f "$tvmazeJsonFile" ]] ; then
-        jq -r '.[] | .name'   "$tvmazeJsonFile" >> "$dbdir/$NewShowName.actualEname.txt"
-        jq -r '.[] | .name'   "$tvmazeJsonFile" >> "$dbdir/$NewShowName.Ename.txt"
-        jq -r '.[] | .season' "$tvmazeJsonFile" >> "$dbdir/$NewShowName.S.txt"
-        jq -r '.[] | .number' "$tvmazeJsonFile" >> "$dbdir/$NewShowName.E.txt"
+        jq -r '.[] | .name'   "$tvmazeJsonFile" >> "$dbdir/$TVDB_TITLE.actualEname.txt"
+        jq -r '.[] | .name'   "$tvmazeJsonFile" >> "$dbdir/$TVDB_TITLE.Ename.txt"
+        jq -r '.[] | .season' "$tvmazeJsonFile" >> "$dbdir/$TVDB_TITLE.S.txt"
+        jq -r '.[] | .number' "$tvmazeJsonFile" >> "$dbdir/$TVDB_TITLE.E.txt"
         local -i EpisodeCount
         EpisodeCount=$(jq -r '.[] | .name' "$tvmazeJsonFile" | wc -l)
         for i in $(seq 0 $((EpisodeCount-1))); do
@@ -2860,25 +2860,25 @@ download_series_info(){
               | tr -d "\n"                           \
               | sed -r 's#</?p>##g'                  \
               | sed -r 's/[^[:alnum:] &,.-]//g'      \
-              | tr -s ' ' >> "$dbdir/$NewShowName.Plot.txt"
-          printf '\n' >> "$dbdir/$NewShowName.Plot.txt"
+              | tr -s ' ' >> "$dbdir/$TVDB_TITLE.Plot.txt"
+          printf '\n' >> "$dbdir/$TVDB_TITLE.Plot.txt"
         done
       fi
 
       #Set permission 644 (rw-r--r--)
-      chmod 644 "$dbdir/$NewShowName.actualEname.txt"
-      chmod 644 "$dbdir/$NewShowName.Ename.txt"
-      chmod 644 "$dbdir/$NewShowName.FAired.txt"
-      chmod 644 "$dbdir/$NewShowName.S.txt"
-      chmod 644 "$dbdir/$NewShowName.E.txt"
-      chmod 644 "$dbdir/$NewShowName.Plot.txt"
+      chmod 644 "$dbdir/$TVDB_TITLE.actualEname.txt"
+      chmod 644 "$dbdir/$TVDB_TITLE.Ename.txt"
+      chmod 644 "$dbdir/$TVDB_TITLE.FAired.txt"
+      chmod 644 "$dbdir/$TVDB_TITLE.S.txt"
+      chmod 644 "$dbdir/$TVDB_TITLE.E.txt"
+      chmod 644 "$dbdir/$TVDB_TITLE.Plot.txt"
       ProcessingSuccesful=1
 
     elif (( GotNewInformation == 2 )); then
-      err "${FUNCNAME[0]}(): UNEXPECTED ERROR comparing new to old information for '$NewShowName'"
+      err "${FUNCNAME[0]}(): UNEXPECTED ERROR comparing new to old information for '$TVDB_TITLE'"
       return 1
     elif (( GotNewInformation == 0 )); then
-      inform "TheTVDB information for $NewShowName has not changed since last download."
+      inform "TheTVDB information for $TVDB_TITLE has not changed since last download."
       return 0
     fi
   else
@@ -2888,7 +2888,7 @@ download_series_info(){
   if ((ProcessingSuccesful == 1)) ; then
     inform "LOCAL DATABASE UPDATED: $dbdir"
     return 0
-  elif [[ ! -f "$dbdir/$NewShowName.Ename.txt" ]]; then
+  elif [[ ! -f "$dbdir/$TVDB_TITLE.Ename.txt" ]]; then
     err "${FUNCNAME[0]}(): PERMISSION ERROR for $dbdir"
     return 1
   fi
@@ -2898,11 +2898,11 @@ download_series_info(){
 #Create myth2kodi's internal database directory for the current show.
 make_m2k_database_dir(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  if [[ ! -d "$m2kdir/$NewShowName" ]]; then
-    mkdir "$m2kdir/$NewShowName"
+  if [[ ! -d "$m2kdir/$TVDB_TITLE" ]]; then
+    mkdir "$m2kdir/$TVDB_TITLE"
     #Set permission 755 (rwxr-xr-x)
-    chmod 755 "$m2kdir/$NewShowName"
-    inform "Created myth2kodi Database Folder: $m2kdir/$NewShowName"
+    chmod 755 "$m2kdir/$TVDB_TITLE"
+    inform "Created myth2kodi Database Folder: $m2kdir/$TVDB_TITLE"
   fi
 }
 
@@ -2976,10 +2976,10 @@ identify_episode(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   debugcont "RECORDING_TYPE='$RECORDING_TYPE'"
   debugcont "ONLINE_LOOKUP='$ONLINE_LOOKUP'"
-  debugcont "SeriesID='$SeriesID'"
+  debugcont "TVDB_SERIESID='$TVDB_SERIESID'"
 
-  if [[ -n "$SeriesID" ]]; then
-    inform "Processing SeriesID:$SeriesID"
+  if [[ -n "$TVDB_SERIESID" ]]; then
+    inform "Processing TVDB_SERIESID:$TVDB_SERIESID"
     #####GET ABSOLUTE EPISODE NUMBER#####
     if [[ "$GuideDataType" = "SchedulesDirect" ]]; then
       ConfidenceReasoning="$ConfidenceReasoning Attempted match on ORIGINALAIRDATE:"
@@ -3080,7 +3080,7 @@ identify_episode(){
     if [[ -z "$EpisodeSubtitle" ]]; then
       AbsoluteEpisodeNumberBackup=$AbsoluteEpisodeNumber
       if set_absolute_episode_number_by_sxxexx; then
-        EpisodeSubtitle=$(sed -n "$AbsoluteEpisodeNumber"'p' "$m2kdir/$NewShowName/$NewShowName.actualEname.txt")
+        EpisodeSubtitle=$(sed -n "$AbsoluteEpisodeNumber"'p' "$m2kdir/$TVDB_TITLE/$TVDB_TITLE.actualEname.txt")
         inform "MythTV-DB did not have an EpisodeSubtitle, using '$EpisodeSubtitle' from TheTVDB."
       else
         AbsoluteEpisodeNumber=$AbsoluteEpisodeNumberBackup
@@ -3160,7 +3160,7 @@ get_serieslinenumber_showname(){
 #resolved by matching the airdate by title.
 resolve_multiple_matches_airdate(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  local NewShowBasename="$m2kdir/$NewShowName/$NewShowName"
+  local NewShowBasename="$m2kdir/$TVDB_TITLE/$TVDB_TITLE"
   #Cleanup from last instance match if required
   ConfidenceReasoning="$ConfidenceReasoning Conflict; Multiple Airdates Detected- Parsed results; Attempted to resolve conflict with Standard Logic:"
   test -f "$NewShowBasename.InstanceEnames.txt"            && rm "$NewShowBasename.InstanceEnames.txt"
@@ -3202,13 +3202,13 @@ resolve_multiple_matches_airdate(){
   return 1
 }
 
-#Sets the SeriesID and NewShowName variables based on serieslinenumber.
+#Sets the TVDB_SERIESID and TVDB_TITLE variables based on serieslinenumber.
 set_seriesid_newshowname_from_serieslinenumber(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   #Get the seriesid based on the showname
-  SeriesID="$(sed -n "$serieslinenumber"'p' "$TMP_SID_FILE" | grep -m1 ^)"
-  NewShowName="$(sed -n "$serieslinenumber"'p' "$TMP_SHN_FILE" | grep -m1 ^)" #TVDB_TITLE
-  NewShowName="${NewShowName//&amp;/&}"
+  TVDB_SERIESID="$(sed -n "$serieslinenumber"'p' "$TMP_SID_FILE" | grep -m1 ^)"
+  TVDB_TITLE="$(sed -n "$serieslinenumber"'p' "$TMP_SHN_FILE" | grep -m1 ^)"
+  TVDB_TITLE="${TVDB_TITLE//&amp;/&}"
 
   #If we're not in debug mode then cleanup show identification files.
   [[ -f "$TMP_SID_FILE" ]] && (( LOGLEVEL < 3 )) && rm -f "$TMP_SID_FILE"
@@ -3221,13 +3221,13 @@ set_absolute_episode_number_by_airdate(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   AbsoluteEpisodeNumber=''
   if [[ -n "$ORIGINALAIRDATE" ]]; then
-    AbsoluteEpisodeNumber="$(grep -n "$ORIGINALAIRDATE" "$m2kdir/$NewShowName/$NewShowName.FAired.txt" | grep -m1 -o '^[0-9]*')"
+    AbsoluteEpisodeNumber="$(grep -n "$ORIGINALAIRDATE" "$m2kdir/$TVDB_TITLE/$TVDB_TITLE.FAired.txt" | grep -m1 -o '^[0-9]*')"
   fi
   #Account for original series airdate
   if [[ -n "$AbsoluteEpisodeNumber" ]] && ((AbsoluteEpisodeNumber > 0)); then
     local NumberOriginalAirdates
     #Account for original show airdate = first air date
-    NumberOriginalAirdates=$(grep --count "$ORIGINALAIRDATE" "$m2kdir/$NewShowName/$NewShowName.FAired.txt")
+    NumberOriginalAirdates=$(grep --count "$ORIGINALAIRDATE" "$m2kdir/$TVDB_TITLE/$TVDB_TITLE.FAired.txt")
     ((NumberOriginalAirdates > 1)) && return 1
     inform "Absolute Exx NR:$AbsoluteEpisodeNumber BASED ON AIRDATE:$ORIGINALAIRDATE"
     return 0
@@ -3240,7 +3240,7 @@ set_absolute_episode_number_by_airdate(){
 set_absolute_episode_number_by_sxxexx(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   debugcont "AbsoluteEpisodeNumber: '$AbsoluteEpisodeNumber'"
-  debugcont "NewShowName: '$NewShowName'"
+  debugcont "TVDB_TITLE: '$TVDB_TITLE'"
   debugcont "Sxx: '$Sxx'"
   debugcont "Exx: '$Exx'"
 
@@ -3252,8 +3252,8 @@ set_absolute_episode_number_by_sxxexx(){
   local Enum=${Exx#E} ; Enum=${Enum#0}
   local SxxAENs
   local ExxAENs
-  SxxAENs=$(grep -nix "$Snum" "$m2kdir/$NewShowName/$NewShowName.S.txt" | cut -d':' -f1 )
-  ExxAENs=$(grep -nix "$Enum" "$m2kdir/$NewShowName/$NewShowName.E.txt" | cut -d':' -f1 )
+  SxxAENs=$(grep -nix "$Snum" "$m2kdir/$TVDB_TITLE/$TVDB_TITLE.S.txt" | cut -d':' -f1 )
+  ExxAENs=$(grep -nix "$Enum" "$m2kdir/$TVDB_TITLE/$TVDB_TITLE.E.txt" | cut -d':' -f1 )
   #With multiple data sources we can get multiple AENs, just take the first data source:
   AENs=($(sort --numeric-sort <<< "$(comm -12 <(sort <<< "$SxxAENs") <(sort <<< "$ExxAENs"))"))
   AbsoluteEpisodeNumber="${AENs[0]}"
@@ -3270,7 +3270,7 @@ set_absolute_episode_number_by_sxxexx(){
 set_absolute_episode_number_by_ename(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   AbsoluteEpisodeNumber=""
-  AbsoluteEpisodeNumber=$(grep -nix "$EpisodeSubtitle" "$m2kdir/$NewShowName/$NewShowName.Ename.txt" | grep -m1 -o '^[0-9]*')
+  AbsoluteEpisodeNumber=$(grep -nix "$EpisodeSubtitle" "$m2kdir/$TVDB_TITLE/$TVDB_TITLE.Ename.txt" | grep -m1 -o '^[0-9]*')
   if [[ -n "$AbsoluteEpisodeNumber" ]] && ((AbsoluteEpisodeNumber > 0)); then
     return 0
   fi
@@ -3297,12 +3297,12 @@ set_absolute_episode_number_by_ename_fuzzy(){
   #Some systems have an agrep that limits PATTERN to < 32 characters...
   #To avoid "special" episodes of the form "Special: Related Episode Name" first
   #try and match the pattern from the start of the line.
-  fuzzy_ename_0=($(agrep -iByns "^${EpisodeSubtitle:0:28}" "$m2kdir/$NewShowName/$NewShowName.Ename.txt"))
+  fuzzy_ename_0=($(agrep -iByns "^${EpisodeSubtitle:0:28}" "$m2kdir/$TVDB_TITLE/$TVDB_TITLE.Ename.txt"))
   #Then, because some shows (eg Gotham) use two part names like "Chapter Name: Episode Name" and
   #guide-data can contain just the "Episode Name" we match without binding to the front of the
   #line. And as the EpisodeSubtitle can contain character with special meanings in regex, we match
   #as a string literal (-k).
-  fuzzy_ename_1=($(agrep -iBynsk "${EpisodeSubtitle:0:29}" "$m2kdir/$NewShowName/$NewShowName.Ename.txt"))
+  fuzzy_ename_1=($(agrep -iBynsk "${EpisodeSubtitle:0:29}" "$m2kdir/$TVDB_TITLE/$TVDB_TITLE.Ename.txt"))
   fuzzy_ename=("${fuzzy_ename_0[@]}" "${fuzzy_ename_1[@]}")
   #Extract our guessed AbsoluteEpisodeNumbers
   all_cost_aen_guess=($(cut -f1 -d":" <<< "$(printf '%s\n' "${fuzzy_ename[@]}")"))
@@ -3328,21 +3328,21 @@ set_absolute_episode_number_by_ename_fuzzy(){
 }
 
 #Use agrep to match the whole guide-data plot against Plots in myth2kodi-DB.
-#Returns: 2 on a failure that indicates $NewShowName.Plot.txt contains no plots;
+#Returns: 2 on a failure that indicates $TVDB_TITLE.Plot.txt contains no plots;
 #         0 if AbsoluteEpisodeNumber properly set; 1 otherwise.
 fuzzy_plot_match(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  debugcont "NewShowName: '$NewShowName'"
+  debugcont "TVDB_TITLE: '$TVDB_TITLE'"
   debugcont "Plot: '$Plot'"
   debugcont "PlotLength: '$PlotLength'"
   local -a FuzzyPlot=()
   local -a cost=()
   #Fuzzy guess at plot, prepended with: "AbsoluteEpisodeNumber:cost:"
-  FuzzyPlot=($(agrep -iBynsk "$Plot" "$m2kdir/$NewShowName/$NewShowName.Plot.txt"))
+  FuzzyPlot=($(agrep -iBynsk "$Plot" "$m2kdir/$TVDB_TITLE/$TVDB_TITLE.Plot.txt"))
   if [[ -z "${FuzzyPlot[0]}" ]]; then
-    #This should only happen when NewShowName has no Plot info, so no point
+    #This should only happen when TVDB_TITLE has no Plot info, so no point
     #continuing trying to match Plot.
-    warn "${FUNCNAME[0]}(): No fuzzy match on Plot -- Possibly no Plot info for $NewShowName"
+    warn "${FUNCNAME[0]}(): No fuzzy match on Plot -- Possibly no Plot info for $TVDB_TITLE"
     return 2
   fi
   #Extract our guessed AbsoluteEpisodeNumber
@@ -3352,7 +3352,7 @@ fuzzy_plot_match(){
   debugcont "$( IFS=','; printf '%s' "Cost: ${cost[*]}." )"
   local -a MatchedPlot=()
   for (( i = 0; i < ${#AENguess[@]}; i++ )) ; do
-    MatchedPlot[i]="$(sed -n "${AENguess[i]}"'p' "$m2kdir/$NewShowName/$NewShowName.Plot.txt")"
+    MatchedPlot[i]="$(sed -n "${AENguess[i]}"'p' "$m2kdir/$TVDB_TITLE/$TVDB_TITLE.Plot.txt")"
     (( $(wc --chars <<< "${MatchedPlot[i]}") < PlotLength )) && warn "${FUNCNAME[0]}(): MatchedPlot $i shorter than Plot."
     debugcont "MatchedPlot $i: ${MatchedPlot[i]}"
   done
@@ -3371,7 +3371,7 @@ fuzzy_plot_match(){
 #episode, then we can be fairly confident that it's actually a matching Plot.
 chunked_fuzzy_plot_match(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  debugcont "NewShowName: '$NewShowName'"
+  debugcont "TVDB_TITLE: '$TVDB_TITLE'"
   debugcont "Plot: '$Plot'"
   local -i PlotWords
   PlotWords=$(wc --words <<< "$Plot")
@@ -3406,7 +3406,7 @@ chunked_fuzzy_plot_match(){
     #~10% error is always ~3 as agrep PATTERN is limited to 29 chars.#len10per=$(( ChunkLengths[i] / 10 ))
     #Some systems have an agrep that limits PATTERN to < 32 characters...
     #TODO: Consider only doing the below conditionally on, say, ChunkLengths > 18 -- I know of one case in my ~2000 recording test set that gets a false positive match due to a short final chunk.
-    fuzzychunk=($(agrep -iBynsk -e "${chunk:0:29}" "$m2kdir/$NewShowName/$NewShowName.Plot.txt"))
+    fuzzychunk=($(agrep -iBynsk -e "${chunk:0:29}" "$m2kdir/$TVDB_TITLE/$TVDB_TITLE.Plot.txt"))
     FuzzyChunks[i]="${fuzzychunk[0]}"
     debugcont "FuzzyChunks[$i]='${FuzzyChunks[i]}'"
     ChunkGuesses[i]=$(cut -f1 -d":" <<< "${FuzzyChunks[i]}")
@@ -3433,7 +3433,7 @@ chunked_fuzzy_plot_match(){
 #Returns: 0 if AbsoluteEpisodeNumber properly set; 1 otherwise.
 multi_match_check(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  debugcont "NewShowName: '$NewShowName'"
+  debugcont "TVDB_TITLE: '$TVDB_TITLE'"
   debugcont "$( IFS=','; printf '%s' "There are ${#AENguess[@]} AENguesses: ${AENguess[*]}." )"
 
   local -i match_count
@@ -3455,8 +3455,8 @@ multi_match_check(){
 
     #Gather series and episode numbers for each AENguess.
     for (( i = 0; i < match_count; i++ )) ; do
-      ExxGuess="$(sed -n "${AENguess[i]}"'p' "$m2kdir/$NewShowName/$NewShowName.E.txt")"
-      SxxGuess="$(sed -n "${AENguess[i]}"'p' "$m2kdir/$NewShowName/$NewShowName.S.txt")"
+      ExxGuess="$(sed -n "${AENguess[i]}"'p' "$m2kdir/$TVDB_TITLE/$TVDB_TITLE.E.txt")"
+      SxxGuess="$(sed -n "${AENguess[i]}"'p' "$m2kdir/$TVDB_TITLE/$TVDB_TITLE.S.txt")"
       #Single digit episode and show names are not allowed Ex and Sx replaced with Exx Sxx
       if ((ExxGuess < 10)); then ExxGuess="e0$ExxGuess"; else ExxGuess="e$ExxGuess"; fi
       if ((SxxGuess < 10)); then SxxGuess="s0$SxxGuess"; else SxxGuess="s$SxxGuess"; fi
@@ -3513,8 +3513,8 @@ multi_match_check(){
   err "${FUNCNAME[1]}():${FUNCNAME[0]}(): Something unexpected went wrong."
   errcont "Maybe called with empty AENguess. Or accessing Season and Episode numbers failed."
   errcont "$( IFS=','; printf '%s' "There are ${#AENguess[@]} AENguesses: ${AENguess[*]}." )"
-  errcont "Season number file:  '$m2kdir/$NewShowName/$NewShowName.S.txt'"
-  errcont "Episode number file: '$m2kdir/$NewShowName/$NewShowName.E.txt'"
+  errcont "Season number file:  '$m2kdir/$TVDB_TITLE/$TVDB_TITLE.S.txt'"
+  errcont "Episode number file: '$m2kdir/$TVDB_TITLE/$TVDB_TITLE.E.txt'"
   return 1
 }
 
@@ -3522,14 +3522,14 @@ multi_match_check(){
 get_absolute_episode_number_fuzzy_plot(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   debugcont "AbsoluteEpisodeNumber: '$AbsoluteEpisodeNumber'"
-  debugcont "NewShowName: '$NewShowName'"
+  debugcont "TVDB_TITLE: '$TVDB_TITLE'"
   debugcont "Plot: '$Plot'"
 
   [[ -z "$Plot" ]] && { err "We do not have any Plot info."; return 1; }
 
-  if [[ ! -f "$m2kdir/$NewShowName/$NewShowName.Plot.txt" ]]; then
-    err "Myth2kodi's internal database contains no Plot file for '$NewShowName'."
-    errcont "This probably means we failed to identify a SeriesID. Either you need"
+  if [[ ! -f "$m2kdir/$TVDB_TITLE/$TVDB_TITLE.Plot.txt" ]]; then
+    err "Myth2kodi's internal database contains no Plot file for '$TVDB_TITLE'."
+    errcont "This probably means we failed to identify a TVDB_SERIESID. Either you need"
     errcont "to add a showTranslations entry, we've mistaken a Movie for an Episode,"
     errcont "or this is a one off showing like news or a sports event."
    return 1
@@ -3573,11 +3573,11 @@ get_absolute_episode_number_fuzzy_plot(){
 set_sxxexx_absolute_episode_number(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   #if line match is obtained, then gather new episode name, Sxx and Exx
-  EpisodeSubtitle="$(sed -n "$AbsoluteEpisodeNumber"'p' "$m2kdir/$NewShowName/$NewShowName.actualEname.txt")"
+  EpisodeSubtitle="$(sed -n "$AbsoluteEpisodeNumber"'p' "$m2kdir/$TVDB_TITLE/$TVDB_TITLE.actualEname.txt")"
 
   #gather series and episode names from files created earlier.
-  Exx="$(sed -n "$AbsoluteEpisodeNumber"'p' "$m2kdir/$NewShowName/$NewShowName.E.txt")"
-  Sxx="$(sed -n "$AbsoluteEpisodeNumber"'p' "$m2kdir/$NewShowName/$NewShowName.S.txt")"
+  Exx="$(sed -n "$AbsoluteEpisodeNumber"'p' "$m2kdir/$TVDB_TITLE/$TVDB_TITLE.E.txt")"
+  Sxx="$(sed -n "$AbsoluteEpisodeNumber"'p' "$m2kdir/$TVDB_TITLE/$TVDB_TITLE.S.txt")"
   [[ -n "$Sxx" ]] && SeasonNumber="$Sxx"
 
   #Single digit episode and show names are not allowed Ex and Sx replaced with Exx Sxx
@@ -3686,8 +3686,8 @@ msg_operation_summary(){
   informcont "ShowName=$ShowName-"
   debugcont  "LastUpdatedTVDB=$LastUpdatedTVDB-"
   debugcont  "CurrentTimeTVDB=$CurrentTimeTVDB-"
-  informcont "SeriesID=$SeriesID-"
-  informcont "NewShowName=$NewShowName-"
+  informcont "TVDB_SERIESID=$TVDB_SERIESID-"
+  informcont "TVDB_TITLE=$TVDB_TITLE-"
   debugcont  "AbsoluteEpisodeNumber=$AbsoluteEpisodeNumber-"
   informcont "EpisodeSubtitle=$EpisodeSubtitle-"
   informcont "HasSxxExx=$HasSxxExx-"
@@ -3710,7 +3710,7 @@ msg_operation_summary(){
     debugcont  "MDB_SERIESID=$MDB_SERIESID-"
     informcont "Plot=$Plot-"
     if [[ -n "$AbsoluteEpisodeNumber" ]]; then
-      informcont "Matched Plot=$(sed -n "$AbsoluteEpisodeNumber"'p' "$m2kdir/$NewShowName/$NewShowName.Plot.txt")-"
+      informcont "Matched Plot=$(sed -n "$AbsoluteEpisodeNumber"'p' "$m2kdir/$TVDB_TITLE/$TVDB_TITLE.Plot.txt")-"
     fi
   fi
   inform "################ END OF OPERATION SUMMARY ################"
@@ -3860,8 +3860,8 @@ msg_unable_to_identify_recording(){
   informcont "    your MythTV-DB; TheTVDB; or tvmaze."
   informcont "Check that information on www.TheTVDB.com is complete for this series."
   informcont "#### If not, Please consider helping out and adding to TheTVDB. ####"
-  if [[ -n "$SeriesID" ]]; then
-    informcont "#### http://www.thetvdb.com/?tab=series&amp;id=$SeriesID           ####"
+  if [[ -n "$TVDB_SERIESID" ]]; then
+    informcont "#### http://www.thetvdb.com/?tab=series&amp;id=$TVDB_SERIESID           ####"
   fi
   informcont "To force processing of unrecognised recordings, disable ShowStopper."
   NOTIFY_MSG="Could not fully identify: $TITLE."
@@ -3935,7 +3935,7 @@ msg_recording_info(){
   printf '%s\n' "  Storagegroup='$MDB_STORAGEGROUP'"
   printf '%s\n' "  MDB_STARS='$MDB_STARS'"
   printf '%s\n' "  Description=\"$MDB_DESCRIPTION\""
-  printf '%s\n' "  Seriesid='$SeriesID'"
+  printf '%s\n' "  Seriesid='$TVDB_SERIESID'"
   printf '%s\n' "  Programid='$MDB_PROGRAMID'"
   printf '%s\n' "  Chanid='$MDB_CHANID'"
   printf '%s\n' "  Starttime='$MDB_STARTTIME'"
@@ -4250,7 +4250,7 @@ set_show_file_name(){
   #Format Episodes showname=show name Sxx=season number Exx=episode number EpisodeSubtitle=episode name
   if [[ -n "$Exx" && "$Exx" != 'E' ]]; then
     debug "Naming as episode"
-    ShowFileName="$NewShowName $Sxx$Exx ($EpisodeSubtitle)$SHOW_FILE_NAME_APPEND"
+    ShowFileName="$TVDB_TITLE $Sxx$Exx ($EpisodeSubtitle)$SHOW_FILE_NAME_APPEND"
   #Format Movies
   elif [[ "$RECORDING_TYPE" = 'MV' ]]; then
     debug 'Naming as movie.'
@@ -4259,9 +4259,9 @@ set_show_file_name(){
     #      Add a MOVIE_RELEASE_YEAR to the processing functions for guide-data that provide this.
     if [[ -n "$MOVIE_RELEASE_YEAR" ]]; then
       warn "${FUNCNAME[0]}(): Currently forcing bypass of adding MOVIE_RELEASE_YEAR to Movie file names."
-      ShowFileName="$NewShowName$SHOW_FILE_NAME_APPEND" # ShowFileName="$NewShowName ($MOVIE_RELEASE_YEAR)$SHOW_FILE_NAME_APPEND"
+      ShowFileName="$TVDB_TITLE$SHOW_FILE_NAME_APPEND" # ShowFileName="$TVDB_TITLE ($MOVIE_RELEASE_YEAR)$SHOW_FILE_NAME_APPEND"
     else
-      ShowFileName="$NewShowName$SHOW_FILE_NAME_APPEND"
+      ShowFileName="$TVDB_TITLE$SHOW_FILE_NAME_APPEND"
     fi
   #Format generic Shows
   else
@@ -4284,7 +4284,7 @@ set_show_file_name_categoric(){
     Sxx="$EventYear"
     EventMonthDay="$(echo "${ORIGINALAIRDATE:5:5}" | tr -d "-" | sed 's/0*//')"
     Exx="$EventMonthDay"
-    [[ -z "$NewShowName" ]] && NewShowName="$ShowName"
+    [[ -z "$TVDB_TITLE" ]] && TVDB_TITLE="$ShowName"
   else #Flag failure of Method1
     testedmethod=0
   fi
@@ -4308,7 +4308,7 @@ set_show_file_name_categoric(){
 
   #Test final result and assign ShowFileName
   if ((EventYear > 1900)) && ((EventMonthDay > 0)); then
-    ShowFileName="$NewShowName S$EventYear""E$EventMonthDay ($SUBTITLE Recorded $datehour)$SHOW_FILE_NAME_APPEND"
+    ShowFileName="$TVDB_TITLE S$EventYear""E$EventMonthDay ($SUBTITLE Recorded $datehour)$SHOW_FILE_NAME_APPEND"
   fi
 
   RequiresNFO=1
@@ -4363,7 +4363,7 @@ set_move_location(){
 #Make the directory we'll move recording to if it doesn't already exist.
 make_show_dir(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  debugcont "NewShowName: '$NewShowName'"
+  debugcont "TVDB_TITLE: '$TVDB_TITLE'"
   debugcont "MoveDir: '$MoveDir'"
   debugcont "SeasonNumber: '$SeasonNumber'"
   debugcont "Notify: '$Notify'"
@@ -4371,8 +4371,8 @@ make_show_dir(){
   debugcont "FailSafeDir: '$FailSafeDir'"
 
   #If specified, make $MoveDir = $MoveDir/show name
-  if [[ -n "$NewShowName" ]]; then
-    MoveDir="$MoveDir/$NewShowName"
+  if [[ -n "$TVDB_TITLE" ]]; then
+    MoveDir="$MoveDir/$TVDB_TITLE"
     if [[ ! -d "$MoveDir" ]]; then
       [[ "$RECORDING_TYPE" = 'EP' ]] && inform "CREATING SERIES FOLDER: '$MoveDir'"
       [[ "$RECORDING_TYPE" = 'MV' ]] && inform "CREATING MOVIE FOLDER: '$MoveDir'"
@@ -4476,21 +4476,21 @@ generate_series_nfo(){
   {
     printf '%s\n' '<?xml version="1.0" encoding="UTF-8" standalone="yes" ?>'
     printf '%s\n' "<tvshow>"
-    printf '%b\n' "\t<title>$NewShowName</title>"
+    printf '%b\n' "\t<title>$TVDB_TITLE</title>"
     #printf '%b\n' "\t<plot>$SeriesPlot</plot>" #TODO: for when we've extracted the series description...
     #printf '%b\n' "\t<status>$SeriesStatus</status>" #TODO: for when we've extracted the series status
     printf '%b\n' "\t<episodeguide>"
   } > "$MoveDir/tvshow.nfo"
 
-  if [[ -n "$SeriesID" ]]; then
+  if [[ -n "$TVDB_SERIESID" ]]; then
     local webaddrs
-    webaddrs="http://www.thetvdb.com/api/$APIkey/series/$SeriesID/all/$Language.zip"
-    printf '%b\n' "\t\t<url cache=\"$SeriesID.xml\">$webaddrs</url>" >> "$MoveDir/tvshow.nfo"
+    webaddrs="http://www.thetvdb.com/api/$APIkey/series/$TVDB_SERIESID/all/$Language.zip"
+    printf '%b\n' "\t\t<url cache=\"$TVDB_SERIESID.xml\">$webaddrs</url>" >> "$MoveDir/tvshow.nfo"
   fi
 
   {
     printf '%b\n' "\t</episodeguide>"
-    [[ -n "$SeriesID" ]] && printf '%b\n' "\t<id>$SeriesID</id>"
+    [[ -n "$TVDB_SERIESID" ]] && printf '%b\n' "\t<id>$TVDB_SERIESID</id>"
     printf '%b\n' "\t<dateadded>$(date --rfc-3339=seconds)</dateadded>"
     #printf '%b\n' "\t<premiered>$SeriesFirstAired</premiered>" #TODO: for when we've extracted the series first aired field.
     printf '%s\n' "</tvshow>"
@@ -5081,7 +5081,7 @@ generaterss(){
   #  though it's probably better to just set myip in the configuration at top of file. #ifconfigpath="$(command -v ifconfig)"
   which /sbin/ifconfig >/dev/null && myip="$(/sbin/ifconfig | grep 'inet addr' -m2 | cut -d: -f2 | awk '{ print $1}' | grep -v "127.0.0.1")"
   rssEpisodeSubtitle="${EpisodeSubtitle//&/&amp;}"
-  rssNewShowName="${NewShowName//&/&amp;}"
+  rssNewShowName="${TVDB_TITLE//&/&amp;}"
   rssPlot="${Plot//&/&amp;}"
   mythicalGUID="$(sed 's/(/%28/g' <<< "$CALLER@$myip$MoveDir/$ShowFileName.$OriginalExt" | sed 's/)/%29/g' | sed 's/ /%20/g')"
 
@@ -5091,7 +5091,7 @@ generaterss(){
     echo -e "\t\t\t<title>$rssNewShowName $Sxx$Exx $rssEpisodeSubtitle</title>"
   } >> "$RSS_DIRECTORY/$TEMPrssFile"
   if [ "$RECORDING_TYPE" = "EP" ]; then
-    echo -e "\t\t\t<link>http://www.thetvdb.com/?tab=series&amp;id=$SeriesID</link>" >> "$RSS_DIRECTORY/$TEMPrssFile"
+    echo -e "\t\t\t<link>http://www.thetvdb.com/?tab=series&amp;id=$TVDB_SERIESID</link>" >> "$RSS_DIRECTORY/$TEMPrssFile"
   elif [ "$RECORDING_TYPE" = "MV" ]; then
     echo -e "\t\t\t<link>http://www.imdb.com/search/title?release_date=,$MOVIE_RELEASE_YEAR&amp;title=$ShowName&amp;title_type=feature</link>" >> "$RSS_DIRECTORY/$TEMPrssFile"
   else
@@ -5912,20 +5912,20 @@ get_series_info(){
   #if we have a series line number then translate that into a series id
   if [[ -n "$serieslinenumber" ]] && ((serieslinenumber > 0)); then
     set_seriesid_newshowname_from_serieslinenumber
-    inform "FOUND: $NewShowName ID#:$SeriesID"
+    inform "FOUND: $TVDB_TITLE ID#:$TVDB_SERIESID"
     make_m2k_database_dir
   else
-    warn "${FUNCNAME[0]}(): SeriesID could not be determined."
+    warn "${FUNCNAME[0]}(): TVDB_SERIESID could not be determined."
     #If we're not in debug mode then cleanup show identification files.
     [[ -f "$TMP_SID_FILE" ]] && (( LOGLEVEL < 3 )) && rm -f "$TMP_SID_FILE"
     [[ -f "$TMP_SHN_FILE" ]] && (( LOGLEVEL < 3 )) && rm -f "$TMP_SHN_FILE"
     return 1
   fi
-  if [[ -n "$SeriesID" ]]; then
+  if [[ -n "$TVDB_SERIESID" ]]; then
     download_series_info
     return "$?"
   else
-    err "${FUNCNAME[0]}(): We had serieslinenumber: '$serieslinenumber' but could not get a SeriesID."
+    err "${FUNCNAME[0]}(): We had serieslinenumber: '$serieslinenumber' but could not get a TVDB_SERIESID."
     return 1
   fi
 }
@@ -6578,7 +6578,7 @@ if [[ "$RECORDING_TYPE" != "SH" && "$RECORDING_TYPE" != "MV" ]]; then
     if [[ "$zap2itid_exitstatus" = 0 ]]; then
       ((++SeriesConfidenceRating))
       ConfidenceReasoning="$ConfidenceReasoning Successful;"
-      inform "MATCH FOUND BASED ON Zap2itID: $NewShowName"
+      inform "MATCH FOUND BASED ON Zap2itID: $TVDB_TITLE"
     else
       ((--SeriesConfidenceRating))
       ConfidenceReasoning="$ConfidenceReasoning Failed;"
@@ -6610,9 +6610,9 @@ if [[ "$RECORDING_TYPE" != "SH" && "$RECORDING_TYPE" != "MV" ]]; then
   #if we have a series line number then translate that into a series id
   if [[ -n "$serieslinenumber" ]] && ((serieslinenumber > 0)); then
     set_seriesid_newshowname_from_serieslinenumber
-    inform "FOUND:$NewShowName ID#:$SeriesID WITH CONFIDENCE:$SeriesConfidenceRating"
+    inform "FOUND:$TVDB_TITLE ID#:$TVDB_SERIESID WITH CONFIDENCE:$SeriesConfidenceRating"
   else
-    warn "SERIESID COULD NOT BE DETERMINED"
+    warn "TVDB_SERIESID could not be determined."
     #If we're not in debug mode then cleanup show identification files.
     [[ -f "$TMP_SID_FILE" ]] && (( LOGLEVEL < 3 )) && rm -f "$TMP_SID_FILE"
     [[ -f "$TMP_SHN_FILE" ]] && (( LOGLEVEL < 3 )) && rm -f "$TMP_SHN_FILE"
@@ -6621,9 +6621,9 @@ fi
 
 #If it's not a recognized episode, then we need to assign the name myth2kodi will use.
 [[ -z "$ShowName" ]] && ShowName="$TITLE"
-[[ -z "$NewShowName" ]] && NewShowName="$ShowName"
+[[ -z "$TVDB_TITLE" ]] && TVDB_TITLE="$ShowName"
 
-if [[ -n "$SeriesID" ]]; then
+if [[ -n "$TVDB_SERIESID" ]]; then
   make_m2k_database_dir
 
   #If database is out of date, download new database
@@ -6639,7 +6639,7 @@ if [[ -n "$SeriesID" ]]; then
     fi
   fi
 #if series id is not obtained send failure message
-elif [[ -z "$SeriesID" && "$RECORDING_TYPE" != "SH" && "$RECORDING_TYPE" != "MV" ]]; then
+elif [[ -z "$TVDB_SERIESID" && "$RECORDING_TYPE" != "SH" && "$RECORDING_TYPE" != "MV" ]]; then
   ConfidenceReasoning="$ConfidenceReasoning Failed; "
   warn "SERIES ID WAS NOT FOUND. TheTVDB MAY BE DOWN. IF NOT TRY USING A showTranslations FILE."
   printf '%s\n' "$INPUT_TITLE" >> "$UnrecognizedSeriesFile"
@@ -6656,13 +6656,13 @@ fi
 #TODO: If we haven't identified the Series, try NLP match $Plot against possible plots to guess a Series.
 
 #####PROCESS EPISODE INFORMATION#####
-#If we have a SeriesID but don't already have Season and Episode information
+#If we have a TVDB_SERIESID but don't already have Season and Episode information
 identify_episode
 
 #If it's not tagged as a Movie but lacking SxxExx and then as a fallback check storagegroup in case it's a Movie we missed
 storagegroup_fallback
 
-#TODO: Need to add checks for existence of myth2kodi database files for $NewShowName and/or check that we've identified the series before bothering with the following
+#TODO: Need to add checks for existence of myth2kodi database files for $TVDB_TITLE and/or check that we've identified the series before bothering with the following
 
 #TODO: Assuming we have identified the Series, but have no Subtitle, try NLP match $Plot against possible plots to guess a subtitle
 
@@ -6682,7 +6682,7 @@ if [ "$RECORDING_TYPE" = "EP" ] && [[ "$Exx" = "E" || -z "$Exx" ]]; then
 #If it's a movie or a showing, give it a name.
 #TODO: If it's a movie, try using imdb or similar with available $Plot to determine if the Title is correct...
 elif [ "$RECORDING_TYPE" = "MV" ] || [ "$RECORDING_TYPE" = "SH" ] ; then
-  NewShowName="$TITLE"
+  TVDB_TITLE="$TITLE"
   ConfidenceReasoning="$ConfidenceReasoning Guide Data reported this is a $ProgramIDType;"
 fi
 
@@ -6719,18 +6719,18 @@ if [[ "$HasSxxExx" != '1' && "$RECORDING_PATH" != "$m2kdir/6666_20420101084242.t
   elif [[ "$RECORDING_TYPE" = "MV" ]]; then
     #Ensures the doover value was not set for the movie and use safe show name
     RequiresDoover=0
-    NewShowName="$SafeShowName"
+    TVDB_TITLE="$SafeShowName"
   #If user has determined that they do not want unrecognisable tv shows in their library
   elif [[ "$ShowStopper" = 'Enabled' ]]; then
     msg_unable_to_identify_recording
     exit_job 'NameCouldNotBeAssigned'
   elif [[ "$RECORDING_TYPE" = "SH" ]]; then
     #Ensures the doover value was not set for the show and use safe show name
-    NewShowName="$SafeShowName"
+    TVDB_TITLE="$SafeShowName"
     msg_show_warning
   else
     #change the show to a Generic type
-    NewShowName="$SafeShowName"
+    TVDB_TITLE="$SafeShowName"
     msg_epishow
   fi
 fi
@@ -6746,14 +6746,14 @@ if ! set_move_location; then exit_job "$EXIT_JOB_TYPE"; fi
 #Format Shows
 #Only keep Alpha-numeric characters, space, parenthesis and the four chars & , . -
 EpisodeSubtitle="$(sed -r 's/[^[:alnum:] &,.)(-]//g' <<< "$EpisodeSubtitle")"
-NewShowName="$(sed -r 's/[^[:alnum:] &,.)(-]//g' <<< "$NewShowName")"
+TVDB_TITLE="$(sed -r 's/[^[:alnum:] &,.)(-]//g' <<< "$TVDB_TITLE")"
 ShowName="$(sed -r 's/[^[:alnum:] &,.)(-]//g' <<< "$ShowName")"
 
 #Format Episodes showname=show name Sxx=season number Exx=episode number EpisodeSubtitle=episode name
 if [[ -z "$NamingConvention" ]]; then
   set_show_file_name
 else
-  [[ -z "$NewShowName" ]] && NewShowName="$ShowName"
+  [[ -z "$TVDB_TITLE" ]] && TVDB_TITLE="$ShowName"
   set_show_file_name_categoric
 fi
 

@@ -200,7 +200,7 @@ Librarian='mythtv'                           #<------THIS VALUE MUST BE SET-----
 ############################ Processing settings #############################
 
 # There are 3 modes for the processing of a recording:
-#   'MOVE' -- Move the recording. And, by default: create a symlink at InputPath;
+#   'MOVE' -- Move the recording. And, by default: create a symlink at RECORDING_PATH;
 #   'LINK' -- Do not move, just create a symbolic 'LINK'; and
 #   'COPY' -- Copy the recording to the target location.
 #NOTE: The 'COPY' mode is primarily meant for supporting the copying of MythTV
@@ -1114,7 +1114,7 @@ validate_args(){
 
     #Our first argument must be a file.
     if [[ ! -f "$M2KARG1" ]]; then
-      NOTIFY_MSG='The specified InputPath is not a file.'
+      NOTIFY_MSG='The specified INPUT_PATH is not a file.'
       err "${FUNCNAME[0]}(): $NOTIFY_MSG."
       msg_invalid_path_error "$M2KARG1"
       EXIT_JOB_TYPE='InputPathNotFile'
@@ -1251,8 +1251,8 @@ check_write(){
         inform "QUICK FIX: mkdir '$3'"
       fi
     else
-      warn "${FUNCNAME[0]}(): COULD NOT READ FILESIZE ON $InputPath"
-      inform "QUICK FIX: chmod -R 775 '$InputPath'"
+      warn "${FUNCNAME[0]}(): COULD NOT READ FILESIZE ON $RECORDING_PATH" #TODO: This message isn't valid for the current wider use of check_write().
+      inform "QUICK FIX: chmod -R 775 '$RECORDING_PATH'"
     fi
   else
     warn "${FUNCNAME[0]}(): COULD NOT READ FREE SPACE on '$3'"
@@ -1260,7 +1260,7 @@ check_write(){
   fi
 
   return 1
-}
+} #check_write()
 
 #Check to see if a path/file is owned by $Librarian or at least that $Librarian
 #has sufficient read-write permissions. If not, exit with a descriptive message.
@@ -1354,8 +1354,8 @@ check_filesystem(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   local filesystem_write_state=0
   #Get file size for the recording we are processing.
-  if [[ -f "$InputPath" ]]; then #Not test_file
-    MoveFileSize=$(wc --bytes < "$InputPath")
+  if [[ -f "$RECORDING_PATH" ]]; then #Not test_file
+    MoveFileSize=$(wc --bytes < "$RECORDING_PATH")
   else
     MoveFileSize=1000000000 #default to ~1GB for diagnostics.
   fi
@@ -1430,7 +1430,6 @@ identify_recording_files(){
     if ! set_recording_name "$inputarg"; then return 1; fi
     debug "RECORDING_PATH: '$RECORDING_PATH'"
     debug "RECORDING_NAME: '$RECORDING_NAME'"
-    InputPath="$RECORDING_PATH"
     InputFileBasename="$RECORDING_NAME"
   else
     EXIT_JOB_TYPE='FileOrPathDoesNotExist'
@@ -1566,7 +1565,7 @@ set_recording_name(){
     err "${FUNCNAME[0]}(): Failed to find MythTV-DB recording name for: $1"
     return 1
   fi
-}
+} #set_recording_name()
 
 ########################### MAINTENANCE FUNCTIONS ############################
 
@@ -1600,7 +1599,7 @@ log_rotation(){
       fi
     fi
   fi
-}
+} #log_rotation()
 
 periodic_maintenace(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
@@ -1632,7 +1631,7 @@ periodic_maintenace(){
   else
     debug "Skipping m2k_maintenance() as m2kScanMode has been set to 'True'"
   fi
-}
+} #periodic_maintenace()
 
 #Loops through tracked files and directories deleting them if they've been orphaned.
 m2k_maintenance(){
@@ -1744,7 +1743,7 @@ m2k_maintenance(){
   fi
   inform "MAINTENANCE ROUTINE COMPLETE."
   return 0
-}
+} #m2k_maintenance()
 
 #Process a list of archived files and remove those older than a specified age.
 process_cleanup_file(){
@@ -1781,7 +1780,7 @@ process_cleanup_file(){
     debug "Not removing temporary clean-up file: '$cleanup_file'"
   fi
   return 0
-}
+} #process_cleanup_file()
 
 #Clean-up old files we don't need any more: log files; m2k database files; etc.
 m2k_cleanse(){
@@ -1846,7 +1845,7 @@ m2k_cleanse(){
     debug "Moving '$DuplicatesFile' to '${DuplicatesFile%.*}_${FILE_NAME_NOW}.log'."
     mv "$DuplicatesFile" "${DuplicatesFile%.*}_${FILE_NAME_NOW}.log"
   fi
-}
+} #m2k_cleanse()
 
 #################### FUNCTIONS TO ACCESS MythTV DATABASE #####################
 
@@ -2203,19 +2202,19 @@ get_mythtvdb_storagegroups(){
 #Remove recording's pictures and entries from MythTV-DB. Thanks to barney_1.
 delete_mythtv_database_entry_mysql(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  debug "InputPath: '$InputPath'"
+  debug "RECORDING_PATH: '$RECORDING_PATH'"
   debug "InputFileBasename: '$InputFileBasename'"
   debug "MySQLuser: '$MySQLuser'"
   debug "MySQLpass: '$MySQLpass'"
   debug "MySQLMythDb: '$MySQLMythDb'"
 
-  if [[ -z "$InputPath" ]]; then
-    err "${FUNCNAME[1]}():${FUNCNAME[0]}(): Called with empty InputPath."
+  if [[ -z "$RECORDING_PATH" ]]; then
+    err "${FUNCNAME[1]}():${FUNCNAME[0]}(): Called with empty RECORDING_PATH."
     return 1
   fi
 
   #Make sure we got input arguments and file is valid
-  if [[ ! -e "$InputPath" ]]; then
+  if [[ ! -e "$RECORDING_PATH" ]]; then
     #Remove recording entry from mysql database
     inform "${FUNCNAME[0]}(): REMOVING: '$InputFileBasename'; THUMBNAILS; DATABASE ENTRIES."
     mysql -u"$MySQLuser" -p"$MySQLpass" -e "USE $MySQLMythDb ; DELETE FROM recorded WHERE basename LIKE '$InputFileBasename' ; "
@@ -2224,9 +2223,9 @@ delete_mythtv_database_entry_mysql(){
       return 1
     fi
     #Remove thumbnails
-    rm -f "$InputPath".*
+    rm -f "$RECORDING_PATH".*
   else
-    warn "${FUNCNAME[0]}(): File still exists: '$InputPath'"
+    warn "${FUNCNAME[0]}(): File still exists: '$RECORDING_PATH'"
     warncont "Not removing MythTV-DB information."
     return 1
   fi
@@ -3758,7 +3757,7 @@ msg_operation_summary(){
   #Print a summary table of writeable directories.
   msg_dir_summary
 
-  informcont "InputPath=$InputPath-"
+  informcont "RECORDING_PATH=$RECORDING_PATH-"
   informcont "InputTitle=$InputTitle-"
   informcont "InputSubtitle=$InputSubtitle-"
   informcont "InputSeasonNum=$InputSeasonNum-"
@@ -3853,10 +3852,10 @@ msg_show_warning(){
 msg_completed_move(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   inform "Move completed."
-  informcont "Moved: $InputPath"
+  informcont "Moved: $RECORDING_PATH"
   informcont "To: $MoveDir/$ShowFileName.$OriginalExt"
   if [[ "$SYMLINK" != 'Disabled' ]]; then
-    informcont "Added symbolic link from: $InputPath"
+    informcont "Added symbolic link from: $RECORDING_PATH"
     informcont "To: $MoveDir/$ShowFileName.$OriginalExt"
   fi
   NOTIFY_MSG="myth2kodi Success $ShowFileName moved to $MoveDir"
@@ -3868,7 +3867,7 @@ msg_completed_move(){
 msg_completed_copy(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   inform "Copy completed."
-  informcont "Copied: $InputPath"
+  informcont "Copied: $RECORDING_PATH"
   informcont "To: $MoveDir/$ShowFileName.$OriginalExt"
   NOTIFY_MSG="myth2kodi Success $ShowFileName copied to $MoveDir"
   EXIT_JOB_TYPE='CopyModeSuccessful'
@@ -3932,7 +3931,7 @@ msg_invalid_path_error(){
 msg_unable_to_identify_recording(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   err     "Operation failed, unable to identify episode info for recording:"
-  errcont "     $InputPath"
+  errcont "     $RECORDING_PATH"
   informcont "This means that insufficient information was provided to myth2kodi"
   informcont "and the missing information could not be determined by other means."
   informcont "If you know the correct information, provide it at the command line,"
@@ -4141,7 +4140,7 @@ target_file_exists(){
   fi
   warn "Adding an entry identifying this recording as a possible duplicate."
   #Write an entry in the duplicates file, for easy check/removal of duplicates.
-  printf '"%s" "%s" "%s" "%s"\n' "$InputTitle" "$ShowStartTime" "$InputPath" "$ShowFileName" >> "$DuplicatesFile"
+  printf '"%s" "%s" "%s" "%s"\n' "$InputTitle" "$ShowStartTime" "$RECORDING_PATH" "$ShowFileName" >> "$DuplicatesFile"
   NOTIFY_MSG="Recording identified as possible duplicate of: $MoveDir/$ShowFileName.$OriginalExt"
   return "$recording_name_return_state"
 }
@@ -4737,7 +4736,7 @@ add_doover(){
   debugcont "M2KARG5: '$M2KARG5'"
   debugcont "M2KARG6: '$M2KARG6'"
   debugcont "m2kdir: '$m2kdir'"
-  debugcont "InputPath: '$InputPath'"
+  debugcont "RECORDING_PATH: '$RECORDING_PATH'"
   debugcont "MoveDir: '$MoveDir'"
   debugcont "ShowFileName: '$ShowFileName'"
   debugcont "OriginalExt: '$OriginalExt'"
@@ -4757,12 +4756,12 @@ add_doover(){
       {
         #Write doover.sh line that removes link:
         printf '%s'    "test -f \"$MoveDir/$ShowFileName.$OriginalExt\" &&"
-        printf ' %s'   "test -L \"$InputPath\" &&"
-        printf ' %s'   "rm -f \"$InputPath\" &&"
-        printf ' %s\n' "echo Moving \"$InputPath\" to original location"
+        printf ' %s'   "test -L \"$RECORDING_PATH\" &&"
+        printf ' %s'   "rm -f \"$RECORDING_PATH\" &&"
+        printf ' %s\n' "echo Moving \"$RECORDING_PATH\" to original location"
         #Write doover.sh line that moves already-moved-file back to original location:
         printf '%s'    "test -f \"$MoveDir/$ShowFileName.$OriginalExt\" &&"
-        printf ' %s\n' "mv \"$MoveDir/$ShowFileName.$OriginalExt\" '$InputPath'"
+        printf ' %s\n' "mv \"$MoveDir/$ShowFileName.$OriginalExt\" '$RECORDING_PATH'"
       } >> "$m2kdir/doover.sh"
     elif [[ "$PROCESS_RECORDING_MODE" = 'LINK' ]]; then
       {
@@ -4790,7 +4789,7 @@ add_doover(){
 add_undo(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   debugcont "m2kdir: '$m2kdir'"
-  debugcont "InputPath: '$InputPath'"
+  debugcont "RECORDING_PATH: '$RECORDING_PATH'"
   debugcont "MoveDir: '$MoveDir'"
   debugcont "ShowFileName: '$ShowFileName'"
   debugcont "OriginalExt: '$OriginalExt'"
@@ -4806,13 +4805,13 @@ add_undo(){
   if [[ "$PROCESS_RECORDING_MODE" = 'MOVE' && "$SYMLINK" = 'Enabled' ]]; then
     {
       #Write undo.sh line that removes link:
-      printf '%s'    "test -L \"$InputPath\" &&"
-      printf ' %s'   "rm -f \"$InputPath\" &&"
-      printf ' %s\n' "echo removed link \"$InputPath\""
+      printf '%s'    "test -L \"$RECORDING_PATH\" &&"
+      printf ' %s'   "rm -f \"$RECORDING_PATH\" &&"
+      printf ' %s\n' "echo removed link \"$RECORDING_PATH\""
       #Write undo.sh line that moves already-moved-file back to original location:
       printf '%s'    "test -f \"$MoveDir/$ShowFileName.$OriginalExt\" &&"
-      printf ' %s'   "mv \"$MoveDir/$ShowFileName.$OriginalExt\" \"$InputPath\" &&"
-      printf ' %s\n' "echo moved \"$MoveDir/$ShowFileName.$OriginalExt\" to \"$InputPath\""
+      printf ' %s'   "mv \"$MoveDir/$ShowFileName.$OriginalExt\" \"$RECORDING_PATH\" &&"
+      printf ' %s\n' "echo moved \"$MoveDir/$ShowFileName.$OriginalExt\" to \"$RECORDING_PATH\""
     } >> "$m2kdir/undo.sh"
   elif [[ "$PROCESS_RECORDING_MODE" = 'LINK' ]]; then
     {
@@ -4836,7 +4835,7 @@ failsafe(){
   if [[ "$FailSafeMode" = 'Enabled' &&  "$SYMLINK" = 'Enabled' ]]; then
     warn "ATTEMPTING SYMLINK TO FAILSAFE DIR: $FailSafeDir"
     inform "FailSafe link name set as: '$FailSafeDir/$ShowFileName.$OriginalExt'"
-    ln -s "$InputPath" "$FailSafeDir/$ShowFileName.$OriginalExt"
+    ln -s "$RECORDING_PATH" "$FailSafeDir/$ShowFileName.$OriginalExt"
     if [[ -f "$FailSafeDir/$ShowFileName.$OriginalExt" ]]; then
       inform "FAILSAFE MODE COMPLETE: SYMLINK CREATED"
       #Do post processing as a successful LINK mode move, but require doover.
@@ -4912,8 +4911,8 @@ increment_target_file_name(){
 move_mode_handling(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   #Send notifications, Move the file and rename
-  debug "MOVING FILE: '$InputPath' to '$MoveDir/$ShowFileName.$OriginalExt'"
-  mv "$InputPath" "$MoveDir/$ShowFileName.$OriginalExt" 2>&1 | err_pipe "'MOVE' mode: "
+  debug "MOVING FILE: '$RECORDING_PATH' to '$MoveDir/$ShowFileName.$OriginalExt'"
+  mv "$RECORDING_PATH" "$MoveDir/$ShowFileName.$OriginalExt" 2>&1 | err_pipe "'MOVE' mode: "
 
   #Check and report if file was moved
   if [[ -e "$MoveDir/$ShowFileName.$OriginalExt" ]]; then
@@ -4921,8 +4920,8 @@ move_mode_handling(){
       #Make symlink back to original file
       if [[ "$SYMLINK" = 'Enabled' ]]; then
         inform "Creating symlink in move mode."
-        ln -s "$MoveDir/$ShowFileName.$OriginalExt" "$InputPath"
-        [[ -L "$InputPath" ]] || err "Failed to Create symlink: FILESYSTEM MAY NOT SUPPORT SYMLINKS"
+        ln -s "$MoveDir/$ShowFileName.$OriginalExt" "$RECORDING_PATH"
+        [[ -L "$RECORDING_PATH" ]] || err "Failed to Create symlink: FILESYSTEM MAY NOT SUPPORT SYMLINKS"
       #If SYMLINK=Disabled, remove database entries
       elif [[ "$SYMLINK" = 'Disabled' ]]; then
         #Set permissions as rw-rw-r-- (664)
@@ -4943,10 +4942,10 @@ move_mode_handling(){
           fi
         else
           warn "Job requires doover, so attempting to create symlink in SYMLINK='Disabled' mode."
-          ln -s "$MoveDir/$ShowFileName.$OriginalExt" "$InputPath"
-          if [[ ! -L "$InputPath" ]]; then
+          ln -s "$MoveDir/$ShowFileName.$OriginalExt" "$RECORDING_PATH"
+          if [[ ! -L "$RECORDING_PATH" ]]; then
             err "Failed to Create symlink: FILESYSTEM MAY NOT SUPPORT SYMLINKS"
-          elif [[ -L "$InputPath" ]]; then
+          elif [[ -L "$RECORDING_PATH" ]]; then
             debug "Symlink Successfully created."
             warn "Setting SYMLINK='Enabled' for subsequent processing."
             SYMLINK='Enabled'
@@ -4979,13 +4978,13 @@ move_mode_handling(){
 link_mode_handling(){
   debug "Creating link in LINK mode with CONFIDENCE:'$ConfidenceRating'"
 
-  ln -s "$InputPath" "$MoveDir/$ShowFileName.$OriginalExt"
+  ln -s "$RECORDING_PATH" "$MoveDir/$ShowFileName.$OriginalExt"
 
   #if file was created
   if [[ -L "$MoveDir/$ShowFileName.$OriginalExt" ]]; then
     inform "Symlink created: $MoveDir/$ShowFileName.$OriginalExt"
     if [[ "$TRACKING" != 'Disabled' ]]; then
-      printf '%s\n' "'$MoveDir/$ShowFileName.$OriginalExt' '$InputPath'" >> "$m2kdir/created.tracking"
+      printf '%s\n' "'$MoveDir/$ShowFileName.$OriginalExt' '$RECORDING_PATH'" >> "$m2kdir/created.tracking"
     fi
 
     #Generate supporting files, add undo and doover entries, notify Kodi.
@@ -5007,8 +5006,8 @@ link_mode_handling(){
 copy_mode_handling(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   #Send notifications, Move the file and rename
-  debug "COPYING FILE: '$InputPath' to '$MoveDir/$ShowFileName.$OriginalExt'"
-  cp -L "$InputPath" "$MoveDir/$ShowFileName.$OriginalExt"
+  debug "COPYING FILE: '$RECORDING_PATH' to '$MoveDir/$ShowFileName.$OriginalExt'"
+  cp -L "$RECORDING_PATH" "$MoveDir/$ShowFileName.$OriginalExt"
   #Check and report if file was moved
   if [[ -e "$MoveDir/$ShowFileName.$OriginalExt" ]]; then
     if [[ -f "$MoveDir/$ShowFileName.$OriginalExt" ]]; then
@@ -6406,6 +6405,12 @@ main(){
   #Make them read-only so we can't accidentally modify them.
   declare -gr INPUT_PATH INPUT_TITLE INPUT_SUBTITLE INPUT_SEASON INPUT_EPISODE
 
+  #Extract components of the file we're processing.
+  INPUT_PATH_BASENAME="$(basename "$INPUT_PATH")" #"${INPUT_PATH##*/}"
+  ORIGINAL_EXT="${INPUT_PATH_BASENAME##*.}"
+  if ! set_recording_name "$INPUT_PATH"; then exit_job "$EXIT_JOB_TYPE"; fi
+  ORIGINAL_DIRNAME="$(dirname "$RECORDING_PATH")"
+
   #Reset move paths if TargetPathIsInputPath is active, creating dirs as needed.
   if [[ "$TargetPathIsInputPath" = 'Enabled' ]]; then
     inform "TargetPathIsInputPath=Enabled. Resetting paths, creating directories."
@@ -6423,8 +6428,6 @@ main(){
   } >> "$LOGFILE"
   PROCESSING_RECORDING='True'
   inform "Processing: $INPUT_PATH"
-
-  INPUT_PATH_BASENAME="$(basename "$INPUT_PATH")" #"${INPUT_PATH##*/}"
 
   #Our starting point for the key information is the command line input.
   TITLE="$INPUT_TITLE"
@@ -6465,10 +6468,6 @@ main(){
   #Format Show Title for Sending to www.TheTVDB.com and KODI
   WEB_TITLE="$(sed 's/ /%20/g' <<< "$TITLE" | sed 's/&/%26/g')"
 
-  #Extract components of the file we're processing.
-  ORIGINAL_EXT="${INPUT_PATH_BASENAME##*.}"
-  ORIGINAL_DIRNAME="$(readlink -f "$(dirname "$INPUT_PATH")")"
-
   #From time-to-time check created.tracking, dir.tracking, and remove orphans.
   periodic_maintenace
 
@@ -6500,7 +6499,7 @@ main(){
   if ! anti_clobber; then exit_job "$EXIT_JOB_TYPE"; fi
 
   #If this is a test file, then exit now.
-  [[ "$InputPath" = "$m2kdir/6666_20420101084242.tst" ]] && testfile_exit
+  [[ "$RECORDING_PATH" = "$m2kdir/6666_20420101084242.tst" ]] && testfile_exit
 
   #If the show is generic programming, this is the best myth2kodi can do.
   [[ "$m2kProgramIDCheck" = 'SH' ]] && msg_show_warning
@@ -6544,7 +6543,7 @@ m2k_init
 
 #TODO: Make proper arg parser...
 #TODO: Set the inputs as fixed (read-only) parameters, then use different variables consistently if we need to modify them...
-InputPath="$1"
+RECORDING_PATH="$1"
 InputTitle="$2"
 InputSubtitle="$3"
 InputSeasonNum="$4"
@@ -6568,9 +6567,9 @@ debug "No command flag set. Processing as recording."
   printf '%s\n' "$m2kVersion on $m2kPlatform"
 } >> "$LOGFILE"
 PROCESSING_RECORDING="True"
-inform "Processing: $InputPath"
+inform "Processing: $RECORDING_PATH"
 
-InputFileBasename="$(basename "$InputPath")" #"${InputPath##*/}"
+InputFileBasename="$(basename "$RECORDING_PATH")" #"${RECORDING_PATH##*/}"
 
 #As long as we're not in diagnostics mode, gather info from MythTV-DB.
 if [[ "$M2K_DIAGNOSTICS_MODE" != "True" ]]; then
@@ -6603,7 +6602,7 @@ EpisodeSubtitle="$(sed 's/;.*//' <<< "$InputSubtitle")"
 #Only keep Alpha-numeric characters, space, parenthesis and the four chars & , . -
 EpisodeSubtitle="$(sed -r 's/[^[:alnum:] &,.)(-]//g' <<< "$EpisodeSubtitle")"
 OriginalExt="${InputFileBasename##*.}"
-originaldirname="$(dirname "$InputPath")"
+originaldirname="$(dirname "$RECORDING_PATH")"
 #Set originaldir name if none was supplied
 [[ "$originaldirname" =~ ^('./'|'.'|'')$ ]] && originaldirname="$(pwd)"
 
@@ -6752,7 +6751,7 @@ fi
 
 #TODO: review this, is it still necessary now that we abort when target already exists???
 #If file is a link then activate link mode so the original link is not screwed up.
-if [[ -L "$InputPath" && "$PROCESS_RECORDING_MODE" != 'COPY' ]]; then
+if [[ -L "$RECORDING_PATH" && "$PROCESS_RECORDING_MODE" != 'COPY' ]]; then
   warn "FILE IS A LINK FORCING PROCESS_RECORDING_MODE='LINK'."
   PROCESS_RECORDING_MODE='LINK'
   SYMLINK='Enabled'
@@ -6772,7 +6771,7 @@ msg_operation_summary
 
 ######PRE-NAMING CHECKS#####
 #if no episode data and it's not a test
-if [[ "$HasSxxExx" != '1' && "$InputPath" != "$m2kdir/6666_20420101084242.tst" ]]; then
+if [[ "$HasSxxExx" != '1' && "$RECORDING_PATH" != "$m2kdir/6666_20420101084242.tst" ]]; then
   if [[ "$m2kProgramIDCheck" = "EP" ]]; then
     NOTIFY_MSG="Episode could not be matched with supplied information."
     warn "$NOTIFY_MSG"
@@ -6839,13 +6838,13 @@ if [[ -f "$MoveDir/$ShowFileName.$OriginalExt" ]]; then
 fi
 
 #If this is a test file, then exit now.
-[[ "$InputPath" = "$m2kdir/6666_20420101084242.tst" ]] && testfile_exit
+[[ "$RECORDING_PATH" = "$m2kdir/6666_20420101084242.tst" ]] && testfile_exit
 
-#Check that we have the necessary permissions for InputPath.
+#Check that we have the necessary permissions for RECORDING_PATH.
 if [[ "$PROCESS_RECORDING_MODE" =~ ^('LINK'|'COPY')$ ]]; then
-  check_path_permission "$InputPath" 'r'
+  check_path_permission "$RECORDING_PATH" 'r'
 else
-  check_path_permission "$InputPath" 'rw'
+  check_path_permission "$RECORDING_PATH" 'rw'
 fi
 
 #If the show is generic programming, this is the best myth2kodi can do.

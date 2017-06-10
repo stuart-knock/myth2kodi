@@ -286,6 +286,7 @@ SHOW_FILE_NAME_APPEND=''
 #Options: ['Enabled'|'Disabled'(DEFAULT)]
 FORCE_PROCESS='Disabled'
 
+
 ############################# Directory Settings #############################
 
 #myth2kodi working directory: Default: "$HOME/.myth2kodi"
@@ -651,7 +652,7 @@ exit_job(){
     source "$m2kdir/userjobs/$jobtype" 2>&1 | err_pipe "${FUNCNAME[0]}(): $jobtype: "
   fi
   exit "$exitstatus"
-}
+} #exit_job()
 
 #This is the first command executed after the setting of variables at the top
 #of this file. It initialises the state of the script and the logging system.
@@ -808,8 +809,9 @@ m2k_init(){
   #Some excessive logging for extra buggy bugs.
   ((LOGLEVEL>=4)) && env | err_pipe 'env:  '
   ((LOGLEVEL>=42)) && set | err_pipe 'set:  '
-}
+} #m2k_init()
 
+#
 parse_command_flags(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   EXIT_JOB_TYPE='SuccessfulCommandLineSwitch'
@@ -999,7 +1001,7 @@ parse_command_flags(){
   msg_usage
   EXIT_JOB_TYPE='UnrecognisedCommand'
   return 1
-}
+} #parse_command_flags()
 
 #Initialises a new log file with creation information -- can be run before
 #the logging system is initialised.
@@ -1009,7 +1011,7 @@ initialise_new_logfile(){
     printf 'Creating Log File: %s\n' "$LOGFILE"
     printf 'Created on %s at %s\n' "$TODAY" "$SCRIPT_START_TIME"
   } >> "$LOGFILE"
-}
+} #initialise_new_logfile()
 
 ######################## TESTING & CHECKING FUNCTIONS ########################
 
@@ -1087,7 +1089,7 @@ validate_settings(){
     return 1
   fi
   return 0
-}
+} #validate_settings()
 
 #Do some basic tests to make sure we were called correctly
 validate_args(){
@@ -1216,7 +1218,7 @@ pre_process_check(){
     fi
   fi
   return 0
-}
+} #pre_process_check()
 
 #Check write permission and free space, return 0 (writeable) or 1 (not).
 #Takes 3 args: $1=filesize ; $2=freespace ; $3=directory
@@ -1351,7 +1353,7 @@ check_path_permission(){
   #If we have made it this far then all is well
   debug "Permissions ok for: '$path_to_check'"
   return 0
-}
+} #check_path_permission()
 
 check_filesystem(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
@@ -1413,7 +1415,7 @@ check_filesystem(){
   debug "filesystem_write_state='$filesystem_write_state'"
   ((filesystem_write_state != 0)) && return 1
   return 0
-}
+} #check_filesystem()
 
 #Assuming the provided argument is a recording file successfully processed in
 #LINK mode or MOVE mode with SYMLINKing Enabled, identify the file, the link,
@@ -1441,7 +1443,7 @@ identify_recording_files(){
     return 1
   fi
   return 0
-}
+} #identify_recording_files()
 
 #Given a recording file or link find the associated link or file.
 #Full paths are returned via RECORDING_FILE and RECORDING_LINK variables.
@@ -1522,7 +1524,7 @@ find_file_link_pairs(){
     err "${FUNCNAME[0]}(): Not a file or link: $file_path"
     return 1
   fi
-}
+} #find_file_link_pairs()
 
 #Sets the RECORDING_NAME variable. If the arg is a MythTV recording file then
 #it just sets as basename, if given a myth2kodi moved name then, if possible,
@@ -1857,7 +1859,7 @@ dbselect(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   debugcont "arg 1 = '$1'"
   mysql -u"$MySQLuser" -p"$MySQLpass" -e "USE $MySQLMythDb ; SELECT $1 FROM recorded WHERE basename LIKE '$INPUT_PATH_BASENAME' ; "
-}
+} #dbselect()
 
 #Use mysql commands to get MythTV-DB entry for the current recording.
 get_mythtvdb_info_mysql(){
@@ -1947,7 +1949,7 @@ get_mythtvdb_info_mysql(){
     generate_comskip
   fi
   return 0
-}
+} #get_mythtvdb_info_mysql()
 
 #Use python bindings to get MythTV-DB entry for the current recording.
 get_mythtvdb_info_pythonbindings(){
@@ -2054,7 +2056,7 @@ get_mythtvdb_info_pythonbindings(){
   else
     debug "Not removing the temporary MythTV-DB info file: '$mtv_recinfo_file'"
   fi
-}
+} #get_mythtvdb_info_pythonbindings()
 
 get_mythtvdb_info(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
@@ -2088,7 +2090,7 @@ get_mythtvdb_info(){
     EXIT_JOB_TYPE='InsufficientInformationProvided'
     return 1
   fi
-}
+} #get_mythtvdb_info()
 
 get_mythtvdb_storagegroups(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
@@ -2135,7 +2137,7 @@ get_mythtvdb_storagegroups(){
     EXIT_JOB_TYPE='InsufficientInformationProvided'
     return 1
   fi
-}
+} #get_mythtvdb_storagegroups()
 
 #Remove recording's pictures and entries from MythTV-DB. Thanks to barney_1.
 delete_mythtv_database_entry_mysql(){
@@ -2168,7 +2170,7 @@ delete_mythtv_database_entry_mysql(){
     return 1
   fi
   return 0
-}
+} #delete_mythtv_database_entry_mysql()
 
 ############## FUNCTIONS TO PROCESS MythTV DATABASE INFORMATION ##############
 
@@ -2220,7 +2222,7 @@ process_mythtvdb(){
     fi
   fi
   return 0
-}
+} #process_mythtvdb()
 
 #Gather information from the MythTV database common to guide-data types.
 process_mythtvdb_common(){
@@ -2265,7 +2267,7 @@ process_mythtvdb_common(){
   STARTTIME="$(printf '%s' "$MDB_STARTTIME" | tr ':' '.' | tr ' ' '@')" #TODO: Consider getting rid of the @ from this, as it's used in file naming... Maybe _ instead
 
   return 0
-}
+} #process_mythtvdb_common()
 
 #Processes Zap2it/SchedulesDirect/Tribune data for use in the program
 process_mythtvdb_schedulesdirect(){
@@ -2292,7 +2294,7 @@ process_mythtvdb_schedulesdirect(){
   Zap2itSeriesID=$(echo "$Zap2itSeriesID" | tr -d MVSHEP | sed 's/0*//' | sed 's/.\{4\}$//')
 
   return 0
-}
+} #process_mythtvdb_schedulesdirect()
 
 #TODO: This processing type should be replaced with an ONLINE_LOOKUP='Enabled'|'Disabled' user option.
 #NoLookup is an alternate mode where TheTVDB is not used for lookups
@@ -2315,7 +2317,7 @@ process_mythtvdb_nolookup(){
   Zap2itSeriesID="$MDB_SERIESID"
 
   return 0
-}
+} #process_mythtvdb_nolookup()
 
 #A Process function compatible with Sydney over the air data...
 process_mythtvdb_sydfta(){
@@ -2416,7 +2418,7 @@ process_mythtvdb_sydfta(){
   #TODO: figure out if anything useful can actually be done with this SydFTA_ProgramID.
 
   return 0
-}
+} #process_mythtvdb_sydfta()
 
 #Convert RECORDING_TYPE into ProgramIDType.
 set_ProgramIDType(){
@@ -2444,7 +2446,7 @@ set_ProgramIDType(){
       ;;
   esac
   return 0
-}
+} #set_ProgramIDType()
 
 #Try and set Sxx and Exx using SEASON and EPISODE, or failing that SeasonEpisode.
 set_sxxexx_season_episode_numbers(){
@@ -2478,7 +2480,7 @@ set_sxxexx_season_episode_numbers(){
   inform "Found Season ($Sxx) & Episode ($Exx) information."
   HasSxxExx='1'
   return 0
-}
+} #set_sxxexx_season_episode_numbers()
 
 #Use regex to check for and make use of SxxExx info in Plot.
 get_sxxexx_from_plot(){
@@ -2506,7 +2508,7 @@ get_sxxexx_from_plot(){
     fi
   fi
   return 0
-}
+} #get_sxxexx_from_plot()
 
 #If we already have season and episode info, remove it from the Plot field.
 remove_sxxexx_from_plot(){
@@ -2533,7 +2535,7 @@ remove_sxxexx_from_plot(){
     debug "SeasonEpisode is not currently set:"
     debugcont "So, either it is not there or we have not extracted it yet, not discarding from Plot field."
   fi
-}
+} #remove_sxxexx_from_plot()
 
 #Try to extract a subtitle from the plot field (Luv Ya SBS)
 get_subtitle_from_plot(){
@@ -2556,7 +2558,7 @@ get_subtitle_from_plot(){
     #inform "No Subtitle extracted from Plot field.
     #return 1
   #fi
-}
+} #get_subtitle_from_plot()
 
 #Called after get_subtitle_from_plot(), it uses the same logic to...
 remove_subtitle_from_plot(){
@@ -2572,7 +2574,7 @@ remove_subtitle_from_plot(){
   else
     debug "SUBTITLE is not currently set, so not going to discard it from Plot field."
   fi
-}
+} #remove_subtitle_from_plot()
 
 #Some Australian channels (ABC, I'm looking at you), put cast info at the end of the Plot.
 remove_cast_from_plot(){
@@ -2586,7 +2588,7 @@ remove_cast_from_plot(){
     Plot="${Plot/$CastString/.}"
     debugcont "New Plot:'$Plot'"
   fi
-}
+} #remove_cast_from_plot()
 
 ############### FUNCTIONS TO BUILD myth2kodi's LOCAL DATABASE ################
 
@@ -2675,7 +2677,7 @@ download_series_identification(){
     debug "Not removing the temporary working file: '$working_file'"
   fi
   return 0
-}
+} #download_series_identification()
 
 #Check whether TheTVDB has updated information relative to myth2kodi's DB.
 check_m2k_database_up_to_date(){
@@ -2733,7 +2735,7 @@ check_m2k_database_up_to_date(){
   fi
   #some other condition was present. update anyways.
   return 1
-}
+} #check_m2k_database_up_to_date()
 
 #Download series information from TheTVDB and tvmaze servers for the
 #currently matched series, then use that information to generate
@@ -2911,7 +2913,7 @@ download_series_info(){
     return 1
   fi
   return 1
-}
+} #download_series_info()
 
 #Create myth2kodi's internal database directory for the current show.
 make_m2k_database_dir(){
@@ -2922,7 +2924,7 @@ make_m2k_database_dir(){
     chmod 755 "$m2kdir/$TVDB_TITLE"
     inform "Created myth2kodi Database Folder: $m2kdir/$TVDB_TITLE"
   fi
-}
+} #make_m2k_database_dir()
 
 ############## FUNCTIONS TO PROCESS myth2kodi's LOCAL DATABASE ###############
 
@@ -3143,7 +3145,7 @@ get_serieslinenumber_zap2itid(){
   warn "${FUNCNAME[0]}(): could not find serieslinenumber with Zap2itSeriesID"
   serieslinenumber=0
   return 1
-}
+} #get_serieslinenumber_zap2itid()
 
 #Set the serieslinenumber by fuzzy logic matching the current TITLE
 #variable against show names returned by querying TheTVDB.
@@ -3164,7 +3166,7 @@ get_serieslinenumber_showname_fuzzy(){
   fi
   err "${FUNCNAME[0]}(): FAILED to determine serieslinenumber for TITLE: '$TITLE'"
   return 1
-}
+} #get_serieslinenumber_showname_fuzzy()
 
 #Set the serieslinenumber by matching the current TITLE variable
 #against show names returned by querying TheTVDB.
@@ -3176,7 +3178,7 @@ get_serieslinenumber_showname(){
   [[ -z "$serieslinenumber" ]] && serieslinenumber=0
   #Get the seriesid based on the showname
   if ((serieslinenumber >= 1)); then return 0; else return 1; fi
-}
+} #get_serieslinenumber_showname()
 
 #TODO: review, possibly remove...
 #Resolve multiple matches on the same airdate, the conflict is
@@ -3223,7 +3225,7 @@ resolve_multiple_matches_airdate(){
     fi
   fi
   return 1
-}
+} #resolve_multiple_matches_airdate()
 
 #Sets the TVDB_SERIESID and TVDB_TITLE variables based on serieslinenumber.
 set_tvdb_seriesid_title_from_serieslinenumber(){
@@ -3239,7 +3241,7 @@ set_tvdb_seriesid_title_from_serieslinenumber(){
   #If we're not in debug mode then cleanup show identification files.
   [[ -f "$TMP_SID_FILE" ]] && (( LOGLEVEL < 3 )) && rm -f "$TMP_SID_FILE"
   [[ -f "$TMP_SHN_FILE" ]] && (( LOGLEVEL < 3 )) && rm -f "$TMP_SHN_FILE"
-}
+} #set_tvdb_seriesid_title_from_serieslinenumber()
 
 #Sets the AbsoluteEpisodeNumber variable by comparing MythTV's ORIGINALAIRDATE
 #against the first aired information in myth2kodi's local database.
@@ -3259,7 +3261,7 @@ set_absolute_episode_number_by_airdate(){
     return 0
   fi
   return 2
-}
+} #set_absolute_episode_number_by_airdate()
 
 #Set the AbsoluteEpisodeNumber by comparing Sxx and Exx against the
 #series and episode number information in myth2kodi's local database.
@@ -3289,7 +3291,7 @@ set_absolute_episode_number_by_sxxexx(){
   fi
   warn "${FUNCNAME[0]}(): Failed to determine AbsoluteEpisodeNumber"
   return 1
-}
+} #set_absolute_episode_number_by_sxxexx()
 
 #Set the AbsoluteEpisodeNumber by matching SUBTITLE against
 #the episode names (Ename) in myth2kodi's local database.
@@ -3301,7 +3303,7 @@ set_absolute_episode_number_by_ename(){
     return 0
   fi
   return 1
-}
+} #set_absolute_episode_number_by_ename()
 
 #Set the AbsoluteEpisodeNumber by fuzzy matching SUBTITLE
 #against the episode names (Ename) in myth2kodi's local database.
@@ -3351,7 +3353,7 @@ set_absolute_episode_number_by_ename_fuzzy(){
   #Check that multiple matches are actually the same episode
   multi_match_check
   return "$?"
-}
+} #set_absolute_episode_number_by_ename_fuzzy()
 
 #Use agrep to match the whole guide-data plot against Plots in myth2kodi-DB.
 #Returns: 2 on a failure that indicates $TVDB_TITLE.Plot.txt contains no plots;
@@ -3387,7 +3389,7 @@ fuzzy_plot_match(){
   #then consider that good enough and validate. #TODO: figure out the critical ratio here.
   (( cost[0] <= (PlotLength / 3) )) && { multi_match_check ; return "$?"; }
   return 1
-}
+} #fuzzy_plot_match()
 
 #Some agrep can't use a full Plot as a PATTERN. And sometimes full Plot matching
 #misses simply because the text is reordered or the middle is chopped out. In
@@ -3451,7 +3453,7 @@ chunked_fuzzy_plot_match(){
   AENguess=($(printf '%s\n' "${GoodChunkGuesses[@]}" | sort))
   multi_match_check
   return "$?"
-}
+} #chunked_fuzzy_plot_match()
 
 #Verify that any absolute-episode-number guesses are either all the same
 #episode or if multiple distinct episodes were matched, accept the match
@@ -3542,7 +3544,7 @@ multi_match_check(){
   errcont "Season number file:  '$m2kdir/$TVDB_TITLE/$TVDB_TITLE.S.txt'"
   errcont "Episode number file: '$m2kdir/$TVDB_TITLE/$TVDB_TITLE.E.txt'"
   return 1
-}
+} #multi_match_check()
 
 #Identify episode by fuzzy matching MythTV-DB Plot against Plots in myth2kodi-DB.
 get_absolute_episode_number_fuzzy_plot(){
@@ -3593,7 +3595,7 @@ get_absolute_episode_number_fuzzy_plot(){
   [[ "$fuzzy_chunk_return_status" == 0 ]] && return 0
   warn "${FUNCNAME[0]}(): Chunked Plot match is still too fuzzy, failed to guess AbsoluteEpisodeNumber."
   return "$fuzzy_chunk_return_status"
-}
+} #get_absolute_episode_number_fuzzy_plot()
 
 #Use AbsoluteEpisodeNumber to set Sxx and Exx
 set_sxxexx_absolute_episode_number(){
@@ -3612,7 +3614,7 @@ set_sxxexx_absolute_episode_number(){
   if ((Sxx < 10)); then Sxx="S0$Sxx"; else Sxx="S$Sxx"; fi
   inform "EPISODE:$TVDB_SUBTITLE EPISODE NUMBER:$AbsoluteEpisodeNumber $Sxx$Exx WITH CONFIDENCE: $EpisodeConfidenceRating"
   HasSxxExx='1'
-}
+} #set_sxxexx_absolute_episode_number()
 
 plot_match_fallback(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
@@ -3651,7 +3653,6 @@ storagegroup_fallback(){
   fi
 } #storagegroup_fallback()
 
-
 ######################### MESSAGE/REPORT FUNCTIONS ###########################
 
 #Appends an entry to today's DailyReport file for the show just processed.
@@ -3664,7 +3665,7 @@ dailyreport(){
     return "$?"
   fi
   return 0
-}
+} #dailyreport()
 
 #Prints a table summarising the status of important directories.
 msg_dir_summary(){
@@ -3681,7 +3682,7 @@ msg_dir_summary(){
   informcont "$(printf '%-18s|  %s  | %10s | %s\n' "PrimaryShowDir"    "$ShowDirWritable"     "$ShowDirFreeSpace MB"     "$PrimaryShowDir"   )"
   informcont "$(printf '%-18s|  %s  | %10s | %s\n' "AlternateShowDir"  "$AltShowDirWritable"  "$AltShowDirFreeSpace MB"  "$AlternateShowDir" )"
   return 0
-}
+} #msg_dir_summary()
 
 #A message summarizing myth2kodi's operation
 msg_operation_summary(){
@@ -3741,7 +3742,7 @@ msg_operation_summary(){
   fi
   inform "################ END OF OPERATION SUMMARY ################"
   return 0
-}
+} #msg_operation_summary()
 
 #Increment the number contained in "$m2kdir/FuzzyLogicError.log"
 increment_fuzzy_logic_error_count(){
@@ -3754,7 +3755,7 @@ increment_fuzzy_logic_error_count(){
   (( ++FuzzyLogicError ))
   printf '%s\n' "$FuzzyLogicError" > "$m2kdir/FuzzyLogicError.log"
   return "$?"
-}
+} #increment_fuzzy_logic_error_count()
 
 #Increment the number contained in "$m2kdir/TotalEpisodeMatches.log"
 increment_total_matches(){
@@ -3768,7 +3769,7 @@ increment_total_matches(){
   (( ++FuzzyLogicMatches ))
   printf '%s\n' "$FuzzyLogicMatches" > "$m2kdir/TotalEpisodeMatches.log"
   return "$?"
-}
+} #increment_total_matches()
 
 #An error message when we were called as a MythTV userjob from outside
 #MythTV, then exit.
@@ -3781,7 +3782,7 @@ msg_userjob_outside_mythtv_error(){
   errcont "  myth2kodi --usage"
   EXIT_JOB_TYPE='InvalidCall'
   return 1
-}
+} #msg_userjob_outside_mythtv_error()
 
 #TODO: review this message function... particularly in relation to msg_unable_to_identify_recording() and msg_unrecognised_series()
 #A warning message for when RECORDING_TYPE="SH"
@@ -3792,7 +3793,7 @@ msg_show_warning(){
   informcont "TYPE: $ProgramIDType- $TITLE, $SUBTITLE"
   warn "RECORDING_TYPE='SH', this can occur due to incomplete guide data."
   return 0
-}
+} #msg_show_warning()
 
 #An error message for when information can't be obtained about a recording.
 msg_unable_to_identify_recording(){
@@ -3812,7 +3813,7 @@ msg_unable_to_identify_recording(){
   fi
   informcont "To force processing of unrecognised recordings, disable ShowStopper."
   NOTIFY_MSG="Could not fully identify: $TITLE."
-}
+} #msg_unable_to_identify_recording()
 
 #
 msg_unrecognised_series(){
@@ -3834,7 +3835,7 @@ msg_unrecognised_series(){
     [[ -z "${Exx:2:1}" ]] && Exx=''
   fi
   return 0
-}
+} #msg_unrecognised_series()
 
 #A message for when we've successfully moved a recording.
 msg_completed_move(){
@@ -3849,7 +3850,7 @@ msg_completed_move(){
   NOTIFY_MSG="myth2kodi Success $ShowFileName moved to $MoveDir"
   EXIT_JOB_TYPE='MoveModeSuccessful'
   return 0
-}
+} #msg_completed_move()
 
 #A message for when we've successfully copied a recording.
 msg_completed_copy(){
@@ -3860,7 +3861,7 @@ msg_completed_copy(){
   NOTIFY_MSG="myth2kodi Success $ShowFileName copied to $MoveDir"
   EXIT_JOB_TYPE='CopyModeSuccessful'
   return 0
-}
+} #msg_completed_copy()
 
 #A warning message for when a recording was thought to be an episode but
 #no episode information could be obtained.
@@ -3869,7 +3870,7 @@ msg_epishow(){
   warn     "SHOW WAS CONSIDERED AN EPISODE BUT INFORMAITON WAS NOT OBTAINABLE"
   warncont "%%%% Please consider helping out and adding to TheTVDB %%%%"
   warncont "HANDLING EPISODE AS GENERAL SHOWING & DUMPING INTO --doover USER JOB"
-}
+} #msg_epishow()
 
 #A warning message for when a fuzzy match on episode name isn't consistent
 #with an airdate match.
@@ -3887,7 +3888,7 @@ msg_fuzzy_logic_warning(){
   warncont "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%"
   inform "Setting LOGLEVEL=3 (debug) DUE TO AIRDATE/FUZZY-LOGIC DISAGREEMENT."
   LOGLEVEL=3 #Enable debug level logging
-}
+} #msg_fuzzy_logic_warning()
 
 #A warning message for when a match on episode name isn't consistent
 #with an airdate match.
@@ -3905,7 +3906,7 @@ msg_standard_logic_warning(){
   warncont "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%"
   inform "Setting LOGLEVEL=3 (debug) DUE TO AIRDATE/STANDARD-LOGIC DISAGREEMENT."
   LOGLEVEL=3 #Enable debug level logging
-}
+} #msg_standard_logic_warning()
 
 #An error message for when the path/file we've been asked to process doesn't exist
 msg_invalid_path_error(){
@@ -3913,7 +3914,7 @@ msg_invalid_path_error(){
   local path_to_check="$1"
   err     "OPERATION FAILED, PATH OR FILE DOES NOT EXIST, CHECK NAME AND PERMISSIONS:"
   errcont "'$path_to_check'"
-}
+} #msg_invalid_path_error()
 
 #An error message for when the moved file has zero length (either the
 #original had zero length or we failed to move it).
@@ -3922,7 +3923,7 @@ msg_wrote_zero_length_file(){
   NOTIFY_MSG="$ShowFileName.$ORIGINAL_EXT could not be moved to $MoveDir"
   err "${FUNCNAME[0]}() CALLED FROM: ${FUNCNAME[1]}(): $NOTIFY_MSG"
   EXIT_JOB_TYPE='ZeroLengthFile'
-}
+} #msg_wrote_zero_length_file()
 
 #TODO: Consider merging the following three message functions into one function,
 #      they're highly redundant.
@@ -3935,7 +3936,7 @@ msg_permission_error_while_moving(){
   err "${FUNCNAME[0]}() CALLED FROM: ${FUNCNAME[1]}(): $NOTIFY_MSG"
   errcont "Possible permission error while moving $ShowFileName"
   EXIT_JOB_TYPE='MoveFailed'
-}
+} #msg_permission_error_while_moving()
 
 #An error message for when issues are encountered during copying
 msg_permission_error_while_copying(){
@@ -3945,7 +3946,7 @@ msg_permission_error_while_copying(){
   err "${FUNCNAME[0]}() CALLED FROM: ${FUNCNAME[1]}(): $NOTIFY_MSG"
   errcont "Possible permission error while copying $ShowFileName"
   EXIT_JOB_TYPE='CopyFailed'
-}
+} #msg_permission_error_while_copying()
 
 #An error message for when we've failed to create a symlink
 msg_symlink_not_created(){
@@ -3955,7 +3956,7 @@ msg_symlink_not_created(){
   errcont " Possible permission error while linking $ShowFileName"
   errcont "Check that file system supports symlinks: $MoveDir"
   EXIT_JOB_TYPE='LinkingFailed'
-}
+} #msg_symlink_not_created()
 
 #This function provides an error message on generic errors
 msg_generic_unspecified_error(){
@@ -3967,7 +3968,7 @@ msg_generic_unspecified_error(){
   errcont "CHECK www.TheTVDB.com RUN myth2kodi LINK COMMAND PROMPT."
   errcont "FOR MORE INFORMATION SEE http://forum.kodi.tv/showthread.php?tid=301925"
   errcont "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%"
-}
+} #msg_generic_unspecified_error()
 
 #--recording-info
 msg_recording_info(){
@@ -3992,7 +3993,7 @@ msg_recording_info(){
     tail -n +2 "$MARKUPFRAMES_TMP"
     printf '\n'
   fi
-}
+} #msg_recording_info()
 
 #Report the combination of command line input and MythTV-DB data.
 msg_merged_input_mythtvdb(){
@@ -4009,7 +4010,7 @@ msg_merged_input_mythtvdb(){
   done
 
   [[ "$Database" = 'Enabled' ]] && debugcont "Plot: \"$Plot\""
-}
+} #msg_merged_input_mythtvdb()
 
 #A warning message about performing maintenance that waits on user input
 #before proceeding
@@ -4027,7 +4028,7 @@ maintenance_warning(){
     return 1
   fi
   return 0
-}
+} #maintenance_warning()
 
 cleanse_warning(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
@@ -4043,7 +4044,7 @@ cleanse_warning(){
     return 1
   fi
   return 0
-}
+} #cleanse_warning()
 
 target_directory_not_writeable(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
@@ -4052,7 +4053,7 @@ target_directory_not_writeable(){
   NOTIFY_MSG="$target_type target directories not writeable."
   EXIT_JOB_TYPE='PermissionError'
   err "${FUNCNAME[1]}() CALLED FROM: ${FUNCNAME[2]}(): $NOTIFY_MSG"
-}
+} #target_directory_not_writeable()
 
 target_file_exists(){
   err "FILE NAME ALREADY EXISTS:"
@@ -4090,7 +4091,7 @@ target_file_exists(){
   printf '"%s" "%s" "%s" "%s"\n' "$TITLE" "$MDB_STARTTIME" "$RECORDING_PATH" "$ShowFileName" >> "$DuplicatesFile"
   NOTIFY_MSG="Recording identified as possible duplicate of: $MoveDir/$ShowFileName.$ORIGINAL_EXT"
   return "$recording_name_return_state"
-}
+} #target_file_exists()
 
 ############################### HELP MESSAGES ################################
 
@@ -4102,7 +4103,7 @@ msg_about(){
   printf ' %s\n\n' "It is a modified version of mythicalLibrarian."
   printf ' %s\n' "mythicalLibrarian Author: Adam Outler adamoutler(at)gmail.com"
   printf ' %s\n\n' "myth2kodi Author: Stuart Knock"
-}
+} #msg_about()
 
 #A message describing the basic call patterns.
 msg_usage(){
@@ -4119,7 +4120,7 @@ msg_usage(){
   [[ "$M2KARG1" =~ ^('-h'|'-?'|'--help')$ ]] || printf '   %s\n' "myth2kodi --help"
   printf '   %s\n' "myth2kodi --config-help"
   printf '   %s\n\n' "myth2kodi --confidence"
-}
+} #msg_usage()
 
 #A message listing all the --option flags.
 msg_options(){
@@ -4199,7 +4200,7 @@ msg_options(){
   printf '\n%s\n' "   --confidence"
   printf '%s\n'   "    Confidence Help, displays information on improving confidence"
   printf '%s\n\n' "    example: myth2kodi --confidence"
-}
+} #msg_options()
 
 #A message about myth2kodi configuration files
 msg_config(){
@@ -4253,7 +4254,7 @@ msg_config(){
   printf '%s\n' " #KODIIPs=( user:password@192.168.1.110:8080 )                #"
   printf '%s\n' " #Database=Disabled                                           #"
   printf '%s\n\n' " ##############################################################"
-}
+} #msg_config()
 
 #A message about enabling Kodi to access the RSS feed generated by myth2kodi
 msg_rss(){
@@ -4271,7 +4272,7 @@ msg_rss(){
   printf '%s\n' "  running myth2kodi then you'll need a webserver enabled on the"
   printf '%s\n' "  myth2kodi machine and the entry should look something like:"
   printf '%s\n\n' "    <feed updateinterval=\"30\">http://[youripaddress]/myth2kodi-rss/rss.xml</feed>"
-}
+} #msg_rss()
 
 #A message explaining how to improve confidence ratings for your recordings.
 msg_improve_confidence(){
@@ -4288,7 +4289,7 @@ msg_improve_confidence(){
   printf '%s\n' " 2. Add your favorite show's Zap2it ID to TheTVDB.com."
   printf '%s\n' " 3. Add your favorite show's OriginalAirdate to TheTVDB.com."
   printf '%s\n\n' " 4. Add your favorite show's proper Title to TheTVDB.com"
-}
+} #msg_improve_confidence()
 
 #################### FUNCTIONS FOR PROCESSING RECORDINGS #####################
 
@@ -4320,7 +4321,7 @@ set_show_file_name(){
     [[ "$RECORDING_TYPE" = 'EP' ]] && RequiresDoover=1
   fi
   inform "Set file name as: $ShowFileName"
-}
+} #set_show_file_name()
 
 #Set the name for special recording "Categories": 'NEWS'; 'SPORT'; etc
 set_show_file_name_categoric(){
@@ -4362,7 +4363,7 @@ set_show_file_name_categoric(){
   RequiresNFO=1
   HasSxxExx=1
   inform "Set file name as: $ShowFileName"
-}
+} #set_show_file_name_categoric()
 
 #Set the move location for the current recording, using Alternate directories
 #when main directories unavailable, setting FailSafe flag when Alternate
@@ -4406,7 +4407,7 @@ set_move_location(){
     return 1
   fi
   return 0
-}
+} #set_move_location()
 
 #Make the directory we'll move recording to if it doesn't already exist.
 make_show_dir(){
@@ -4454,7 +4455,7 @@ make_show_dir(){
     inform "MOVE DIRECTORY SET AS: '$MoveDir'"
     return 0
   fi
-}
+} #make_show_dir()
 
 #If TargetPathIsInputPath is set, then this changes MoveDir to original dir.
 set_target_dir_as_input_path_dir(){
@@ -4478,7 +4479,7 @@ set_target_dir_as_input_path_dir(){
   #AlternateShowDir will act as a Secondary Show Dir if the primary show dir fails.
   AlternateShowDir="$ORIGINAL_DIRNAME/Showings"
   [[ -d "$AlternateShowDir" ]] || mkdir "$AlternateShowDir"
-}
+} #set_target_dir_as_input_path_dir()
 
 #Create a comskip.txt file from MythTV database information for use by Kodi.
 generate_comskip(){
@@ -4516,7 +4517,7 @@ generate_comskip(){
     debug "Not removing the temporary markup files: '$MARKUPSTART_TMP'; '$MARKUPSTOP_TMP'."
   fi
   return 0
-}
+} #generate_comskip()
 
 #Create a series NFO file based on information we have for the current series
 generate_series_nfo(){
@@ -4545,7 +4546,7 @@ generate_series_nfo(){
   } >> "$MoveDir/tvshow.nfo"
   inform "Generated series NFO file: $MoveDir/tvshow.nfo"
   return 0
-}
+} #generate_series_nfo()
 
 #Create an episode NFO file based on information we have for the current episode
 generate_episode_nfo(){
@@ -4594,7 +4595,7 @@ generate_episode_nfo(){
   fi
   inform "Generated episode NFO file: $MoveDir/$ShowFileName.nfo"
   return 0
-}
+} #generate_episode_nfo()
 
 #Processes the title and categoric ignore lists
 process_ignore_lists(){
@@ -4617,7 +4618,7 @@ process_ignore_lists(){
     fi
   fi
   return 0
-}
+} #process_ignore_lists()
 
 #Get show translations if the $m2kdir/showTranslations file exists.
 #The show title will be replaced by the one in the user created showTranslations file
@@ -4633,7 +4634,7 @@ show_translation(){
     fi
   fi
   return 0
-}
+} #show_translation()
 
 #On successful processing this function is called to: move any comskip file
 #into place; generate NFO; communicate with Kodi; add undo and doover entries;
@@ -4660,7 +4661,7 @@ success_postprocessing(){
   if [[ "$PROCESS_RECORDING_MODE" = 'MOVE' && "$SYMLINK" = 'Disabled' ]]; then
     set_group_permission
   fi
-}
+} #success_postprocessing()
 
 #Adds an entry to doover.sh for the current job.
 add_doover(){
@@ -4719,7 +4720,7 @@ add_doover(){
     errcont "RequiresDoover: $RequiresDoover"
     return 1
   fi
-}
+} #add_doover()
 
 #Adds an entry to undo.sh for the current job.
 add_undo(){
@@ -4761,7 +4762,7 @@ add_undo(){
     inform "No undo.sh entry will be added for this recording:"
     informcont "File Name: '$MoveDir/$ShowFileName.$ORIGINAL_EXT'"
   fi
-}
+} #add_undo()
 
 failsafe(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
@@ -4794,7 +4795,7 @@ failsafe(){
     return 0
   fi
   return 0
-}
+} #failsafe()
 
 anti_clobber(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
@@ -4816,7 +4817,7 @@ set_group_permission(){
   #Set permission 664 (rw-rw-r--)
   chmod 664 "$MoveDir/$ShowFileName.$ORIGINAL_EXT"
   return "$?"
-}
+} #set_group_permission()
 
 naming_checks(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
@@ -4876,7 +4877,7 @@ increment_target_file_name(){
       warn "FILE NAME EXISTS. FILE WILL BE KNOWN AS: $ShowFileName"
     fi
   done
-}
+} #increment_target_file_name()
 
 #Process a recording file in MOVE mode.
 move_mode_handling(){
@@ -5001,7 +5002,6 @@ copy_mode_handling(){
   fi
 } #copy_mode_handling()
 
-
 ######################## KODI COMMUNICATION FUNCTIONS ########################
 
 #Request Kodi remove any no-longer reachable files from its library.
@@ -5028,7 +5028,7 @@ kodi_cleanup(){
     debug 'Scan Mode: Skipping Kodi VideoLibrary.Clean request.'
   fi
   return 0
-}
+} #kodi_cleanup()
 
 #Send a GUI notification to Kodi and request it update its library.
 kodi_newshow(){
@@ -5075,7 +5075,7 @@ kodi_newshow(){
     debug 'Scan Mode: Skipping Kodi VideoLibrary.Scan request.'
   fi
   return 0
-}
+} #kodi_newshow()
 
 #Generate an RSS feed for processed recordings, Kodi can be set to view this feed.
 generaterss(){
@@ -5195,7 +5195,7 @@ generaterss(){
   mv "$RSS_DIRECTORY/$TEMPrssFile" "$RSS_DIRECTORY/$OLDrssFile" 2>&1 | err_pipe "${FUNCNAME[0]}(): "
   inform "RSS ENTRY SUCCESSFULLY CREATED: $RSS_DIRECTORY/$OLDrssFile"
   return 0
-}
+} #generaterss()
 
 ##################### COMMAND SWITCH RELATED FUNCTIONS #######################
 
@@ -5207,7 +5207,7 @@ msg_scan_usage(){
   err "$1."
   errcont '  usage: myth2kodi --scan "ext" "/path/to/folder"'
   errcont '  example: myth2kodi --scan "mpg" "/home/mythtv/videos"'
-}
+} #msg_scan_usage()
 
 #This function will scan a folder and process the entire library
 m2k_scan(){
@@ -5323,7 +5323,7 @@ m2k_scan(){
     return 0
   fi
   return 1
-}
+} #m2k_scan()
 
 #A special exit point for when we're processing our diagnostics test file.
 testfile_exit(){
@@ -5335,7 +5335,7 @@ testfile_exit(){
   [[ -d ./Movies ]]   && [[ ! "$(ls -A ./Movies)" ]]   && rmdir ./Movies
   [[ -d ./Showings ]] && [[ ! "$(ls -A ./Showings)" ]] && rmdir ./Showings
   exit 0
-}
+} #testfile_exit()
 
 #This function provides basic testing of myth2kodi's functionality.
 m2k_diagnostics(){
@@ -5754,7 +5754,7 @@ m2k_diagnostics(){
   test "$overallchecks" = "***FAILED***" && return 1
 
   return 0
-}
+} #m2k_diagnostics()
 
 #This function provides an easy way to redo failed jobs.
 m2k_doover(){
@@ -5797,7 +5797,7 @@ m2k_doover(){
     fi
   fi
   return 1
-}
+} #m2k_doover()
 
 #This function provides an easy way to undo all myth2kodi jobs
 m2k_undo_all(){
@@ -5850,7 +5850,7 @@ m2k_undo_all(){
     return 0
   fi
   return 1
-}
+} #m2k_undo_all()
 
 remove_undo_doover_entries(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
@@ -5892,7 +5892,7 @@ remove_undo_doover_entries(){
     warncont "may have encountered a bug, so check your logs."
   fi
   return "$(( undo_entry_remove_status + doover_entry_remove_status ))"
-}
+} #remove_undo_doover_entries()
 
 #Provides a mechanism to undo processing of a specified recording.
 m2k_undo_rec(){
@@ -5937,7 +5937,7 @@ m2k_undo_rec(){
     err "${FUNCNAME[0]}(): Unprocessed or MOVEed with SYMLINKing='Disabled', cannot undo: $1"
     return 1
   fi
-}
+} #m2k_undo_rec()
 
 #Update the myth2kodi database tables for a specified Series.
 get_series_info(){
@@ -6088,7 +6088,7 @@ delete_recording_from_mythtv(){
   (( LOGLEVEL < 3 )) && [[ -f "$m2kdir/created.tracking.bak" ]] && rm -f "$m2kdir/created.tracking.bak"
 
   return 0
-}
+} #delete_recording_from_mythtv()
 
 #Called from myth2kodi --delete and myth2kodi --rerecord.
 switch_delete_recording(){
@@ -6117,7 +6117,7 @@ switch_delete_recording(){
     rm -f "${RECORDING_LINK%.*}.txt"
   fi
   return 0
-}
+} #switch_delete_recording()
 
 disconnect_recording(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
@@ -6173,7 +6173,7 @@ disconnect_recording(){
   if ! delete_recording_from_mythtv "$inputarg"; then return 1; fi
 
   return 0
-}
+} #disconnect_recording()
 
 #Displays the log entries for processing of a specified recording file.
 recording_log(){
@@ -6243,7 +6243,7 @@ recording_log(){
     printf '%s\n' "#### NO ENTRIES FOUND ####" >> "$templog_file"
     return 1
   fi
-}
+} #recording_log()
 
 #Creates a comskip file for a recording or all recordings in a directory.
 #Actual file generation is done by generate_comskip()
@@ -6321,7 +6321,7 @@ recreate_comskip(){
     err "${FUNCNAME[0]}(): $NOTIFY_MSG"
     return 1
   fi
-}
+} #recreate_comskip()
 
 ############################## MAIN FUNCTION #################################
 

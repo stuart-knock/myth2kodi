@@ -3610,7 +3610,7 @@ plot_match_fallback(){
   #As a last resort, if we still think it's an episode but have no episode info, try fuzzy match on plot
   if [[ "$PlotMatchFallback" = 'Enabled' ]]; then
     debug "PlotMatchFallback is Enabled"
-    if [[ "$RECORDING_TYPE" = "EP" && "$HasSxxExx" != '1' ]] ; then
+    if [[ "$RECORDING_TYPE" = 'EP' && "$HasSxxExx" != '1' ]] ; then
       if get_absolute_episode_number_fuzzy_plot && [[ -n "$AbsoluteEpisodeNumber" ]]; then
         inform "Setting Sxx, Exx, and TVDB_SUBTITLE based on FuzzyPlotMatch:"
         #NOTE: set_sxxexx_absolute_episode_number also sets TVDB_SUBTITLE and SeasonNumber
@@ -6383,15 +6383,32 @@ main(){
   #From time-to-time check created.tracking, dir.tracking, and remove orphans.
   periodic_maintenace
 
-  #If it's an episode and ONLINE_LOOKUP is not disabled, check against TheTVDB.
+  #If we think it's an episode try and identify the series and episode.
   if [[ "$RECORDING_TYPE" = 'EP' ]]; then
     identify_series
-    get_series_info
+    [[ "$ONLINE_LOOKUP" != 'Disabled' ]] && get_series_info
     identify_episode
 
     #Try fall-back methods.
     storagegroup_fallback #In-case it is actually a movie
     plot_match_fallback  #If still unrecognised, try matching against plot.
+
+    #Warn if we have not obtained a TVDB_SERIESID and still think it's an 'EP'.
+    if [[ -z "$TVDB_SERIESID" && "$RECORDING_TYPE" = 'EP' ]]; then
+      ConfidenceReasoning="$ConfidenceReasoning Failed;"
+      warn 'TVDB_SERIESID was not found.'
+      [[ "$ONLINE_LOOKUP" != 'Disabled' ]] && warncont 'TheTVDB may be down.'
+      warncont "Check '$TITLE' on TheTVDB, you may need a showTranslations file."
+      printf '%s\n' "$TITLE" >> "$UnrecognizedSeriesFile"
+      if [[ "$Database" = 'Enabled' ]]; then
+        warncont "RECSTART: '$MDB_STARTTIME'"
+        warncont "Air Date: '$MDB_AIRDATE'"
+        warncont "Original Air Date: '$MDB_ORIGINALAIRDATE'"
+        warncont "Channel ID: '$MDB_CHANID'"
+        warncont "Category: '$MDB_CATEGORY'"
+        [[ -z "${Exx:2:1}" ]] && Exx=''
+      fi
+    fi
 
     #If we identified the episode then use TheTVDB naming.
     [[ -n "$TVDB_TITLE" ]] && TITLE="$TVDB_TITLE"

@@ -368,7 +368,7 @@ Database='Enabled'
 #Database access method for MythTV-DB ['PythonBindings'(DEFAULT)|'MySQL']
 DATABASE_ACCESS='PythonBindings'
 
-#MySQL Myth Database: Default: 'mythconverg'
+#MySQL MythTV Database: Default: 'mythconverg'
 MySQLMythDb='mythconverg'
 
 #Guide data type: SchedulesDirect currently covers DataDirect, MC2XML and others.
@@ -674,7 +674,7 @@ m2k_init(){
   ((LOGLEVEL>=3)) && printf '%s\n' "Config complete." >> "$pre_logging_file"
 
   #What am I...
-  m2kVersion='myth2kodi Version 1.4.2d' ; declare -gr m2kVersion
+  m2kVersion='myth2kodi Version 1.4.2e' ; declare -gr m2kVersion
   m2kPlatform="$(uname)" ; declare -gr m2kPlatform
   ((LOGLEVEL>=3)) && printf '%s\n' "Running $m2kVersion on $m2kPlatform." >> "$pre_logging_file"
 
@@ -753,11 +753,8 @@ m2k_init(){
   #Initialise logging system
   ((LOGLEVEL>=3)) && printf '%s\n' 'Initialising logging system.' >> "$pre_logging_file"
   if [[ -f "$binpath/bashlogging" ]]; then
-    local bashloggingstatus
     # shellcheck source=./bashlogging
-    source "$binpath/bashlogging"
-    bashloggingstatus="$?"
-    [[ "$bashloggingstatus" != "0" ]] && exit "$bashloggingstatus"
+    if ! source "$binpath/bashlogging"; then exit 1; fi
   else
     printf 'ERROR: %s\n' "$binpath/bashlogging does not exist." | tee -a "$LOGFILE"
     exit 1
@@ -775,10 +772,7 @@ m2k_init(){
   debug "LOGTYPE=$LOGTYPE-"
 
   #Do some basic validation of the settings
-  # if ! validate_settings; then exit 1; fi
-  validate_settings
-  settings_status="$?"
-  [[ "$settings_status" != '0' ]] && exit "$settings_status"
+  if ! validate_settings; then exit 1; fi
 
   #Set defaults for searching Series information
   TVDB_SERIESID=''
@@ -932,7 +926,10 @@ parse_command_flags(){
       #Example usage: myth2kodi --series-info "Black Books"
       TITLE="$M2KARG2"
       ONLINE_LOOKUP='Enabled'
-      identify_series
+      if ! identify_series; then return 1; fi
+      #If a lastupdated.time file exists then remove it to force an update.
+      local last_updated_file="$m2kdir/$TVDB_TITLE/lastupdated.time"
+      [[ -f "$last_updated_file" ]] && rm -f "$last_updated_file"
       get_series_info
       return $?
     ;;
@@ -1850,15 +1847,27 @@ m2k_cleanse(){
     debug "Moving '$DuplicatesFile' to '${DuplicatesFile%.*}_${FILE_NAME_NOW}.log'."
     mv "$DuplicatesFile" "${DuplicatesFile%.*}_${FILE_NAME_NOW}.log"
   fi
+  return 0
 } #m2k_cleanse()
 
 #################### FUNCTIONS TO ACCESS MythTV DATABASE #####################
 
-#Helper function for MySQL access to MythTV-DB.
+#Helper function for MySQL access to the MythTV-DB.
 dbselect(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  debugcont "arg 1 = '$1'"
-  mysql -u"$MySQLuser" -p"$MySQLpass" -e "USE $MySQLMythDb ; SELECT $1 FROM recorded WHERE basename LIKE '$INPUT_PATH_BASENAME' ; "
+  debugcont "Called with $# arguments."
+  local -i i=0; local var; for var in "$@"; do ((++i)); debugcont "arg $i = '${var}'"; done
+  local field table where query
+  field="$1"
+  if [[ -z "$2" ]]; then table='recorded'; else table="$2"; fi
+  if (($# < 3)); then
+    where="WHERE basename LIKE '$INPUT_PATH_BASENAME'"
+  else
+    where="$3"
+  fi
+  query="USE $MySQLMythDb ; SELECT $field FROM $table $where ; "
+  mysql -u"$MySQLuser" -p"$MySQLpass" -e "$query"
+  return "$?"
 } #dbselect()
 
 #Use mysql commands to get MythTV-DB entry for the current recording.
@@ -1868,7 +1877,7 @@ get_mythtvdb_info_mysql(){
   debugcont "INPUT_PATH_BASENAME: '$INPUT_PATH_BASENAME'"
   debugcont "MySQLMythDb: '$MySQLMythDb'"
   debugcont "MySQLuser: '$MySQLuser'"
-  debugcont "MySQLpass: '$MySQLpass'"
+  ((LOGLEVEL > 3)) && debugcont "MySQLpass: '$MySQLpass'"
 
   #Obtain MythTV Database Information
   inform "Accessing MythTV DataBase Using mysql Commands:"
@@ -1900,9 +1909,10 @@ get_mythtvdb_info_mysql(){
   MDB_CHANID="$(         dbselect chanid          | sed -n "2p")"
   MDB_STARTTIME="$(      dbselect starttime       | sed -n "2p")"
 
-  MDB_AIRDATE="$(mysql -u"$MySQLuser" -p"$MySQLpass" -e "USE $MySQLMythDb ; SELECT airdate FROM recordedprogram WHERE programid LIKE '$MDB_PROGRAMID' AND chanid LIKE '$MDB_CHANID' ; " | tr -d '/' | sed 's/airdate//g' | sed -n "2p" | tr -d ' ')"
-
-  MDB_XMLTVGRABBER="$(mysql -u"$MySQLuser" -p"$MySQLpass" -e "USE $MySQLMythDb ; SELECT xmltvgrabber FROM videosource ; " | sed 's/xmltvgrabber//g' | tr -d '/' | sed -n "2p" | tr -d ' ')"
+  local where
+  where="WHERE programid LIKE '$MDB_PROGRAMID' AND chanid LIKE '$MDB_CHANID'"
+  MDB_AIRDATE="$(dbselect 'airdate' 'recordedprogram' "$where" | sed -n "2p")"
+  MDB_XMLTVGRABBER="$(dbselect 'xmltvgrabber' 'videosource' '' | sed -n "2p")"
 
   #
   declare -gr MDB_TITLE
@@ -1940,10 +1950,14 @@ get_mythtvdb_info_mysql(){
     declare -gr MARKUPSTOP_TMP
 
     #Remove old and generate a comskip Start list
-    echo "" > "$MARKUPSTART_TMP" #TODO: Compare this against what's returned by the python bindings version.
+    printf '\n' > "$MARKUPSTART_TMP" #TODO: Compare this against what's returned by the python bindings version.
+    # where="WHERE starttime LIKE '$MDB_STARTTIME' AND chanid LIKE '$MDB_CHANID' AND type LIKE 4"
+    # dbselect 'mark' 'recordedmarkup' "$where" >> "$MARKUPSTART_TMP"
     mysql -u"$MySQLuser" -p"$MySQLpass" -e "USE $MySQLMythDb ; SELECT mark FROM recordedmarkup WHERE starttime LIKE '$MDB_STARTTIME' AND chanid LIKE '$MDB_CHANID' AND type LIKE 4 ; " | sed 's/mark//g' | tr -d ' ' >> "$MARKUPSTART_TMP"
     #Remove old and generate comskip Stop list
-    echo "" > "$MARKUPSTOP_TMP"
+    printf '\n' > "$MARKUPSTOP_TMP"
+    # where="WHERE starttime LIKE '$MDB_STARTTIME' AND chanid LIKE '$MDB_CHANID' AND type LIKE 5"
+    # dbselect 'mark' 'recordedmarkup' "$where" >> "$MARKUPSTOP_TMP"
     mysql -u"$MySQLuser" -p"$MySQLpass" -e "USE $MySQLMythDb ; SELECT mark FROM recordedmarkup WHERE starttime LIKE '$MDB_STARTTIME' AND chanid LIKE '$MDB_CHANID' AND type LIKE 5 ; " | sed 's/mark//g' | tr -d ' ' >> "$MARKUPSTOP_TMP"
     #Combine commercial data into a single comskip file and remove the initial files
     generate_comskip
@@ -1957,11 +1971,11 @@ get_mythtvdb_info_pythonbindings(){
   debugcont "m2kdir: '$m2kdir'"
   debugcont "binpath: '$binpath'"
   debugcont "INPUT_PATH_BASENAME: '$INPUT_PATH_BASENAME'"
-  debugcont "DBPin: '$DBPin'"
+  ((LOGLEVEL > 3)) && debugcont "DBPin: '$DBPin'"
   debugcont "DBHostName: '$DBHostName'"
   debugcont "MySQLMythDb: '$MySQLMythDb'"
   debugcont "MySQLuser: '$MySQLuser'"
-  debugcont "MySQLpass: '$MySQLpass'"
+  ((LOGLEVEL > 3)) && debugcont "MySQLpass: '$MySQLpass'"
   inform "Accessing MythTV DataBase Using PythonBindings:"
   inform "Attempting to pull database information on '$INPUT_PATH_BASENAME'"
 
@@ -2096,20 +2110,20 @@ get_mythtvdb_storagegroups(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   if [[ "$Database" = 'Enabled' ]]; then
     declare -ga STORAGEGROUP_DIRS
-    local returnstatus
+    local db_storagegroup_dirs
     #Access the database entry using the requested grabber
     case "$DATABASE_ACCESS" in
       MySQL)
-        STORAGEGROUP_DIRS=($(mysql -u"$MySQLuser" -p"$MySQLpass" -e "USE $MySQLMythDb ; SELECT dirname FROM storagegroup; " | sed -n '2~1p'))
-        returnstatus="$?"
-        if [[ "$returnstatus" != 0 ]]; then
-          NOTIFY_MSG="Accessing storagegroup table from MythTV-DB using MySQL failed."
+        if ! db_storagegroup_dirs="$(dbselect 'dirname' 'storagegroup' '' )"; then
+          NOTIFY_MSG='Accessing storagegroup table from MythTV-DB using MySQL failed.'
           EXIT_JOB_TYPE='MythTVdatabaseFailure'
           return 1
         fi
+        STORAGEGROUP_DIRS=($(sed -n '2~1p' <<< "$db_storagegroup_dirs"))
         return 0
         ;;
       PythonBindings)
+        local returnstatus
         STORAGEGROUP_DIRS=($("$binpath"/mythdb_access --storagegroups            \
                                                       --SecurityPin="$DBPin"     \
                                                       --DBHostName="$DBHostName" \
@@ -2118,7 +2132,7 @@ get_mythtvdb_storagegroups(){
                                                       --DBPassword="$MySQLpass"))
         returnstatus="$?"
         if [[ "$returnstatus" != 0 ]]; then
-          NOTIFY_MSG="Accessing storagegroup table from MythTV-DB using Python-bindings failed."
+          NOTIFY_MSG='Accessing storagegroup table from MythTV-DB using Python-bindings failed.'
           EXIT_JOB_TYPE='MythTVdatabaseFailure'
           return 1
         fi
@@ -2144,9 +2158,9 @@ delete_mythtv_database_entry_mysql(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   debug "RECORDING_PATH: '$RECORDING_PATH'"
   debug "INPUT_PATH_BASENAME: '$INPUT_PATH_BASENAME'"
-  debug "MySQLuser: '$MySQLuser'"
-  debug "MySQLpass: '$MySQLpass'"
   debug "MySQLMythDb: '$MySQLMythDb'"
+  debug "MySQLuser: '$MySQLuser'"
+  ((LOGLEVEL > 3)) && debug "MySQLpass: '$MySQLpass'"
 
   if [[ -z "$RECORDING_PATH" ]]; then
     err "${FUNCNAME[1]}():${FUNCNAME[0]}(): Called with empty RECORDING_PATH."
@@ -2693,10 +2707,10 @@ check_m2k_database_up_to_date(){
   #Get the time from the file
   CurrentTimeTVDB=$(grep '<Time>' "$dbdir/TheTVDB_current.time" | sed -r 's#</?Time>##g')
   #if time server is down, then just update #TODO: If the Updates part of the api isn't working we probably shouldn't expect the rest to...
-  [[ -z "$CurrentTimeTVDB" ]] && warn "${FUNCNAME[0]}(): TheTVDB TIME SERVER WAS DOWN" && return 1
+  [[ -z "$CurrentTimeTVDB" ]] && warn "${FUNCNAME[0]}(): TheTVDB time server was down." && return 1
 
   #If file exist for last updated time, then get value
-  if [ -f "$dbdir/lastupdated.time" ]; then
+  if [[ -f "$dbdir/lastupdated.time" ]]; then
     LastUpdatedTVDB=$(cat "$dbdir/lastupdated.time")
   else #no last updated time, so assign a never updated value and update now.
     debug "Seems we've never updated $TVDB_TITLE from TheTVDB -- no lastupdated.time file."
@@ -2737,9 +2751,9 @@ check_m2k_database_up_to_date(){
   return 1
 } #check_m2k_database_up_to_date()
 
-#Download series information from TheTVDB and tvmaze servers for the
-#currently matched series, then use that information to generate
-#myth2kodi's internal database files for the series.
+#Download series information from TheTVDB and tvmaze servers for the currently
+#matched series, then use that information to generate or update myth2kodi's
+#internal database-files for the series.
 download_series_info(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   inform "Downloading Series: '$TVDB_SERIESID'"
@@ -2750,9 +2764,9 @@ download_series_info(){
   local FieldsWeWant="(</?Series>|</?seriesid>|</?Status>|</?lastupdated>|</?Episode>|</?SeasonNumber>|</?EpisodeNumber>|</?EpisodeName>|</?Overview>|</?FirstAired>)"
   curl -L -s -m"$Timeout" "$TheTVDBShowXML" | grep -E "$FieldsWeWant" > "$dbdir/$TVDB_TITLE.xmlTest"
   local curl_grep_status=("${PIPESTATUS[@]}")
-  [[ "${curl_grep_status[0]}" != '0' ]] && warn "${FUNCNAME[0]}(): Issue accessing: $TheTVDBShowXML"
-  (( curl_grep_status[1] >= 2 )) && err "${FUNCNAME[0]}(): Error status returned by grep for FieldsWeWant from '$TheTVDBShowXML'."
-  [[ "${curl_grep_status[1]}" = '1' ]] && warn "${FUNCNAME[0]}(): Failed to match any of the fields we want."
+  (( curl_grep_status[0] != 0 )) && warn "${FUNCNAME[0]}(): Issue accessing: '${TheTVDBShowXML/$APIkey/<APIkey>}'."
+  (( curl_grep_status[1] >= 2 )) && err "${FUNCNAME[0]}(): Error status returned by grep for FieldsWeWant from '${TheTVDBShowXML/$APIkey/<APIkey>}'."
+  (( curl_grep_status[1] == 1 )) && warn "${FUNCNAME[0]}(): Failed to match any of the fields we want."
 
   local -i tvmaze_id
   tvmaze_id=$(curl -L -s -m"$Timeout" http://api.tvmaze.com/lookup/shows?thetvdb="$TVDB_SERIESID" | jq '.id')
@@ -2770,32 +2784,32 @@ download_series_info(){
   if grep -q "EpisodeName" "$dbdir/$TVDB_TITLE.xmlTest"; then
     printf '%s\n' "$(date +%s)" > "$dbdir/lastupdated.time" && chmod 644 "$dbdir/lastupdated.time"
     #Check the new info is actually new, if there was no old info then it must be new.
-    if [ -f "$dbdir/$TVDB_TITLE.xml" ] ; then
+    if [[ -f "$dbdir/$TVDB_TITLE.xml" ]]; then
       diff "$dbdir/$TVDB_TITLE.xmlTest" "$dbdir/$TVDB_TITLE.xml" &> /dev/null
       GotNewInformation="$?" #NOTE: No-diff = 0; diff = 1; error = 2
     else
       GotNewInformation=1
     fi
-    if [ "$GotNewInformation" = "1" ] ; then
+    if (( GotNewInformation == 1 )) ; then
       #Clear out the old
       inform "Downloaded new information for '$TVDB_TITLE'"
       debug 'Cleaning up old information before processing.'
-      test -f "$dbdir/$TVDB_TITLE.xml" && mv "$dbdir/$TVDB_TITLE.xml" "$dbdir/${TODAY}_$TVDB_TITLE.xml"
+      [[ -f "$dbdir/$TVDB_TITLE.xml" ]] && mv "$dbdir/$TVDB_TITLE.xml" "$dbdir/${TODAY}_$TVDB_TITLE.xml"
       mv "$dbdir/$TVDB_TITLE.xmlTest" "$dbdir/$TVDB_TITLE.xml"
-      test -f "$dbdir/$TVDB_TITLE.actualEname.txt" && rm -f "$dbdir/$TVDB_TITLE.actualEname.txt"
-      test -f "$dbdir/$TVDB_TITLE.Ename.txt"       && rm -f "$dbdir/$TVDB_TITLE.Ename.txt"
-      test -f "$dbdir/$TVDB_TITLE.FAired.txt"      && rm -f "$dbdir/$TVDB_TITLE.FAired.txt"
-      test -f "$dbdir/$TVDB_TITLE.S.txt"           && rm -f "$dbdir/$TVDB_TITLE.S.txt"
-      test -f "$dbdir/$TVDB_TITLE.E.txt"           && rm -f "$dbdir/$TVDB_TITLE.E.txt"
-      test -f "$dbdir/$TVDB_TITLE.Plot.txt"        && rm -f "$dbdir/$TVDB_TITLE.Plot.txt"
+      [[ -f "$dbdir/$TVDB_TITLE.actualEname.txt" ]] && rm -f "$dbdir/$TVDB_TITLE.actualEname.txt"
+      [[ -f "$dbdir/$TVDB_TITLE.Ename.txt" ]]       && rm -f "$dbdir/$TVDB_TITLE.Ename.txt"
+      [[ -f "$dbdir/$TVDB_TITLE.FAired.txt" ]]      && rm -f "$dbdir/$TVDB_TITLE.FAired.txt"
+      [[ -f "$dbdir/$TVDB_TITLE.S.txt" ]]           && rm -f "$dbdir/$TVDB_TITLE.S.txt"
+      [[ -f "$dbdir/$TVDB_TITLE.E.txt" ]]           && rm -f "$dbdir/$TVDB_TITLE.E.txt"
+      [[ -f "$dbdir/$TVDB_TITLE.Plot.txt" ]]        && rm -f "$dbdir/$TVDB_TITLE.Plot.txt"
 
       #create a folder/file "database" Strip XML tags. Series, Exx and Sxx are separated into different files
-      local Ename=""
-      local actualEname=""
-      local FAired=""
-      local SeasonNr=""
-      local EpisodeNr=""
-      local EpisodeOverview=""
+      local Ename=''
+      local actualEname=''
+      local FAired=''
+      local SeasonNr=''
+      local EpisodeNr=''
+      local EpisodeOverview=''
       local -i recordNumber=-1
       inform "Parsing Downloaded information from TheTVDB: $TVDB_TITLE.xml"
       while read -r line ; do
@@ -2902,7 +2916,7 @@ download_series_info(){
       return 0
     fi
   else
-    warn "${FUNCNAME[0]}(): COULD NOT DOWNLOAD: '$TheTVDBShowXML'"
+    warn "${FUNCNAME[0]}(): COULD NOT DOWNLOAD: '${TheTVDBShowXML/$APIkey/<APIkey>}'"
   fi
   #check if files were created and generate message
   if ((ProcessingSuccesful == 1)) ; then
@@ -2936,7 +2950,7 @@ identify_series(){
   debugcont "Zap2itSeriesID='$Zap2itSeriesID'"
   #Process as though it's an episode of a tv series.
   if [[ "$ONLINE_LOOKUP" != 'Disabled' ]]; then
-    #Query TheTVDB on TVDB_TITLE: retrieve fields zap2it_id, SeriesName and seriesid.
+    #Query TheTVDB on TITLE: retrieve fields zap2it_id, SeriesName and seriesid.
     if download_series_identification; then
       #Try to match on Zap2itID if we have one (depends on guide-data).
       if [[ -n "$Zap2itSeriesID" ]]; then
@@ -3553,7 +3567,7 @@ get_absolute_episode_number_fuzzy_plot(){
   debugcont "TVDB_TITLE: '$TVDB_TITLE'"
   debugcont "Plot: '$Plot'"
 
-  [[ -z "$Plot" ]] && { err "We do not have any Plot info."; return 1; }
+  [[ -z "$Plot" ]] && { err 'We do not have any Plot info.'; return 1; }
 
   if [[ ! -f "$m2kdir/$TVDB_TITLE/$TVDB_TITLE.Plot.txt" ]]; then
     err "Myth2kodi's internal database contains no Plot file for '$TVDB_TITLE'."
@@ -3569,7 +3583,6 @@ get_absolute_episode_number_fuzzy_plot(){
   local -i PlotLength
   local -a AENguess=()
   local -i fuzzy_plot_return_status=0
-  local -i fuzzy_chunk_return_status=0
   #Length of the plot we're trying to match
   PlotLength=$(wc --chars <<< "$Plot")
   debugcont "PlotLength: '$PlotLength'"
@@ -3590,11 +3603,11 @@ get_absolute_episode_number_fuzzy_plot(){
   warn "${FUNCNAME[0]}(): AbsoluteEpisodeNumber guess from full Plot failed or too fuzzy, trying chunked match."
 
   #Try matching small chunks of the plot.
-  chunked_fuzzy_plot_match
-  fuzzy_chunk_return_status="$?"
-  [[ "$fuzzy_chunk_return_status" == 0 ]] && return 0
-  warn "${FUNCNAME[0]}(): Chunked Plot match is still too fuzzy, failed to guess AbsoluteEpisodeNumber."
-  return "$fuzzy_chunk_return_status"
+  if ! chunked_fuzzy_plot_match; then
+    warn "${FUNCNAME[0]}(): Chunked Plot match is still too fuzzy, failed to guess AbsoluteEpisodeNumber."
+    return 1
+  fi
+  return 0
 } #get_absolute_episode_number_fuzzy_plot()
 
 #Use AbsoluteEpisodeNumber to set Sxx and Exx
@@ -3693,7 +3706,7 @@ msg_operation_summary(){
   informcont "CALLER=$CALLER-"
   debugcont  "m2kdir=$m2kdir-"
   debugcont  "Timeout=$Timeout-"
-  debugcont  "APIkey=$APIkey-"
+  ((LOGLEVEL > 3)) && debugcont  "APIkey=$APIkey-"
   informcont "PROCESS_RECORDING_MODE=$PROCESS_RECORDING_MODE-"
   informcont "SYMLINK=$SYMLINK-"
   informcont "TargetPathIsInputPath=$TargetPathIsInputPath-"
@@ -5092,14 +5105,15 @@ generaterss(){
   local lineBreak='&lt;br /&gt;'
 
   local rss_title rss_subtitle rss_plot
+  local myip mythicalGUID
 
   #test if rssFile directory is writeable
-  if [[ ! -w "$RSS_DIRECTORY" ]]; then
+  if [[ ! -w "$RSS_DIRECTORY" ]]; then #TODO: Consider using if ! check_path_permission "$RSS_DIRECTORY" 'rwx'; then ...; fi
     err "${FUNCNAME[0]}(): RSS generation failed: Directory not writeable ($RSS_DIRECTORY)"
     return 5
   fi
 
-  #test if rssFile is writeable
+  #test if rssFile is writeable #TODO: Consider using if ! check_path_permission "$RSS_DIRECTORY/$OLDrssFile" 'rw'; then ...; f
   if [[ -e "$RSS_DIRECTORY/$OLDrssFile" && ! -w "$RSS_DIRECTORY/$OLDrssFile" ]]; then
     err "${FUNCNAME[0]}(): RSS generation failed: File exists but is not writeable: $RSS_DIRECTORY/$OLDrssFile"
     return 6
@@ -5107,12 +5121,12 @@ generaterss(){
 
   #Setup the rss file
   {
-    echo -e '<?xml version="1.0" encoding="ISO-8859-1" ?>'
-    echo -e '<rss version="2.0">'
-    echo -e '<channel>'
-    echo -e '\t<title>Recently added by myth2kodi</title>'
-    echo -e '\t<link>http://kodi.tv</link>'
-    echo -e '\t<description>myth2kodi Daily Report Information</description>'
+    printf '%b\n' '<?xml version="1.0" encoding="ISO-8859-1" ?>'
+    printf '%b\n' '<rss version="2.0">'
+    printf '%b\n' '<channel>'
+    printf '%b\n' '\t<title>Recently added by myth2kodi</title>'
+    printf '%b\n' '\t<link>http://kodi.tv</link>'
+    printf '%b\n' '\t<description>myth2kodi Daily Report Information</description>'
   } > "$RSS_DIRECTORY/$TEMPrssFile"
 
   #TODO: Need to make the call to ifconfig more portable, maybe just revert to straight call and add /sbin to librarians path.
@@ -5126,35 +5140,35 @@ generaterss(){
 
   #write current recording information to first item.
   {
-    echo -e "\t\t<item>"
-    echo -e "\t\t\t<title>$rss_title $Sxx$Exx $rss_subtitle</title>"
-  } >> "$RSS_DIRECTORY/$TEMPrssFile"
-  if [ "$RECORDING_TYPE" = "EP" ]; then
-    echo -e "\t\t\t<link>http://www.thetvdb.com/?tab=series&amp;id=$TVDB_SERIESID</link>" >> "$RSS_DIRECTORY/$TEMPrssFile"
-  elif [ "$RECORDING_TYPE" = "MV" ]; then
-    echo -e "\t\t\t<link>http://www.imdb.com/search/title?release_date=,$MOVIE_RELEASE_YEAR&amp;title=$TITLE&amp;title_type=feature</link>" >> "$RSS_DIRECTORY/$TEMPrssFile"
-  else
-    tvdotcomshowname="${TITLE// /%20}"
-    echo -e "\t\t\t<link>http://www.tv.com/search.php?type=11&amp;stype=all&amp;tag=search%3Bfrontdoor&amp;qs=$tvdotcomshowname </link>" >> "$RSS_DIRECTORY/$TEMPrssFile"
-  fi
-  {
-    echo -e "\t\t\t<guid>sftp://$mythicalGUID</guid>"
-    echo -e "\t\t\t<pubDate>$(date -R -d "$MDB_STARTTIME")</pubDate>"
-    echo -e "\t\t\t<description>"
-    echo -e "\t\t\t\tEpisode Title: $rss_subtitle$lineBreak"
-    echo -e "\t\t\t\tProgram: $rss_title$lineBreak"
-    echo -e "\t\t\t\tSeason: $Sxx$lineBreak"
-    echo -e "\t\t\t\tEpisode: $Exx$lineBreak$lineBreak"
-    echo -e "\t\t\t\tPlot: $rss_plot"
-    echo -e "\t\t\t</description>"
-    echo -e "\t\t</item>"
+    printf '%b\n' "\t\t<item>"
+    printf '%b\n' "\t\t\t<title>$rss_title $Sxx$Exx $rss_subtitle</title>"
+    if [[ "$RECORDING_TYPE" = 'EP' ]]; then
+      printf '%b\n' "\t\t\t<link>http://www.thetvdb.com/?tab=series&amp;id=$TVDB_SERIESID</link>"
+    elif [[ "$RECORDING_TYPE" = 'MV' ]]; then
+      printf '%b\n' "\t\t\t<link>http://www.imdb.com/search/title?release_date=,$MOVIE_RELEASE_YEAR&amp;title=$TITLE&amp;title_type=feature</link>"
+    else
+      local tvdotcomshowname
+      tvdotcomshowname="${TITLE// /%20}"
+      printf '%b\n' "\t\t\t<link>http://www.tv.com/search.php?type=11&amp;stype=all&amp;tag=search%3Bfrontdoor&amp;qs=$tvdotcomshowname </link>"
+    fi
+    printf '%b\n' "\t\t\t<guid>sftp://$mythicalGUID</guid>"
+    printf '%b\n' "\t\t\t<pubDate>$(date -R -d "$MDB_STARTTIME")</pubDate>"
+    printf '%b\n' "\t\t\t<description>"
+    printf '%b\n' "\t\t\t\tEpisode Title: $rss_subtitle$lineBreak"
+    printf '%b\n' "\t\t\t\tProgram: $rss_title$lineBreak"
+    printf '%b\n' "\t\t\t\tSeason: $Sxx$lineBreak"
+    printf '%b\n' "\t\t\t\tEpisode: $Exx$lineBreak$lineBreak"
+    printf '%b\n' "\t\t\t\tPlot: $rss_plot"
+    printf '%b\n' "\t\t\t</description>"
+    printf '%b\n' "\t\t</item>"
   } >> "$RSS_DIRECTORY/$TEMPrssFile"
 
   #If there is an old RSS file
   if [[ -e "$RSS_DIRECTORY/$OLDrssFile" ]]; then
-    #test for number of </item> tags using grep
     local RssItemCount itemLimit firstLine lastLine old_rss_data
-    RssItemCount=$(grep -c "</item>" "$RSS_DIRECTORY/$OLDrssFile")
+
+    #test for number of </item> tags using grep
+    RssItemCount="$(grep -c '</item>' "$RSS_DIRECTORY/$OLDrssFile")"
 
     #if $RSSmaxItems is greater than this number
     if ((RSSmaxItems > RssItemCount)); then
@@ -5173,22 +5187,16 @@ generaterss(){
     local IFS=$'\n'
     #Read in the old RSS file
     declare -a old_rss_data=( $(cat "$RSS_DIRECTORY/$OLDrssFile") )
-    #arrayLen=${#old_rss_data[@]}
     #iterate through the array
     for index in $(seq $((firstLine-1)) $((lastLine-1))) ; do
-      echo "${old_rss_data[$index]}" >> "$RSS_DIRECTORY/$TEMPrssFile"
+      printf '%s\n' "${old_rss_data[$index]}" >> "$RSS_DIRECTORY/$TEMPrssFile"
     done
-    #copy line from old to new
-    #if copied line is </item>
-      #increment counter
-    #if counter is great than tracking variable
-      #break
   fi
 
   #Write close of entry to the file.
   {
-    echo -e '</channel>'
-    echo -e '</rss>'
+    printf '%b\n' '</channel>'
+    printf '%b\n' '</rss>'
   } >> "$RSS_DIRECTORY/$TEMPrssFile"
 
   #move fully formed temp file on top of the old file
@@ -5252,13 +5260,10 @@ m2k_scan(){
   #Check that we have the permissions we need for scanpath.
   if [[ "$PROCESS_RECORDING_MODE" =~ ^(LINK|COPY)$ ]]; then
     #We do not typically need to write to scanpath in LINK and COPY modes.
-    check_path_permission "$scanpath" 'rx'
-    checkpermissionstatus="$?"
+    if ! check_path_permission "$scanpath" 'rx'; then return 1; fi
   else
-    check_path_permission "$scanpath" 'rwx'
-    checkpermissionstatus="$?"
+    if ! check_path_permission "$scanpath" 'rwx'; then return 1; fi
   fi
-  [[ "$checkpermissionstatus" != 0 ]] && return "$checkpermissionstatus"
 
   warn "--You have entered scan Mode."
   warncont "myth2kodi will conduct a scan of the folder:"
@@ -5768,9 +5773,9 @@ m2k_doover(){
   warncont "files which were moved in the past despite having low confidence."
   warncont "It is important that this process is not interrupted or data loss may occur."
   ((DoOverBypass != 1)) && read -r -n1 -p "  Doover requested -- 'y' to continue, 'n' to exit... y/(n):>" yesorno && printf '\n'
-  ((DoOverBypass == 1)) && yesorno="y"
+  ((DoOverBypass == 1)) && yesorno='y'
 
-  if [ "$yesorno" = "y" ] && [ -f "$m2kdir/doover.sh" ]; then
+  if [[ "$yesorno" = 'y' && -f "$m2kdir/doover.sh" ]]; then
     debug "Running doover.sh"
     #NOTE: The first command in doover.sh is to delete the file doover.sh.
     cp "$m2kdir/doover.sh" "$m2kdir/doover_${FILE_NAME_NOW}.sh"
@@ -6459,7 +6464,7 @@ main(){
 
   #Process the recording file.
   if [[ "$PROCESS_RECORDING_MODE" = 'MOVE' ]]; then
-    #Move and rename the recording file.
+    #Move and rename the recording file, optionally adding a link.
     if move_mode_handling; then return 0; else return 1; fi
   elif [[ "$PROCESS_RECORDING_MODE" = 'LINK' ]]; then
     #Create a symbolic-link to the recording file.
@@ -6496,7 +6501,7 @@ M2KARG6="$6" #This is a buffer arg for when a --switch is used with all args.
 declare -gr M2KARG_COUNT M2KARG1 M2KARG2 M2KARG3 M2KARG4 M2KARG5 M2KARG6
 
 #Run the main function
-main
+if ! main; then err "Exited main() function with an error state."; fi
 
 #Final messaging and clean-up, running any user specified post-processing jobs.
 exit_job "$EXIT_JOB_TYPE"

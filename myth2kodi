@@ -643,7 +643,7 @@ exit_job(){
   [[ -f "$MARKUPFRAMES_TMP" ]] && (( LOGLEVEL < 3 )) && rm -rf "$MARKUPFRAMES_TMP"
 
   #Some excessive logging for extra buggy bugs.
-  ((LOGLEVEL>=4)) && env | err_pipe 'env:  '
+  ((LOGLEVEL>=13)) && env | err_pipe 'env:  '
   ((LOGLEVEL>=42)) && set | err_pipe 'set:  '
 
   #Run any user job specified for this job type.
@@ -801,7 +801,7 @@ m2k_init(){
   debug "Running myth2kodi as '$CALLER'"
 
   #Some excessive logging for extra buggy bugs.
-  ((LOGLEVEL>=4)) && env | err_pipe 'env:  '
+  ((LOGLEVEL>=13)) && env | err_pipe 'env:  '
   ((LOGLEVEL>=42)) && set | err_pipe 'set:  '
 } #m2k_init()
 
@@ -1366,7 +1366,7 @@ check_filesystem(){
   #Determine the free space available in all the directories we might use.
   WorkingDirFreeSpace=$(df -P "$m2kdir"             | sed -n 2p | awk '{print $4}') || WorkingDirFreeSpace=0
   TempDirFreeSpace=$(df -P "$M2K_TMPDIR"            | sed -n 2p | awk '{print $4}') || TempDirFreeSpace=0
-  OriginalDirFreeSpace=$(df -P "$ORIGINAL_DIRNAME"   | sed -n 2p | awk '{print $4}') || OriginalDirFreeSpace=0
+  OriginalDirFreeSpace=$(df -P "$ORIGINAL_DIRNAME"  | sed -n 2p | awk '{print $4}') || OriginalDirFreeSpace=0
   MoveDirFreeSpace=$(df -P "$MoveDir"               | sed -n 2p | awk '{print $4}') || MoveDirFreeSpace=0
   AltMoveDirFreeSpace=$(df -P "$AlternateMoveDir"   | sed -n 2p | awk '{print $4}') || AltMoveDirFreeSpace=0
   MovieDirFreeSpace=$(df -P "$PrimaryMovieDir"      | sed -n 2p | awk '{print $4}') || MovieDirFreeSpace=0
@@ -1987,26 +1987,11 @@ get_mythtvdb_info_pythonbindings(){
   fi
   debug "Storing MythTV-DB info in temporary file: '$mtv_recinfo_file'"
 
-  local MDB_STARTDATA='access'
-  local MDB_STOPDATA='access'
-
   #Declare the MythTV-DB variables we want access to outside of this function.
-  declare -g MDB_TITLE='access'
-  declare -g MDB_SUBTITLE='access'
-  declare -g MDB_SEASON='access'
-  declare -g MDB_EPISODE='access'
-  declare -g MDB_CATEGORY='access'
-  declare -g MDB_ORIGINALAIRDATE='access'
-  declare -g MDB_STORAGEGROUP='access'
-  declare -g MDB_STARS='access'
-  declare -g MDB_DESCRIPTION='access'
-  declare -g MDB_SERIESID='access'
-  declare -g MDB_PROGRAMID='access'
-  declare -g MDB_INETREF='access'
-  declare -g MDB_CHANID='access'
-  declare -g MDB_STARTTIME='access'
-  declare -g MDB_AIRDATE='access'
-  declare -g MDB_XMLTVGRABBER='access'
+  local access_list
+  access_list='title|subtitle|season|episode|category|originalairdate|'
+  access_list="$access_list"'storagegroup|stars|description|seriesid|programid|'
+  access_list="$access_list"'inetref|chanid|starttime|airdate|xmltvgrabber'
 
   #Access MytTV-DB via the python bindings and output to a temporary file.
   "$binpath"/mythdb_access --verbosity="$((LOGLEVEL<3?LOGLEVEL:3))" \
@@ -2033,11 +2018,14 @@ get_mythtvdb_info_pythonbindings(){
     value="$(tr -d \" <<< "$value")"
     if [[ "$equals" = '=' ]]; then
       this_var="MDB_${var^^}"
-      if [[ "${!this_var}" = 'access' ]]; then
+      if [[ "$this_var" =~ ^(MDB_STARTDATA\[[0-9]*\]|MDB_STOPDATA\[[0-9]*\])$ ]]; then
+        declare "$this_var=$value"
+        debugcont "$this_var='$value'"
+      elif [[ "$var" =~ ^($access_list)$ ]]; then
         declare -gr "$this_var=$value"
         debugcont "$this_var='$value'"
       else
-        debugcont "UNUSED: $this_var='$value'"
+        ((LOGLEVEL>3)) && debugcont "UNUSED: $this_var='$value'"
       fi
     fi
   done < "$mtv_recinfo_file"
@@ -2614,7 +2602,6 @@ download_series_identification(){
   local tvdbshowname
   #Format Show TITLE for Sending to www.TheTVDB.com
   tvdbshowname="$(sed 's/ /%20/g' <<< "$TITLE" | sed 's/&/%26/g')"
-  inform "SEARCHING www.TheTVDB.com FOR $tvdbshowname"
 
   #Create temporary file to hold the show data from TheTVDB
   local working_file
@@ -2624,6 +2611,7 @@ download_series_identification(){
   fi
 
   #Search TheTVDB and return an XML file with results
+  inform "SEARCHING: www.TheTVDB.com for '$TITLE'"
   curl -L -s -m"$Timeout" "www.thetvdb.com/api/GetSeries.php?seriesname=$tvdbshowname" > "$working_file"
 
   if (( $(wc --bytes < "$working_file") == 0 )); then
@@ -3723,7 +3711,6 @@ msg_operation_summary(){
   informcont "SUBTITLE=$SUBTITLE-"
   informcont "SEASON=$SEASON-"
   informcont "EPISODE=$EPISODE-"
-  informcont "TITLE_TRANSLATION=$TITLE_TRANSLATION-"
   debugcont  "LastUpdatedTVDB=$LastUpdatedTVDB-"
   debugcont  "CurrentTimeTVDB=$CurrentTimeTVDB-"
   informcont "TVDB_SERIESID=$TVDB_SERIESID-"
@@ -3739,7 +3726,7 @@ msg_operation_summary(){
     debugcont  "MDB_XMLTVGRABBER=$MDB_XMLTVGRABBER-"
     informcont "MDB_STARTTIME=$MDB_STARTTIME-"
     debugcont  "MDB_AIRDATE=$MDB_AIRDATE-"
-    debugcont  "MDB_ORIGINALAIRDATE=$MDB_ORIGINALAIRDATE-"
+    debugcont  "ORIGINALAIRDATE=$ORIGINALAIRDATE-"
     informcont "MDB_PROGRAMID=$MDB_PROGRAMID-"
     debugcont "MDB_CHANID=$MDB_CHANID-"
     informcont "MDB_STORAGEGROUP=$MDB_STORAGEGROUP-"
@@ -6501,7 +6488,7 @@ M2KARG6="$6" #This is a buffer arg for when a --switch is used with all args.
 declare -gr M2KARG_COUNT M2KARG1 M2KARG2 M2KARG3 M2KARG4 M2KARG5 M2KARG6
 
 #Run the main function
-if ! main; then err "Exited main() function with an error state."; fi
+if ! main; then debug "Exited main() function with an error state."; fi
 
 #Final messaging and clean-up, running any user specified post-processing jobs.
 exit_job "$EXIT_JOB_TYPE"

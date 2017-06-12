@@ -372,10 +372,9 @@ DATABASE_ACCESS='PythonBindings'
 MySQLMythDb='mythconverg'
 
 #Guide data type: SchedulesDirect currently covers DataDirect, MC2XML and others.
-#NoLookup will bypass tvdb scanning
 #SydFTA was written to handle the guide data transmitted by free-to-air digital
 #channels in Sydney, Australia.
-#Options: ['SchedulesDirect'|'NoLookup'|'SydFTA'(DEFAULT)]
+#Options: ['SchedulesDirect'|'SydFTA'(DEFAULT)]
 GuideDataType='SydFTA'
 
 #The IP address or name of the server for MythTV Database (used in python bindings only)
@@ -674,7 +673,7 @@ m2k_init(){
   ((LOGLEVEL>=3)) && printf '%s\n' "Config complete." >> "$pre_logging_file"
 
   #What am I...
-  m2kVersion='myth2kodi Version 1.4.2e' ; declare -gr m2kVersion
+  m2kVersion='myth2kodi Version 1.4.2f' ; declare -gr m2kVersion
   m2kPlatform="$(uname)" ; declare -gr m2kPlatform
   ((LOGLEVEL>=3)) && printf '%s\n' "Running $m2kVersion on $m2kPlatform." >> "$pre_logging_file"
 
@@ -773,6 +772,10 @@ m2k_init(){
 
   #Do some basic validation of the settings
   if ! validate_settings; then exit 1; fi
+
+  #A regex that should match MythTVs file naming, for the 21st century.
+  RECPATTERN='[0-9]{4}_20[0-9]{2}[0-1][0-9][0-3][0-9][0-2][0-9][0-5][0-9]{3}\.'
+  declare -gr RECPATTERN
 
   #Set defaults for searching Series information
   TVDB_SERIESID=''
@@ -955,8 +958,8 @@ parse_command_flags(){
       msg_usage
       return 0
     ;;
-    --help|-?|-h)
-      debug "Recognised command line switch '--help|-?|-h'"
+    --help|-h)
+      debug "Recognised command line switch '--help|-h'"
       msg_about
       msg_usage
       msg_options
@@ -1151,11 +1154,9 @@ pre_process_check(){
   [[ -f "$file_path" ]] || { err "${FUNCNAME[0]}(): Not a file: $file_path"; return 1; }
   local file_basename
   file_basename="${file_path##*/}"
-  #A regex that should match MythTVs file naming, for the 21st century.
-  local recpattern='[0-9]{4}_20[0-9]{2}[0-1][0-9][0-3][0-9][0-2][0-9][0-5][0-9]{3}\.'
 
   #Is file_path named like a MythTV recording, or is there enough info to process without MythTV-DB.
-  if [[ "$file_basename" =~ ^$recpattern ]]; then #NOTE: Don't quote the RHS
+  if [[ "$file_basename" =~ ^$RECPATTERN ]]; then #NOTE: Don't quote the RHS
     debug "Looks ok, file_path is named like a MythTV recording: '$file_path'"
   elif [[ -n "$M2KARG2" ]]; then
     warn "${FUNCNAME[0]}(): This does not look like a MythTV recording: '$file_path'"
@@ -1452,8 +1453,6 @@ find_file_link_pairs(){
   (( "$#" > 1 )) && { err "${FUNCNAME[0]}() only takes one arg."; return 1 ; }
   local file_path="$1"
   [[ -e "$file_path" ]] || { err "${FUNCNAME[0]}(): Does not exist: '$file_path'"; return 1; }
-  #A regex that should match MythTVs file naming, for the 21st century.
-  local recpattern='[0-9]{4}_20[0-9]{2}[0-1][0-9][0-3][0-9][0-2][0-9][0-5][0-9]{3}\.'
   #Is file_path a link or a file
   if [[ -L "$file_path" ]]; then
     #file_path is a link, grab its target. #TODO: maybe "$(realpath --strip "$file_path")" ~ "$(cd "$(dirname "$file_path")" ; pwd)"
@@ -1461,10 +1460,10 @@ find_file_link_pairs(){
     if ! RECORDING_FILE="$(readlink "$file_path" 2> >(err_pipe "ERROR: ${FUNCNAME[0]}(): Line $LINENO: "))"; then return 1; fi
     [[ -f "$RECORDING_FILE" ]] || { err "${FUNCNAME[0]}(): Broken link: $RECORDING_FILE"; return 1; }
     [[ -L "$RECORDING_FILE" ]] && { err "${FUNCNAME[0]}(): Multiple links, not following: $RECORDING_FILE"; return 1; }
-    if [[ "${RECORDING_FILE##*/}" =~ ^$recpattern ]]; then #NOTE: Don't quote the RHS.
+    if [[ "${RECORDING_FILE##*/}" =~ ^$RECPATTERN ]]; then #NOTE: Don't quote the RHS.
       RECORDING_FILE_OWNER='MythTV'
       RECORDING_LINK_OWNER='myth2kodi'
-    elif [[ "${RECORDING_LINK##*/}" =~ ^$recpattern ]]; then #NOTE: Don't quote the RHS.
+    elif [[ "${RECORDING_LINK##*/}" =~ ^$RECPATTERN ]]; then #NOTE: Don't quote the RHS.
       RECORDING_FILE_OWNER='myth2kodi'
       RECORDING_LINK_OWNER='MythTV'
     #else
@@ -1479,7 +1478,7 @@ find_file_link_pairs(){
     local -i found=1 #Use exit code convention of 0=success 1=failure.
     local -a check_dirs
     local link_name
-    if [[ "${RECORDING_FILE##*/}" =~ ^$recpattern ]]; then #NOTE: Don't quote the RHS.
+    if [[ "${RECORDING_FILE##*/}" =~ ^$RECPATTERN ]]; then #NOTE: Don't quote the RHS.
       #file_path is a MythTV file name, check if there is a link to file_path from a myth2kodi target directory
       RECORDING_FILE_OWNER='MythTV'
       RECORDING_LINK_OWNER='myth2kodi'
@@ -1507,7 +1506,7 @@ find_file_link_pairs(){
       if ! RECORDING_LINK="$(realpath --strip "$link_name" 2> >(err_pipe "ERROR: ${FUNCNAME[0]}(): Line $LINENO: "))"; then return 1; fi
       return 0
     fi
-    if [[ ! "${RECORDING_FILE##*/}" =~ ^$recpattern ]]; then
+    if [[ ! "${RECORDING_FILE##*/}" =~ ^$RECPATTERN ]]; then
       warn "${FUNCNAME[0]}(): No link found to: '$RECORDING_FILE'"
       warncont "Assuming recording has been disconnected from MythTV."
       RECORDING_LINK=''
@@ -1532,10 +1531,8 @@ set_recording_name(){
   local file_name="$1"
   #Takes a single argument
   (( "$#" > 1 )) && { err "${FUNCNAME[0]}() only takes one arg."; return 1 ; }
-  #A regex that should match MythTVs file naming, for the 21st century.
-  local recpattern='[0-9]{4}_20[0-9]{2}[0-1][0-9][0-3][0-9][0-2][0-9][0-5][0-9]{3}\.'
   local -i found=1 #Use exit code convention of: 0=success; 1=failure.
-  if [[ "${file_name##*/}" =~ ^$recpattern ]]; then #NOTE: Don't quote the RHS.
+  if [[ "${file_name##*/}" =~ ^$RECPATTERN ]]; then #NOTE: Don't quote the RHS.
     #Is a MythTV recording.
     found=0
     RECORDING_NAME="$file_name"
@@ -1548,7 +1545,7 @@ set_recording_name(){
     #Check if it's a moved file name that's still tracked by MythTV
     for sg_dir in "${STORAGEGROUP_DIRS[@]}" ; do
       RECORDING_NAME="$(find -L "$sg_dir" -samefile "$file_name" 2> >(err_pipe "ERROR: ${FUNCNAME[0]}(): Line $LINENO: "))"
-      [[ "${RECORDING_NAME##*/}" =~ ^$recpattern ]] && { found=0 ; break ; }
+      [[ "${RECORDING_NAME##*/}" =~ ^$RECPATTERN ]] && { found=0 ; break ; }
     done
     (( found == 0 )) && inform "$file_name <==> $RECORDING_NAME"
     #else
@@ -1621,18 +1618,17 @@ periodic_maintenace(){
     fi
     if ((current_time > last_maintenance_time+MAINTENANCE_PERIOD)); then
       inform "Last maintenance more than $((MAINTENANCE_PERIOD/3600)) hours ago."
-      m2k_maintenance
-      local m2k_maintenance_status="$?"
-      if [[ "$m2k_maintenance_status" = '0' ]]; then
+      if m2k_maintenance; then
         printf '%s\n' "$current_time" > "$m2kdir/lastmaintenace.time"
       else
         warn "${FUNCNAME[0]}(): maintenance failed to run correctly."
-        return "$m2k_maintenance_status"
+        return 1
       fi
     fi
   else
     debug "Skipping m2k_maintenance() as m2kScanMode has been set to 'True'"
   fi
+  return 0
 } #periodic_maintenace()
 
 #Loops through tracked files and directories deleting them if they've been orphaned.
@@ -1951,14 +1947,12 @@ get_mythtvdb_info_mysql(){
 
     #Remove old and generate a comskip Start list
     printf '\n' > "$MARKUPSTART_TMP" #TODO: Compare this against what's returned by the python bindings version.
-    # where="WHERE starttime LIKE '$MDB_STARTTIME' AND chanid LIKE '$MDB_CHANID' AND type LIKE 4"
-    # dbselect 'mark' 'recordedmarkup' "$where" >> "$MARKUPSTART_TMP"
-    mysql -u"$MySQLuser" -p"$MySQLpass" -e "USE $MySQLMythDb ; SELECT mark FROM recordedmarkup WHERE starttime LIKE '$MDB_STARTTIME' AND chanid LIKE '$MDB_CHANID' AND type LIKE 4 ; " | sed 's/mark//g' | tr -d ' ' >> "$MARKUPSTART_TMP"
+    where="WHERE starttime LIKE '$MDB_STARTTIME' AND chanid LIKE '$MDB_CHANID' AND type LIKE 4"
+    dbselect 'mark' 'recordedmarkup' "$where" >> "$MARKUPSTART_TMP"
     #Remove old and generate comskip Stop list
     printf '\n' > "$MARKUPSTOP_TMP"
-    # where="WHERE starttime LIKE '$MDB_STARTTIME' AND chanid LIKE '$MDB_CHANID' AND type LIKE 5"
-    # dbselect 'mark' 'recordedmarkup' "$where" >> "$MARKUPSTOP_TMP"
-    mysql -u"$MySQLuser" -p"$MySQLpass" -e "USE $MySQLMythDb ; SELECT mark FROM recordedmarkup WHERE starttime LIKE '$MDB_STARTTIME' AND chanid LIKE '$MDB_CHANID' AND type LIKE 5 ; " | sed 's/mark//g' | tr -d ' ' >> "$MARKUPSTOP_TMP"
+    where="WHERE starttime LIKE '$MDB_STARTTIME' AND chanid LIKE '$MDB_CHANID' AND type LIKE 5"
+    dbselect 'mark' 'recordedmarkup' "$where" >> "$MARKUPSTOP_TMP"
     #Combine commercial data into a single comskip file and remove the initial files
     generate_comskip
   fi
@@ -2070,9 +2064,7 @@ get_mythtvdb_info(){
         return "$?"
         ;;
       PythonBindings)
-        get_mythtvdb_info_pythonbindings
-        returnstatus="$?"
-        if [[ "$returnstatus" != 0 ]]; then
+        if ! get_mythtvdb_info_pythonbindings; then
           NOTIFY_MSG="Call to MythTV-DB Python bindings failed."
           EXIT_JOB_TYPE='MythTVdatabaseFailure'
           return 1
@@ -2159,8 +2151,8 @@ delete_mythtv_database_entry_mysql(){
   if [[ ! -e "$RECORDING_PATH" ]]; then
     #Remove recording entry from mysql database
     inform "${FUNCNAME[0]}(): REMOVING: '$INPUT_PATH_BASENAME'; THUMBNAILS; DATABASE ENTRIES."
-    mysql -u"$MySQLuser" -p"$MySQLpass" -e "USE $MySQLMythDb ; DELETE FROM recorded WHERE basename LIKE '$INPUT_PATH_BASENAME' ; "
-    if [[ "$?" != 0 ]]; then
+    local cmd="USE $MySQLMythDb ; DELETE FROM recorded WHERE basename LIKE '$INPUT_PATH_BASENAME' ; "
+    if ! mysql -u"$MySQLuser" -p"$MySQLpass" -e "$cmd"; then
       err "${FUNCNAME[0]}(): Failed to delete DB entry for: $INPUT_PATH_BASENAME"
       return 1
     fi
@@ -2188,9 +2180,6 @@ process_mythtvdb(){
     case "$GuideDataType" in
       SchedulesDirect)
         process_mythtvdb_schedulesdirect
-        ;;
-      NoLookup)
-        process_mythtvdb_nolookup
         ;;
       SydFTA)
         process_mythtvdb_sydfta
@@ -2282,7 +2271,7 @@ process_mythtvdb_schedulesdirect(){
   #Create MV/EP/SH Identification Type from MDB_PROGRAMID
   RECORDING_TYPE="${MDB_PROGRAMID:0:2}"
 
-  #TODO: Does SchedulesDirect contain a Movie's release year in the MDB_AIRDATE field
+  #TODO: Does SchedulesDirect contain a Movie's release year in the MDB_AIRDATE field?
   # MOVIE_RELEASE_YEAR="$MDB_AIRDATE"
   # [[ -n "$MOVIE_RELEASE_YEAR" ]] && (( MOVIE_RELEASE_YEAR < 1900 )) && MOVIE_RELEASE_YEAR=''
 
@@ -2297,29 +2286,6 @@ process_mythtvdb_schedulesdirect(){
 
   return 0
 } #process_mythtvdb_schedulesdirect()
-
-#TODO: This processing type should be replaced with an ONLINE_LOOKUP='Enabled'|'Disabled' user option.
-#NoLookup is an alternate mode where TheTVDB is not used for lookups
-process_mythtvdb_nolookup(){
-  debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  inform 'Processing MythTV database info as NoLookup.'
-
-  #Gather information from the MythTV database common to guide-data types.
-  process_mythtvdb_common
-
-  #Create MV/EP/SH Identification Type from MDB_PROGRAMID
-  RECORDING_TYPE="${MDB_PROGRAMID:0:2}"
-
-  #Spoof show as episode to avoid RECORDING_TYPE='EP'
-  [[ "$RECORDING_TYPE" = 'EP' ]] && RECORDING_TYPE='SH'
-  #Extrapolate data from RECORDING_TYPE
-  set_ProgramIDType
-
-  #This probably isn't necessary, but adding it for the time-being to match previous state. #SAK
-  Zap2itSeriesID="$MDB_SERIESID"
-
-  return 0
-} #process_mythtvdb_nolookup()
 
 #A Process function compatible with Sydney over the air data...
 process_mythtvdb_sydfta(){
@@ -2936,6 +2902,11 @@ identify_series(){
   debugcont "ONLINE_LOOKUP='$ONLINE_LOOKUP'"
   debugcont "TITLE='$TITLE'"
   debugcont "Zap2itSeriesID='$Zap2itSeriesID'"
+
+  #TODO: Review.
+  #  Check our local list of TV-SERIES for an exact match.
+  #  Failing that, if "$ONLINE_LOOKUP" != 'Disabled', try online matching.
+
   #Process as though it's an episode of a tv series.
   if [[ "$ONLINE_LOOKUP" != 'Disabled' ]]; then
     #Query TheTVDB on TITLE: retrieve fields zap2it_id, SeriesName and seriesid.
@@ -2993,6 +2964,7 @@ identify_series(){
       return 1
     fi
   else
+    #TODO: Check against our local database of series if we have one. Probably sensible and quicker to do this as a first step, only looking online if we don't already have a local match...
     debug 'Series identification via TheTVDB is disabled.'
     return 0
   fi
@@ -3001,19 +2973,26 @@ identify_series(){
 identify_episode(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   debugcont "RECORDING_TYPE='$RECORDING_TYPE'"
-  debugcont "ONLINE_LOOKUP='$ONLINE_LOOKUP'"
   debugcont "TVDB_SERIESID='$TVDB_SERIESID'"
+
+  #TODO: Review
+  #  Try matching against SUBTITLE.
+  #  Try matching against SEASON and EPISODE numbers.
+  #  If US, try matching against ORIGINALAIRDATE -- As this is only US specific it probably shouldn't be the initial test.
+  #  Try matching against Plot.
+  #  If identified, make sure we've consistently set TITLE, SUBTITLE, SEASON, and EPISODE.
 
   if [[ -n "$TVDB_SERIESID" ]]; then
     inform "Processing TVDB_SERIESID:$TVDB_SERIESID"
-    #####GET ABSOLUTE EPISODE NUMBER#####
-    if [[ "$GuideDataType" = "SchedulesDirect" ]]; then
+    #Try to match against ORIGINALAIRDATE.
+    if [[ "$GuideDataType" = 'SchedulesDirect' ]]; then
       ConfidenceReasoning="$ConfidenceReasoning Attempted match on ORIGINALAIRDATE:"
       set_absolute_episode_number_by_airdate
-      AirdateExitStatus=$?
-      [[ "$AirdateExitStatus" = "1" && -n "$SUBTITLE" ]] && resolve_multiple_matches_airdate
-      test "$?" = "0" && AirdateExitStatus=0
-      if [ "$AirdateExitStatus" = "0" ]; then
+      local AirdateExitStatus="$?"
+      if [[ "$AirdateExitStatus" = '1' && -n "$SUBTITLE" ]]; then
+        if resolve_multiple_matches_airdate; then AirdateExitStatus=0; fi
+      fi
+      if [[ "$AirdateExitStatus" = '0' ]]; then
         ((++EpisodeConfidenceRating))
         ConfidenceReasoning="$ConfidenceReasoning Successful; "
         GotEpisodeNumber=1
@@ -3023,7 +3002,7 @@ identify_episode(){
         ConfidenceReasoning="$ConfidenceReasoning Failed;"
       fi
     fi
-
+    #Try to match against SUBTITLE (episode-title).
     if ((GotEpisodeNumber != 1)) && [[ -n "$SUBTITLE" ]]; then
       ConfidenceReasoning="$ConfidenceReasoning Attempted SubTitle match on Standard logic:"
       if set_absolute_episode_number_by_ename; then
@@ -3958,6 +3937,7 @@ msg_symlink_not_created(){
   EXIT_JOB_TYPE='LinkingFailed'
 } #msg_symlink_not_created()
 
+#TODO: Currently unused...
 #This function provides an error message on generic errors
 msg_generic_unspecified_error(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
@@ -4117,7 +4097,7 @@ msg_usage(){
   printf '   %s\n' "myth2kodi --diagnostics"
   printf ' %s\n\n' "before running in --scan mode or as a MythTV UserJob."
   printf ' %s\n' "For more information type:"
-  [[ "$M2KARG1" =~ ^('-h'|'-?'|'--help')$ ]] || printf '   %s\n' "myth2kodi --help"
+  [[ "$M2KARG1" =~ ^('-h'|'--help')$ ]] || printf '   %s\n' "myth2kodi --help"
   printf '   %s\n' "myth2kodi --config-help"
   printf '   %s\n\n' "myth2kodi --confidence"
 } #msg_usage()
@@ -4191,7 +4171,7 @@ msg_options(){
   printf '%s\n'   "    eg. myth2kodi --comskip '/home/mythtv/recordings/1099_20151210093000.mpg'"
   printf '%s\n'   "    eg. myth2kodi --comskip '/home/mythtv/recordings'"
   printf '%s\n'   "    eg. myth2kodi --comskip '/home/mythtv/recordings' 'mpg'"
-  printf '\n%s\n' "  -?|-h|--help"
+  printf '\n%s\n' "  -h|--help"
   printf '%s\n'   "    Displays this message"
   printf '%s\n'   "    example: myth2kodi --help"
   printf '\n%s\n' "  --config-help"
@@ -4822,7 +4802,7 @@ set_group_permission(){
 naming_checks(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   #If no episode data and it's not a test
-  if [[ "$HasSxxExx" != '1' && "$INPUT_PATH" != "$m2kdir/6666_20420101084242.tst" ]]; then
+  if [[ "$HasSxxExx" != '1' && "$INPUT_PATH" != "$M2K_TEST_FILE" ]]; then
     if [[ "$RECORDING_TYPE" = 'EP' ]]; then
       NOTIFY_MSG="Episode could not be matched with supplied information."
       warn "$NOTIFY_MSG"
@@ -5413,10 +5393,12 @@ m2k_diagnostics(){
     if [[ -z "$PKGNAME_PYTHON" ]]; then
       python_version="$(python --version 2>&1)"  #Python returns version info to stderr
       pyver="$(echo "$python_version" | sed 's/python\s*//I' | cut -f1-2 -d"." | tr -d '.')"
-      python -c "from MythTV import MythDB ; exit()" &> /dev/null
-      test "$?" != "0" && PKGNAME_LIBMYTH_PYTHON="libmyth-python"
-      python -c "import lxml ; exit()" &> /dev/null
-      test "$?" != "0" && PKGNAME_PYTHON_LXML="python-lxml"
+      if ! python -c "from MythTV import MythDB ; exit()" &> /dev/null; then
+        PKGNAME_LIBMYTH_PYTHON="libmyth-python"
+      fi
+      if ! python -c "import lxml ; exit()" &> /dev/null; then
+        PKGNAME_PYTHON_LXML="python-lxml"
+      fi
     fi
   fi
 
@@ -5444,7 +5426,7 @@ m2k_diagnostics(){
     [[ -z "$PKGNAME_PYTHON_LXML" ]] && inform "package 'python-lxml' found."
   fi
   if [[ -n "$packagecheck" ]] ; then
-    packagecheck="***FAILED***"
+    packagecheck='***FAILED***'
     err "Installed packages check ***FAILED***"
     errcont "Missing packages are: $PKGNAME_CURL $PKGNAME_AGREP $PKGNAME_LIBNOTIFY $PKGNAME_JQ $PKGNAME_REALPATH $PKGNAME_PYTHON $PKGNAME_LIBMYTH_PYTHON $PKGNAME_PYTHON_LXML"
     errcont "If packages are already installed, check your path settings."
@@ -5455,25 +5437,25 @@ m2k_diagnostics(){
       [[ -n "$PKGNAME_PYTHON" ]] && errcont "Python is missing, please install Python, or make sure it is in your path."
     fi
   else
-    packagecheck="***PASSED***"
-    inform "Installed packages check ***PASSED***"
+    packagecheck='***PASSED***'
+    inform 'Installed packages check ***PASSED***'
   fi
 
   #If we're not on Mac OS X, check that user notification is working.
-  if [[ "$m2kPlatform" != "Darwin" ]]; then
+  if [[ "$m2kPlatform" != 'Darwin' ]]; then
     read -r -n1 -p "Press any key to perform Desktop Message test..."
     printf '\n'
-    inform "Performing m2k_notify test"
+    inform 'Performing m2k_notify test'
     informcont "This test verifies that the message was sent to the DBUS."
     informcont "This test does not verify the user has a valid desktop open."
     [[ -f "$m2kdir/myth2kodi.png" ]] || informcont "Remember to copy myth2kodi.png into $m2kdir/"
     [[ -f "$m2kdir/myth2kodi_failed.png" ]] || informcont "Remember to copy myth2kodi_failed.png into $m2kdir/"
     sudo -u "$NotifyUserName" "$binpath/m2k_notify" "myth2kodi test" "Testing Desktop Communications" "$m2kdir/myth2kodi.png"
-    if [ "$?" = "0" ] ; then
-      notifytest="***PASSED***"
+    if [[ "$?" = '0' ]]; then
+      notifytest='***PASSED***'
       inform "Desktop Notifications test $notifytest"
     else
-      notifytest="***FAILED***"
+      notifytest='***FAILED***'
       warn "Desktop Notifications test $notifytest"
     fi
   else
@@ -5507,12 +5489,12 @@ m2k_diagnostics(){
       fi
       if [ "$PythonBindingsCheck" = "OK" ]; then
         inform "MythTV Python Bindings are installed properly."
-        DBTest="***PASSED***"
+        DBTest='***PASSED***'
         inform "MythTV Database Test $DBTest"
       else
         err "MythTV PythonBindings are not installed properly"
         errcont "there was a problem connecting to the database, check MythDatabase package."
-        DBTest="***FAILED***"
+        DBTest='***FAILED***'
         err "MythTV Database Test $DBTest"
       fi
     else
@@ -5560,9 +5542,9 @@ m2k_diagnostics(){
     fi
   done
   if ((KODI_COMM_FAILURES==0)); then
-    KODIcomm="***PASSED***"
+    KODIcomm='***PASSED***'
   else
-    KODIcomm="***FAILED***"
+    KODIcomm='***FAILED***'
     err "Communication failed for $KODI_COMM_FAILURES of ${#KODIIPs[@]} Kodi instances."
   fi
 
@@ -5596,29 +5578,29 @@ m2k_diagnostics(){
   msg_dir_summary
 
   if ((filesystem_state == 0)) ; then
-    folderchecks="***PASSED***"
+    folderchecks='***PASSED***'
     inform "Critical Filesystem checks $folderchecks"
   else
-    folderchecks="***FAILED***"
+    folderchecks='***FAILED***'
     err "Critical Filesystem checks $folderchecks"
   fi
-  if [[ "$packagecheck" = "***PASSED***" && "$folderchecks" = "***PASSED***" ]]; then
-    overallchecks="***PASSED***"
+  if [[ "$packagecheck" = '***PASSED***' && "$folderchecks" = '***PASSED***' ]]; then
+    overallchecks='***PASSED***'
   else
-    overallchecks="***FAILED***"
+    overallchecks='***FAILED***'
   fi
-  if [ "$overallchecks" = "***PASSED***" ]; then
+  if [[ "$overallchecks" = '***PASSED***' ]]; then
     read -r -n1 -p "press any key to test myth2kodi..."
     printf '\n'
 
     #Create a dummy recording file for testing.
-    local test_file="$m2kdir/6666_20420101084242.tst"
-    touch "$test_file"
+    export M2K_TEST_FILE="$m2kdir/6666_20420101084242.tst"
+    touch "$M2K_TEST_FILE"
 
     inform "Recordings Database is not used for testing."
     informcont "Performing fuzzy logic lookup on database file. Please wait."
     informcont "It may take a moment to build the myth2kodi database files."
-    informcont "Executing: myth2kodi '$test_file' 'mister rogers' 'show 1332'"
+    informcont "Executing: myth2kodi '$M2K_TEST_FILE' 'mister rogers' 'show 1332'"
     informcont "Testing exit status..."
 
     #TODO: the expectation is that myth2kodi is in the caller's path, otherwise
@@ -5628,19 +5610,20 @@ m2k_diagnostics(){
     #      diagnostic warning/error if myth2kodi is not in caller's path so that
     #      it is considered part of a proper configuration...
     #Run myth2kodi against the dummy file
-    myth2kodi "$test_file" 'mister rogers' 'show 1332'
+    myth2kodi "$M2K_TEST_FILE" 'mister rogers' 'show 1332'
     exitstatus="$?"
     informcont  "exited with status $exitstatus"
 
     #Clean-up the dummy recording file.
-    [[ -f "$test_file" ]] && rm -f "$test_file"
+    [[ -f "$M2K_TEST_FILE" ]] && rm -f "$M2K_TEST_FILE"
+    unset M2K_TEST_FILE
 
-    if [ "$exitstatus" = "0" ]; then
-      mythicaltest="***PASSED***"
+    if [[ "$exitstatus" = '0' ]]; then
+      mythicaltest='***PASSED***'
     else
       err "OVERALL FAILURE -- checks passed, but test run failed."
       mythicaltest="COULD NOT COMPLETE"
-      overallchecks="***FAILED***"
+      overallchecks='***FAILED***'
     fi
   else
     err "OVERALL FAILURE"
@@ -5661,7 +5644,7 @@ m2k_diagnostics(){
   printf '\n' | tee -a "$DIAGNOSTICS_FILE"
 
   #Logging for failure messages
-  if [[ "$DBTest" = "***FAILED***" ]]; then
+  if [[ "$DBTest" = '***FAILED***' ]]; then
     err "Database tests failed"
     errcont "When interfacing MythTV >=0.24, myth2kodi can use MythTV's Python"
     errcont "Bindings. These must be configured and working for proper access"
@@ -5670,7 +5653,7 @@ m2k_diagnostics(){
     printf '\n' | tee -a "$DIAGNOSTICS_FILE"
   fi
 
-  if [[ "$notifytest" = "***FAILED***" ]]; then
+  if [[ "$notifytest" = '***FAILED***' ]]; then
     err "Notify tests failed"
     errcont "Notifications to the DBUS have failed. myth2kodi relies upon"
     errcont "m2k_notify and package lib-notify to display messages on"
@@ -5678,7 +5661,7 @@ m2k_diagnostics(){
     printf '\n' | tee -a "$DIAGNOSTICS_FILE"
   fi
 
-  if [[ "$KODIcomm" = "***FAILED***" ]]; then
+  if [[ "$KODIcomm" = '***FAILED***' ]]; then
     err "Kodi communication tests failed: $KODI_COMM_FAILURES of ${#KODIIPs[@]}."
     errcont "This will not prevent myth2kodi from functioning, it just means"
     errcont "that myth2kodi can not send messages or library update requests"
@@ -5698,7 +5681,7 @@ m2k_diagnostics(){
     printf '\n' | tee -a "$DIAGNOSTICS_FILE"
   fi
 
-  if [[ "$RSSchecks" = "***FAILED***" ]]; then
+  if [[ "$RSSchecks" = '***FAILED***' ]]; then
     err "RSS tests failed"
     errcont "This either means the RSS_DIRECTORY: '$RSS_DIRECTORY'"
     errcont "does not exist, or you do not have sufficient permissions to write"
@@ -5709,7 +5692,7 @@ m2k_diagnostics(){
     printf '\n' | tee -a "$DIAGNOSTICS_FILE"
   fi
 
-  if [[ "$folderchecks" = "***FAILED***" ]]; then
+  if [[ "$folderchecks" = '***FAILED***' ]]; then
     err "The filesystem checks failed."
     errcont "First check that the Librarian user setting is correct, and that"
     errcont "you're running myth2kodi as that user. Currently Librarian='$Librarian'."
@@ -5728,7 +5711,7 @@ m2k_diagnostics(){
     printf '\n' | tee -a "$DIAGNOSTICS_FILE"
   fi
 
-  if [[ "$mythicaltest" != "***PASSED***" ]]; then
+  if [[ "$mythicaltest" != '***PASSED***' ]]; then
     err "Test run of myth2kodi failed."
     errcont "myth2kodi has encountered an error. This may be due to a"
     errcont "lack of network connection. If the problem persists, try"
@@ -5736,14 +5719,14 @@ m2k_diagnostics(){
     printf '\n' | tee -a "$DIAGNOSTICS_FILE"
   fi
 
-  if [[ "$overallchecks" = "***FAILED***" ]]; then
+  if [[ "$overallchecks" = '***FAILED***' ]]; then
     inform "The issues mentioned above must be corrected for myth2kodi to perform correctly."
   fi
 
   inform "Diagnostic mode completed: $(date)"
   debug "A diagnostics log file was written to: $LOGFILE"
 
-  test "$overallchecks" = "***FAILED***" && return 1
+  test "$overallchecks" = '***FAILED***' && return 1
 
   return 0
 } #m2k_diagnostics()
@@ -6444,7 +6427,7 @@ main(){
   if ! anti_clobber; then return 1; fi
 
   #If this is a test file, then exit now.
-  [[ "$RECORDING_PATH" = "$m2kdir/6666_20420101084242.tst" ]] && testfile_exit
+  [[ "$RECORDING_PATH" = "$M2K_TEST_FILE" ]] && testfile_exit
 
   #If the show is generic programming, this is the best myth2kodi can do.
   [[ "$RECORDING_TYPE" = 'SH' ]] && msg_show_warning

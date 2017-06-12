@@ -37,7 +37,7 @@
 #
 
 #Use the header as a basic help message.
-[[ "$1" =~ ^('-h'|'--help'|'-?')$ ]] && { head -n 30 "${BASH_SOURCE[0]}" ; exit 1 ; }
+[[ "$1" =~ ^('-h'|'--help')$ ]] && { head -n 30 "${BASH_SOURCE[0]}" ; exit 1 ; }
 
 #We need bash >= 4.2 (for, at least, the '-g' flag to declare.).
 THIS_BASH_VER="${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}"

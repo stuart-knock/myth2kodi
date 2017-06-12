@@ -800,6 +800,9 @@ m2k_init(){
     FuzzyLogicError=0
   fi
 
+  #Make sure our series list is consistent (directories still present).
+  prune_series_list
+
   debug "myth2kodi script initialisation complete."
   debug "Running myth2kodi as '$CALLER'"
 
@@ -818,7 +821,7 @@ parse_command_flags(){
     --scan) #filetype /path/to/folder
       debug "Recognised command line switch '--scan'"
       #TODO: Add ability to scan only specific files, eg those for a specific TITLE
-      export m2kScanMode="True"
+      export m2kScanMode='True'
       m2k_scan
       declare -i scanreturnstatus="$?"
       unset m2kScanMode
@@ -843,7 +846,7 @@ parse_command_flags(){
     ;;
     --diagnostics)
       debug "Recognised command line switch '--diagnostics'"
-      export M2K_DIAGNOSTICS_MODE="True"
+      export M2K_DIAGNOSTICS_MODE='True'
       local PreCallLogFile="$LOGFILE"
       local PreCallLogLevel="$LOGLEVEL"
       (( LOGLEVEL < 2 )) && LOGLEVEL=2 && inform "Escalating LOGLEVEL to Info (2)."
@@ -2705,6 +2708,27 @@ check_m2k_database_up_to_date(){
   return 1
 } #check_m2k_database_up_to_date()
 
+#Prune entries from the series-list if the directory no-longer exists.
+prune_series_list(){
+  debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
+  local series_title series_id line_number=0
+  touch "$m2kdir/temp_series_list.txt"
+  touch "$m2kdir/temp_seriesid_list.txt"
+  if [[ -f "$m2kdir/series_list.txt" ]]; then
+    while read -r series_title ; do
+      ((++line_number))
+      if [[ -d "$m2kdir/$series_title" ]]; then
+        printf '%s\n' "$series_title" >> "$m2kdir/temp_series_list.txt"
+        series_id="$(sed -n "$line_number"'p' "$m2kdir/seriesid_list.txt")"
+        printf '%s\n' "$series_id" >> "$m2kdir/temp_seriesid_list.txt"
+      fi
+    done < "$m2kdir/series_list.txt"
+  fi
+  mv "$m2kdir/temp_series_list.txt" "$m2kdir/series_list.txt"
+  mv "$m2kdir/temp_seriesid_list.txt" "$m2kdir/seriesid_list.txt"
+  return 0
+} #prune_series_list()
+
 #Download series information from TheTVDB and tvmaze servers for the currently
 #matched series, then use that information to generate or update myth2kodi's
 #internal database-files for the series.
@@ -2737,6 +2761,13 @@ download_series_info(){
   #Validate that the show has at least one EpisodeName tag and is a valid download before clobbering our old download.
   if grep -q "EpisodeName" "$dbdir/$TVDB_TITLE.xmlTest"; then
     printf '%s\n' "$(date +%s)" > "$dbdir/lastupdated.time" && chmod 644 "$dbdir/lastupdated.time"
+
+    #Add series-list and seriesid-list entries if we haven't already.
+    if ! grep -q "$TVDB_TITLE" "$m2kdir/series_list.txt"; then
+      printf '%s\n' "$TVDB_TITLE" >> "$m2kdir/series_list.txt"
+      printf '%s\n' "$TVDB_SERIESID" >> "$m2kdir/seriesid_list.txt"
+    fi
+
     #Check the new info is actually new, if there was no old info then it must be new.
     if [[ -f "$dbdir/$TVDB_TITLE.xml" ]]; then
       diff "$dbdir/$TVDB_TITLE.xmlTest" "$dbdir/$TVDB_TITLE.xml" &> /dev/null
@@ -2896,6 +2927,20 @@ make_m2k_database_dir(){
 
 ############## FUNCTIONS TO PROCESS myth2kodi's LOCAL DATABASE ###############
 
+#Check if we already have local information for this tv-series.
+have_series_info(){
+  debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
+  debugcont "TITLE='$TITLE'"
+
+  if grep -q "$TITLE" "$m2kdir/series_list.txt"; then
+    inform "We have existing info for: '$TITLE'"
+    return 0
+  else
+    inform "No existing info for: '$TITLE'"
+    return 1
+  fi
+} #have_series_info()
+
 identify_series(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   debugcont "RECORDING_TYPE='$RECORDING_TYPE'"
@@ -2903,9 +2948,17 @@ identify_series(){
   debugcont "TITLE='$TITLE'"
   debugcont "Zap2itSeriesID='$Zap2itSeriesID'"
 
-  #TODO: Review.
-  #  Check our local list of TV-SERIES for an exact match.
-  #  Failing that, if "$ONLINE_LOOKUP" != 'Disabled', try online matching.
+  #Check our local list of TV-SERIES for an exact match.
+  if have_series_info; then
+    TVDB_TITLE="$TITLE"
+    ConfidenceReasoning="$ConfidenceReasoning Have existing series info;"
+    ((++SeriesConfidenceRating))
+    local sln
+    sln="$(grep -nix "$TITLE" "$m2kdir/series_list.txt" | grep -m1 -o '^[0-9]*')"
+    TVDB_SERIESID="$(sed -n "$sln"'p' "$m2kdir/seriesid_list.txt")"
+    declare -gr TVDB_TITLE TVDB_SERIESID
+    return 0
+  fi
 
   #Process as though it's an episode of a tv series.
   if [[ "$ONLINE_LOOKUP" != 'Disabled' ]]; then
@@ -2964,7 +3017,6 @@ identify_series(){
       return 1
     fi
   else
-    #TODO: Check against our local database of series if we have one. Probably sensible and quicker to do this as a first step, only looking online if we don't already have a local match...
     debug 'Series identification via TheTVDB is disabled.'
     return 0
   fi

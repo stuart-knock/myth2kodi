@@ -673,7 +673,7 @@ m2k_init(){
   ((LOGLEVEL>=3)) && printf '%s\n' "Config complete." >> "$pre_logging_file"
 
   #What am I...
-  m2kVersion='myth2kodi Version 1.4.2g' ; declare -gr m2kVersion
+  m2kVersion='myth2kodi Version 1.4.2h' ; declare -gr m2kVersion
   m2kPlatform="$(uname)" ; declare -gr m2kPlatform
   ((LOGLEVEL>=3)) && printf '%s\n' "Running $m2kVersion on $m2kPlatform." >> "$pre_logging_file"
 
@@ -773,32 +773,14 @@ m2k_init(){
   #Do some basic validation of the settings
   if ! validate_settings; then exit 1; fi
 
-  #A regex that should match MythTVs file naming, for the 21st century.
+  #A regex that should match MythTV's file naming, for the 21st century.
   RECPATTERN='[0-9]{4}_20[0-9]{2}[0-1][0-9][0-3][0-9][0-2][0-9][0-5][0-9]{3}\.'
   declare -gr RECPATTERN
 
-  #Set defaults for searching Series information
-  TVDB_SERIESID=''
-  TVDB_TITLE=''
-  RequiresDoover=0
-  ConfidenceRating=0
-  SeriesConfidenceRating=0
-  #Setup defaults for searching Episode information
-  Exx=''
-  Sxx=''
-  GotEpisodeNumber=0
-  EpisodeConfidenceRating=0
-
-  #Initialise processing state variables.
-  FailSafeState=0
-
-  #Initialise the fuzzy logic error count to zero if the file doesn't exist.
-  declare -gi FuzzyLogicError
-  if [[ -f "$m2kdir/FuzzyLogicError.log" ]]; then
-    FuzzyLogicError="$(<"$m2kdir/FuzzyLogicError.log")"
-  else
-    FuzzyLogicError=0
-  fi
+  #Initialise confidence rating variables.
+  declare -gi ConfidenceRating=0
+  declare -gi SeriesConfidenceRating=0
+  declare -gi EpisodeConfidenceRating=0
 
   #Make sure our series list is consistent (directories still present).
   prune_series_list
@@ -2339,7 +2321,7 @@ process_mythtvdb_sydfta(){
   #TODO: Check the seriesid field in MythTV-DB & see if we can make more
   #  sensible use of whatever it contains...
 
-  #If the information is already available, set the Sxx & Exx variables
+  #Try to extract any SUBTITLE or SeasonEpisode info that is in the Plot.
   if [[ "$RECORDING_TYPE" = 'EP' ]]; then
     debug 'The MythTV Guide data Plot before we messed with it:'
     debugcont "Plot:'$Plot'"
@@ -2420,7 +2402,7 @@ set_ProgramIDType(){
 } #set_ProgramIDType()
 
 #Try and set Sxx and Exx using SEASON and EPISODE, or failing that SeasonEpisode.
-set_sxxexx_season_episode_numbers(){
+set_sxxexx_with_season_episode(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   debugcont "SEASON='$SEASON'"
   debugcont "EPISODE='$EPISODE'"
@@ -2432,13 +2414,12 @@ set_sxxexx_season_episode_numbers(){
     Exx="$EPISODE"
   elif [[ -n "$SeasonEpisode" ]]; then
     debug 'Using season & episode information extracted from Plot.'
-    Sxx="$(echo "$SeasonEpisode" | grep -E -i --only-matching '(s\.?[0-9]?[0-9])|([0-9]?[0-9]x)' | sed 's/s\.\?\|x//I')"
-    Exx="$(echo "$SeasonEpisode" | grep -E -i --only-matching '((e|ep)\.?[0-9][0-9]?)|(x[0-9][0-9]?)' | sed 's/\(E\.\?\|Ep\.\?\)\|x//I')"
-    # Sxx="$(grep -E -i --only-matching '(s\.?[0-9]?[0-9])|([0-9]?[0-9]x)' <<< "$SeasonEpisode" | sed 's/s\.\?\|x//I')"
-    # Exx="$(grep -E -i --only-matching '((e|ep)\.?[0-9][0-9]?)|(x[0-9][0-9]?)' <<< "$SeasonEpisode" | sed 's/\(E\.\?\|Ep\.\?\)\|x//I')"
+    Sxx="$(grep -E -i --only-matching '(s\.?[0-9]?[0-9])|([0-9]?[0-9]x)' <<< "$SeasonEpisode" | sed 's/s\.\?\|x//I')"
+    Exx="$(grep -E -i --only-matching '((e|ep)\.?[0-9][0-9]?)|(x[0-9][0-9]?)' <<< "$SeasonEpisode" | sed 's/\(E\.\?\|Ep\.\?\)\|x//I')"
     #Strip leading zero
     Sxx="${Sxx#0}"
     Exx="${Exx#0}"
+    #Make sure SEASON and EPISODE are set consistently with Sxx and Exx.
     SEASON="$Sxx"
     EPISODE="$Exx"
   else
@@ -2451,7 +2432,7 @@ set_sxxexx_season_episode_numbers(){
   inform "Found Season ($Sxx) & Episode ($Exx) information."
   HasSxxExx='1'
   return 0
-} #set_sxxexx_season_episode_numbers()
+} #set_sxxexx_with_season_episode()
 
 #Use regex to check for and make use of SxxExx info in Plot.
 get_sxxexx_from_plot(){
@@ -2770,7 +2751,7 @@ download_series_info(){
 
     #Check the new info is actually new, if there was no old info then it must be new.
     if [[ -f "$dbdir/$TVDB_TITLE.xml" ]]; then
-      diff "$dbdir/$TVDB_TITLE.xmlTest" "$dbdir/$TVDB_TITLE.xml" &> /dev/null
+      diff -q "$dbdir/$TVDB_TITLE.xmlTest" "$dbdir/$TVDB_TITLE.xml" &> /dev/null
       GotNewInformation="$?" #NOTE: No-diff = 0; diff = 1; error = 2
     else
       GotNewInformation=1
@@ -2788,7 +2769,7 @@ download_series_info(){
       [[ -f "$dbdir/$TVDB_TITLE.E.txt" ]]           && rm -f "$dbdir/$TVDB_TITLE.E.txt"
       [[ -f "$dbdir/$TVDB_TITLE.Plot.txt" ]]        && rm -f "$dbdir/$TVDB_TITLE.Plot.txt"
 
-      #create a folder/file "database" Strip XML tags. Series, Exx and Sxx are separated into different files
+      #Create a folder/file "database" Strip XML tags.
       local Ename=''
       local actualEname=''
       local FAired=''
@@ -3022,22 +3003,57 @@ identify_series(){
   fi
 } #identify_series()
 
+#Attempt to identify an AbsoluteEpisodeNumber based on the information we have.
 identify_episode(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   debugcont "RECORDING_TYPE='$RECORDING_TYPE'"
-  debugcont "TVDB_SERIESID='$TVDB_SERIESID'"
+  debugcont "TVDB_TITLE='$TVDB_TITLE'"
+  debugcont "SUBTITLE='$SUBTITLE'"
+  debugcont "SEASON='$SEASON'"
+  debugcont "EPISODE='$EPISODE'"
+  debugcont "Plot='$Plot'"
 
-  #TODO: Review
-  #  Try matching against SUBTITLE.
-  #  Try matching against SEASON and EPISODE numbers.
-  #  If US, try matching against ORIGINALAIRDATE -- As this is only US specific it probably shouldn't be the initial test.
-  #  Try matching against Plot.
-  #  If identified, make sure we've consistently set TITLE, SUBTITLE, SEASON, and EPISODE.
+  #TODO: Consider having user settings ['Enabled'(DEFAULT)|'Disabled']:
+  #        MATCH_SEASON_EPISODE
+  #        MATCH_SUBTITLE
+  #        MATCH_ORIGINALAIRDATE
+  #        MATCH_PLOT
+  #      so that users can turn off any matching that is problematic for them.
 
-  if [[ -n "$TVDB_SERIESID" ]]; then
-    inform "Processing TVDB_SERIESID:$TVDB_SERIESID"
-    #Try to match against ORIGINALAIRDATE.
-    if [[ "$GuideDataType" = 'SchedulesDirect' ]]; then
+  if [[ -n "$TVDB_TITLE" ]]; then
+    #Try matching against SEASON and EPISODE numbers.
+    if [[ -n "$SEASON" && -n "$EPISODE" ]]; then
+      ConfidenceReasoning="$ConfidenceReasoning Attempted SEASON and EPISODE match:"
+      if set_absolute_episode_number_by_season_episode; then
+        ConfidenceReasoning="$ConfidenceReasoning Successful;"
+        return 0
+      else
+        ((--EpisodeConfidenceRating))
+        ConfidenceReasoning="$ConfidenceReasoning Failed;"
+      fi
+    fi
+
+    #Try to match against SUBTITLE (episode-title).
+    if [[ -n "$SUBTITLE" ]]; then
+      ConfidenceReasoning="$ConfidenceReasoning Attempted SUBTITLE exact match:"
+      if set_absolute_episode_number_by_ename; then
+        ConfidenceReasoning="$ConfidenceReasoning Successful;"
+        return 0
+      else
+        ((--EpisodeConfidenceRating))
+        ConfidenceReasoning="$ConfidenceReasoning Failed; Attempted SUBTITLE fuzzy match:"
+        if set_absolute_episode_number_by_ename_fuzzy; then
+          ConfidenceReasoning="$ConfidenceReasoning Successful;"
+          return 0
+        else
+          ((--EpisodeConfidenceRating))
+          ConfidenceReasoning="$ConfidenceReasoning Failed;"
+        fi
+      fi
+    fi
+
+    #Try matching against ORIGINALAIRDATE -- NOTE: this is US specific.
+    if [[ -n "$ORIGINALAIRDATE" ]]; then
       ConfidenceReasoning="$ConfidenceReasoning Attempted match on ORIGINALAIRDATE:"
       set_absolute_episode_number_by_airdate
       local AirdateExitStatus="$?"
@@ -3046,118 +3062,73 @@ identify_episode(){
       fi
       if [[ "$AirdateExitStatus" = '0' ]]; then
         ((++EpisodeConfidenceRating))
-        ConfidenceReasoning="$ConfidenceReasoning Successful; "
-        GotEpisodeNumber=1
+        ConfidenceReasoning="$ConfidenceReasoning Successful;"
+        return 0
       else
-        warn "AIRDATE FAILED. TITLE MATCH ON ABSOLUTE EPISODE NUMBER: $AbsoluteEpisodeNumber"
+        warn "Failed to identify episode."
+        ((--EpisodeConfidenceRating))
+        ConfidenceReasoning="$ConfidenceReasoning Failed."
+      fi
+    fi
+
+    #Try matching against Plot.
+    if [[ "$PlotMatchFallback" = 'Enabled' && -n "$Plot" ]]; then
+      ConfidenceReasoning="$ConfidenceReasoning Attempted Plot fuzzy match:"
+      if get_absolute_episode_number_fuzzy_plot; then
+        ConfidenceReasoning="$ConfidenceReasoning Successful;"
+        return 0
+      else
         ((--EpisodeConfidenceRating))
         ConfidenceReasoning="$ConfidenceReasoning Failed;"
       fi
     fi
-    #Try to match against SUBTITLE (episode-title).
-    if ((GotEpisodeNumber != 1)) && [[ -n "$SUBTITLE" ]]; then
-      ConfidenceReasoning="$ConfidenceReasoning Attempted SubTitle match on Standard logic:"
-      if set_absolute_episode_number_by_ename; then
-        ConfidenceReasoning="$ConfidenceReasoning Successful; "
-      else
-        warn "AIRDATE/STANDARD LOGIC FAILED. FUZZY LOGIC ABSOLUTE: $AbsoluteEpisodeNumber. Requiring doover."
-        RequiresDoover=1
-        ((--EpisodeConfidenceRating))
-        ConfidenceReasoning="$ConfidenceReasoning Failed; Attempted SubTitle match on Fuzzy logic:"
-        if set_absolute_episode_number_by_ename_fuzzy; then
-          ConfidenceReasoning="$ConfidenceReasoning Successful; "
-        else
-          ((--EpisodeConfidenceRating))
-          ConfidenceReasoning="$ConfidenceReasoning Failed;"
-        fi
-      fi
-    fi
-
-    #update confidence total
-    ((ConfidenceRating = EpisodeConfidenceRating + SeriesConfidenceRating))
-
-    #Verification only makes sense if we got AbsoluteEpisodeNumber from a method
-    # other than Standard or Fuzzy logic above.
-    if ((GotEpisodeNumber == 1)) && [[ -n "$AbsoluteEpisodeNumber" ]]; then
-      #####VERIFICATION OF CONFIDENCE RATING#####
-      #backup AbsoluteEpisodeNumber for tests
-      AbsoluteEpisodeNumberBackup="$AbsoluteEpisodeNumber"
-      if [[ -n "$SUBTITLE" && -n "$ORIGINALAIRDATE" ]]; then
-        #Verify with Standard logic
-        set_absolute_episode_number_by_ename
-        if (( AbsoluteEpisodeNumber != AbsoluteEpisodeNumberBackup )); then
-          msg_standard_logic_warning
-          [[ -z "$AbsoluteEpisodeNumber" ]] && AbsoluteEpisodeNumber="Nothing"
-          ConfidenceReasoning="$ConfidenceReasoning Standard Logic came up with Episode Number $AbsoluteEpisodeNumber. This does not match $AbsoluteEpisodeNumberBackup;"
-        else
-          #TODO For shows which are way off, we need some sort of doover mechanism.
-          #CONFIDENCE:2 LOGIC PATH:  Attempted Match On Zap2itID: Successful; Attempted match on ORIGINALAIRDATE: Successful;
-          #Standard Logic came up with line 76. This does not match 85; Fuzzy Logic test came up with line 76. This does not match 85;
-          #JOB: myth2kodi '/home/mythtv/Videos/1035_20101109001500.mpg' 'Aqua Teen Hunger Force' 'Couple Skate'
-          #TARGET SET:/home/mythtv/Videos/Episodes/Aqua Teen Hunger Force/Season 6/Aqua Teen Hunger Force S06E03 (She Creature).mpg
-          increment_fuzzy_logic_error_count
-          ConfidenceReasoning="$ConfidenceReasoning Verified with Standard logic;"
-          (( ++ConfidenceRating ))
-        fi
-
-        #Verify with Fuzzy
-        set_absolute_episode_number_by_ename_fuzzy
-        if (( AbsoluteEpisodeNumber != AbsoluteEpisodeNumberBackup )); then
-          [[ -z "$AbsoluteEpisodeNumber" ]] && AbsoluteEpisodeNumber="Nothing"
-          ConfidenceReasoning="$ConfidenceReasoning Fuzzy Logic test came up with Episode Number $AbsoluteEpisodeNumber. This does not match $AbsoluteEpisodeNumberBackup;"
-          msg_fuzzy_logic_warning
-        else
-          increment_fuzzy_logic_error_count
-          ConfidenceReasoning="$ConfidenceReasoning Verified with Fuzzy logic;"
-          (( ++ConfidenceRating ))
-        fi
-      fi
-      #Restore AbsoluteEpisodeNumber after testing
-      AbsoluteEpisodeNumber="$AbsoluteEpisodeNumberBackup"
-    fi
-
-    #Statistical Fuzzy Logic monitoring
-    increment_total_matches
-    debug "TOTAL FUZZY LOGIC MATCHES:'$FuzzyLogicMatches'"
-    debug "TOTAL VERIFIED FUZZY ERRORS:'${FuzzyLogicError:-0}'"
-  fi
-
-  #TODO: The following few blocks will run even if we haven't properly identified the series, which doesn't make
-  #      sense for the things trying to set SxxExx...
-  #TODO: makes no sense to run this block if this is a movie.
-  #If we already have Sxx and Exx from MythTV-DB, use them. If we also had a Subtitle, then do some verification.
-  if [[ "$HasSxxExx" = '1' ]] ; then
-    #TODO: If the confidence rating from the above is good, and we have an
-    #  AbsoluteEpisodeNumber then use it to validate the Sxx, Exx & Subtitle from
-    #  the MythTV-DB.
-    inform "Using episode number: '$Sxx$Exx', extracted from the MythTV-DB."
-    #TODO: Probably should only do the following if the Series confidence rating
-    #  is ok.
-    #If we don't have a Subtitle, then use Sxx & Exx to get it from the TVDb info.
-    if [[ -z "$TVDB_SUBTITLE" ]]; then
-      AbsoluteEpisodeNumberBackup=$AbsoluteEpisodeNumber
-      if set_absolute_episode_number_by_sxxexx; then
-        TVDB_SUBTITLE=$(sed -n "$AbsoluteEpisodeNumber"'p' "$m2kdir/$TVDB_TITLE/$TVDB_TITLE.actualEname.txt")
-        inform "MythTV-DB did not have an TVDB_SUBTITLE, using '$TVDB_SUBTITLE' from TheTVDB."
-
-      else
-        AbsoluteEpisodeNumber=$AbsoluteEpisodeNumberBackup
-      fi
-    fi
-    #Strip the leading "S" from Sxx,
-    SEASON="${Sxx#S}"
-    #and any leading "0"
-    SEASON="${SEASON#0}"
-
-  #If we don't already have EXX and SXX, set them by matching Absolute Episode Number across myth2kodi's database
-  elif [[ -n "$AbsoluteEpisodeNumber" ]]; then
-    #NOTE: this function also sets TVDB_SUBTITLE and TVDB_SEASON
-    set_sxxexx_absolute_episode_number
   else
-    warn "Could not set Sxx and Exx from MythTV-DB or set them based on SUBTITLE."
-    ConfidenceReasoning="$ConfidenceReasoning Could not get Sxx and Exx from MythTV-DB or set them based on SUBTITLE; "
-  fi
+    err 'Attempted episode match without TVDB_TITLE.'
+  fi #[[ -n "$TVDB_TITLE" ]]
+  return 1
 } #identify_episode()
+
+#Check that the SUBTITLE, SEASON, and EPISODE we have set correspond to the same
+#episode in the series table of our local-db.
+validate_episode(){
+  debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
+  debugcont "RECORDING_TYPE='$RECORDING_TYPE'"
+  debugcont "TVDB_TITLE='$TVDB_TITLE'"
+  debugcont "SUBTITLE='$SUBTITLE'"
+  debugcont "SEASON='$SEASON'"
+  debugcont "EPISODE='$EPISODE'"
+  debugcont "Plot='$Plot'"
+
+  if [[ -n "$SUBTITLE" && -n "$SEASON" && -n "$EPISODE" ]]; then
+    inform 'We appear to have full episode information, verifying against local-DB.'
+  else
+    warn "Trying to validate an episode for which we have incomplete information."
+  fi
+
+  local aen_backup="$AbsoluteEpisodeNumber"
+  local aen_sxxexx aen_ename aen_ename_fuzzy aen_originalairdate
+  if set_absolute_episode_number_by_season_episode; then aen_sxxexx="$AbsoluteEpisodeNumber"; fi
+  if set_absolute_episode_number_by_ename; then aen_ename="$AbsoluteEpisodeNumber"; fi
+  if set_absolute_episode_number_by_ename_fuzzy; then aen_ename_fuzzy="$AbsoluteEpisodeNumber"; fi
+  if set_absolute_episode_number_by_airdate; then aen_originalairdate="$AbsoluteEpisodeNumber"; fi
+  debug 'Found:'
+  debugcont "aen_sxxexx          = '$aen_sxxexx';"
+  debugcont "aen_ename           = '$aen_ename';"
+  debugcont "aen_ename_fuzzy     = '$aen_ename_fuzzy';"
+  debugcont "aen_originalairdate = '$aen_originalairdate'."
+  local AENguess=()
+  local var
+  local i=0
+  for var in 'aen_sxxexx' 'aen_ename' 'aen_ename_fuzzy' 'aen_originalairdate'; do
+    if [[ -n "${!var}" ]]; then { ((++i)); AENguess[i]="${!var}"; }; fi
+  done
+  AENguess=($(printf '%s\n' "${AENguess[@]}" | sort))
+  multi_match_check
+  local mmc_status="$?"
+  [[ "$mmc_status" = '0' ]] && ((EpisodeConfidenceRating += ${#AENguess[@]}))
+  AbsoluteEpisodeNumber="$aen_backup"
+  return "$mmc_status"
+}
 
 #Set the serieslinenumber by matching the Zap2itSeriesID from MythTV-DB
 #against the zap2it ids returned by querying TheTVDB.
@@ -3296,35 +3267,31 @@ set_absolute_episode_number_by_airdate(){
   return 2
 } #set_absolute_episode_number_by_airdate()
 
-#Set the AbsoluteEpisodeNumber by comparing Sxx and Exx against the
+#Set the AbsoluteEpisodeNumber by comparing SEASON and EPISODE against the
 #series and episode number information in myth2kodi's local database.
-set_absolute_episode_number_by_sxxexx(){
+set_absolute_episode_number_by_season_episode(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   debugcont "AbsoluteEpisodeNumber: '$AbsoluteEpisodeNumber'"
   debugcont "TVDB_TITLE: \"$TVDB_TITLE\""
-  debugcont "Sxx: '$Sxx'"
-  debugcont "Exx: '$Exx'"
+  debugcont "SEASON: '$SEASON'"
+  debugcont "EPISODE: '$EPISODE'"
 
-  AbsoluteEpisodeNumber=""
+  AbsoluteEpisodeNumber=''
   local -a AENs
-  #Strip the leading "S" and any leading "0" from Sxx
-  local Snum=${Sxx#S} ; Snum=${Snum#0}
-  #Strip the leading "E" and any leading "0" from Exx
-  local Enum=${Exx#E} ; Enum=${Enum#0}
   local SxxAENs
   local ExxAENs
-  SxxAENs=$(grep -nix "$Snum" "$m2kdir/$TVDB_TITLE/$TVDB_TITLE.S.txt" | cut -d':' -f1 )
-  ExxAENs=$(grep -nix "$Enum" "$m2kdir/$TVDB_TITLE/$TVDB_TITLE.E.txt" | cut -d':' -f1 )
+  SxxAENs=$(grep -nix "$SEASON"  "$m2kdir/$TVDB_TITLE/$TVDB_TITLE.S.txt" | cut -d':' -f1 )
+  ExxAENs=$(grep -nix "$EPISODE" "$m2kdir/$TVDB_TITLE/$TVDB_TITLE.E.txt" | cut -d':' -f1 )
   #With multiple data sources we can get multiple AENs, just take the first data source:
   AENs=($(sort --numeric-sort <<< "$(comm -12 <(sort <<< "$SxxAENs") <(sort <<< "$ExxAENs"))"))
   AbsoluteEpisodeNumber="${AENs[0]}"
   if [[ -n "$AbsoluteEpisodeNumber" ]] && ((AbsoluteEpisodeNumber > 0)); then
-    inform "Using SxxExx, determined AbsoluteEpisodeNumber: $AbsoluteEpisodeNumber"
+    inform "Using SEASON and EPISODE determined AbsoluteEpisodeNumber: $AbsoluteEpisodeNumber"
     return 0
   fi
   warn "${FUNCNAME[0]}(): Failed to determine AbsoluteEpisodeNumber"
   return 1
-} #set_absolute_episode_number_by_sxxexx()
+} #set_absolute_episode_number_by_season_episode()
 
 #Set the AbsoluteEpisodeNumber by matching SUBTITLE against
 #the episode names (Ename) in myth2kodi's local database.
@@ -3348,7 +3315,7 @@ set_absolute_episode_number_by_ename_fuzzy(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   #set IFS to use line break as a delineator -- necessary for separating multiple agrep matches below.
   local IFS=$'\n'
-  AbsoluteEpisodeNumber=""
+  AbsoluteEpisodeNumber=''
   local -a fuzzy_ename_0=()
   local -a fuzzy_ename_1=()
   local -a fuzzy_ename=()
@@ -3596,7 +3563,7 @@ get_absolute_episode_number_fuzzy_plot(){
    return 1
   fi
 
-  AbsoluteEpisodeNumber=""
+  AbsoluteEpisodeNumber=''
   #set IFS to use line break as a delineator -- necessary for separating multiple agrep matches below.
   local IFS=$'\n'
   local -i PlotLength
@@ -3628,45 +3595,6 @@ get_absolute_episode_number_fuzzy_plot(){
   fi
   return 0
 } #get_absolute_episode_number_fuzzy_plot()
-
-#Use AbsoluteEpisodeNumber to set Sxx and Exx
-set_sxxexx_absolute_episode_number(){
-  debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  #if line match is obtained, then gather new episode name, Sxx and Exx
-  TVDB_SUBTITLE="$(sed -n "$AbsoluteEpisodeNumber"'p' "$m2kdir/$TVDB_TITLE/$TVDB_TITLE.actualEname.txt")"
-
-  #gather series and episode names from files created earlier.
-  Exx="$(sed -n "$AbsoluteEpisodeNumber"'p' "$m2kdir/$TVDB_TITLE/$TVDB_TITLE.E.txt")"
-  Sxx="$(sed -n "$AbsoluteEpisodeNumber"'p' "$m2kdir/$TVDB_TITLE/$TVDB_TITLE.S.txt")"
-  [[ -n "$Sxx" ]] && TVDB_SEASON="$Sxx"
-  [[ -n "$Exx" ]] && ((Exx > 0)) && TVDB_EPISODE="$Exx"
-
-  #Single digit episode and show names are not allowed Ex and Sx replaced with Exx Sxx
-  if ((Exx < 10)); then Exx="E0$Exx"; else Exx="E$Exx"; fi
-  if ((Sxx < 10)); then Sxx="S0$Sxx"; else Sxx="S$Sxx"; fi
-  inform "EPISODE:$TVDB_SUBTITLE EPISODE NUMBER:$AbsoluteEpisodeNumber $Sxx$Exx WITH CONFIDENCE: $EpisodeConfidenceRating"
-  HasSxxExx='1'
-} #set_sxxexx_absolute_episode_number()
-
-plot_match_fallback(){
-  debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  #As a last resort, if we still think it's an episode but have no episode info, try fuzzy match on plot
-  if [[ "$PlotMatchFallback" = 'Enabled' ]]; then
-    debug "PlotMatchFallback is Enabled"
-    if [[ "$RECORDING_TYPE" = 'EP' && "$HasSxxExx" != '1' ]] ; then
-      if get_absolute_episode_number_fuzzy_plot && [[ -n "$AbsoluteEpisodeNumber" ]]; then
-        inform "Setting Sxx, Exx, and TVDB_SUBTITLE based on FuzzyPlotMatch:"
-        #NOTE: set_sxxexx_absolute_episode_number also sets TVDB_SUBTITLE and TVDB_SEASON
-        set_sxxexx_absolute_episode_number
-        ((--ConfidenceRating)) #Decrement confidence, because this is a guess.
-        ConfidenceReasoning="$ConfidenceReasoning Found AbsoluteEpisodeNumber with fuzzy plot match, Guess; "
-      else
-        warn "Failed in last ditch attempt to identify episode with fuzzy plot match, we have no SxxExx."
-        #TODO: Probably should exit here... If/when tis is done change message back to err
-      fi
-    fi
-  fi
-} #plot_match_fallback()
 
 storagegroup_fallback(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
@@ -3775,33 +3703,6 @@ msg_operation_summary(){
   return 0
 } #msg_operation_summary()
 
-#Increment the number contained in "$m2kdir/FuzzyLogicError.log"
-increment_fuzzy_logic_error_count(){
-  debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  #Initialise the total match count to zero if the file doesn't exist.
-  if [[ ! -f "$m2kdir/FuzzyLogicError.log" ]]; then
-    printf '%s\n' '0' > "$m2kdir/FuzzyLogicError.log"
-  fi
-  FuzzyLogicError="$(<"$m2kdir/FuzzyLogicError.log")"
-  (( ++FuzzyLogicError ))
-  printf '%s\n' "$FuzzyLogicError" > "$m2kdir/FuzzyLogicError.log"
-  return "$?"
-} #increment_fuzzy_logic_error_count()
-
-#Increment the number contained in "$m2kdir/TotalEpisodeMatches.log"
-increment_total_matches(){
-  debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  #Initialise the total match count to zero if the file doesn't exist.
-  if [[ ! -f "$m2kdir/TotalEpisodeMatches.log" ]]; then
-    printf '%s\n' '0' > "$m2kdir/TotalEpisodeMatches.log"
-  fi
-  declare -gi FuzzyLogicMatches
-  FuzzyLogicMatches="$(<"$m2kdir/TotalEpisodeMatches.log")"
-  (( ++FuzzyLogicMatches ))
-  printf '%s\n' "$FuzzyLogicMatches" > "$m2kdir/TotalEpisodeMatches.log"
-  return "$?"
-} #increment_total_matches()
-
 #An error message when we were called as a MythTV userjob from outside
 #MythTV, then exit.
 msg_userjob_outside_mythtv_error(){
@@ -3903,42 +3804,6 @@ msg_epishow(){
   warncont "HANDLING EPISODE AS GENERAL SHOWING & DUMPING INTO --doover USER JOB"
 } #msg_epishow()
 
-#A warning message for when a fuzzy match on episode name isn't consistent
-#with an airdate match.
-msg_fuzzy_logic_warning(){
-  #TODO: review this message
-  debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  warn     "%%%% AIRDATE MATCH AND FUZZY LOGIC ARE IN DISAGREEMENT %%%%"
-  warncont "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%"
-  warncont "%%%%%%%%%% GUIDE DATA AND TVDB DATA DO NOT MATCH %%%%%%%%%%"
-  warncont "%%%% Possible causes: small variations in episode name %%%%"
-  warncont "%%%%%%%%%%%%%%%%%%%%% bad guide data %%%%%%%%%%%%%%%%%%%%%%"
-  warncont "%%%%%%%%%%%%%%%%%%%%% bad tvdb airdate %%%%%%%%%%%%%%%%%%%%"
-  warncont "%%%%%%%%%%%%%%%%%%%%% bad tvdb episode name %%%%%%%%%%%%%%%"
-  warncont "%%%%%%%%%%%%%%%%%%%%% bad tvdb zap2it id %%%%%%%%%%%%%%%%%%"
-  warncont "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%"
-  inform "Setting LOGLEVEL=3 (debug) DUE TO AIRDATE/FUZZY-LOGIC DISAGREEMENT."
-  LOGLEVEL=3 #Enable debug level logging
-} #msg_fuzzy_logic_warning()
-
-#A warning message for when a match on episode name isn't consistent
-#with an airdate match.
-msg_standard_logic_warning(){
-  #TODO: review this message
-  debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  warn     "%% AIRDATE MATCH AND STANDARD LOGIC ARE IN DISAGREEMENT. %%"
-  warncont "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%"
-  warncont "%%%%%%%%%%% GUIDE DATA AND TVDB DATA DO NOT MATCH %%%%%%%%%"
-  warncont "%%%% Possible causes: small variations in episode name %%%%"
-  warncont "%%%%%%%%%%%%%%%%%%%%% bad guide data %%%%%%%%%%%%%%%%%%%%%%"
-  warncont "%%%%%%%%%%%%%%%%%%%%% bad tvdb airdate %%%%%%%%%%%%%%%%%%%%"
-  warncont "%%%%%%%%%%%%%%%%%%%%% bad tvdb episode name %%%%%%%%%%%%%%%"
-  warncont "%%%%%%%%%%%%%%%%%%%%% bad tvdb zap2it id %%%%%%%%%%%%%%%%%%"
-  warncont "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%"
-  inform "Setting LOGLEVEL=3 (debug) DUE TO AIRDATE/STANDARD-LOGIC DISAGREEMENT."
-  LOGLEVEL=3 #Enable debug level logging
-} #msg_standard_logic_warning()
-
 #An error message for when the path/file we've been asked to process doesn't exist
 msg_invalid_path_error(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
@@ -3988,19 +3853,6 @@ msg_symlink_not_created(){
   errcont "Check that file system supports symlinks: $MoveDir"
   EXIT_JOB_TYPE='LinkingFailed'
 } #msg_symlink_not_created()
-
-#TODO: Currently unused...
-#This function provides an error message on generic errors
-msg_generic_unspecified_error(){
-  debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  err  "%%%% OPERATION FAILED: GenericUnspecifiedError %%%%"
-  errcont "NO MATCH FOUND. TROUBLESHOOTING: Check TheTVDB TO SEE IF $TITLE EXISTS."
-  errcont "CHECK EPISODE NAME $SUBTITLE. CHECK INTERNET CONNECTION. CHECK API KEY."
-  errcont "NOT ENOUGH INFORMATION PULLED FROM DATABASE TO IDENTIFY FILE AS MOVIE OR EPISODE"
-  errcont "CHECK www.TheTVDB.com RUN myth2kodi LINK COMMAND PROMPT."
-  errcont "FOR MORE INFORMATION SEE http://forum.kodi.tv/showthread.php?tid=301925"
-  errcont "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%"
-} #msg_generic_unspecified_error()
 
 #--recording-info
 msg_recording_info(){
@@ -4329,7 +4181,7 @@ msg_improve_confidence(){
 set_show_file_name(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   #Format Episodes showname=show name Sxx=season number Exx=episode number SUBTITLE=episode name
-  if [[ -n "$Exx" && "$Exx" != 'E' ]]; then
+  if [[ -n "$Sxx" && -n "$Exx" ]]; then
     debug "Naming as episode"
     ShowFileName="$TVDB_TITLE $Sxx$Exx ($SUBTITLE)$SHOW_FILE_NAME_APPEND"
   #Format Movies
@@ -4854,7 +4706,7 @@ set_group_permission(){
 naming_checks(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   #If no episode data and it's not a test
-  if [[ "$HasSxxExx" != '1' && "$INPUT_PATH" != "$M2K_TEST_FILE" ]]; then
+  if [[ "$HasSxxExx" != '1' && "$RECORDING_PATH" != "$M2K_TEST_FILE" ]]; then
     if [[ "$RECORDING_TYPE" = 'EP' ]]; then
       NOTIFY_MSG="Episode could not be matched with supplied information."
       warn "$NOTIFY_MSG"
@@ -5971,7 +5823,7 @@ get_series_info(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   debugcont "TVDB_SERIESID='$TVDB_SERIESID'"
   debugcont "TVDB_TITLE='$TVDB_TITLE'"
-  if [[ -n "$TVDB_SERIESID" ]]; then
+  if [[ "$ONLINE_LOOKUP" != 'Disabled' && -n "$TVDB_SERIESID" ]]; then
     make_m2k_database_dir
     if ! check_m2k_database_up_to_date; then
       if ! download_series_info; then
@@ -5979,10 +5831,9 @@ get_series_info(){
         RequiresDoover=1
         return 1
       fi
-    else
-      return 0
     fi
   fi
+  return 0
 } #get_series_info()
 
 #Delete: the recording file and any links to it; associated database entry and
@@ -6398,7 +6249,7 @@ main(){
     printf '%s\n' "$m2kVersion on $m2kPlatform"
   } >> "$LOGFILE"
   PROCESSING_RECORDING='True'
-  inform "Processing: $INPUT_PATH"
+  inform "Processing: $RECORDING_PATH"
 
   #Initialise key variables with command line args, necessary if Database='Disabled'.
   TITLE="$INPUT_TITLE"
@@ -6445,21 +6296,31 @@ main(){
   #If we think it's an episode try and identify the series and episode.
   if [[ "$RECORDING_TYPE" = 'EP' ]]; then
     identify_series
-    [[ "$ONLINE_LOOKUP" != 'Disabled' ]] && get_series_info
-    identify_episode
+    get_series_info
+    if identify_episode; then
+      if ! validate_episode; then
+        warn 'Episode validation indicates inconsistent data, requiring doover.'
+        RequiresDoover=1
+      fi
+      #Use the AbsoluteEpisodeNumber to access TheTVDB information.
+      TVDB_SUBTITLE="$(sed -n "$AbsoluteEpisodeNumber"'p' "$m2kdir/$TVDB_TITLE/$TVDB_TITLE.actualEname.txt")"
+      TVDB_SEASON="$(  sed -n "$AbsoluteEpisodeNumber"'p' "$m2kdir/$TVDB_TITLE/$TVDB_TITLE.S.txt")"
+      TVDB_EPISODE="$( sed -n "$AbsoluteEpisodeNumber"'p' "$m2kdir/$TVDB_TITLE/$TVDB_TITLE.E.txt")"
+      #Use TheTVDB info as our recording info.
+      [[ -n "$TVDB_SUBTITLE" ]] && SUBTITLE="$TVDB_SUBTITLE"
+      [[ -n "$TVDB_SEASON" ]]   && SEASON="$TVDB_SEASON"
+      [[ -n "$TVDB_EPISODE" ]]  && EPISODE="$TVDB_EPISODE"
+    fi
+    #Update confidence total
+    ((ConfidenceRating = EpisodeConfidenceRating + SeriesConfidenceRating))
 
-    #Try fall-back methods.
+    #Try to set Sxx and Exx using SEASON, EPISODE, or SeasonEpisode(from Plot).
+    set_sxxexx_with_season_episode
+
     storagegroup_fallback #In-case it is actually a movie
-    plot_match_fallback  #If still unrecognised, try matching against plot.
 
     #Warn if we have not obtained a TVDB_SERIESID and still think it's an 'EP'.
     [[ -z "$TVDB_SERIESID" && "$RECORDING_TYPE" = 'EP' ]] && msg_unrecognised_series
-
-    #If we identified the episode then use TheTVDB information.
-    [[ -n "$TVDB_TITLE" ]]    && TITLE="$TVDB_TITLE"
-    [[ -n "$TVDB_SUBTITLE" ]] && SUBTITLE="$TVDB_SUBTITLE"
-    [[ -n "$TVDB_SEASON" ]]   && SEASON="$TVDB_SEASON"
-    [[ -n "$TVDB_EPISODE" ]]  && EPISODE="$TVDB_EPISODE"
   fi
 
   #Determine write permissions and free space for Move and Working directories.

@@ -673,7 +673,7 @@ m2k_init(){
   ((LOGLEVEL>=3)) && printf '%s\n' "Config complete." >> "$pre_logging_file"
 
   #What am I...
-  m2kVersion='myth2kodi Version 1.4.2h' ; declare -gr m2kVersion
+  m2kVersion='myth2kodi Version 1.4.2i' ; declare -gr m2kVersion
   m2kPlatform="$(uname)" ; declare -gr m2kPlatform
   ((LOGLEVEL>=3)) && printf '%s\n' "Running $m2kVersion on $m2kPlatform." >> "$pre_logging_file"
 
@@ -3059,7 +3059,6 @@ identify_episode(){
         ConfidenceReasoning="$ConfidenceReasoning Successful;"
         return 0
       else
-        warn "Failed to identify episode."
         ((--EpisodeConfidenceRating))
         ConfidenceReasoning="$ConfidenceReasoning Failed."
       fi
@@ -3076,6 +3075,7 @@ identify_episode(){
         ConfidenceReasoning="$ConfidenceReasoning Failed;"
       fi
     fi
+    warn "Failed to identify episode."
   else
     err 'Attempted episode match without TVDB_TITLE.'
   fi #[[ -n "$TVDB_TITLE" ]]
@@ -3291,6 +3291,11 @@ set_absolute_episode_number_by_season_episode(){
 #the episode names (Ename) in myth2kodi's local database.
 set_absolute_episode_number_by_ename(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
+  debugcont "TVDB_TITLE = '$TVDB_TITLE'"
+  debugcont "SUBTITLE = '$SUBTITLE'"
+
+  [[ -z "$SUBTITLE" ]] && { warn "${FUNCNAME[0]}(): No SUBTITLE."; return 1; }
+
   AbsoluteEpisodeNumber=''
   AbsoluteEpisodeNumber="$(grep -nix "$SUBTITLE" "$m2kdir/$TVDB_TITLE/$TVDB_TITLE.Ename.txt" | grep -m1 -o '^[0-9]*')"
   if [[ -n "$AbsoluteEpisodeNumber" ]] && ((AbsoluteEpisodeNumber > 0)); then
@@ -3307,6 +3312,11 @@ set_absolute_episode_number_by_ename_fuzzy(){
   #    'The Office' 'The Delivery (2)'       -TvDb data
   #  currently, the former would be associated with 'The Delivery (1)'
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
+  debugcont "TVDB_TITLE = '$TVDB_TITLE'"
+  debugcont "SUBTITLE = '$SUBTITLE'"
+
+  [[ -z "$SUBTITLE" ]] && { warn "${FUNCNAME[0]}(): No SUBTITLE."; return 1; }
+
   #set IFS to use line break as a delineator -- necessary for separating multiple agrep matches below.
   local IFS=$'\n'
   AbsoluteEpisodeNumber=''

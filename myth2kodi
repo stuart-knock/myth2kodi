@@ -673,7 +673,7 @@ m2k_init(){
   ((LOGLEVEL>=3)) && printf '%s\n' "Config complete." >> "$pre_logging_file"
 
   #What am I...
-  m2kVersion='myth2kodi Version 1.4.2j' ; declare -gr m2kVersion
+  m2kVersion='myth2kodi Version 1.4.2k' ; declare -gr m2kVersion
   m2kPlatform="$(uname)" ; declare -gr m2kPlatform
   ((LOGLEVEL>=3)) && printf '%s\n' "Running $m2kVersion on $m2kPlatform." >> "$pre_logging_file"
 
@@ -2395,7 +2395,7 @@ set_ProgramIDType(){
   return 0
 } #set_ProgramIDType()
 
-#Try and set Sxx and Exx using SEASON and EPISODE, or failing that SeasonEpisode.
+#Try and set Sxx and Exx using SEASON and EPISODE.
 set_sxxexx_with_season_episode(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   debugcont "SEASON='$SEASON'"
@@ -2406,16 +2406,6 @@ set_sxxexx_with_season_episode(){
     debug 'Using season & episode information from MythTV-DB or command-line.'
     Sxx="$SEASON"
     Exx="$EPISODE"
-  elif [[ -n "$SeasonEpisode" ]]; then
-    debug 'Using season & episode information extracted from Plot.'
-    Sxx="$(grep -E -i --only-matching '(s\.?[0-9]?[0-9])|([0-9]?[0-9]x)' <<< "$SeasonEpisode" | sed 's/s\.\?\|x//I')"
-    Exx="$(grep -E -i --only-matching '((e|ep)\.?[0-9][0-9]?)|(x[0-9][0-9]?)' <<< "$SeasonEpisode" | sed 's/\(E\.\?\|Ep\.\?\)\|x//I')"
-    #Strip leading zero
-    Sxx="${Sxx#0}"
-    Exx="${Exx#0}"
-    #Make sure SEASON and EPISODE are set consistently with Sxx and Exx.
-    SEASON="$Sxx"
-    EPISODE="$Exx"
   else
     debug "No Season & Episode number information is available."
     return 1
@@ -2439,7 +2429,7 @@ get_sxxexx_from_plot(){
   #episode fields from MythTV database or command line, then attempt to extract
   #SeasonEpisode from Plot, SBS is big on including it in the plot/description
   #field instead of where it belongs.
-  if [[ -z "$SeasonEpisode" ]] && [[ -z "$SEASON" || -z "$EPISODE" ]]; then
+  if [[ -z "$SEASON" || -z "$EPISODE" ]]; then
     debug 'Searching Plot for season & episode information.'
     #The below should work for any of the following forms, assumes season and
     #episode numbers in range 0-99:
@@ -2450,6 +2440,19 @@ get_sxxexx_from_plot(){
       return 1
     else
       debug "Found SeasonEpisode='$SeasonEpisode' in Plot."
+      if [[ -n "$SeasonEpisode" ]]; then
+        debug 'Using season & episode information extracted from Plot.'
+        Sxx="$(grep -E -i --only-matching '(s\.?[0-9]?[0-9])|([0-9]?[0-9]x)' <<< "$SeasonEpisode" | sed 's/s\.\?\|x//I')"
+        Exx="$(grep -E -i --only-matching '((e|ep)\.?[0-9][0-9]?)|(x[0-9][0-9]?)' <<< "$SeasonEpisode" | sed 's/\(E\.\?\|Ep\.\?\)\|x//I')"
+        #Strip leading zero
+        Sxx="${Sxx#0}"
+        Exx="${Exx#0}"
+        #Make sure SEASON and EPISODE are set consistently with Sxx and Exx.
+        SEASON="$Sxx"
+        EPISODE="$Exx"
+        debugcont "SEASON = '$SEASON'"
+        debugcont "EPISODE = '$EPISODE'"
+      fi
       #TODO: Maybe add warning in the case of 4x4 in case it's not actually an SxxExx
     fi
   fi
@@ -6320,7 +6323,7 @@ main(){
     #Update confidence total.
     ((ConfidenceRating = EpisodeConfidenceRating + SeriesConfidenceRating))
 
-    #Try to set Sxx and Exx using SEASON, EPISODE, or SeasonEpisode(from Plot).
+    #Try to set Sxx and Exx using SEASON, EPISODE.
     set_sxxexx_with_season_episode
 
     storagegroup_fallback #In-case it is actually a movie

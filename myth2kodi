@@ -624,7 +624,7 @@ exit_job(){
   if [[ "$m2kScanMode" != 'True' && "$Notify" = 'Enabled' && -n "$NOTIFY_MSG" ]]; then
     debug "NOTIFY_MSG=$NOTIFY_MSG  ;  notify_icon=${notify_icon[$exitstatus]}"
     #Work-around for systems that don't allow users to sudo as themselves (Ubuntu).
-    if [[ "$NotifyUserName" == "$CALLER" ]]; then
+    if [[ "$NotifyUserName" = "$CALLER" ]]; then
       "$binpath/m2k_notify" "myth2kodi: $jobtype" "$NOTIFY_MSG" "${notify_icon[$exitstatus]}"
     else
       sudo -u "$NotifyUserName" "$binpath/m2k_notify" "myth2kodi: $jobtype" "$NOTIFY_MSG" "${notify_icon[$exitstatus]}"
@@ -634,7 +634,7 @@ exit_job(){
   fi
 
   #Final myth2kodi log entry when processing a recording, regardless of LOGLEVEL.
-  if [[ "$PROCESSING_RECORDING" = "True" ]]; then
+  if [[ "$PROCESSING_RECORDING" = 'True' ]]; then
     printf '%s\n' "@@@@ COMPLETE: $(date --rfc-3339=seconds) @@@@" >> "$LOGFILE"
   fi
 
@@ -699,7 +699,7 @@ m2k_init(){
     read -r -p "Possible permission contamination. Continue anyway? yes/(no)" yesorno
     printf '\n'
     #Default to safety, ie do nothing and exit with status 1.
-    [[ "$yesorno" != "yes" ]] && exit 1
+    [[ "$yesorno" != 'yes' ]] && exit 1
     printf 'WARNING: %s\n' "Continuation forced by $CALLER, despite possible permission contamination."
   fi
 
@@ -832,7 +832,7 @@ parse_command_flags(){
       local PreCallLogFile="$LOGFILE"
       local PreCallLogLevel="$LOGLEVEL"
       (( LOGLEVEL < 2 )) && LOGLEVEL=2 && inform "Escalating LOGLEVEL to Info (2)."
-      if [[ "$LOGTYPE" = 'stderr' ]] ; then
+      if [[ "$LOGTYPE" = 'stderr' ]]; then
         warn "Running diagnostics without any logging to file, consider using LOGTYPE='filestderr'."
       else
         inform "Running diagnostics, so redirecting subsequent messages to $DIAGNOSTICS_FILE"
@@ -897,7 +897,7 @@ parse_command_flags(){
       if [[ -z "$M2KARG2" ]]; then
         err 'myth2kodi --undo requires either "all" or a file name arg.'
         return 1
-      elif [[ "${M2KARG2,,}" == 'all' ]]; then
+      elif [[ "${M2KARG2,,}" = 'all' ]]; then
         m2k_undo_all
         return $?
       elif [[ -f "$M2KARG2" ]]; then
@@ -1053,7 +1053,7 @@ validate_settings(){
   # check_path_permission "$binpath"    "rx"
   # local origdir_permissions
   # [[ "$PROCESS_RECORDING_MODE" =~ ^(LINK|COPY)$ ]] && origdir_permissions='rx'
-  # [[ "$PROCESS_RECORDING_MODE" == 'MOVE' ]] && origdir_permissions='rwx'
+  # [[ "$PROCESS_RECORDING_MODE" = 'MOVE' ]] && origdir_permissions='rwx'
   # #TODO: originaldir not set when this is called... ?move elsewhere?
   # local target_permissions='rwx'
   # check_path_permission "$MoveDir"           "$target_permissions"
@@ -1100,7 +1100,7 @@ validate_args(){
   fi
 
   #Validations that only apply when our first argument is not a switch.
-  if [[ "${M2KARG1:0:1}" != "-" ]]; then
+  if [[ "${M2KARG1:0:1}" != '-' ]]; then
 
     #Our first argument must be a file.
     if [[ ! -f "$M2KARG1" ]]; then
@@ -1302,7 +1302,7 @@ check_path_permission(){
   fi
 
   #If we require read permission then check for it
-  if [[ "$required_permission" == *'r'* && ! -r "$path_to_check" ]]; then
+  if [[ "$required_permission" = *'r'* && ! -r "$path_to_check" ]]; then
     NOTIFY_MSG="Cannot read: $path_to_check"
     err "${FUNCNAME[0]}() CALLED FROM: ${FUNCNAME[1]}(): $NOTIFY_MSG"
     EXIT_JOB_TYPE='PermissionError'
@@ -1310,7 +1310,7 @@ check_path_permission(){
   fi
 
   #If we require read permission then check for it
-  if [[ "$required_permission" == *'w'* && ! -w "$path_to_check" ]]; then
+  if [[ "$required_permission" = *'w'* && ! -w "$path_to_check" ]]; then
     NOTIFY_MSG="Cannot write: '$path_to_check'"
     err "${FUNCNAME[0]}() CALLED FROM: ${FUNCNAME[1]}(): $NOTIFY_MSG"
     errcont "USER NAME:'$CALLER' ATTEMPTED TO MODIFY A '$path_owner' OWNED FILE."
@@ -1320,7 +1320,7 @@ check_path_permission(){
   fi
 
   #If we require execution permission then check for it
-  if [[ "$required_permission" == *'x'* && ! -x "$path_to_check" ]]; then
+  if [[ "$required_permission" = *'x'* && ! -x "$path_to_check" ]]; then
     if [[ -f "$path_to_check" ]]; then
       NOTIFY_MSG="Cannot execute: '$path_to_check'"
       err "${FUNCNAME[0]}() CALLED FROM: ${FUNCNAME[1]}(): $NOTIFY_MSG"
@@ -1588,7 +1588,7 @@ log_rotation(){
 periodic_maintenace(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   #Do periodic maintenance
-  if [[ "$m2kScanMode" != "True" ]]; then
+  if [[ "$m2kScanMode" != 'True' ]]; then
     #check for interrupted undo jobs
     [[ -f "$m2kdir/undo.lock" && ! -f "$m2kdir/undo.sh" ]] && mv "$m2kdir/undo.lock" "$m2kdir/undo.sh"
     local current_time
@@ -1833,7 +1833,11 @@ m2k_cleanse(){
 
 #################### FUNCTIONS TO ACCESS MythTV DATABASE #####################
 
-#Helper function for MySQL access to the MythTV-DB.
+#Helper function for MySQL access to the MythTV-DB. It takes 3 arguments; the
+#first(required) is the name of the field we want; the second(optional) is to
+#specify a non-default table (default='recorded'); the third(optional) is to
+#specify a non-default WHERE construct, which needs to be set as '' when we
+#do not want a WHERE (default="WHERE basename LIKE '$INPUT_PATH_BASENAME'").
 dbselect(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   debugcont "Called with $# arguments."
@@ -1863,18 +1867,8 @@ get_mythtvdb_info_mysql(){
   #Obtain MythTV Database Information
   inform "Accessing MythTV DataBase Using mysql Commands:"
   inform "Attempting to pull database information on '$INPUT_PATH_BASENAME'"
-  #NOTE: Previously the info retrieved from the MythTV-DB was also passed through additional sed commands
-  #  where "/", the thing being selected (eg "title") and occasionally spaces were stripped. At least for
-  #  mythtv 0.27.5 and "mysql Ver 15.1 Distrib 10.0.22-MariaDB, for Linux (x86_64) using readline 5.2",
-  #  these seem to be redundant. In case there was an old DB schema or older mysql version that required
-  #  this additional processing, if the below isn't working for you try adding the additional sed commands
-  #  back in, something like:
-  #    | sed s/"\/"/""/g | sed -n "2p" | sed 's/chanid//g' | tr -d ' '
-  #  to replace the
-  #    | sed -n "2p"
-  #  found below. Finally, if any of the above processing turns out to be SchedulesDirect specific then it
-  #  should be moved to process_mythtvdb_schedulesdirect().
 
+  #Select the variables we are interested in from the MythTV-DB.
   MDB_TITLE="$(          dbselect title           | sed -n "2p")"
   MDB_SUBTITLE="$(       dbselect subtitle        | sed -n "2p")"
   MDB_SEASON="$(         dbselect season          | sed -n "2p")"
@@ -1895,7 +1889,7 @@ get_mythtvdb_info_mysql(){
   MDB_AIRDATE="$(dbselect 'airdate' 'recordedprogram' "$where" | sed -n "2p")"
   MDB_XMLTVGRABBER="$(dbselect 'xmltvgrabber' 'videosource' '' | sed -n "2p")"
 
-  #
+  #Make the MythTV-DB variables read-only.
   declare -gr MDB_TITLE
   declare -gr MDB_SUBTITLE
   declare -gr MDB_SEASON
@@ -1984,7 +1978,7 @@ get_mythtvdb_info_pythonbindings(){
                            --writeFile 2>&1 | err_pipe "mythdb_access: "
 
   python_exit_status="${PIPESTATUS[0]}"
-  if [[ "$python_exit_status" != "0" ]]; then
+  if (( python_exit_status != 0 )); then
     err "${FUNCNAME[0]}(): DATABASE ACCESS ERROR: COULD NOT OBTAIN INFORMATION"
     debug 'Check DBInfo in mythicalSetup, verify file is MythTV file.'
     return 1
@@ -2583,13 +2577,13 @@ download_series_identification(){
   declare -gr TMP_SID_FILE TMP_SHN_FILE
 
   #Separate the XML into textual DBs containing seriesid, SeriesName and zap2it_id
-  grep "<seriesid>" "$working_file" | sed -e 's#</\?seriesid>##g' \
+  grep '<seriesid>' "$working_file" | sed -e 's#</\?seriesid>##g' \
                                           -e 's/&quot;/"/g'       \
                                           -e 's/&amp;/\&/g'       \
                                           -e 's/&ndash;/-/g'      \
                                           -e 's/&lt;/</g'         \
                                           -e 's/&gt;/>/g' > "$TMP_SID_FILE"
-  grep "<SeriesName>" "$working_file" | sed -e 's#</\?SeriesName>##g' \
+  grep '<SeriesName>' "$working_file" | sed -e 's#</\?SeriesName>##g' \
                                             -e 's/&quot;/"/g'         \
                                             -e 's/&amp;/\&/g'         \
                                             -e 's/&ndash;/-/g'        \
@@ -2606,13 +2600,13 @@ download_series_identification(){
 
   #parse the XML for shows with Zap2ItIDs
   while read -r line ; do
-    test "$line" = "<Series>" && next_show=1
-    if [[ "$line" = "</Series>" ]] && ((next_show==1)); then
+    [[ "$line" = '<Series>' ]] && next_show=1
+    if [[ "$line" = '</Series>' ]] && ((next_show==1)); then
       printf '\n' >> "$TMP_ZAP2IT_FILE"
       next_show=0
     fi
 
-    if [[ "$line" =~ '<zap2it_id>'* ]] ; then
+    if [[ "$line" =~ '<zap2it_id>'* ]]; then
       echo "$line" | sed -e 's#</\?zap2it_id>##g' \
                          -e 's/&quot;/"/g'        \
                          -e 's/&amp;/\&/g'        \
@@ -2786,8 +2780,8 @@ download_series_info(){
           #  directory, then add a check for this before we bother trying to
           #  download information again. Also, use the lastupdated field if present.
           #Skip lines until the end series block tag is found, then start processing the episode info
-          [[ "$line" == "</Series>" ]] && recordNumber=0
-        elif [[ "$line" == "</Episode>" ]]; then
+          [[ "$line" = '</Series>' ]] && recordNumber=0
+        elif [[ "$line" = '</Episode>' ]]; then
           (( ++recordNumber ))
           #Write Episode info to files
           debug "Building Record:$recordNumber -${actualEname}-"
@@ -2798,7 +2792,7 @@ download_series_info(){
           printf '%s\n' "$EpisodeNr"       >> "$dbdir/$TVDB_TITLE.E.txt"
           printf '%s\n' "$EpisodeOverview" >> "$dbdir/$TVDB_TITLE.Plot.txt"
         #Get actual show name
-        elif [[ "$line" == "<EpisodeName>"* ]]; then
+        elif [[ "$line" = '<EpisodeName>'* ]]; then
           line="${line/"</EpisodeName>"/}"
           line="${line/<EpisodeName>/}"
           line="${line//&lt;/}"
@@ -2813,22 +2807,22 @@ download_series_info(){
           #Only keep Alpha-numeric characters, space, parenthesis and the four chars & , . -
           Ename="$(sed -r 's/[^[:alnum:] &,.)(-]//g' <<< "$Ename")"
         #Get First Aired Date
-        elif [[ "$line" == "<FirstAired>"* ]]; then
+        elif [[ "$line" = '<FirstAired>'* ]]; then
           line="${line/"</FirstAired>"/}"
           line="${line/<FirstAired>/}"
           FAired="$line"
         #Get Season number
-        elif [[ "$line" == "<SeasonNumber>"* ]]; then
+        elif [[ "$line" = '<SeasonNumber>'* ]]; then
           line="${line/"</SeasonNumber>"/}"
           line="${line/<SeasonNumber>/}"
           SeasonNr="$line"
         #Get Episode number
-        elif [[ "$line" == "<EpisodeNumber>"* ]]; then
+        elif [[ "$line" = '<EpisodeNumber>'* ]]; then
           line="${line/"</EpisodeNumber>"/}"
           line="${line/<EpisodeNumber>/}"
           EpisodeNr="$line"
         #Get Episode Overview
-        elif [[ "$line" == "<Overview>"* ]]; then
+        elif [[ "$line" = '<Overview>'* ]]; then
           line="${line/"</Overview>"/}"
           line="${line/<Overview>/}"
           line="${line//&lt;/}"
@@ -2848,7 +2842,7 @@ download_series_info(){
       done < "$dbdir/$TVDB_TITLE.xml"
 
       #If we also have a json file from tvmaze, then append that info
-      if [[ -f "$tvmazeJsonFile" ]] ; then
+      if [[ -f "$tvmazeJsonFile" ]]; then
         jq -r '.[] | .name'   "$tvmazeJsonFile" >> "$dbdir/$TVDB_TITLE.actualEname.txt"
         jq -r '.[] | .name'   "$tvmazeJsonFile" >> "$dbdir/$TVDB_TITLE.Ename.txt"
         jq -r '.[] | .season' "$tvmazeJsonFile" >> "$dbdir/$TVDB_TITLE.S.txt"
@@ -3017,7 +3011,7 @@ identify_episode(){
   #        MATCH_SEASON_EPISODE
   #        MATCH_SUBTITLE
   #        MATCH_ORIGINALAIRDATE
-  #        MATCH_PLOT
+  #        MATCH_PLOT (replacing PlotMatchFallback)
   #      so that users can turn off any matching that is problematic for them.
 
   if [[ -n "$TVDB_TITLE" ]]; then
@@ -3601,7 +3595,7 @@ storagegroup_fallback(){
   #If it's not tagged as a Movie but lacking SxxExx and then as a fallback check storagegroup in case it's a Movie we missed
   if [[ "$StorageGroupFallback" = 'Enabled' ]]; then
     debug "StorageGroupFallback is Enabled"
-    if [[ "$RECORDING_TYPE" != 'MV' && "$HasSxxExx" != '1' ]] ; then
+    if [[ "$RECORDING_TYPE" != 'MV' && "$HasSxxExx" != '1' ]]; then
       if grep -iq '\(Movies*\|Films*\)' <<< "$MDB_STORAGEGROUP" ; then
         inform "GUESSING that this is a Movie based on being in storagegroup: '$MDB_STORAGEGROUP'"
         RECORDING_TYPE="MV"
@@ -3872,7 +3866,7 @@ msg_recording_info(){
   printf '%s\n' "  Programid='$MDB_PROGRAMID'"
   printf '%s\n' "  Chanid='$MDB_CHANID'"
   printf '%s\n' "  Starttime='$MDB_STARTTIME'"
-  if [[ "$CommercialMarkup" = "Created" ]]; then
+  if [[ "$CommercialMarkup" = 'Created' ]]; then
     printf '\n%s\n' "Commercial Skip Info"
     tail -n +2 "$MARKUPFRAMES_TMP"
     printf '\n'
@@ -3907,7 +3901,7 @@ maintenance_warning(){
   warncont "  storage drives are connected and mounted properly before continuing"
   read -r -n1 -p "Do you want myth2kodi to perform maintenance? y/(n)>" yesorno
   printf '\n'
-  if [ "$yesorno" != "y" ]; then
+  if [[ "$yesorno" != 'y' ]]; then
     inform "You must press 'y' to continue"
     return 1
   fi
@@ -3923,7 +3917,7 @@ cleanse_warning(){
   informcont "  the user settings: LOG_LIFE; M2K_DB_LIFE; and DAILYREPORT_LIFE."
   read -r -n1 -p "Do you want myth2kodi to cleanse its working directory? y/(n)>" yesorno
   printf '\n'
-  if [ "$yesorno" != "y" ]; then
+  if [[ "$yesorno" != 'y' ]]; then
     inform "You must press 'y' to continue"
     return 1
   fi
@@ -3956,8 +3950,8 @@ target_file_exists(){
   set_recording_name "$MoveDir/$ShowFileName.$ORIGINAL_EXT"
   recording_name_return_state="$?"
 
-  if [[ "$recording_name_return_state" == 0 && -n "$RECORDING_NAME" ]]; then
-    if [[ "$RECORDING_NAME" == "$INPUT_PATH_BASENAME" ]]; then
+  if [[ "$recording_name_return_state" = '0' && -n "$RECORDING_NAME" ]]; then
+    if [[ "$RECORDING_NAME" = "$INPUT_PATH_BASENAME" ]]; then
       err "This is because we've already processed this recording."
       NOTIFY_MSG="Recording has already been processed: $INPUT_PATH_BASENAME"
       return 0
@@ -4212,7 +4206,7 @@ set_show_file_name_categoric(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   local -i testedmethod
   #Method1 - use airdate for season
-  if [[ "${ORIGINALAIRDATE:0:4}" != "0000" && -n "${ORIGINALAIRDATE:0:4}" && "$UseMethod2" != "1" ]]; then
+  if [[ "${ORIGINALAIRDATE:0:4}" != '0000' && -n "${ORIGINALAIRDATE:0:4}" && "$UseMethod2" != '1' ]]; then
     EventYear="${ORIGINALAIRDATE:0:4}"
     Sxx="$EventYear"
     EventMonthDay="$(echo "${ORIGINALAIRDATE:5:5}" | tr -d "-" | sed 's/0*//')"
@@ -4230,7 +4224,7 @@ set_show_file_name_categoric(){
 
   #Method2 -
   if ((testedmethod != 1)); then
-    if [[ "${MDB_STARTTIME:0:4}" != 0000 && -n "${MDB_STARTTIME:0:4}" ]] ; then
+    if [[ "${MDB_STARTTIME:0:4}" != 0000 && -n "${MDB_STARTTIME:0:4}" ]]; then
       EventYear="${MDB_STARTTIME:0:4}"
       EventMonthDay="$(echo "${MDB_STARTTIME:5:5}" | tr -d "-" | sed 's/0*//')"
     fi
@@ -4408,7 +4402,7 @@ generate_series_nfo(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   {
     printf '%s\n' '<?xml version="1.0" encoding="UTF-8" standalone="yes" ?>'
-    printf '%s\n' "<tvshow>"
+    printf '%s\n' '<tvshow>'
     printf '%b\n' "\t<title>$TVDB_TITLE</title>"
     #printf '%b\n' "\t<plot>$SeriesPlot</plot>" #TODO: for when we've extracted the series description...
     #printf '%b\n' "\t<status>$SeriesStatus</status>" #TODO: for when we've extracted the series status
@@ -4426,7 +4420,7 @@ generate_series_nfo(){
     [[ -n "$TVDB_SERIESID" ]] && printf '%b\n' "\t<id>$TVDB_SERIESID</id>"
     printf '%b\n' "\t<dateadded>$(date --rfc-3339=seconds)</dateadded>"
     #printf '%b\n' "\t<premiered>$SeriesFirstAired</premiered>" #TODO: for when we've extracted the series first aired field.
-    printf '%s\n' "</tvshow>"
+    printf '%s\n' '</tvshow>'
   } >> "$MoveDir/tvshow.nfo"
   inform "Generated series NFO file: $MoveDir/tvshow.nfo"
   return 0
@@ -4471,7 +4465,7 @@ generate_episode_nfo(){
     printf '%b\n' "\t<genre>$CATEGORY</genre>"
     printf '%b\n' "\t<aired>${MDB_STARTTIME%% *}</aired>"
     printf '%b\n' "\t<dateadded>$(date --rfc-3339=seconds)</dateadded>"
-    printf '%s\n' "</episodedetails>"
+    printf '%s\n' '</episodedetails>'
   } >> "$MoveDir/$ShowFileName.nfo"
 
   if [[ "$TRACKING" != 'Disabled' ]]; then
@@ -4527,7 +4521,7 @@ success_postprocessing(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
 
   #Move comskip data to proper folder and add created.tracking entry.
-  if [[ "$CommercialMarkup" = "Created" ]]; then
+  if [[ "$CommercialMarkup" = 'Created' ]]; then
     mv "$MARKUPFRAMES_TMP" "$MoveDir/$ShowFileName.txt" 2>&1 | err_pipe "${FUNCNAME[0]}(): "
     chmod 664 "$MoveDir/$ShowFileName.txt" 2>&1 | err_pipe "${FUNCNAME[0]}(): "
     if [[ "$TRACKING" != 'Disabled' ]]; then
@@ -4571,7 +4565,7 @@ add_doover(){
     chmod 644 "$m2kdir/doover.sh"
   fi
 
-  if [[ "$RequiresDoover" = "1" ]]; then
+  if (( RequiresDoover == 1 )); then
     inform "Writing job to doover queue: $m2kdir/doover.sh"
     if [[ "$PROCESS_RECORDING_MODE" = 'MOVE' && "$SYMLINK" = 'Enabled' ]]; then
       {
@@ -4641,7 +4635,7 @@ add_undo(){
       printf ' %s'   "rm -f \"$MoveDir/$ShowFileName.$ORIGINAL_EXT\" &&"
       printf ' %s\n' "echo removed link \"$MoveDir/$ShowFileName.$ORIGINAL_EXT\""
     } >> "$m2kdir/undo.sh"
-  elif [[ "$PROCESS_RECORDING_MODE" = 'MOVE' && "$SYMLINK" = 'Disabled' && "$RequiresDoover" != "1" ]]; then
+  elif [[ "$PROCESS_RECORDING_MODE" = 'MOVE' && "$SYMLINK" = 'Disabled' && "$RequiresDoover" != '1' ]]; then
     debug "'MOVE' mode with SYMLINK=Disabled and does not require doover, so MythTV-DB info has been removed."
     inform "No undo.sh entry will be added for this recording:"
     informcont "File Name: '$MoveDir/$ShowFileName.$ORIGINAL_EXT'"
@@ -4894,8 +4888,8 @@ kodi_cleanup(){
   debugcont "m2kScanMode: '$m2kScanMode'"
   debugcont "KODIClean: '$KODIClean'"
   debugcont "$( printf 'KODIIPs: %s' "${KODIIPs[*]/%/ ;}." )"
-  if [[ "$m2kScanMode" != "True" ]] ; then
-    if [[ "$KODIClean" = 'Enabled' ]] ; then
+  if [[ "$m2kScanMode" != 'True' ]]; then
+    if [[ "$KODIClean" = 'Enabled' ]]; then
       local data=""
       local curlPOST=""
       curlPOST='curl --silent --max-time 8 --connect-timeout 5 -H "Content-Type: application/json;" --data-binary'
@@ -4944,7 +4938,7 @@ kodi_newshow(){
   fi
 
   #Send Update Library request to KODI
-  if [[ "$m2kScanMode" != 'True' ]] ; then
+  if [[ "$m2kScanMode" != 'True' ]]; then
     if [[ "$KODIUpdate" = 'Enabled' ]]; then
       data=\''{"jsonrpc": "2.0", "method": "VideoLibrary.Scan", "id": "myth2kodi"}'\'
       for KODIIP in "${KODIIPs[@]}" ; do
@@ -5051,9 +5045,9 @@ generaterss(){
     fi
 
     #get the line number for the first <item> tag
-    firstLine="$(grep -n -m 1 "<item>" "$RSS_DIRECTORY/$OLDrssFile" | cut -d ":" -f 1)"
+    firstLine="$(grep -n -m 1 '<item>' "$RSS_DIRECTORY/$OLDrssFile" | cut -d ":" -f 1)"
     #get the line number for our last </item> tag
-    lastLine="$(grep -n -m $((itemLimit-1)) "</item>" "$RSS_DIRECTORY/$OLDrssFile" | tail -n1 | cut -d ":" -f 1)"
+    lastLine="$(grep -n -m $((itemLimit-1)) '</item>' "$RSS_DIRECTORY/$OLDrssFile" | tail -n1 | cut -d ":" -f 1)"
     #set IFS to use line break as a delineator
     local IFS=$'\n'
     #Read in the old RSS file
@@ -5106,7 +5100,7 @@ m2k_scan(){
     msg_scan_usage "$NOTIFY_MSG"
     EXIT_JOB_TYPE='InvalidCall'
     return 1
-  elif [[ "${checkext:0:1}" = "." ]]; then
+  elif [[ "${checkext:0:1}" = '.' ]]; then
     NOTIFY_MSG='Please do not prepend a "." to the file extension'
     msg_scan_usage "$NOTIFY_MSG"
     EXIT_JOB_TYPE='InvalidCall'
@@ -5121,7 +5115,7 @@ m2k_scan(){
     msg_scan_usage "$NOTIFY_MSG"
     EXIT_JOB_TYPE='FileOrPathDoesNotExist'
     return 1
-  elif [[ "${scanpath:0:1}" != "/" ]]; then
+  elif [[ "${scanpath:0:1}" != '/' ]]; then
     NOTIFY_MSG='Please specify the full path to the file'
     msg_scan_usage "$NOTIFY_MSG"
     EXIT_JOB_TYPE='InvalidCall'
@@ -5155,7 +5149,7 @@ m2k_scan(){
   printf '\n'
   #Default to safety, ie do nothing.
   [[ -z "$yesorno" ]] && yesorno="n"
-  if [ "$yesorno" = "y" ]; then
+  if [[ "$yesorno" = 'y' ]]; then
     #Explicitly check for interrupted undo jobs here and call m2k_maintenance(),
     #as it's blocked in subsequent calls to myth2kodi from scan mode.
     [[ -f "$m2kdir/undo.lock" && ! -f "$m2kdir/undo.sh" ]] && mv "$m2kdir/undo.lock" "$m2kdir/undo.sh"
@@ -5168,7 +5162,7 @@ m2k_scan(){
       #                 eg, all processed correctly, but it's a duplicate. Need to review doover generally and myth2kodi exit status...
       read -r -n1 -p "  ERROR DURING DOOVER: Continue with the scan? y/(n)>" yesorno
       printf '\n' ; [[ -z "$yesorno" ]] && yesorno="n"
-      [[ "$yesorno" != "y" ]] && return "$dooverstatus"
+      [[ "$yesorno" != 'y' ]] && return "$dooverstatus"
     fi
     local scan_file
     if ! scan_file="$(mktemp "$M2K_TMPDIR/m2k_scan_$FILE_NAME_NOW"-XXXX)"; then
@@ -5206,7 +5200,7 @@ testfile_exit(){
   #TODO: Consider using [[ -n "$(find ./dir -prune -empty)" ]] instead...
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   printf '%s\n' "@@@@ COMPLETE: $(date --rfc-3339=seconds) @@@@" >> "$LOGFILE"
-  [[ "$Exx" != "E07" ]] && err "${FUNCNAME[0]}(): FUZZY FAILURE" && exit 1
+  [[ "$Exx" != 'E07' ]] && err "${FUNCNAME[0]}(): FUZZY FAILURE" && exit 1
   [[ -d ./Episodes ]] && [[ ! "$(ls -A ./Episodes)" ]] && rmdir ./Episodes
   [[ -d ./Movies ]]   && [[ ! "$(ls -A ./Movies)" ]]   && rmdir ./Movies
   [[ -d ./Showings ]] && [[ ! "$(ls -A ./Showings)" ]] && rmdir ./Showings
@@ -5230,12 +5224,12 @@ m2k_diagnostics(){
   local PKGPATH_JQ=''
   local PKGPATH_REALPATH=''
   local PKGPATH_PYTHON=''
-  local python_version="" #Python Version information
+  local python_version='' #Python Version information
   local pyver=0 #An integer representing first 2 points of python version, ie 2.6.3 => 26
-  local packagecheck=""
-  local DBTest=""
-  local notifytest=""
-  local PythonBindingsCheck=""
+  local packagecheck=''
+  local DBTest=''
+  local notifytest=''
+  local PythonBindingsCheck=''
   local exitstatus
   local filesystem_state
   inform "Diagnostic mode entered: $(date)"
@@ -5287,21 +5281,21 @@ m2k_diagnostics(){
   ((our_scripts!=0)) && err "Checks for our own scripts ***FAILED***"
 
   #Test if required packages are installed and accessible to caller.
-  PKGPATH_CURL=$(command -v curl)             || PKGNAME_CURL="curl"
-  PKGPATH_AGREP=$(command -v agrep)           || PKGNAME_AGREP="agrep or tre-agrep"
-  PKGPATH_LIBNOTIFY=$(command -v notify-send) || PKGNAME_LIBNOTIFY="libnotify-bin"
-  PKGPATH_JQ=$(command -v jq)                 || PKGNAME_JQ="jq"
-  PKGPATH_REALPATH=$(command -v realpath)     || PKGNAME_REALPATH="coreutils or realpath"
-  if [ "$DATABASE_ACCESS" = "PythonBindings" ]; then
-    PKGPATH_PYTHON=$(command -v python) || PKGNAME_PYTHON="python"
+  PKGPATH_CURL=$(command -v curl)             || PKGNAME_CURL='curl'
+  PKGPATH_AGREP=$(command -v agrep)           || PKGNAME_AGREP='agrep or tre-agrep'
+  PKGPATH_LIBNOTIFY=$(command -v notify-send) || PKGNAME_LIBNOTIFY='libnotify-bin'
+  PKGPATH_JQ=$(command -v jq)                 || PKGNAME_JQ='jq'
+  PKGPATH_REALPATH=$(command -v realpath)     || PKGNAME_REALPATH='coreutils or realpath'
+  if [[ "$DATABASE_ACCESS" = 'PythonBindings' ]]; then
+    PKGPATH_PYTHON=$(command -v python) || PKGNAME_PYTHON='python'
     if [[ -z "$PKGNAME_PYTHON" ]]; then
       python_version="$(python --version 2>&1)"  #Python returns version info to stderr
       pyver="$(echo "$python_version" | sed 's/python\s*//I' | cut -f1-2 -d"." | tr -d '.')"
       if ! python -c "from MythTV import MythDB ; exit()" &> /dev/null; then
-        PKGNAME_LIBMYTH_PYTHON="libmyth-python"
+        PKGNAME_LIBMYTH_PYTHON='libmyth-python'
       fi
       if ! python -c "import lxml ; exit()" &> /dev/null; then
-        PKGNAME_PYTHON_LXML="python-lxml"
+        PKGNAME_PYTHON_LXML='python-lxml'
       fi
     fi
   fi
@@ -5319,7 +5313,7 @@ m2k_diagnostics(){
   [[ -n "$PKGPATH_JQ" ]]        && debug "$("$PKGPATH_JQ" --version)"
   [[ -n "$PKGPATH_REALPATH" ]]  && inform "package 'realpath' found: $PKGPATH_REALPATH"
   [[ -n "$PKGPATH_REALPATH" ]]  && debug "$("$PKGPATH_REALPATH" --version)"
-  if [ "$DATABASE_ACCESS" = "PythonBindings" ]; then
+  if [[ "$DATABASE_ACCESS" = 'PythonBindings' ]]; then
     packagecheck="$packagecheck$PKGNAME_PYTHON$PKGNAME_LIBMYTH_PYTHON$PKGNAME_PYTHON_LXML"
     [[ -n "$PKGPATH_PYTHON" ]] && inform "package 'python' found: $PKGPATH_PYTHON"
     if [[ -z "$PKGNAME_PYTHON" ]] && ((pyver < 27 || pyver >= 30)); then
@@ -5329,7 +5323,7 @@ m2k_diagnostics(){
     [[ -z "$PKGNAME_LIBMYTH_PYTHON" ]] && inform "package 'libmyth-python' found."
     [[ -z "$PKGNAME_PYTHON_LXML" ]] && inform "package 'python-lxml' found."
   fi
-  if [[ -n "$packagecheck" ]] ; then
+  if [[ -n "$packagecheck" ]]; then
     packagecheck='***FAILED***'
     err "Installed packages check ***FAILED***"
     errcont "Missing packages are: $PKGNAME_CURL $PKGNAME_AGREP $PKGNAME_LIBNOTIFY $PKGNAME_JQ $PKGNAME_REALPATH $PKGNAME_PYTHON $PKGNAME_LIBMYTH_PYTHON $PKGNAME_PYTHON_LXML"
@@ -5367,7 +5361,7 @@ m2k_diagnostics(){
   fi
 
   #If we'll be using MythTV python bindings, check that they're functioning.
-  if [ "$DATABASE_ACCESS" = "PythonBindings" ]; then
+  if [[ "$DATABASE_ACCESS" = 'PythonBindings' ]]; then
     read -r -n1 -p "Press any key to perform a test of the MythTV Database python bindings..."
     printf '\n'
     inform "Performing MythTV Python Bindings database test."
@@ -5386,12 +5380,12 @@ m2k_diagnostics(){
                                --DBUserName="$MySQLuser"                \
                                --DBPassword="$MySQLpass"                \
                                --SecurityPin="$DBPin" 2>&1 | err_pipe "mythdb_access: "
-      if [[ "${PIPESTATUS[0]}" = "0" ]]; then
+      if [[ "${PIPESTATUS[0]}" = '0' ]]; then
         PythonBindingsCheck="OK"
       else
         PythonBindingsCheck="FAILED"
       fi
-      if [ "$PythonBindingsCheck" = "OK" ]; then
+      if [[ "$PythonBindingsCheck" = 'OK' ]]; then
         inform "MythTV Python Bindings are installed properly."
         DBTest='***PASSED***'
         inform "MythTV Database Test $DBTest"
@@ -5470,7 +5464,7 @@ m2k_diagnostics(){
   #Use current directory as a place-holder for a recording's original dir.
   ORIGINAL_DIRNAME="$(pwd)"
   if [[ "$TargetPathIsInputPath" = 'Enabled' ]]; then
-    inform "TargetPathIsInputPath is selected. Testing with current folder"
+    inform "TargetPathIsInputPath is selected. Testing with current folder."
     set_target_dir_as_input_path_dir
   fi
 
@@ -5536,7 +5530,7 @@ m2k_diagnostics(){
   read -r -n1 -p "press any key to continue on to the final results..."
   printf '\n'
   inform "RESULTS SUMMARY:"
-  [[ "$DATABASE_ACCESS" = "PythonBindings" ]] && informcont "MythTV Database Test: $DBTest"
+  [[ "$DATABASE_ACCESS" = 'PythonBindings' ]] && informcont "MythTV Database Test: $DBTest"
   informcont "Installed Packages:   $packagecheck $PKGNAME_LIBMYTH_PYTHON $PKGNAME_PYTHON_LXML $PKGNAME_CURL $PKGNAME_AGREP $PKGNAME_LIBNOTIFY $PKGNAME_JQ $PKGNAME_REALPATH"
   informcont "Notifications Test:   $notifytest"
   informcont "KODI Communications:  $KODIcomm"
@@ -5630,7 +5624,7 @@ m2k_diagnostics(){
   inform "Diagnostic mode completed: $(date)"
   debug "A diagnostics log file was written to: $LOGFILE"
 
-  test "$overallchecks" = '***FAILED***' && return 1
+  [[ "$overallchecks" = '***FAILED***' ]] && return 1
 
   return 0
 } #m2k_diagnostics()
@@ -5639,7 +5633,7 @@ m2k_diagnostics(){
 m2k_doover(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   [[ "$LOGTYPE" = 'file' ]] && printf '%s\n' "WARNING: Recommend setting LOGTYPE='filestderr', before proceeding.."
-  local yesorno=""
+  local yesorno=''
   local dooverstatus
 
   warn "--You have entered doover mode."
@@ -5691,7 +5685,7 @@ m2k_undo_all(){
   local yesorno=""
   read -r -n1 -p "  Press 'y' to continue or 'n' to exit..... y/(n):>" yesorno
   printf '\n'
-  if [ "$yesorno" = "y" ]; then
+  if [[ "$yesorno" = 'y' ]]; then
     local undostatus
     warn "Running undo.sh DO NOT INTERRUPT THIS PROCESS OR DATA LOSS MAY OCCUR."
     cp "$m2kdir/undo.sh" "$m2kdir/undo.lock"
@@ -5804,7 +5798,7 @@ m2k_undo_rec(){
     undostatus="${PIPESTATUS[0]}"
     (( LOGLEVEL < 3 )) && rm -f "$recording_undo_file"
 
-    if [[ "$undostatus" == 0 ]]; then
+    if [[ "$undostatus" = '0' ]]; then
       #Remove the undo and doover entries associated with the recording.
       remove_undo_doover_entries
       #TODO: Consider whether we should be running maintenance here...
@@ -6162,10 +6156,10 @@ recreate_comskip(){
     read -r -n1 -p "  Do you want myth2kodi to regenerate all comskip files? y/(n)>" yesorno
     printf '\n'
     #Default to safety, ie do nothing.
-    if [ "$yesorno" = "y" ]; then
+    if [[ "$yesorno" = 'y' ]]; then
       local scanpath
       #Default to mpg extension
-      [[ -z "$checkext" ]] && checkext="mpg"
+      [[ -z "$checkext" ]] && checkext='mpg'
       #Strip any trailing / from  inputarg
       scanpath="${inputarg%*/}"
       debug "Checking for files with names of the form: '$scanpath/filename.$checkext'"
@@ -6205,7 +6199,6 @@ recreate_comskip(){
 
 #The main myth2kodi function...
 main(){
-
   #Initial setup: override defaults with myth2kodi.conf; initialise logging system.
   m2k_init #TODO: Consider capture return status and exit on failed init.
 
@@ -6311,7 +6304,7 @@ main(){
       [[ -n "$TVDB_SEASON" ]]   && SEASON="$TVDB_SEASON"
       [[ -n "$TVDB_EPISODE" ]]  && EPISODE="$TVDB_EPISODE"
     fi
-    #Update confidence total
+    #Update confidence total.
     ((ConfidenceRating = EpisodeConfidenceRating + SeriesConfidenceRating))
 
     #Try to set Sxx and Exx using SEASON, EPISODE, or SeasonEpisode(from Plot).

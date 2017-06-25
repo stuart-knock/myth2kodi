@@ -132,8 +132,8 @@ m2k_install_init(){
   #What am I
   if [[ ! -d "${SCRIPT_PATH}/.git" ]]; then
     local m2kVersion
-    eval "$(grep -o 'm2kVersion=".*"' "${SCRIPT_PATH}/myth2kodi")"
-    inform "Running installation script for $m2kVersion"
+    eval "$(grep -o "m2kVersion='.*'" "${SCRIPT_PATH}/myth2kodi")"
+    inform "Running installation script for '$m2kVersion'"
   fi
 
   #Pre-declare global variables set beyond this point in the script, to make it

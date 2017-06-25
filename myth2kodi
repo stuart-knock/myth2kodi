@@ -4177,7 +4177,7 @@ set_show_file_name(){
   #Format Episodes showname=show name Sxx=season number Exx=episode number SUBTITLE=episode name
   if [[ -n "$Sxx" && -n "$Exx" ]]; then
     debug "Naming as episode"
-    ShowFileName="$TVDB_TITLE $Sxx$Exx ($SUBTITLE)$SHOW_FILE_NAME_APPEND"
+    ShowFileName="$TITLE $Sxx$Exx ($SUBTITLE)$SHOW_FILE_NAME_APPEND"
   #Format Movies
   elif [[ "$RECORDING_TYPE" = 'MV' ]]; then
     debug 'Naming as movie.'
@@ -4186,9 +4186,9 @@ set_show_file_name(){
     #      Add a MOVIE_RELEASE_YEAR to the processing functions for guide-data that provide this.
     if [[ -n "$MOVIE_RELEASE_YEAR" ]]; then
       warn "${FUNCNAME[0]}(): Currently forcing bypass of adding MOVIE_RELEASE_YEAR to Movie file names."
-      ShowFileName="$TVDB_TITLE$SHOW_FILE_NAME_APPEND" # ShowFileName="$TVDB_TITLE ($MOVIE_RELEASE_YEAR)$SHOW_FILE_NAME_APPEND"
+      ShowFileName="$TITLE$SHOW_FILE_NAME_APPEND" # ShowFileName="$TITLE ($MOVIE_RELEASE_YEAR)$SHOW_FILE_NAME_APPEND"
     else
-      ShowFileName="$TVDB_TITLE$SHOW_FILE_NAME_APPEND"
+      ShowFileName="$TITLE$SHOW_FILE_NAME_APPEND"
     fi
   #Format generic Shows
   else

@@ -3471,7 +3471,10 @@ multi_match_check(){
   local -i match_count
   match_count="${#AENguess[@]}"
 
-  if (( match_count == 1 )) ; then
+  if (( match_count == 0 )); then
+    warn "${FUNCNAME[0]}(): Called with empty Absolute Episode Number guess."
+    return 1
+  elif (( match_count == 1 )) ; then
     debug "Called with only one Absolute Episode Number guess."
     AbsoluteEpisodeNumber="${AENguess[0]}"
     inform "${FUNCNAME[0]}(): Identified AbsoluteEpisodeNumber: $AbsoluteEpisodeNumber using ${FUNCNAME[1]}()."
@@ -3543,7 +3546,7 @@ multi_match_check(){
   fi #match_count
   #There are no guesses...
   err "${FUNCNAME[1]}():${FUNCNAME[0]}(): Something unexpected went wrong."
-  errcont "Maybe called with empty AENguess. Or accessing Season and Episode numbers failed."
+  errcont "Maybe accessing Season and Episode numbers failed."
   errcont "$( IFS=','; printf '%s' "There are ${#AENguess[@]} AENguesses: ${AENguess[*]}." )"
   errcont "Season number file:  '$m2kdir/$TVDB_TITLE/$TVDB_TITLE.S.txt'"
   errcont "Episode number file: '$m2kdir/$TVDB_TITLE/$TVDB_TITLE.E.txt'"

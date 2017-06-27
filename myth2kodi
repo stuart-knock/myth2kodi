@@ -673,7 +673,7 @@ m2k_init(){
   ((LOGLEVEL>=3)) && printf '%s\n' "Config complete." >> "$pre_logging_file"
 
   #What am I...
-  m2kVersion='myth2kodi Version 1.4.2o' ; declare -gr m2kVersion
+  m2kVersion='myth2kodi Version 1.4.2p' ; declare -gr m2kVersion
   m2kPlatform="$(uname)" ; declare -gr m2kPlatform
   ((LOGLEVEL>=3)) && printf '%s\n' "Running $m2kVersion on $m2kPlatform." >> "$pre_logging_file"
 
@@ -1865,8 +1865,7 @@ get_mythtvdb_info_mysql(){
   ((LOGLEVEL > 3)) && debugcont "MySQLpass: '$MySQLpass'"
 
   #Obtain MythTV Database Information
-  inform "Accessing MythTV DataBase Using mysql Commands:"
-  inform "Attempting to pull database information on '$INPUT_PATH_BASENAME'"
+  inform "Accessing MythTV DataBase Using mysql Commands."
 
   #Select the variables we are interested in from the MythTV-DB.
   MDB_TITLE="$(          dbselect title           | sed -n "2p")"
@@ -1950,8 +1949,7 @@ get_mythtvdb_info_pythonbindings(){
   debugcont "MySQLMythDb: '$MySQLMythDb'"
   debugcont "MySQLuser: '$MySQLuser'"
   ((LOGLEVEL > 3)) && debugcont "MySQLpass: '$MySQLpass'"
-  inform "Accessing MythTV DataBase Using PythonBindings:"
-  inform "Attempting to pull database information on '$INPUT_PATH_BASENAME'"
+  inform "Accessing MythTV DataBase Using PythonBindings."
 
   local python_exit_status
   local mtv_recinfo_file
@@ -2668,7 +2666,7 @@ check_m2k_database_up_to_date(){
     ##########################################################################
     curl -L -s -m"$Timeout" "${updates_site}?type=all&time=$LastUpdatedTVDB" > "$dbdir/UpdatesList.txt"
     if grep -q "$TVDB_SERIESID" "$dbdir/UpdatesList.txt" ; then
-      inform "DATABASE OUT OF DATE. Next update: $next_update. Current: $CurrentTimeTVDB"
+      inform "Database out of date. Next update: $next_update. Current: $CurrentTimeTVDB"
       return 1
     else
       debug "TheTVDB does not appear to have any updates for $TVDB_TITLE."
@@ -2679,7 +2677,7 @@ check_m2k_database_up_to_date(){
     fi
   #Send report to the log if database was not updated.
   elif ((CurrentTimeTVDB <= next_update)); then
-    inform "DATABASE MAINTAINED. Current: $CurrentTimeTVDB. Next update: $next_update."
+    debug "Database maintained. Current: $CurrentTimeTVDB. Next update: $next_update."
     return 0
   fi
   #some other condition was present. update anyways.
@@ -3119,7 +3117,6 @@ validate_episode(){
   for var in 'aen_sxxexx' 'aen_ename' 'aen_ename_fuzzy' 'aen_originalairdate'; do
     if [[ -n "${!var}" ]]; then { ((++i)); AENguess[i]="${!var}"; }; fi
   done
-  AENguess=($(printf '%s\n' "${AENguess[@]}" | sort -n ))
   multi_match_check
   local mmc_status="$?"
   [[ "$mmc_status" = '0' ]] && ((EpisodeConfidenceRating += ${#AENguess[@]}))
@@ -3365,9 +3362,9 @@ set_absolute_episode_number_by_ename_fuzzy(){
     fi
   done
   #Require a cost that is <= 1/3 the subtitle's length.
-  (( cost[0] > (subtitle_length / 3) )) && { warn 'Fuzzy subtitle match too fuzzy.' ; return 1; }
-  #Check that multiple matches are actually the same episode
-  AENguess=($(printf '%s\n' "${AENguess[@]}" | sort -n ))
+  (( min_cost > (subtitle_length / 3) )) && { warn 'Fuzzy subtitle match too fuzzy.' ; return 1; }
+  #Check that multiple matches are actually the same episode.
+  #NOTE: do not sort as we preferentially want the results of fuzzy_ename_0.
   multi_match_check
   return "$?"
 } #set_absolute_episode_number_by_ename_fuzzy()
@@ -3676,28 +3673,37 @@ msg_operation_summary(){
   ((LOGLEVEL > 3)) && debugcont  "APIkey=$APIkey-"
   informcont "PROCESS_RECORDING_MODE=$PROCESS_RECORDING_MODE-"
   informcont "SYMLINK=$SYMLINK-"
-  informcont "TargetPathIsInputPath=$TargetPathIsInputPath-"
-  informcont "FailSafeMode=$FailSafeMode-"
+  debugcont "TargetPathIsInputPath=$TargetPathIsInputPath-"
+  debugcont "FailSafeMode=$FailSafeMode-"
   debugcont  "FailSafeDir=$FailSafeDir-"
   debugcont  "Notify=$Notify-"
 
-  #TODO: consider only displaying this here when debug is enabled, ie ((LOGLEVEL>2)) &&
   #Print a summary table of writeable directories.
-  msg_dir_summary
+  ((LOGLEVEL>2)) && msg_dir_summary
 
   informcont "RECORDING_PATH=$RECORDING_PATH-"
+  informcont "TVDB_SERIESID=$TVDB_SERIESID-"
   informcont "TITLE=$TITLE-"
+  debugcont "INPUT_TITLE=$INPUT_TITLE-"
+  [[ "$Database" = 'Enabled' ]] && debugcont "MDB_TITLE=$MDB_TITLE-"
+  debugcont "TVDB_TITLE=$TVDB_TITLE-"
   informcont "SUBTITLE=$SUBTITLE-"
+  debugcont "INPUT_SUBTITLE=$INPUT_SUBTITLE-"
+  [[ "$Database" = 'Enabled' ]] && debugcont "MDB_SUBTITLE=$MDB_SUBTITLE-"
+  debugcont "TVDB_SUBTITLE=$TVDB_SUBTITLE-"
   informcont "SEASON=$SEASON-"
+  debugcont "INPUT_SEASON=$INPUT_SEASON-"
+  [[ "$Database" = 'Enabled' ]] && debugcont "MDB_SEASON=$MDB_SEASON-"
+  debugcont "TVDB_SEASON=$TVDB_SEASON-"
   informcont "EPISODE=$EPISODE-"
+  debugcont "INPUT_EPISODE=$INPUT_EPISODE-"
+  [[ "$Database" = 'Enabled' ]] && debugcont "MDB_EPISODE=$MDB_EPISODE-"
+  debugcont "TVDB_EPISODE=$TVDB_EPISODE-"
+  debugcont "Sxx=$Sxx- Exx=$Exx-"
   debugcont  "LastUpdatedTVDB=$LastUpdatedTVDB-"
   debugcont  "CurrentTimeTVDB=$CurrentTimeTVDB-"
-  informcont "TVDB_SERIESID=$TVDB_SERIESID-"
-  informcont "TVDB_TITLE=$TVDB_TITLE-"
   debugcont  "AbsoluteEpisodeNumber=$AbsoluteEpisodeNumber-"
-  informcont "TVDB_SUBTITLE=$TVDB_SUBTITLE-"
-  informcont "HasSxxExx=$HasSxxExx-"
-  informcont "Sxx=$Sxx- Exx=$Exx-"
+  debugcont "HasSxxExx=$HasSxxExx-"
   informcont "MoveFileSize=$MoveFileSize MB"
   informcont "ConfidenceRating=$ConfidenceRating-"
   informcont "ConfidenceReasoning=$ConfidenceReasoning-"

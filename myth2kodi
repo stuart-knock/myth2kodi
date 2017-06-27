@@ -1980,8 +1980,7 @@ get_mythtvdb_info_pythonbindings(){
 
   python_exit_status="${PIPESTATUS[0]}"
   if (( python_exit_status != 0 )); then
-    err "${FUNCNAME[0]}(): DATABASE ACCESS ERROR: COULD NOT OBTAIN INFORMATION"
-    debug 'Check DBInfo in mythicalSetup, verify file is MythTV file.'
+    err "${FUNCNAME[0]}(): DATABASE ACCESS ERROR: Could not obtain information."
     return 1
   fi
 
@@ -2348,7 +2347,7 @@ process_mythtvdb_sydfta(){
   fi
 
   #TODO: If it's a movie, check Title and Plot for a release year, assuming format (YYYY) seems reasonable.
-  #  If we find it, check its between 1942 & ThisYear, then store it and remove it from where we found it,
+  #  If we find it, check its between 1942 & ThisYear, then store it (MOVIE_RELEASE_YEAR) and remove it from where we found it,
   #  especially important to remove from Title -- to avoid repetition in NewFileName if we use it to generate that name.
 
   #Extrapolate data from RECORDING_TYPE
@@ -3120,7 +3119,7 @@ validate_episode(){
   for var in 'aen_sxxexx' 'aen_ename' 'aen_ename_fuzzy' 'aen_originalairdate'; do
     if [[ -n "${!var}" ]]; then { ((++i)); AENguess[i]="${!var}"; }; fi
   done
-  AENguess=($(printf '%s\n' "${AENguess[@]}" | sort))
+  AENguess=($(printf '%s\n' "${AENguess[@]}" | sort -n ))
   multi_match_check
   local mmc_status="$?"
   [[ "$mmc_status" = '0' ]] && ((EpisodeConfidenceRating += ${#AENguess[@]}))
@@ -3359,6 +3358,7 @@ set_absolute_episode_number_by_ename_fuzzy(){
     fi
   done
   #Check that multiple matches are actually the same episode
+  AENguess=($(printf '%s\n' "${AENguess[@]}" | sort -n ))
   multi_match_check
   return "$?"
 } #set_absolute_episode_number_by_ename_fuzzy()
@@ -3458,7 +3458,7 @@ chunked_fuzzy_plot_match(){
   (( ${#GoodChunkGuesses[@]} < 2 )) && return 1
 
   #If all ChunkGuess with ChunkCost < 10% are the same Absolute Episode Number
-  AENguess=($(printf '%s\n' "${GoodChunkGuesses[@]}" | sort))
+  AENguess=($(printf '%s\n' "${GoodChunkGuesses[@]}" | sort -n ))
   multi_match_check
   return "$?"
 } #chunked_fuzzy_plot_match()

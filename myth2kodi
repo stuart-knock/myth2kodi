@@ -673,7 +673,7 @@ m2k_init(){
   ((LOGLEVEL>=3)) && printf '%s\n' "Config complete." >> "$pre_logging_file"
 
   #What am I...
-  m2kVersion='myth2kodi Version 1.4.2m' ; declare -gr m2kVersion
+  m2kVersion='myth2kodi Version 1.4.2o' ; declare -gr m2kVersion
   m2kPlatform="$(uname)" ; declare -gr m2kPlatform
   ((LOGLEVEL>=3)) && printf '%s\n' "Running $m2kVersion on $m2kPlatform." >> "$pre_logging_file"
 
@@ -3320,6 +3320,14 @@ set_absolute_episode_number_by_ename_fuzzy(){
 
   [[ -z "$SUBTITLE" ]] && { warn "${FUNCNAME[0]}(): No SUBTITLE."; return 1; }
 
+  local subtitle subtitle_length
+  if agrep --version &> /dev/null ; then #Hacky: works because, so far, the agrep that limits PATTERN length to < 32 also lacks a --version flag.
+    subtitle="$SUBTITLE"
+  else
+    subtitle="${SUBTITLE:0:28}"
+  fi
+  subtitle_length=$(wc --chars <<< "$subtitle")
+
   #set IFS to use line break as a delineator -- necessary for separating multiple agrep matches below.
   local IFS=$'\n'
   AbsoluteEpisodeNumber=''
@@ -3329,15 +3337,14 @@ set_absolute_episode_number_by_ename_fuzzy(){
   local -a cost=()
   local -a all_cost_aen_guess=()
   declare -ga AENguess=()
-  #Some systems have an agrep that limits PATTERN to < 32 characters...
   #To avoid "special" episodes of the form "Special: Related Episode Name" first
   #try and match the pattern from the start of the line.
-  fuzzy_ename_0=($(agrep -iByns "^${SUBTITLE:0:28}" "$m2kdir/$TVDB_TITLE/$TVDB_TITLE.Ename.txt"))
+  fuzzy_ename_0=($(agrep -iByns "^${subtitle}" "$m2kdir/$TVDB_TITLE/$TVDB_TITLE.Ename.txt"))
   #Then, because some shows (eg Gotham) use two part names like "Chapter Name: Episode Name" and
   #guide-data can contain just the "Episode Name" we match without binding to the front of the
   #line. And as the SUBTITLE can contain character with special meanings in regex, we match
   #as a string literal (-k).
-  fuzzy_ename_1=($(agrep -iBynsk "${SUBTITLE:0:29}" "$m2kdir/$TVDB_TITLE/$TVDB_TITLE.Ename.txt"))
+  fuzzy_ename_1=($(agrep -iBynsk "${subtitle}" "$m2kdir/$TVDB_TITLE/$TVDB_TITLE.Ename.txt"))
   fuzzy_ename=("${fuzzy_ename_0[@]}" "${fuzzy_ename_1[@]}")
   #Extract our guessed AbsoluteEpisodeNumbers
   all_cost_aen_guess=($(cut -f1 -d":" <<< "$(printf '%s\n' "${fuzzy_ename[@]}")"))
@@ -3357,6 +3364,8 @@ set_absolute_episode_number_by_ename_fuzzy(){
       ((++counter))
     fi
   done
+  #Require a cost that is <= 1/3 the subtitle's length.
+  (( cost[0] > (subtitle_length / 3) )) && { warn 'Fuzzy subtitle match too fuzzy.' ; return 1; }
   #Check that multiple matches are actually the same episode
   AENguess=($(printf '%s\n' "${AENguess[@]}" | sort -n ))
   multi_match_check

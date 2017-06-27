@@ -1890,22 +1890,23 @@ get_mythtvdb_info_mysql(){
   MDB_XMLTVGRABBER="$(dbselect 'xmltvgrabber' 'videosource' '' | sed -n "2p")"
 
   #Make the MythTV-DB variables read-only.
-  declare -gr MDB_TITLE
-  declare -gr MDB_SUBTITLE
-  declare -gr MDB_SEASON
-  declare -gr MDB_EPISODE
-  declare -gr MDB_CATEGORY
-  declare -gr MDB_ORIGINALAIRDATE
-  declare -gr MDB_STORAGEGROUP
-  declare -gr MDB_STARS
-  declare -gr MDB_DESCRIPTION
-  declare -gr MDB_SERIESID
-  declare -gr MDB_PROGRAMID
-  declare -gr MDB_INETREF
-  declare -gr MDB_CHANID
-  declare -gr MDB_STARTTIME
-  declare -gr MDB_AIRDATE
-  declare -gr MDB_XMLTVGRABBER
+  debug 'Extracted the following data from MythTV-DB:'
+  declare -gr MDB_TITLE           ; debugcont "MDB_TITLE='$MDB_TITLE'"
+  declare -gr MDB_SUBTITLE        ; debugcont "MDB_SUBTITLE='$MDB_SUBTITLE'"
+  declare -gr MDB_SEASON          ; debugcont "MDB_SEASON='$MDB_SEASON'"
+  declare -gr MDB_EPISODE         ; debugcont "MDB_EPISODE='$MDB_EPISODE'"
+  declare -gr MDB_CATEGORY        ; debugcont "MDB_CATEGORY='$MDB_CATEGORY'"
+  declare -gr MDB_ORIGINALAIRDATE ; debugcont "MDB_ORIGINALAIRDATE='$MDB_ORIGINALAIRDATE'"
+  declare -gr MDB_STORAGEGROUP    ; debugcont "MDB_STORAGEGROUP='$MDB_STORAGEGROUP'"
+  declare -gr MDB_STARS           ; debugcont "MDB_STARS='$MDB_STARS'"
+  declare -gr MDB_DESCRIPTION     ; debugcont "MDB_DESCRIPTION='$MDB_DESCRIPTION'"
+  declare -gr MDB_SERIESID        ; debugcont "MDB_SERIESID='$MDB_SERIESID'"
+  declare -gr MDB_PROGRAMID       ; debugcont "MDB_PROGRAMID='$MDB_PROGRAMID'"
+  declare -gr MDB_INETREF         ; debugcont "MDB_INETREF='$MDB_INETREF'"
+  declare -gr MDB_CHANID          ; debugcont "MDB_CHANID='$MDB_CHANID'"
+  declare -gr MDB_STARTTIME       ; debugcont "MDB_STARTTIME='$MDB_STARTTIME'"
+  declare -gr MDB_AIRDATE         ; debugcont "MDB_AIRDATE='$MDB_AIRDATE'"
+  declare -gr MDB_XMLTVGRABBER    ; debugcont "MDB_XMLTVGRABBER='$MDB_XMLTVGRABBER'"
 
   #####COMSKIP DATA#####
   #Set up counter, remove old markup data and generate new markup file from markupstart and stop

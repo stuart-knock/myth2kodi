@@ -3115,7 +3115,7 @@ validate_episode(){
   local var
   local i=0
   for var in 'aen_sxxexx' 'aen_ename' 'aen_ename_fuzzy' 'aen_originalairdate'; do
-    if [[ -n "${!var}" ]]; then { ((++i)); AENguess[i]="${!var}"; }; fi
+    if [[ -n "${!var}" ]]; then { AENguess[i]="${!var}"; ((++i)); }; fi
   done
   multi_match_check
   local mmc_status="$?"

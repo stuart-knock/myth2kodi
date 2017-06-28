@@ -673,7 +673,7 @@ m2k_init(){
   ((LOGLEVEL>=3)) && printf '%s\n' "Config complete." >> "$pre_logging_file"
 
   #What am I...
-  m2kVersion='myth2kodi Version 1.4.2p' ; declare -gr m2kVersion
+  m2kVersion='myth2kodi Version 1.4.2q' ; declare -gr m2kVersion
   m2kPlatform="$(uname)" ; declare -gr m2kPlatform
   ((LOGLEVEL>=3)) && printf '%s\n' "Running $m2kVersion on $m2kPlatform." >> "$pre_logging_file"
 
@@ -3434,6 +3434,9 @@ chunked_fuzzy_plot_match(){
   debugcont "chunck_size='$chunck_size'"
   debugcont "chunk_overlap='$chunk_overlap'"
   debugcont "numchunks='$numchunks'"
+  if ! agrep --version &> /dev/null ; then #Hacky: works because, so far, the agrep that limits PATTERN length to < 32 also lacks a --version flag.
+    local truncate='true'
+  fi
   local -i Counter=0
   for (( i = 0; i < numchunks; i++ )) ; do
     debugcont "i='$i'"
@@ -3442,13 +3445,15 @@ chunked_fuzzy_plot_match(){
     m=$((n+chunck_size-1))
     debugcont "m='$m'"
     chunk="$(cut -d" " -f$n-$m <<< "$Plot")"
+    #Some systems have an agrep that limits PATTERN to < 32 characters...
+    [[ "$truncate" = 'true' ]] && chunk="${chunk:0:29}"
     debugcont "chunk='$chunk'"
     ChunkLengths[i]=$(wc --chars <<< "$chunk")
     debugcont "ChunkLengths[$i]='${ChunkLengths[i]}'"
-    #~10% error is always ~3 as agrep PATTERN is limited to 29 chars.#len10per=$(( ChunkLengths[i] / 10 ))
-    #Some systems have an agrep that limits PATTERN to < 32 characters...
-    #TODO: Consider only doing the below conditionally on, say, ChunkLengths > 18 -- I know of one case in my ~2000 recording test set that gets a false positive match due to a short final chunk.
-    fuzzychunk=($(agrep -iBynsk -e "${chunk:0:29}" "$m2kdir/$TVDB_TITLE/$TVDB_TITLE.Plot.txt"))
+    #Short chunks give false positives, so don't try.
+    ((ChunkLengths[i] < 18)) && continue
+    len10per=$(( ChunkLengths[i] / 10 ))
+    fuzzychunk=($(agrep -iBynsk -e "$chunk" "$m2kdir/$TVDB_TITLE/$TVDB_TITLE.Plot.txt"))
     FuzzyChunks[i]="${fuzzychunk[0]}"
     debugcont "FuzzyChunks[$i]='${FuzzyChunks[i]}'"
     ChunkGuesses[i]=$(cut -f1 -d":" <<< "${FuzzyChunks[i]}")

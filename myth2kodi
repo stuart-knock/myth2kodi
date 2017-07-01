@@ -673,7 +673,7 @@ m2k_init(){
   ((LOGLEVEL>=3)) && printf '%s\n' "Config complete." >> "$pre_logging_file"
 
   #What am I...
-  m2kVersion='myth2kodi Version 1.4.2q' ; declare -gr m2kVersion
+  m2kVersion='myth2kodi Version 1.4.2v' ; declare -gr m2kVersion
   m2kPlatform="$(uname)" ; declare -gr m2kPlatform
   ((LOGLEVEL>=3)) && printf '%s\n' "Running $m2kVersion on $m2kPlatform." >> "$pre_logging_file"
 
@@ -2527,7 +2527,7 @@ remove_subtitle_from_plot(){
 remove_cast_from_plot(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   local CastString
-  CastString="$(grep -iE --only-matching '\. CAST: ((\w+)(.?\s*)){1,8}$' <<< "$Plot")"
+  CastString="$(grep -iE --only-matching '\.? CAST:? ((\w+)(.?\s*)){1,8}$' <<< "$Plot")"
   if [[ -n "$CastString" ]]; then
     warn "${FUNCNAME[0]}(): Plot field appears to contain Cast information, removing it to simplify subsequent processing."
     debug "Removing: '$CastString' from Plot."
@@ -3418,11 +3418,13 @@ chunked_fuzzy_plot_match(){
   local -i PlotWords
   PlotWords=$(wc --words <<< "$Plot")
   local chunk=""
-  local -i chunck_size=6
-  local -i chunk_overlap=3
+  local -i chunck_size=5
+  local -i chunk_overlap=2
+  local -i min_chunk_length=21 #Short chunks give false positives.
+  local -i inv_error_rate=4 #10=>10%; 9=>~11%; 8=>~12.5%; 7=>~14%; 6=>~16.6%; 5=>20%; 4=>25%; 3=>~33%.
   local -i numchunks
   numchunks=$((PlotWords/(chunck_size-chunk_overlap)))
-  local -i len10per=3 #~10% error is always ~3 as agrep PATTERN is limited to 29 chars.
+  local -i max_error_count=3 #Reset below specific per chunk.
   local -a fuzzychunk=()
   local -a FuzzyChunks=()
   local -a ChunkGuesses=()
@@ -3433,6 +3435,8 @@ chunked_fuzzy_plot_match(){
   debugcont "PlotWords='$PlotWords'"
   debugcont "chunck_size='$chunck_size'"
   debugcont "chunk_overlap='$chunk_overlap'"
+  debugcont "min_chunk_length='$min_chunk_length'"
+  debugcont "inv_error_rate='$inv_error_rate'"
   debugcont "numchunks='$numchunks'"
   if ! agrep --version &> /dev/null ; then #Hacky: works because, so far, the agrep that limits PATTERN length to < 32 also lacks a --version flag.
     local truncate='true'
@@ -3451,8 +3455,8 @@ chunked_fuzzy_plot_match(){
     ChunkLengths[i]=$(wc --chars <<< "$chunk")
     debugcont "ChunkLengths[$i]='${ChunkLengths[i]}'"
     #Short chunks give false positives, so don't try.
-    ((ChunkLengths[i] < 18)) && continue
-    len10per=$(( ChunkLengths[i] / 10 ))
+    ((ChunkLengths[i] < min_chunk_length)) && continue
+    max_error_count=$(( ChunkLengths[i] / inv_error_rate ))
     fuzzychunk=($(agrep -iBynsk -e "$chunk" "$m2kdir/$TVDB_TITLE/$TVDB_TITLE.Plot.txt"))
     FuzzyChunks[i]="${fuzzychunk[0]}"
     debugcont "FuzzyChunks[$i]='${FuzzyChunks[i]}'"
@@ -3460,7 +3464,10 @@ chunked_fuzzy_plot_match(){
     debugcont "ChunkGuesses[$i]='${ChunkGuesses[i]}'"
     ChunkCosts[i]=$(cut -f2 -d":" <<< "${FuzzyChunks[i]}")
     debugcont "ChunkCosts[$i]='${ChunkCosts[i]}'"
-    ((ChunkCosts[i] <= len10per)) && GoodChunkGuesses[Counter]=${ChunkGuesses[i]} && ((++Counter))
+    #TODO: consider weighting matches ((ChunkLengths[i]-ChunkCosts[i])) and having multi_match_check take them into account.
+    ((ChunkCosts[i] <= max_error_count)) && GoodChunkGuesses[Counter]=${ChunkGuesses[i]} && ((++Counter))
+    #Do not use the last chunk if it is just a subset of the second last.
+    ((m>=PlotWords)) && break
   done
   debug "$( IFS=','; printf '%s' "${FUNCNAME[0]}(): GoodChunkGuesses ${#GoodChunkGuesses[@]}: ${GoodChunkGuesses[*]}." )"
 
@@ -3574,7 +3581,8 @@ get_absolute_episode_number_fuzzy_plot(){
   debugcont "AbsoluteEpisodeNumber: '$AbsoluteEpisodeNumber'"
   debugcont "TVDB_TITLE: '$TVDB_TITLE'"
   debugcont "Plot: '$Plot'"
-
+  #TODO: Consider either keyword based match or stripping very common words (it, a, an, the, etc.) before current match as they just tend to add noise.
+  #      This would require a cleansed plot file be generated for the series as well as cleansing the Plot variable...
   [[ -z "$Plot" ]] && { err 'We do not have any Plot info.'; return 1; }
 
   if [[ ! -f "$m2kdir/$TVDB_TITLE/$TVDB_TITLE.Plot.txt" ]]; then
@@ -3599,10 +3607,14 @@ get_absolute_episode_number_fuzzy_plot(){
 
   #If our agrep supports it, try a full Plot match.
   if agrep --version &> /dev/null ; then #Hacky: works because, so far, the agrep that limits PATTERN length to < 32 also lacks a --version flag.
-    fuzzy_plot_match
-    fuzzy_plot_return_status="$?"
-    if [[ "$fuzzy_plot_return_status" =~ ^('0'|'2')$ ]]; then
-      return "$fuzzy_plot_return_status"
+    if ((PlotLength<=200)); then
+      fuzzy_plot_match
+      fuzzy_plot_return_status="$?"
+      if [[ "$fuzzy_plot_return_status" =~ ^('0'|'2')$ ]]; then
+        return "$fuzzy_plot_return_status"
+      fi
+    else
+      inform "Plot too long ($PlotLength) for efficient whole plot match."
     fi
   else
     warn "This version of agrep limits PATTERN to < 32 characters, so cannot do complete Plot match."

@@ -2908,7 +2908,7 @@ have_series_info(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   debugcont "TITLE='$TITLE'"
 
-  if grep -q "$TITLE" "$m2kdir/series_list.txt"; then
+  if grep -q "^$TITLE$" "$m2kdir/series_list.txt"; then
     inform "We have existing info for: '$TITLE'"
     return 0
   else

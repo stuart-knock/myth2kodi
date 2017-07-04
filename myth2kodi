@@ -2634,6 +2634,13 @@ check_m2k_database_up_to_date(){
   local -i next_update=0
   local -i current_time=0
 
+  #Do not be so demanding for updates of series that have ended...
+  if [[ -f "$dbdir/$TVDB_TITLE.series_status.txt" ]]; then
+    debug 'The series has status="Ended", so extending the update period to about a month.'
+    debugcont "NOTE: you can force an update with \"myth2kodi --series-info '$TVDB_TITLE'\"."
+    [[ "$(<"$dbdir/$TVDB_TITLE.series_status.txt")" = 'Ended' ]] && UpdateDatabase=2419200
+  fi
+
   #If file exist for last updated time, then get value
   if [[ -f "$dbdir/lastupdated.time" ]]; then
     LastUpdatedTVDB=$(cat "$dbdir/lastupdated.time")
@@ -2757,14 +2764,29 @@ download_series_info(){
     [[ -f "$tvdb_series_json" ]] && mv "$tvdb_series_json" "$dbdir/${TODAY}_${TVDB_TITLE}_series_info.json"
     mv "${tvdb_series_json}.temp" "$tvdb_series_json"
     jq -r '.data.status'      "$tvdb_series_json" > "$dbdir/$TVDB_TITLE.series_status.txt"
-    jq -r '.data.overview'    "$tvdb_series_json" > "$dbdir/$TVDB_TITLE.series_overview.txt"
     jq -r '.data.firstAired'  "$tvdb_series_json" > "$dbdir/$TVDB_TITLE.series_firstaired.txt"
     jq -r '.data.lastUpdated' "$tvdb_series_json" > "$dbdir/$TVDB_TITLE.series_lastupdated.txt"
     jq -r '.data.zap2itId'    "$tvdb_series_json" > "$dbdir/$TVDB_TITLE.series_zap2itid.txt"
+    {
+      jq -r '.data.overview'  "$tvdb_series_json"  \
+          | tr -d "\n"                             \
+          | sed -r 's/[^[:alnum:] &,.-]//g'        \
+          | sed -r 's/^null$//'                    \
+          | tr -s ' '
+      printf '\n'
+    } > "$dbdir/$TVDB_TITLE.series_overview.txt"
   elif (( new_series_info == 2 )); then
     err "An error occurred while diff-ing: '${tvdb_series_json}.temp' and '$tvdb_series_json'."
   elif (( new_series_info == 0 )); then
     debug 'No new series-level information is available.'
+  fi
+
+  #Trust the series level info and only update if it says there are updates.
+  if [[ -f "$dbdir/lastupdated.time" && -f "$dbdir/$TVDB_TITLE.series_lastupdated.txt" ]]; then
+    if (( $(<"$dbdir/lastupdated.time") > $(<"$dbdir/$TVDB_TITLE.series_lastupdated.txt") )); then
+      inform "TheTVDB series.lastUpdated for $TVDB_TITLE was before our last download."
+      return 0
+    fi
   fi
 
   #TODO: Should try to get jq to merge the pages rather than the manual hackery below.
@@ -4434,13 +4456,17 @@ generate_series_nfo(){
     printf '%s\n' '<?xml version="1.0" encoding="UTF-8" standalone="yes" ?>'
     printf '%s\n' '<tvshow>'
     printf '%b\n' "\t<title>$TVDB_TITLE</title>"
-    #printf '%b\n' "\t<plot>$SeriesPlot</plot>" #TODO: for when we've extracted the series description...
-    #printf '%b\n' "\t<status>$SeriesStatus</status>" #TODO: for when we've extracted the series status
+    if [[ -f "$dbdir/$TVDB_TITLE.series_overview.txt" ]]; then
+      printf '%b\n' "\t<plot>$(<"$m2kdir/$TVDB_TITLE/$TVDB_TITLE.series_overview.txt")</plot>"
+    fi
+    if [[ -f "$dbdir/$TVDB_TITLE.series_status.txt" ]]; then
+      printf '%b\n' "\t<status>$(<"$m2kdir/$TVDB_TITLE/$TVDB_TITLE.series_status.txt")</status>"
+    fi
     printf '%b\n' "\t<episodeguide>"
   } > "$MoveDir/tvshow.nfo"
 
   if [[ -n "$TVDB_SERIESID" ]]; then
-    local webaddrs
+    local webaddrs #TODO: This needs to be updated... With new Token based system accessing the API won't work.
     webaddrs="http://www.thetvdb.com/api/$APIkey/series/$TVDB_SERIESID/all/$Language.zip"
     printf '%b\n' "\t\t<url cache=\"$TVDB_SERIESID.xml\">$webaddrs</url>" >> "$MoveDir/tvshow.nfo"
   fi
@@ -4449,7 +4475,9 @@ generate_series_nfo(){
     printf '%b\n' "\t</episodeguide>"
     [[ -n "$TVDB_SERIESID" ]] && printf '%b\n' "\t<id>$TVDB_SERIESID</id>"
     printf '%b\n' "\t<dateadded>$(date --rfc-3339=seconds)</dateadded>"
-    #printf '%b\n' "\t<premiered>$SeriesFirstAired</premiered>" #TODO: for when we've extracted the series first aired field.
+    if [[ -f "$dbdir/$TVDB_TITLE.series_firstaired.txt" ]]; then
+      printf '%b\n' "\t<premiered>$(<"$m2kdir/$TVDB_TITLE/$TVDB_TITLE.series_firstaired.txt")</premiered>"
+    fi
     printf '%s\n' '</tvshow>'
   } >> "$MoveDir/tvshow.nfo"
   inform "Generated series NFO file: $MoveDir/tvshow.nfo"

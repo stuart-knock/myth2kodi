@@ -2868,9 +2868,9 @@ download_series_info(){
     for i in $(seq 0 $((episode_count-1))); do
       {
         jq -r ".[$i] | .overview" "$tvdb_episodes_json" \
-          | tr -d "\n"                                \
-          | sed -r 's/[^[:alnum:] &,.-]//g'           \
-          | sed -r 's/^null$//'                       \
+          | tr -d "\n"                                  \
+          | sed -r 's/[^[:alnum:] &,.-]//g'             \
+          | sed -r 's/^null$//'                         \
           | tr -s ' '
       printf '\n'
       } >> "$dbdir/$TVDB_TITLE.Plot.txt"
@@ -2889,9 +2889,10 @@ download_series_info(){
       for i in $(seq 0 $((episode_count-1))); do
         {
           jq -r ".[$i] | .summary" "$tvmaze_episodes_json" \
-            | tr -d "\n"                                 \
-            | sed -r 's#</?p>##g'                        \
-            | sed -r 's/[^[:alnum:] &,.-]//g'            \
+            | tr -d "\n"                                   \
+            | sed -r 's#</?p>##g'                          \
+            | sed -r 's/[^[:alnum:] &,.-]//g'              \
+            | sed -r 's/^null$//'                          \
             | tr -s ' '
           printf '\n'
           } >> "$dbdir/$TVDB_TITLE.Plot.txt"
@@ -4457,7 +4458,7 @@ generate_series_nfo(){
     printf '%s\n' '<tvshow>'
     printf '%b\n' "\t<title>$TVDB_TITLE</title>"
     if [[ -f "$dbdir/$TVDB_TITLE.series_overview.txt" ]]; then
-      printf '%b\n' "\t<plot>$(<"$m2kdir/$TVDB_TITLE/$TVDB_TITLE.series_overview.txt")</plot>"
+      printf '%b\n' "\t<plot>$(sed 's/\&/\&amp;/g' "$m2kdir/$TVDB_TITLE/$TVDB_TITLE.series_overview.txt")</plot>"
     fi
     if [[ -f "$dbdir/$TVDB_TITLE.series_status.txt" ]]; then
       printf '%b\n' "\t<status>$(<"$m2kdir/$TVDB_TITLE/$TVDB_TITLE.series_status.txt")</status>"

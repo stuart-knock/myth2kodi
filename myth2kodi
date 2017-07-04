@@ -673,7 +673,7 @@ m2k_init(){
   ((LOGLEVEL>=3)) && printf '%s\n' "Config complete." >> "$pre_logging_file"
 
   #What am I...
-  m2kVersion='myth2kodi Version 1.4.2v' ; declare -gr m2kVersion
+  m2kVersion='myth2kodi Version 1.4.2w' ; declare -gr m2kVersion
   m2kPlatform="$(uname)" ; declare -gr m2kPlatform
   ((LOGLEVEL>=3)) && printf '%s\n' "Running $m2kVersion on $m2kPlatform." >> "$pre_logging_file"
 
@@ -784,6 +784,8 @@ m2k_init(){
 
   #Make sure our series list is consistent (directories still present).
   prune_series_list
+
+  [[ "$ONLINE_LOOKUP" != 'Disabled' ]] && get_tvdb_token
 
   debug "myth2kodi script initialisation complete."
   debug "Running myth2kodi as '$CALLER'"
@@ -2539,30 +2541,68 @@ remove_cast_from_plot(){
 
 ############### FUNCTIONS TO BUILD myth2kodi's LOCAL DATABASE ################
 
+#Get an up to date token for accessing TheTVDB v2 API.
+get_tvdb_token(){
+  debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
+  ((LOGLEVEL > 3)) && debugcont "APIkey: '$APIkey'"
+  ((LOGLEVEL > 3)) && debugcont "TVDB_TOKEN: '$TVDB_TOKEN'"
+  local curlPOST curlGET
+  local current_time
+  local token_json=''
+
+  current_time="$(date +%s)"
+  if [[ -f "$m2kdir/tvdb_token.json" ]]; then
+    token_last_updated="$(jq -r .updated "$m2kdir/tvdb_token.json")"
+  else
+    token_last_updated=42
+  fi
+
+  #Tokens currently (2017-07-03) are supposed to last 24 hours and refreshing
+  #a valid token with a GET is preferred over POSTing to login for a new one.
+  if (( (current_time - token_last_updated + 42)/3600 >= 24 )); then
+    #Get a new token using our APIkey
+    curlPOST="curl -s -m '$Timeout' -X POST --header 'Content-Type: application/json' -H 'Accept: application/json' -d"
+    data=\'"{\"apikey\": \"$APIkey\"}"\'
+    token_json="$(eval "$curlPOST $data 'https://api.thetvdb.com/login'")"
+  elif (( (current_time - token_last_updated)/3600 > 12 )); then
+    #Get a refreshed token using our currently valid token (if current is older than 12 hours).
+    curlGET="curl -s -m '$Timeout' -X GET --header 'Authorization: Bearer $TVDB_TOKEN' -H 'Accept: application/json'"
+    token_json="$(eval "$curlGET 'https://api.thetvdb.com/refresh_token'")"
+  fi
+
+  if [[ -n "$token_json" ]]; then
+    #Set the TVDB_TOKEN variable to the new token value.
+    TVDB_TOKEN="$(jq -r '.token' <<< "$token_json")"
+
+    #Write the new token and the update time to a file.
+    jq --arg updated "$(date +%s)" '. + {updated: $updated}' <<< "$token_json" > "$m2kdir/tvdb_token.json"
+  else
+    #Load our local, currently valid, token.
+    TVDB_TOKEN="$(jq -r '.token' "$m2kdir/tvdb_token.json")"
+  fi
+  return 0
+} #get_tvdb_token()
+
 #Search TheTVDB for this recording's show name, then use the response
 #to generate temporary text files for subsequent show identification.
 download_series_identification(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  local -i next_show=0
   local tvdbshowname
   #Format Show TITLE for Sending to www.TheTVDB.com
   tvdbshowname="$(sed 's/ /%20/g' <<< "$TITLE" | sed 's/&/%26/g')"
-
-  #Create temporary file to hold the show data from TheTVDB
-  local working_file
-  if ! working_file="$(mktemp "$M2K_TMPDIR/m2k_working_$FILE_NAME_NOW"-XXXX)"; then
-    err "${FUNCNAME[0]}(): Failed to create temporary working file."
-    return 1
-  fi
+  local curlGET series_query
+  curlGET="curl -s -m '$Timeout' -X GET -H 'Authorization: Bearer $TVDB_TOKEN' -H 'Accept: application/json' -H 'Accept-Language: $Language'"
 
   #Search TheTVDB and return an XML file with results
   inform "SEARCHING: www.TheTVDB.com for '$TITLE'"
-  curl -L -s -m"$Timeout" "www.thetvdb.com/api/GetSeries.php?seriesname=$tvdbshowname" > "$working_file"
+  series_query="$(eval "$curlGET 'https://api.thetvdb.com/search/series?name=$tvdbshowname'")"
 
-  if (( $(wc --bytes < "$working_file") == 0 )); then
+  if [[ -z "$series_query" ]]; then
     err "${FUNCNAME[0]}(): Could not access info from TheTVDB."
     errcont "Check your internet connection."
-    errcont "Check www.thetvdb.com for '$tvdbshowname'."
+  elif jq -e 'has("Error")' <<< "$series_query" > /dev/null; then
+    err "${FUNCNAME[0]}(): An error was returned by TheTVDB."
+    errcont "Check www.thetvdb.com for '$TITLE'."
     return 1
   fi
 
@@ -2577,52 +2617,10 @@ download_series_identification(){
   fi
   declare -gr TMP_SID_FILE TMP_SHN_FILE
 
-  #Separate the XML into textual DBs containing seriesid, SeriesName and zap2it_id
-  grep '<seriesid>' "$working_file" | sed -e 's#</\?seriesid>##g' \
-                                          -e 's/&quot;/"/g'       \
-                                          -e 's/&amp;/\&/g'       \
-                                          -e 's/&ndash;/-/g'      \
-                                          -e 's/&lt;/</g'         \
-                                          -e 's/&gt;/>/g' > "$TMP_SID_FILE"
-  grep '<SeriesName>' "$working_file" | sed -e 's#</\?SeriesName>##g' \
-                                            -e 's/&quot;/"/g'         \
-                                            -e 's/&amp;/\&/g'         \
-                                            -e 's/&ndash;/-/g'        \
-                                            -e 's/&lt;/</g'           \
-                                            -e 's/&gt;/>/g' > "$TMP_SHN_FILE"
+  #Write the id and seriesName to file for the series returned by our series-query.
+  jq -r '.data[] | .id'         <<< "$series_query" > "$TMP_SID_FILE"
+  jq -r '.data[] | .seriesName' <<< "$series_query" > "$TMP_SHN_FILE"
 
-  #Create a temporary file to contain zap2it info
-  if ! TMP_ZAP2IT_FILE="$(mktemp "$M2K_TMPDIR/m2k_zap2it_$FILE_NAME_NOW"-XXXX)"; then
-    err "${FUNCNAME[0]}(): Failed to create temporary zap2it file."
-    return 1
-  fi
-  declare -gr TMP_ZAP2IT_FILE
-  debug "Created a temporary zap2it file: '$TMP_ZAP2IT_FILE'"
-
-  #parse the XML for shows with Zap2ItIDs
-  while read -r line ; do
-    [[ "$line" = '<Series>' ]] && next_show=1
-    if [[ "$line" = '</Series>' ]] && ((next_show==1)); then
-      printf '\n' >> "$TMP_ZAP2IT_FILE"
-      next_show=0
-    fi
-
-    if [[ "$line" =~ '<zap2it_id>'* ]]; then
-      echo "$line" | sed -e 's#</\?zap2it_id>##g' \
-                         -e 's/&quot;/"/g'        \
-                         -e 's/&amp;/\&/g'        \
-                         -e 's/&ndash;/-/g'       \
-                         -e 's/&lt;/</g'          \
-                         -e 's/&gt;/>/g' >> "$TMP_ZAP2IT_FILE"
-      next_show=0
-    fi
-  done < "$working_file"
-  #If we're not in debug mode, remove the working file.
-  if (( LOGLEVEL < 3 )); then
-    rm -f "$working_file"
-  else
-    debug "Not removing the temporary working file: '$working_file'"
-  fi
   return 0
 } #download_series_identification()
 
@@ -2631,53 +2629,65 @@ check_m2k_database_up_to_date(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   #Return state = 1 means the local database should be updated from TheTVDB
   #Return state = 0 means the local database is up to date with TheTVDB
-  local updates_site='http://www.thetvdb.com/api/Updates.php'
   local dbdir="$m2kdir/$TVDB_TITLE"
-
-  #Get current server time
-  curl -L -s -m"$Timeout" "${updates_site}?type=none" > "$dbdir/TheTVDB_current.time"
-
-  #Get the time from the file
-  CurrentTimeTVDB=$(grep '<Time>' "$dbdir/TheTVDB_current.time" | sed -r 's#</?Time>##g')
-  #if time server is down, then just update #TODO: If the Updates part of the api isn't working we probably shouldn't expect the rest to...
-  [[ -z "$CurrentTimeTVDB" ]] && warn "${FUNCNAME[0]}(): TheTVDB time server was down." && return 1
+  local -i next_update=0
+  local -i current_time=0
 
   #If file exist for last updated time, then get value
   if [[ -f "$dbdir/lastupdated.time" ]]; then
     LastUpdatedTVDB=$(cat "$dbdir/lastupdated.time")
   else #no last updated time, so assign a never updated value and update now.
-    debug "Seems we've never updated $TVDB_TITLE from TheTVDB -- no lastupdated.time file."
+    debug "There is no lastupdated.time file."
+    debugcont "So either we've never updated '$TVDB_TITLE' from TheTVDB, or"
+    debugcont "an update is being forced with the --series-info flag."
     LastUpdatedTVDB=42 #A meaningless low number to start from...
     return 1
   fi
 
-  #Apply Database Update interval to last update time LastUpdatedTVDB = next_updated
-  local -i next_update=0
+  #Add Database Update interval to last update time.
   next_update=$((LastUpdatedTVDB + UpdateDatabase))
+  current_time="$(date +%s)"
 
-  #if episode information is out of date or not created
-  if ((CurrentTimeTVDB > next_update)); then
-    #TODO: the Updates part of TheTVDb v1 api is deprecated, for that matter so is
-    #      the v1 api... Need to implement access to the new JSON based v2 api...
-    #      See:
-    #          https://api.thetvdb.com/swagger
-    warn "${FUNCNAME[0]}(): Bypassing TheTVDB LastUpdated checks... Forcing update. See #TODO: Line $LINENO"
+  #Updated queries return a maximum of 1 week after fromTime.
+  if (( (current_time - LastUpdatedTVDB)/3600/24 >= 7 )); then
+    inform 'It has been over a week since the last update, so forcing update.'
     return 1
-    ##########################################################################
-    curl -L -s -m"$Timeout" "${updates_site}?type=all&time=$LastUpdatedTVDB" > "$dbdir/UpdatesList.txt"
-    if grep -q "$TVDB_SERIESID" "$dbdir/UpdatesList.txt" ; then
-      inform "Database out of date. Next update: $next_update. Current: $CurrentTimeTVDB"
+  fi
+
+  if ((current_time > next_update)); then
+    #It has been longer than UpdateDatabase since our last update.
+    local updated_series updates_available list_last_updated
+
+    #Find out when we last grabbed a list of recently updated series.
+    if [[ -f "$m2kdir/tvdb_updates_list.json" ]]; then
+      list_last_updated="$(jq -r .updated "$m2kdir/tvdb_updates_list.json")"
+    else
+      debug "Seems we've never updated $TVDB_TITLE from TheTVDB -- no lastupdated.time file."
+      list_last_updated=42
+    fi
+
+    #Get a list of updated series.
+    if (( (current_time - list_last_updated) < 3600 )); then
+      #It has been less than an hour since we got a list so just use the local one.
+      updated_series="$(jq -r . "$m2kdir/tvdb_updates_list.json")"
+    else
+      #It has been longer than an hour so GET a new list of updated series.
+      local curlGET="curl -s -m '$Timeout' -X GET -H 'Authorization: Bearer $TVDB_TOKEN' -H 'Accept: application/json'"
+      local updates_site="https://api.thetvdb.com/updated/query?fromTime=$LastUpdatedTVDB"
+      updated_series="$(eval "$curlGET '$updates_site'")"
+      jq --arg updated "$(date +%s)" '. + {updated: $updated}' <<< "$updated_series" > "$dbdir/tvdb_updates_list.json"
+    fi
+
+    updates_available="$(jq "contains({data: [{id: $TVDB_SERIESID}]})" <<< "$updated_series")"
+    if [[ "$updates_available" = 'true' ]]; then
+      inform "Updates are available for TVDB_SERIESID: '$TVDB_SERIESID'."
       return 1
     else
-      debug "TheTVDB does not appear to have any updates for $TVDB_TITLE."
-      #TODO: TVDB_SERIESID isn't being found in UpdatesList for Grey's Anatomy, Marvel's Agents of S.H.I.E.L.D., and possibly others, so the the local data isn't being updated
-      #inform "DATABASE DOESN'T APPEAR TO BE OUT OF DATE. BUT UNFORTUNATELY WE CURRENTLY HAVE A BUG HERE SO ARE FORCING UPDATE ANYWAY..."
-      #return 1 #TODO: This is a current work around for some Series not being found in the UpdatesList from thetvdb, even though updated data is available...
+      debug "No updates are available for TVDB_SERIESID: '$TVDB_SERIESID'."
       return 0
     fi
-  #Send report to the log if database was not updated.
-  elif ((CurrentTimeTVDB <= next_update)); then
-    debug "Database maintained. Current: $CurrentTimeTVDB. Next update: $next_update."
+  else
+    debug "Database maintained. Current: $current_time. Next update: $next_update."
     return 0
   fi
   #some other condition was present. update anyways.
@@ -2711,177 +2721,152 @@ prune_series_list(){
 download_series_info(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   inform "Downloading Series: '$TVDB_SERIESID'"
-  local -i GotNewInformation=0
+  local -i new_info_tvdb=0
+  local -i new_info_tvmaze=0
   local -i ProcessingSuccesful=0
   local dbdir="$m2kdir/$TVDB_TITLE"
-  local TheTVDBShowXML="http://www.thetvdb.com/api/$APIkey/series/$TVDB_SERIESID/all/$Language.xml"
-  local FieldsWeWant="(</?Series>|</?seriesid>|</?Status>|</?lastupdated>|</?Episode>|</?SeasonNumber>|</?EpisodeNumber>|</?EpisodeName>|</?Overview>|</?FirstAired>)"
-  curl -L -s -m"$Timeout" "$TheTVDBShowXML" | grep -E "$FieldsWeWant" > "$dbdir/$TVDB_TITLE.xmlTest"
-  local curl_grep_status=("${PIPESTATUS[@]}")
-  (( curl_grep_status[0] != 0 )) && warn "${FUNCNAME[0]}(): Issue accessing: '${TheTVDBShowXML/$APIkey/<APIkey>}'."
-  (( curl_grep_status[1] >= 2 )) && err "${FUNCNAME[0]}(): Error status returned by grep for FieldsWeWant from '${TheTVDBShowXML/$APIkey/<APIkey>}'."
-  (( curl_grep_status[1] == 1 )) && warn "${FUNCNAME[0]}(): Failed to match any of the fields we want."
-
+  local tvdb_series_json="$dbdir/${TVDB_TITLE}_tvdb.json"
+  local tvmaze_series_json="$dbdir/${TVDB_TITLE}_tvmaze.json"
+  local curlGET="curl --silent -m '$Timeout' -X GET -H 'Authorization: Bearer $TVDB_TOKEN' -H 'Accept: application/json'"
+  local series_data
+  local page=1
   local -i tvmaze_id
-  tvmaze_id=$(curl -L -s -m"$Timeout" http://api.tvmaze.com/lookup/shows?thetvdb="$TVDB_SERIESID" | jq '.id')
-  local tvmazeJsonFile="$dbdir/${TVDB_TITLE}_tvmaze.json"
-  # to get the matching tvmaze id, then
-  if ((tvmaze_id != 0)) ; then
-    debug "Found matching tvmaze id: '$tvmaze_id'"
-    local tvmazeShowJson="http://api.tvmaze.com/shows/$tvmaze_id/episodes"
-    [[ -f "$tvmazeJsonFile" ]] && mv "$tvmazeJsonFile" "$dbdir/${TODAY}_${TVDB_TITLE}_tvmaze.json"
-    debug "Getting new tvmaze show info from: '$tvmazeShowJson'"
-    curl -L -s -m"$Timeout" "$tvmazeShowJson" > "$tvmazeJsonFile"
+  local -i episode_count
+
+  #TODO: Should try to get jq to merge the pages rather than the manual hackery below.
+  #Download the episode information from TheTVDB for TVDB_SERIESID
+  debug "Accessing page '$page' of TheTVDB entry for '$TVDB_SERIESID'."
+  series_data="$(eval "$curlGET 'https://api.thetvdb.com/series/$TVDB_SERIESID/episodes?page=$page'")"
+  jq -r '.data' <<< "$series_data" | sed 's/]$//' > "${tvdb_series_json}.temp"
+  if jq -e 'has("Error")' <<< "$series_data" > /dev/null; then
+    err "${FUNCNAME[0]}(): An error was returned by TheTVDB."
+    errcont "TVDB_SERIESID: '$TVDB_SERIESID'."
+    errcont "page: '$page'."
+    return 1
+  fi
+  page="$(jq .links.next <<< "$series_data")"
+  while [[ "$page" != 'null' ]]; do
+    debug "Accessing page '$page' of TheTVDB entry for '$TVDB_SERIESID'."
+    series_data="$(eval "$curlGET 'https://api.thetvdb.com/series/$TVDB_SERIESID/episodes?page=$page'")"
+    jq -r '.data' <<< "$series_data" | sed 's/^\[/,/' | sed 's/]$//'  >> "${tvdb_series_json}.temp"
+    if jq -e 'has("Error")' <<< "$series_data" > /dev/null; then
+      err "${FUNCNAME[0]}(): An error was returned by TheTVDB."
+      errcont "TVDB_SERIESID: '$TVDB_SERIESID'."
+      errcont "page: '$page'."
+      return 1
+    fi
+    page="$(jq .links.next <<< "$series_data")"
+  done
+  printf ']\n' >> "${tvdb_series_json}.temp"
+
+  printf '%s\n' "$(date +%s)" > "$dbdir/lastupdated.time" && chmod 644 "$dbdir/lastupdated.time"
+
+  #Check the new info is actually new, if there was no old info then it must be new.
+  if [[ -f "$tvdb_series_json" ]]; then
+    diff -q "${tvdb_series_json}.temp" "$tvdb_series_json" &> /dev/null
+    new_info_tvdb="$?" #NOTE: No-diff = 0; diff = 1; error = 2
+  else
+    new_info_tvdb=1
   fi
 
-  #Validate that the show has at least one EpisodeName tag and is a valid download before clobbering our old download.
-  if grep -q "EpisodeName" "$dbdir/$TVDB_TITLE.xmlTest"; then
-    printf '%s\n' "$(date +%s)" > "$dbdir/lastupdated.time" && chmod 644 "$dbdir/lastupdated.time"
+  if ((new_info_tvdb == 1)); then
+    [[ -f "$tvdb_series_json" ]] && mv "$tvdb_series_json" "$dbdir/${TODAY}_${TVDB_TITLE}_tvdb.json"
+    mv "${tvdb_series_json}.temp" "$tvdb_series_json"
+  fi
 
+  #Download the episode information from tvmaze for TVDB_SERIESID
+  tvmaze_id=$(curl -L -s -m"$Timeout" http://api.tvmaze.com/lookup/shows?thetvdb="$TVDB_SERIESID" | jq '.id')
+  if ((tvmaze_id != 0)) ; then
+    debug "Found matching tvmaze id: '$tvmaze_id'"
+    local tvmaze_episodes_site="http://api.tvmaze.com/shows/$tvmaze_id/episodes"
+    debug "Getting new tvmaze show info from: '$tvmaze_episodes_site'"
+    curl -L -s -m"$Timeout" "$tvmaze_episodes_site" > "${tvmaze_series_json}.temp"
+  fi
+
+  #Check the new info is actually new, if there was no old info then it must be new.
+  if [[ -f "$tvmaze_series_json" ]]; then
+    diff -q "${tvmaze_series_json}.temp" "$tvmaze_series_json" &> /dev/null
+    new_info_tvmaze="$?" #NOTE: No-diff = 0; diff = 1; error = 2
+  else
+    new_info_tvmaze=1
+  fi
+
+  if ((new_info_tvmaze == 1)); then
+    [[ -f "$tvmaze_series_json" ]] && mv "$tvmaze_series_json" "$dbdir/${TODAY}_${TVDB_TITLE}_tvmaze.json"
+    mv "${tvmaze_series_json}.temp" "$tvmaze_series_json"
+  fi
+
+  if ((new_info_tvdb == 1)) || ((new_info_tvmaze == 1)); then
+    inform "Downloaded new information for '$TVDB_TITLE'"
+
+    jq -r '.[] | .episodeName'        "$tvdb_series_json" > "$dbdir/$TVDB_TITLE.Ename.txt"
+    jq -r '.[] | .airedSeason'        "$tvdb_series_json" > "$dbdir/$TVDB_TITLE.S.txt"
+    jq -r '.[] | .airedEpisodeNumber' "$tvdb_series_json" > "$dbdir/$TVDB_TITLE.E.txt"
+    jq -r '.[] | .firstAired'         "$tvdb_series_json" > "$dbdir/$TVDB_TITLE.FAired.txt"
+    jq -r '.[] | .id'                 "$tvdb_series_json" > "$dbdir/$TVDB_TITLE.id.txt"
+
+    [[ -f "$dbdir/$TVDB_TITLE.Plot.txt" ]] && rm -f "$dbdir/$TVDB_TITLE.Plot.txt"
+
+    episode_count="$(jq -r '.[] | .episodeName' "$tvdb_series_json" | wc -l)"
+    inform "Local-DB contains '$episode_count' entries from TheTVDB for '$TVDB_TITLE'."
+    for i in $(seq 0 $((episode_count-1))); do
+      {
+        jq -r ".[$i] | .overview" "$tvdb_series_json" \
+          | tr -d "\n"                                \
+          | sed -r 's/[^[:alnum:] &,.-]//g'           \
+          | sed -r 's/^null$//'                       \
+          | tr -s ' '
+      printf '\n'
+      } >> "$dbdir/$TVDB_TITLE.Plot.txt"
+    done
+
+    #If we also have a json file from tvmaze, then append that info
+    if [[ -f "$tvmaze_series_json" ]]; then
+      jq -r '.[] | .name'    "$tvmaze_series_json" >> "$dbdir/$TVDB_TITLE.Ename.txt"
+      jq -r '.[] | .season'  "$tvmaze_series_json" >> "$dbdir/$TVDB_TITLE.S.txt"
+      jq -r '.[] | .number'  "$tvmaze_series_json" >> "$dbdir/$TVDB_TITLE.E.txt"
+      jq -r '.[] | .airdate' "$tvmaze_series_json" >> "$dbdir/$TVDB_TITLE.FAired.txt"
+      jq -r '.[] | .id'      "$tvmaze_series_json" >> "$dbdir/$TVDB_TITLE.id.txt"
+
+      episode_count=$(jq -r '.[] | .name' "$tvmaze_series_json" | wc -l)
+      inform "Local-DB contains '$episode_count' entries from tvmaze for '$TVDB_TITLE'."
+      for i in $(seq 0 $((episode_count-1))); do
+        {
+          jq -r ".[$i] | .summary" "$tvmaze_series_json" \
+            | tr -d "\n"                                 \
+            | sed -r 's#</?p>##g'                        \
+            | sed -r 's/[^[:alnum:] &,.-]//g'            \
+            | tr -s ' '
+          printf '\n'
+          } >> "$dbdir/$TVDB_TITLE.Plot.txt"
+      done
+    fi
+
+    #Set permission 644 (rw-r--r--)
+    chmod 644 "$dbdir/$TVDB_TITLE.Ename.txt"
+    chmod 644 "$dbdir/$TVDB_TITLE.S.txt"
+    chmod 644 "$dbdir/$TVDB_TITLE.E.txt"
+    chmod 644 "$dbdir/$TVDB_TITLE.FAired.txt"
+    chmod 644 "$dbdir/$TVDB_TITLE.id.txt"
+    chmod 644 "$dbdir/$TVDB_TITLE.Plot.txt"
+    ProcessingSuccesful=1
+
+  elif ((new_info_tvdb == 2)) || ((new_info_tvmaze == 2)); then
+    err "${FUNCNAME[0]}(): UNEXPECTED ERROR comparing new to old information for '$TVDB_TITLE'"
+    return 1
+  elif ((new_info_tvdb == 0)) && ((new_info_tvmaze == 0)); then
+    inform "TheTVDB information for $TVDB_TITLE has not changed since last download."
+    return 0
+  fi
+
+  #check if files were created and generate message
+  if ((ProcessingSuccesful == 1)) ; then
+    inform "LOCAL DATABASE UPDATED: $dbdir"
     #Add series-list and seriesid-list entries if we haven't already.
     if ! grep -q "$TVDB_TITLE" "$m2kdir/series_list.txt"; then
       printf '%s\n' "$TVDB_TITLE" >> "$m2kdir/series_list.txt"
       printf '%s\n' "$TVDB_SERIESID" >> "$m2kdir/seriesid_list.txt"
     fi
-
-    #Check the new info is actually new, if there was no old info then it must be new.
-    if [[ -f "$dbdir/$TVDB_TITLE.xml" ]]; then
-      diff -q "$dbdir/$TVDB_TITLE.xmlTest" "$dbdir/$TVDB_TITLE.xml" &> /dev/null
-      GotNewInformation="$?" #NOTE: No-diff = 0; diff = 1; error = 2
-    else
-      GotNewInformation=1
-    fi
-    if (( GotNewInformation == 1 )) ; then
-      #Clear out the old
-      inform "Downloaded new information for '$TVDB_TITLE'"
-      debug 'Cleaning up old information before processing.'
-      [[ -f "$dbdir/$TVDB_TITLE.xml" ]] && mv "$dbdir/$TVDB_TITLE.xml" "$dbdir/${TODAY}_$TVDB_TITLE.xml"
-      mv "$dbdir/$TVDB_TITLE.xmlTest" "$dbdir/$TVDB_TITLE.xml"
-      [[ -f "$dbdir/$TVDB_TITLE.actualEname.txt" ]] && rm -f "$dbdir/$TVDB_TITLE.actualEname.txt"
-      [[ -f "$dbdir/$TVDB_TITLE.Ename.txt" ]]       && rm -f "$dbdir/$TVDB_TITLE.Ename.txt"
-      [[ -f "$dbdir/$TVDB_TITLE.FAired.txt" ]]      && rm -f "$dbdir/$TVDB_TITLE.FAired.txt"
-      [[ -f "$dbdir/$TVDB_TITLE.S.txt" ]]           && rm -f "$dbdir/$TVDB_TITLE.S.txt"
-      [[ -f "$dbdir/$TVDB_TITLE.E.txt" ]]           && rm -f "$dbdir/$TVDB_TITLE.E.txt"
-      [[ -f "$dbdir/$TVDB_TITLE.Plot.txt" ]]        && rm -f "$dbdir/$TVDB_TITLE.Plot.txt"
-
-      #Create a folder/file "database" Strip XML tags.
-      local Ename=''
-      local actualEname=''
-      local FAired=''
-      local SeasonNr=''
-      local EpisodeNr=''
-      local EpisodeOverview=''
-      local -i recordNumber=-1
-      inform "Parsing Downloaded information from TheTVDB: $TVDB_TITLE.xml"
-      while read -r line ; do
-        if ((recordNumber < 0)); then
-          #TODO: Grab the Series description and first aired date, either here or in download_series_identification(), for use in series NFO
-          #TODO:Check for a Status line and if it exists and says Ended then touch
-          #  a file called Status.Ended in the $m2kdir/$TVDB_TITLE/
-          #  directory, then add a check for this before we bother trying to
-          #  download information again. Also, use the lastupdated field if present.
-          #Skip lines until the end series block tag is found, then start processing the episode info
-          [[ "$line" = '</Series>' ]] && recordNumber=0
-        elif [[ "$line" = '</Episode>' ]]; then
-          (( ++recordNumber ))
-          #Write Episode info to files
-          debug "Building Record:$recordNumber -${actualEname}-"
-          printf '%s\n' "$actualEname"     >> "$dbdir/$TVDB_TITLE.actualEname.txt"
-          printf '%s\n' "$Ename"           >> "$dbdir/$TVDB_TITLE.Ename.txt"
-          printf '%s\n' "$FAired"          >> "$dbdir/$TVDB_TITLE.FAired.txt"
-          printf '%s\n' "$SeasonNr"        >> "$dbdir/$TVDB_TITLE.S.txt"
-          printf '%s\n' "$EpisodeNr"       >> "$dbdir/$TVDB_TITLE.E.txt"
-          printf '%s\n' "$EpisodeOverview" >> "$dbdir/$TVDB_TITLE.Plot.txt"
-        #Get actual show name
-        elif [[ "$line" = '<EpisodeName>'* ]]; then
-          line="${line/"</EpisodeName>"/}"
-          line="${line/<EpisodeName>/}"
-          line="${line//&lt;/}"
-          line="${line//&gt;/}"
-          line="${line//&quot;/}"
-          line="${line//&amp;/&}"
-          line="${line//&ndash;/-}"
-          actualEname="${line}"
-          #Only keep Alpha-numeric characters, space, parenthesis and the four chars & , . -
-          actualEname="$(sed -r 's/[^[:alnum:] &,.)(-]//g' <<< "$actualEname")"
-          Ename="${actualEname/;*/}" #TODO: This strips everything following the first ";" (semi-colon). Is that intentional because there are sometimes multiple EpisodeNames separated by semi-colons???
-          #Only keep Alpha-numeric characters, space, parenthesis and the four chars & , . -
-          Ename="$(sed -r 's/[^[:alnum:] &,.)(-]//g' <<< "$Ename")"
-        #Get First Aired Date
-        elif [[ "$line" = '<FirstAired>'* ]]; then
-          line="${line/"</FirstAired>"/}"
-          line="${line/<FirstAired>/}"
-          FAired="$line"
-        #Get Season number
-        elif [[ "$line" = '<SeasonNumber>'* ]]; then
-          line="${line/"</SeasonNumber>"/}"
-          line="${line/<SeasonNumber>/}"
-          SeasonNr="$line"
-        #Get Episode number
-        elif [[ "$line" = '<EpisodeNumber>'* ]]; then
-          line="${line/"</EpisodeNumber>"/}"
-          line="${line/<EpisodeNumber>/}"
-          EpisodeNr="$line"
-        #Get Episode Overview
-        elif [[ "$line" = '<Overview>'* ]]; then
-          line="${line/"</Overview>"/}"
-          line="${line/<Overview>/}"
-          line="${line//&lt;/}"
-          line="${line//&gt;/}"
-          line="${line//&quot;/}"
-          line="${line//&amp;/&}"
-          line="${line//&ndash;/-}"
-          #Convert any unprintable (space, tab, newline) to space.
-          line="${line//[[:space:]]/ }"
-          #Only keep Alpha-numeric characters, space and the four chars & , . -
-          line="$(sed -r 's/[^[:alnum:] &,.-]//g' <<< "$line")"
-          line="$(tr -s ' ' <<< "$line")"
-          #Remove any trailing space
-          line="${line%%*([[:space:]])}"
-          EpisodeOverview="$line"
-        fi
-      done < "$dbdir/$TVDB_TITLE.xml"
-
-      #If we also have a json file from tvmaze, then append that info
-      if [[ -f "$tvmazeJsonFile" ]]; then
-        jq -r '.[] | .name'   "$tvmazeJsonFile" >> "$dbdir/$TVDB_TITLE.actualEname.txt"
-        jq -r '.[] | .name'   "$tvmazeJsonFile" >> "$dbdir/$TVDB_TITLE.Ename.txt"
-        jq -r '.[] | .season' "$tvmazeJsonFile" >> "$dbdir/$TVDB_TITLE.S.txt"
-        jq -r '.[] | .number' "$tvmazeJsonFile" >> "$dbdir/$TVDB_TITLE.E.txt"
-        local -i EpisodeCount
-        EpisodeCount=$(jq -r '.[] | .name' "$tvmazeJsonFile" | wc -l)
-        for i in $(seq 0 $((EpisodeCount-1))); do
-          jq -r ".[$i] | .summary" "$tvmazeJsonFile" \
-              | tr -d "\n"                           \
-              | sed -r 's#</?p>##g'                  \
-              | sed -r 's/[^[:alnum:] &,.-]//g'      \
-              | tr -s ' ' >> "$dbdir/$TVDB_TITLE.Plot.txt"
-          printf '\n' >> "$dbdir/$TVDB_TITLE.Plot.txt"
-        done
-      fi
-
-      #Set permission 644 (rw-r--r--)
-      chmod 644 "$dbdir/$TVDB_TITLE.actualEname.txt"
-      chmod 644 "$dbdir/$TVDB_TITLE.Ename.txt"
-      chmod 644 "$dbdir/$TVDB_TITLE.FAired.txt"
-      chmod 644 "$dbdir/$TVDB_TITLE.S.txt"
-      chmod 644 "$dbdir/$TVDB_TITLE.E.txt"
-      chmod 644 "$dbdir/$TVDB_TITLE.Plot.txt"
-      ProcessingSuccesful=1
-
-    elif (( GotNewInformation == 2 )); then
-      err "${FUNCNAME[0]}(): UNEXPECTED ERROR comparing new to old information for '$TVDB_TITLE'"
-      return 1
-    elif (( GotNewInformation == 0 )); then
-      inform "TheTVDB information for $TVDB_TITLE has not changed since last download."
-      return 0
-    fi
-  else
-    warn "${FUNCNAME[0]}(): COULD NOT DOWNLOAD: '${TheTVDBShowXML/$APIkey/<APIkey>}'"
-  fi
-  #check if files were created and generate message
-  if ((ProcessingSuccesful == 1)) ; then
-    inform "LOCAL DATABASE UPDATED: $dbdir"
     return 0
   elif [[ ! -f "$dbdir/$TVDB_TITLE.Ename.txt" ]]; then
     err "${FUNCNAME[0]}(): PERMISSION ERROR for $dbdir"
@@ -2938,39 +2923,22 @@ identify_series(){
 
   #Process as though it's an episode of a tv series.
   if [[ "$ONLINE_LOOKUP" != 'Disabled' ]]; then
-    #Query TheTVDB on TITLE: retrieve fields zap2it_id, SeriesName and seriesid.
+    #TODO: consider adding a zap2itId based query here when we have a Zap2ItID
+    #Query TheTVDB on TITLE: retrieve fields seriesName and id.
     if download_series_identification; then
-      #Try to match on Zap2itID if we have one (depends on guide-data).
-      if [[ -n "$Zap2itSeriesID" ]]; then
-        ConfidenceReasoning="$ConfidenceReasoning Attempted Match On Zap2itID:"
-        if get_serieslinenumber_zap2itid; then
-          ((++SeriesConfidenceRating))
-          ConfidenceReasoning="$ConfidenceReasoning Successful;"
-          inform "Match found based on Zap2itID: $TITLE"
-        else
-          ((--SeriesConfidenceRating))
-          ConfidenceReasoning="$ConfidenceReasoning Failed;"
-        fi
-      fi
-      #We no-longer need the temporary Zap2it file
-      (( LOGLEVEL < 3 )) && rm -f "$TMP_ZAP2IT_FILE"
-
-      #If Zap2itSeriesID match failed to find the SeriesLineNumber
-      if (( SeriesConfidenceRating <= 0 )); then
-        ConfidenceReasoning="$ConfidenceReasoning Attempted Title match on Standard Logic:"
-        if get_serieslinenumber_showname; then
+      ConfidenceReasoning="$ConfidenceReasoning Attempted Title match on Standard Logic:"
+      if get_serieslinenumber_showname; then
+        ConfidenceReasoning="$ConfidenceReasoning Successful;"
+      else
+        warn "FAILED to get series line number with standard logic, requiring doover."
+        RequiresDoover=1
+        ((--SeriesConfidenceRating))
+        ConfidenceReasoning="$ConfidenceReasoning Failed; Attempted Title match on Fuzzy Logic:"
+        if get_serieslinenumber_showname_fuzzy; then
           ConfidenceReasoning="$ConfidenceReasoning Successful;"
         else
-          warn "FAILED to get series line number with standard logic, requiring doover."
-          RequiresDoover=1
           ((--SeriesConfidenceRating))
-          ConfidenceReasoning="$ConfidenceReasoning Failed; Attempted Title match on Fuzzy Logic:"
-          if get_serieslinenumber_showname_fuzzy; then
-            ConfidenceReasoning="$ConfidenceReasoning Successful;"
-          else
-            ((--SeriesConfidenceRating))
-            ConfidenceReasoning="$ConfidenceReasoning Failed; Information not obtainable;"
-          fi
+          ConfidenceReasoning="$ConfidenceReasoning Failed; Information not obtainable;"
         fi
       fi
     else
@@ -3123,27 +3091,6 @@ validate_episode(){
   AbsoluteEpisodeNumber="$aen_backup"
   return "$mmc_status"
 }
-
-#Set the serieslinenumber by matching the Zap2itSeriesID from MythTV-DB
-#against the zap2it ids returned by querying TheTVDB.
-get_serieslinenumber_zap2itid(){
-  debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  local Zap2ItTest
-  serieslinenumber=0
-  #loop through all show names received by TheTVDB and match Zap2it ID.
-  while read -r line ; do
-    (( ++serieslinenumber ))
-    debug "TESTING FOR ZAP2ITID MATCH:$line $(sed -n "$serieslinenumber"'p' "$TMP_SHN_FILE")"
-    Zap2ItTest="$(echo "$line" | tr -d MVSHEP | sed 's/0*//')"
-    if [[ "$Zap2ItTest" = "$Zap2itSeriesID" ]]; then
-      inform "Found ZAP2ITID match: $line $(sed -n "$serieslinenumber"'p' "$TMP_SHN_FILE")"
-      return 0
-    fi
-  done < "$TMP_ZAP2IT_FILE"
-  warn "${FUNCNAME[0]}(): could not find serieslinenumber with Zap2itSeriesID"
-  serieslinenumber=0
-  return 1
-} #get_serieslinenumber_zap2itid()
 
 #Set the serieslinenumber by fuzzy logic matching the current TITLE
 #variable against show names returned by querying TheTVDB.
@@ -3718,7 +3665,7 @@ msg_operation_summary(){
   debugcont "TVDB_EPISODE=$TVDB_EPISODE-"
   debugcont "Sxx=$Sxx- Exx=$Exx-"
   debugcont  "LastUpdatedTVDB=$LastUpdatedTVDB-"
-  debugcont  "CurrentTimeTVDB=$CurrentTimeTVDB-"
+  debugcont  "Current Time=$(date +%s)-"
   debugcont  "AbsoluteEpisodeNumber=$AbsoluteEpisodeNumber-"
   debugcont "HasSxxExx=$HasSxxExx-"
   informcont "MoveFileSize=$MoveFileSize MB"
@@ -6345,7 +6292,7 @@ main(){
         RequiresDoover=1
       fi
       #Use the AbsoluteEpisodeNumber to access TheTVDB information.
-      TVDB_SUBTITLE="$(sed -n "$AbsoluteEpisodeNumber"'p' "$m2kdir/$TVDB_TITLE/$TVDB_TITLE.actualEname.txt")"
+      TVDB_SUBTITLE="$(sed -n "$AbsoluteEpisodeNumber"'p' "$m2kdir/$TVDB_TITLE/$TVDB_TITLE.Ename.txt")"
       TVDB_SEASON="$(  sed -n "$AbsoluteEpisodeNumber"'p' "$m2kdir/$TVDB_TITLE/$TVDB_TITLE.S.txt")"
       TVDB_EPISODE="$( sed -n "$AbsoluteEpisodeNumber"'p' "$m2kdir/$TVDB_TITLE/$TVDB_TITLE.E.txt")"
       #Use TheTVDB info as our recording info.

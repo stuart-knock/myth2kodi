@@ -69,7 +69,7 @@ only increased. So, it seemed safer, and easier, just to drop them.*
 **LOG_LIFE**: *How long to persist archived log files in months.*  
 **M2K_DB_LIFE**: *How long to persist archived myth2kodi database files in months.*  
 **DAILYREPORT_LIFE**: *How long to persist daily report files in months.*  
-**LOGTYPE**: *Defines where to direct logging messages -- stdout, stderr, file.*  
+**LOGTYPE**: *Defines where to direct logging messages -- stderr, file, filestderr.*  
 **CREATE_RSS**: *Whether to create an RSS entry.*  
 **RSS_DIRECTORY**: *The directory to place the RSS file.*
 

@@ -236,6 +236,42 @@ DIR_TRACKING_CLEANUP='Enabled'
 #symlink operation fails. Options: Enabled|Disabled
 FailSafeMode='Disabled'
 
+#The following four settings can Enable or Disable the mechanisms used used for
+#identifying an episode. By default they are all 'Enabled' and should generally
+#be left that way. Identification is done by comparing the data extracted from
+#your MythTV-DB and provided at the command line against data downloaded from
+#TheTVBD and TVmaze.
+
+#MATCH_SEASON_EPISODE can be used to enable/disable attempting episode identification
+#based on the season and episode numbers. The mechanism is an exact match against
+#the "season" and "episode" field from the Guide data in MythTV-DB against the
+#"airedSeason" and "airedEpisodeNumber"(TheTVDB) & "season" and "number"(tvmaze)
+#fields for the series.
+#Options: ['Enabled'(DEFAULT)|'Disabled']
+MATCH_SEASON_EPISODE='Enabled'
+
+#MATCH_SUBTITLE can be used to enable/disable attempting episode identification
+#based on the episode title. The mechanism first tries an exact match using grep,
+#failing that it then uses agrep to "fuzzy" match the "subtitle" field from the
+#Guide data in MythTV-DB against the "episodeName"(TheTVDB) and "name"(tvmaze)
+#fields for the series.
+#Options: ['Enabled'(DEFAULT)|'Disabled']
+MATCH_SUBTITLE='Enabled'
+
+#MATCH_ORIGINALAIRDATE can be used to enable/disable attempting episode identification
+#based on the original airdate for the episode. The mechanism tries an exact match
+#of the "originalairdate" field from the Guide data in MythTV-DB against the
+#"firstAired"(TheTVDB) and "airdate"(tvmaze) fields for the series.
+#Options: ['Enabled'(DEFAULT)|'Disabled']
+MATCH_ORIGINALAIRDATE='Enabled'
+
+#MATCH_PLOT can be used to enable/disable attempting episode identification
+#based on the episode plot. The mechanism uses agrep to fuzzy match the
+#"overview" field from the Guide data in MythTV-DB against the overview(TheTVDB)
+#and summary(tvmaze) data for the series.
+#Options: ['Enabled'(DEFAULT)|'Disabled']
+MATCH_PLOT='Enabled'
+
 #StorageGroupFallback can enable/disable a bit of code that, if Guide Data
 #identified the input file as a show or episode, but no episode or series
 #information was found, then it checks if the MythTV-DB's storagegroup is
@@ -245,14 +281,6 @@ FailSafeMode='Disabled'
 #for the recording. This works for my setup SAK.
 #Options: ['Enabled'|'Disabled'(DEFAULT)]
 StorageGroupFallback='Disabled'
-
-#PlotMatchFallback can be used to enable/disable a bit of code that, if a
-#TVDB_SERIESID has been determined but no subtitle nor Season & Episode numbers
-#have been identified, falls back to fuzzy matching the Plot field from the
-#Guide data in MythTV-DB against the Plot data for the series, which we
-#retrieved from TheTVDB and tvmaze.
-#Options: ['Enabled'(DEFAULT)|'Disabled']
-PlotMatchFallback='Enabled'
 
 #CommercialMarkup will generate comskip files for recordings when they are moved.
 #Options: ['Enabled'(DEFAULT)|'Disabled']
@@ -1016,7 +1044,8 @@ validate_settings(){
   local -a switch_user_settings
   switch_user_settings=( 'SYMLINK' 'TRACKING' 'TargetPathIsInputPath'        \
                          'FailSafeMode' 'DIR_TRACKING_CLEANUP' 'StorageGroupFallback' \
-                         'PlotMatchFallback' 'Database' 'ShowStopper'        \
+                         'MATCH_SEASON_EPISODE' 'MATCH_SUBTITLE' 'MATCH_ORIGINALAIRDATE' \
+                         'MATCH_PLOT' 'Database' 'ShowStopper'        \
                          'CommercialMarkup' 'CommercialMarkupCleanup'        \
                          'DailyReport' 'Notify' 'KODIUpdate' 'KODIClean'     \
                          'KODINotify' )
@@ -2596,6 +2625,7 @@ download_series_identification(){
   #Search TheTVDB and return an XML file with results
   inform "SEARCHING: www.TheTVDB.com for '$TITLE'"
   series_query="$(eval "$curlGET 'https://api.thetvdb.com/search/series?name=$tvdbshowname'")"
+  #TODO: it is possible to search by zap2itID as well... so consider doing that too.
 
   if [[ -z "$series_query" ]]; then
     err "${FUNCNAME[0]}(): Could not access info from TheTVDB."
@@ -3033,16 +3063,9 @@ identify_episode(){
   debugcont "EPISODE='$EPISODE'"
   debugcont "Plot='$Plot'"
 
-  #TODO: Consider having user settings ['Enabled'(DEFAULT)|'Disabled']:
-  #        MATCH_SEASON_EPISODE
-  #        MATCH_SUBTITLE
-  #        MATCH_ORIGINALAIRDATE
-  #        MATCH_PLOT (replacing PlotMatchFallback)
-  #      so that users can turn off any matching that is problematic for them.
-
   if [[ -n "$TVDB_TITLE" ]]; then
     #Try matching against SEASON and EPISODE numbers.
-    if [[ -n "$SEASON" && -n "$EPISODE" ]]; then
+    if [[ "$MATCH_SEASON_EPISODE" != 'Disabled' && -n "$SEASON" && -n "$EPISODE" ]]; then
       ConfidenceReasoning="$ConfidenceReasoning Attempted SEASON and EPISODE match:"
       if set_absolute_episode_number_by_season_episode; then
         ConfidenceReasoning="$ConfidenceReasoning Successful;"
@@ -3054,7 +3077,7 @@ identify_episode(){
     fi
 
     #Try to match against SUBTITLE (episode-title).
-    if [[ -n "$SUBTITLE" ]]; then
+    if [[ "$MATCH_SUBTITLE" != 'Disabled' && -n "$SUBTITLE" ]]; then
       ConfidenceReasoning="$ConfidenceReasoning Attempted SUBTITLE exact match:"
       if set_absolute_episode_number_by_ename; then
         ConfidenceReasoning="$ConfidenceReasoning Successful;"
@@ -3073,7 +3096,7 @@ identify_episode(){
     fi
 
     #Try matching against ORIGINALAIRDATE -- NOTE: this is US specific.
-    if [[ -n "$ORIGINALAIRDATE" ]]; then
+    if [[ "$MATCH_ORIGINALAIRDATE" != 'Disabled' && -n "$ORIGINALAIRDATE" ]]; then
       ConfidenceReasoning="$ConfidenceReasoning Attempted match on ORIGINALAIRDATE:"
       set_absolute_episode_number_by_airdate
       local AirdateExitStatus="$?"
@@ -3091,7 +3114,7 @@ identify_episode(){
     fi
 
     #Try matching against Plot.
-    if [[ "$PlotMatchFallback" = 'Enabled' && -n "$Plot" ]]; then
+    if [[ "$MATCH_PLOT" = 'Enabled' && -n "$Plot" ]]; then
       ConfidenceReasoning="$ConfidenceReasoning Attempted Plot fuzzy match:"
       if get_absolute_episode_number_fuzzy_plot; then
         ConfidenceReasoning="$ConfidenceReasoning Successful;"

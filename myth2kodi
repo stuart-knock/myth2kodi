@@ -267,7 +267,7 @@ MATCH_ORIGINALAIRDATE='Enabled'
 
 #MATCH_PLOT can be used to enable/disable attempting episode identification
 #based on the episode plot. The mechanism uses agrep to fuzzy match the
-#"overview" field from the Guide data in MythTV-DB against the overview(TheTVDB)
+#"description" field from the Guide data in MythTV-DB against the overview(TheTVDB)
 #and summary(tvmaze) data for the series.
 #Options: ['Enabled'(DEFAULT)|'Disabled']
 MATCH_PLOT='Enabled'
@@ -1042,13 +1042,13 @@ validate_settings(){
 
   #Check all Enabled|Disabled switches are set correctly.
   local -a switch_user_settings
-  switch_user_settings=( 'SYMLINK' 'TRACKING' 'TargetPathIsInputPath'        \
-                         'FailSafeMode' 'DIR_TRACKING_CLEANUP' 'StorageGroupFallback' \
-                         'MATCH_SEASON_EPISODE' 'MATCH_SUBTITLE' 'MATCH_ORIGINALAIRDATE' \
-                         'MATCH_PLOT' 'Database' 'ShowStopper'        \
-                         'CommercialMarkup' 'CommercialMarkupCleanup'        \
-                         'DailyReport' 'Notify' 'KODIUpdate' 'KODIClean'     \
-                         'KODINotify' )
+  switch_user_settings=( 'CommercialMarkup' 'CommercialMarkupCleanup' 'CREATE_RSS' \
+                         'DailyReport' 'Database' 'DIR_TRACKING_CLEANUP'           \
+                         'FailSafeMode' 'FORCE_PROCESS' 'KODIClean' 'KODINotify'   \
+                         'KODIUpdate' 'MATCH_ORIGINALAIRDATE' 'MATCH_PLOT'         \
+                         'MATCH_SEASON_EPISODE' 'MATCH_SUBTITLE' 'Notify'          \
+                         'ONLINE_LOOKUP' 'ShowStopper' 'StorageGroupFallback'      \
+                         'SYMLINK' 'TargetPathIsInputPath' 'TRACKING' )
   msg="is expected to be set as either 'Enabled' or 'Disabled'."
   for var in "${switch_user_settings[@]}"; do
     [[ "${!var}" =~ ^(Enabled|Disabled)$ ]] || err "$var $msg"
@@ -1622,16 +1622,16 @@ periodic_maintenace(){
   if [[ "$m2kScanMode" != 'True' ]]; then
     #check for interrupted undo jobs
     [[ -f "$m2kdir/undo.lock" && ! -f "$m2kdir/undo.sh" ]] && mv "$m2kdir/undo.lock" "$m2kdir/undo.sh"
-    local current_time
     local last_maintenance_time
-    current_time="$(date +%s)"
     #If file exist for last maintenance time, then get value
     if [[ -f "$m2kdir/lastmaintenace.time" ]]; then
-      last_maintenance_time="$(cat "$m2kdir/lastmaintenace.time")"
+      last_maintenance_time="$(<"$m2kdir/lastmaintenace.time")"
     else #no last maintenance time, so assign a never updated value.
       inform "Seems we've never run maintenance -- no lastmaintenace.time file."
       last_maintenance_time=42 #A meaningless low number to start from...
     fi
+    local current_time
+    current_time="$(date +%s)"
     if ((current_time > last_maintenance_time+MAINTENANCE_PERIOD)); then
       inform "Last maintenance more than $((MAINTENANCE_PERIOD/3600)) hours ago."
       if m2k_maintenance; then
@@ -1775,14 +1775,17 @@ process_cleanup_file(){
 
   inform "Removing files created more than $archive_life months ago."
   while read -r line ; do
-    #TODO: check that line is a file
-    #Extract the creation date of the archived file
-    archive_date="$(grep --only-matching '20[0-9][0-9]-[0-1][0-9]-[0-3][0-9]' <<< "$line")"
-    #Convert it to an integer
-    archive_date="$(date -d "$archive_date" +"%Y%m%d")"
-    if ((archive_date < expire_older_than)); then
-      debug "Removing old archive file: '$line'"
-      rm -f "$line"
+    if [[ -f "$line" ]]; then
+      #Extract the creation date of the archived file
+      archive_date="$(grep --only-matching '20[0-9][0-9]-[0-1][0-9]-[0-3][0-9]' <<< "$line")"
+      #Convert it to an integer
+      archive_date="$(date -d "$archive_date" +"%Y%m%d")"
+      if ((archive_date < expire_older_than)); then
+        debug "Removing old archive file: '$line'"
+        rm -f "$line"
+      fi
+    else
+      warn "${FUNCNAME[0]}(): Entry in '$cleanup_file' is not a file: '$line'."
     fi
   done < "$cleanup_file"
 
@@ -2673,7 +2676,7 @@ check_m2k_database_up_to_date(){
 
   #If file exist for last updated time, then get value
   if [[ -f "$dbdir/lastupdated.time" ]]; then
-    LastUpdatedTVDB=$(cat "$dbdir/lastupdated.time")
+    LastUpdatedTVDB=$(<"$dbdir/lastupdated.time")
   else #no last updated time, so assign a never updated value and update now.
     debug "There is no lastupdated.time file."
     debugcont "So either we've never updated '$TVDB_TITLE' from TheTVDB, or"
@@ -5133,7 +5136,7 @@ generaterss(){
     #set IFS to use line break as a delineator
     local IFS=$'\n'
     #Read in the old RSS file
-    declare -a old_rss_data=( $(cat "$RSS_DIRECTORY/$OLDrssFile") )
+    declare -a old_rss_data=( $(<"$RSS_DIRECTORY/$OLDrssFile") )
     #iterate through the array
     for index in $(seq $((firstLine-1)) $((lastLine-1))) ; do
       printf '%s\n' "${old_rss_data[$index]}" >> "$RSS_DIRECTORY/$TEMPrssFile"
@@ -5279,13 +5282,12 @@ m2k_scan(){
 
 #A special exit point for when we're processing our diagnostics test file.
 testfile_exit(){
-  #TODO: Consider using [[ -n "$(find ./dir -prune -empty)" ]] instead...
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   printf '%s\n' "@@@@ COMPLETE: $(date --rfc-3339=seconds) @@@@" >> "$LOGFILE"
   [[ "$Exx" != 'E07' ]] && err "${FUNCNAME[0]}(): FUZZY FAILURE" && exit 1
-  [[ -d ./Episodes ]] && [[ ! "$(ls -A ./Episodes)" ]] && rmdir ./Episodes
-  [[ -d ./Movies ]]   && [[ ! "$(ls -A ./Movies)" ]]   && rmdir ./Movies
-  [[ -d ./Showings ]] && [[ ! "$(ls -A ./Showings)" ]] && rmdir ./Showings
+  [[ -d ./Episodes ]] && [[ -n "$(find ./Episodes -prune -empty)" ]] && rmdir ./Episodes
+  [[ -d ./Movies ]]   && [[ -n "$(find ./Movies   -prune -empty)" ]] && rmdir ./Movies
+  [[ -d ./Showings ]] && [[ -n "$(find ./Showings -prune -empty)" ]] && rmdir ./Showings
   exit 0
 } #testfile_exit()
 
@@ -6293,6 +6295,11 @@ main(){
   fi
   debug "No command flag set. Processing as recording."
 
+  #From time-to-time check created.tracking, dir.tracking, and remove orphans.
+  #NOTE: This can take some time, so do not do it before parse_command_flags()
+  #      as some of those are small quick things.
+  periodic_maintenace
+
   #No flags, so inputs should be for processing a recording.
   INPUT_PATH="$M2KARG1"
   INPUT_TITLE="$M2KARG2"
@@ -6356,17 +6363,9 @@ main(){
   #Do not process files listed in categoricIgnore or titleIgnore, just exit.
   if ! process_ignore_lists; then return 1; fi
 
-  #TODO: check whether the split on semicolon here should be in process_mythtvdb_schedulesdirect()
-  #Split on semicolon, there will only be one entry looked up.
-  TITLE=$(sed 's/;.*//' <<< "$TITLE") #TODO: ??? ${TITLE%%;*}
-  SUBTITLE="$(sed 's/;.*//' <<< "$SUBTITLE")"
-
   #Only keep Alpha-numeric characters, space, parenthesis and the four chars & , . -
   TITLE="$(sed -r 's/[^[:alnum:] &,.)(-]//g' <<< "$TITLE")"
   SUBTITLE="$(sed -r 's/[^[:alnum:] &,.)(-]//g' <<< "$SUBTITLE")"
-
-  #From time-to-time check created.tracking, dir.tracking, and remove orphans.
-  periodic_maintenace  #TODO: Consider moving this to m2k_init -- somewhere after settings validation.
 
   #If we think it's an episode try and identify the series and episode.
   if [[ "$RECORDING_TYPE" = 'EP' ]]; then

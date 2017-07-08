@@ -689,7 +689,7 @@ m2k_init(){
   {
     printf '%s\n' "Entered ${FUNCNAME[0]}() -- $(date)"
     printf '%s\n' "Called with $M2KARG_COUNT arguments. Called as:"
-    printf '%s\n' "  myth2kodi '$M2KARG1' \"$M2KARG2\" \"$M2KARG3\" \"$M2KARG4\" '$M2KARG5' '$M2KARG6'"
+    printf '%s\n' "  myth2kodi '$M2KARG1' \"$M2KARG2\" \"$M2KARG3\" \"$M2KARG4\" '$M2KARG5'"
     printf '%s\n' "Working directory: '$m2kdir'"
   } > "$pre_logging_file"
 
@@ -1113,7 +1113,7 @@ validate_args(){
   #TODO: Review/Expand the checks of whether we were called correctly.
 
   debug "Called with $M2KARG_COUNT arguments. Called as:"
-  debugcont "myth2kodi '$M2KARG1' \"$M2KARG2\" \"$M2KARG3\" \"$M2KARG4\" '$M2KARG5' '$M2KARG6'"
+  debugcont "myth2kodi '$M2KARG1' \"$M2KARG2\" \"$M2KARG3\" \"$M2KARG4\" '$M2KARG5'"
 
   #We need at least one arg
   if [[ -z "$M2KARG1" ]]; then
@@ -3719,7 +3719,7 @@ msg_dir_summary(){
 msg_operation_summary(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   inform "################ OPERATION SUMMARY ################"
-  informcont "JOB: myth2kodi '$M2KARG1' \"$M2KARG2\" \"$M2KARG3\" \"$M2KARG4\" '$M2KARG5' '$M2KARG6'"
+  informcont "JOB: myth2kodi '$M2KARG1' \"$M2KARG2\" \"$M2KARG3\" \"$M2KARG4\" '$M2KARG5'"
   debugcont  "m2kVersion=$m2kVersion-"
   informcont "CALLER=$CALLER-"
   debugcont  "m2kdir=$m2kdir-"
@@ -4022,7 +4022,7 @@ target_directory_not_writeable(){
 target_file_exists(){
   err "FILE NAME ALREADY EXISTS:"
   errcont "FILE NAME:$MoveDir/$ShowFileName.$ORIGINAL_EXT"
-  errcont "CALLED AS: myth2kodi '$M2KARG1' \"$M2KARG2\" \"$M2KARG3\" \"$M2KARG4\" '$M2KARG5' '$M2KARG6'"
+  errcont "CALLED AS: myth2kodi '$M2KARG1' \"$M2KARG2\" \"$M2KARG3\" \"$M2KARG4\" '$M2KARG5'"
   errcont "TITLE: $TITLE"
   errcont "SUBTITLE: $SUBTITLE"
   errcont "SEASON: $SEASON"
@@ -4641,7 +4641,6 @@ add_doover(){
   debugcont "M2KARG3: '$M2KARG3'"
   debugcont "M2KARG4: '$M2KARG4'"
   debugcont "M2KARG5: '$M2KARG5'"
-  debugcont "M2KARG6: '$M2KARG6'"
   debugcont "m2kdir: '$m2kdir'"
   debugcont "RECORDING_PATH: '$RECORDING_PATH'"
   debugcont "MoveDir: '$MoveDir'"
@@ -4683,7 +4682,7 @@ add_doover(){
     fi
     DOOVER_ADDED='true'
     #Write doover.sh line that recalls myth2kodi in the same way it was originally called:
-    printf '%s\n' "myth2kodi '$M2KARG1' \"$M2KARG2\" \"$M2KARG3\" \"$M2KARG4\" '$M2KARG5' '$M2KARG6'" >> "$m2kdir/doover.sh"
+    printf '%s\n' "myth2kodi '$M2KARG1' \"$M2KARG2\" \"$M2KARG3\" \"$M2KARG4\" '$M2KARG5'" >> "$m2kdir/doover.sh"
     return "$?"
   else
     err "${FUNCNAME[0]}(): should only be called if job requires doover."
@@ -6459,10 +6458,9 @@ M2KARG2="$2"
 M2KARG3="$3"
 M2KARG4="$4"
 M2KARG5="$5"
-M2KARG6="$6" #This is a buffer arg for when a --switch is used with all args.
 
 #Make them read-only so we can't accidentally modify them.
-declare -gr M2KARG_COUNT M2KARG1 M2KARG2 M2KARG3 M2KARG4 M2KARG5 M2KARG6
+declare -gr M2KARG_COUNT M2KARG1 M2KARG2 M2KARG3 M2KARG4 M2KARG5
 
 #Run the main function
 if ! main; then debug "Exited main() function with an error state."; fi

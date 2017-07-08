@@ -3770,6 +3770,7 @@ msg_operation_summary(){
 
   informcont "RECORDING_PATH=$RECORDING_PATH-"
   informcont "TVDB_SERIESID=$TVDB_SERIESID-"
+  informcont "TVMAZE_SERIESID=$TVMAZE_SERIESID-"
   informcont "TITLE=$TITLE-"
   debugcont "INPUT_TITLE=$INPUT_TITLE-"
   [[ "$Database" = 'Enabled' ]] && debugcont "MDB_TITLE=$MDB_TITLE-"

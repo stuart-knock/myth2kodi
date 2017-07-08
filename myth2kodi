@@ -2585,33 +2585,40 @@ get_tvdb_token(){
   current_time="$(date +%s)"
   if [[ -f "$m2kdir/tvdb_token.json" ]]; then
     token_last_updated="$(jq -r .updated "$m2kdir/tvdb_token.json")"
+    debug "Token last updated: '$(date --date="@$token_last_updated")'"
   else
+    debug 'We do not have an existing token.'
     token_last_updated=42
   fi
 
   #Tokens currently (2017-07-03) are supposed to last 24 hours and refreshing
   #a valid token with a GET is preferred over POSTing to login for a new one.
   if (( (current_time - token_last_updated + 42)/3600 >= 24 )); then
+    debug 'Doing full authentication to get a new token.'
     #Get a new token using our APIkey
     curlPOST="curl -s -m '$Timeout' -X POST --header 'Content-Type: application/json' -H 'Accept: application/json' -d"
     data=\'"{\"apikey\": \"$APIkey\"}"\'
     token_json="$(eval "$curlPOST $data 'https://api.thetvdb.com/login'")"
   elif (( (current_time - token_last_updated)/3600 > 12 )); then
+    debug 'Getting refreshed token using our current one.'
     #Get a refreshed token using our currently valid token (if current is older than 12 hours).
     curlGET="curl -s -m '$Timeout' -X GET --header 'Authorization: Bearer $TVDB_TOKEN' -H 'Accept: application/json'"
     token_json="$(eval "$curlGET 'https://api.thetvdb.com/refresh_token'")"
   fi
 
   if [[ -n "$token_json" ]]; then
+    debug 'Using new token.'
     #Set the TVDB_TOKEN variable to the new token value.
     TVDB_TOKEN="$(jq -r '.token' <<< "$token_json")"
 
     #Write the new token and the update time to a file.
     jq --arg updated "$(date +%s)" '. + {updated: $updated}' <<< "$token_json" > "$m2kdir/tvdb_token.json"
   else
+    debug 'Using existing token.'
     #Load our local, currently valid, token.
     TVDB_TOKEN="$(jq -r '.token' "$m2kdir/tvdb_token.json")"
   fi
+  ((LOGLEVEL>3)) && debug "TVDB_TOKEN: '$TVDB_TOKEN'."
   return 0
 } #get_tvdb_token()
 

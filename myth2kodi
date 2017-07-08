@@ -810,6 +810,12 @@ m2k_init(){
   declare -gi SeriesConfidenceRating=0
   declare -gi EpisodeConfidenceRating=0
 
+  #Initialise paths to our local-database summary files.
+  M2K_DB_LIST_TITLE="$m2kdir/m2k_db_series_list_tvdb_title.txt"
+  M2K_DB_LIST_TVDBID="$m2kdir/m2k_db_series_list_tvdb_id.txt"
+  M2K_DB_LIST_TVMAZEID="$m2kdir/m2k_db_series_list_tvmaze_id.txt"
+  declare -gr M2K_DB_LIST_TITLE M2K_DB_LIST_TVDBID M2K_DB_LIST_TVMAZEID
+
   #Make sure our series list is consistent (directories still present).
   prune_series_list
 
@@ -2745,21 +2751,39 @@ check_m2k_database_up_to_date(){
 #Prune entries from the series-list if the directory no-longer exists.
 prune_series_list(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  local series_title series_id line_number=0
-  touch "$m2kdir/temp_series_list.txt"
-  touch "$m2kdir/temp_seriesid_list.txt"
-  if [[ -f "$m2kdir/series_list.txt" ]]; then
-    while read -r series_title ; do
-      ((++line_number))
-      if [[ -d "$m2kdir/$series_title" ]]; then
-        printf '%s\n' "$series_title" >> "$m2kdir/temp_series_list.txt"
-        series_id="$(sed -n "$line_number"'p' "$m2kdir/seriesid_list.txt")"
-        printf '%s\n' "$series_id" >> "$m2kdir/temp_seriesid_list.txt"
-      fi
-    done < "$m2kdir/series_list.txt"
+  local title tvdb_id tvmaze_id line_number=0
+  local title_tmp tvdbid_tmp tvmazeid_tmp
+
+  #Create temporary files for our local-db summary info.
+  if ! title_tmp="$(mktemp "$M2K_TMPDIR/m2k_title_list_$FILE_NAME_NOW"-XXXX)"; then
+    err "${FUNCNAME[0]}(): Failed to create temporary series-title-list file."
+    return 1
   fi
-  mv "$m2kdir/temp_series_list.txt" "$m2kdir/series_list.txt"
-  mv "$m2kdir/temp_seriesid_list.txt" "$m2kdir/seriesid_list.txt"
+  if ! tvdbid_tmp="$(mktemp "$M2K_TMPDIR/m2k_tvdbid_list_$FILE_NAME_NOW"-XXXX)"; then
+    err "${FUNCNAME[0]}(): Failed to create temporary series-tvdbid-list file."
+    return 1
+  fi
+  if ! tvmazeid_tmp="$(mktemp "$M2K_TMPDIR/m2k_tvmazeid_list_$FILE_NAME_NOW"-XXXX)"; then
+    err "${FUNCNAME[0]}(): Failed to create temporary series-tvmazeid-list file."
+    return 1
+  fi
+
+  #Check the directory for each entry still exists, if it does not delete the entry.
+  if [[ -f "$M2K_DB_LIST_TITLE" ]]; then
+    while read -r title ; do
+      ((++line_number))
+      if [[ -d "$m2kdir/$title" ]]; then
+        printf '%s\n' "$title" >> "$title_tmp"
+        tvdb_id="$(sed -n "$line_number"'p' "$M2K_DB_LIST_TVDBID")"
+        printf '%s\n' "$tvdb_id" >> "$tvdbid_tmp"
+        tvmaze_id="$(sed -n "$line_number"'p' "$M2K_DB_LIST_TVMAZEID")"
+        printf '%s\n' "$tvmaze_id" >> "$tvmazeid_tmp"
+      fi
+    done < "$M2K_DB_LIST_TITLE"
+  fi
+  mv "$title_tmp" "$M2K_DB_LIST_TITLE"
+  mv "$tvdbid_tmp" "$M2K_DB_LIST_TVDBID"
+  mv "$tvmazeid_tmp" "$M2K_DB_LIST_TVMAZEID"
   return 0
 } #prune_series_list()
 
@@ -2780,7 +2804,6 @@ download_series_info(){
   local curlGET="curl --silent -m '$Timeout' -X GET -H 'Authorization: Bearer $TVDB_TOKEN' -H 'Accept: application/json'"
   local series_data
   local page=1
-  local -i tvmaze_id
   local -i episode_count
 
   #First, grab the information for the series.
@@ -2870,13 +2893,21 @@ download_series_info(){
     mv "${tvdb_episodes_json}.temp" "$tvdb_episodes_json"
   fi
 
-  #Download the episode information from tvmaze for TVDB_SERIESID
-  tvmaze_id=$(curl -L -s -m"$Timeout" http://api.tvmaze.com/lookup/shows?thetvdb="$TVDB_SERIESID" | jq '.id')
-  if ((tvmaze_id != 0)) ; then
-    debug "Found matching tvmaze id: '$tvmaze_id'"
-    local tvmaze_episodes_site="http://api.tvmaze.com/shows/$tvmaze_id/episodes"
+  #Download the episode information from tvmaze for TVDB_SERIESID.
+  if [[ -z "$TVMAZE_SERIESID" ]]; then
+    TVMAZE_SERIESID="$(curl -L -s -m"$Timeout" http://api.tvmaze.com/lookup/shows?thetvdb="$TVDB_SERIESID" | jq '.id')"
+    declare -gr TVMAZE_SERIESID
+    inform "Identified TVMAZE_SERIESID='$TVMAZE_SERIESID' for TVDB_SERIESID='$TVDB_SERIESID'."
+  else
+    debug "Using TVMAZE_SERIESID from local list."
+  fi
+  if ((TVMAZE_SERIESID != 0)) ; then
+    debug "Using TVMAZE_SERIESID: '$TVMAZE_SERIESID'"
+    local tvmaze_episodes_site="http://api.tvmaze.com/shows/$TVMAZE_SERIESID/episodes"
     debug "Getting new tvmaze show info from: '$tvmaze_episodes_site'"
     curl -L -s -m"$Timeout" "$tvmaze_episodes_site" > "${tvmaze_episodes_json}.temp"
+  else
+    warn "Could not identify the TVMAZE_SERIESID for TVDB_SERIESID='$TVDB_SERIESID'."
   fi
 
   #Check the new info is actually new, if there was no old info then it must be new.
@@ -2894,7 +2925,7 @@ download_series_info(){
 
   if ((new_info_tvdb == 1)) || ((new_info_tvmaze == 1)); then
     inform "Downloaded new information for '$TVDB_TITLE'"
-
+    #Parse new information into our local-db files.
     jq -r '.[] | .episodeName'        "$tvdb_episodes_json" > "$dbdir/$TVDB_TITLE.Ename.txt"
     jq -r '.[] | .airedSeason'        "$tvdb_episodes_json" > "$dbdir/$TVDB_TITLE.S.txt"
     jq -r '.[] | .airedEpisodeNumber' "$tvdb_episodes_json" > "$dbdir/$TVDB_TITLE.E.txt"
@@ -2960,9 +2991,10 @@ download_series_info(){
   if ((ProcessingSuccesful == 1)) ; then
     inform "LOCAL DATABASE UPDATED: $dbdir"
     #Add series-list and seriesid-list entries if we haven't already.
-    if ! grep -q "$TVDB_TITLE" "$m2kdir/series_list.txt"; then
-      printf '%s\n' "$TVDB_TITLE" >> "$m2kdir/series_list.txt"
-      printf '%s\n' "$TVDB_SERIESID" >> "$m2kdir/seriesid_list.txt"
+    if ! grep -q "$TVDB_TITLE" "$M2K_DB_LIST_TITLE"; then
+      printf '%s\n' "$TVDB_TITLE" >> "$M2K_DB_LIST_TITLE"
+      printf '%s\n' "$TVDB_SERIESID" >> "$M2K_DB_LIST_TVDBID"
+      printf '%s\n' "$TVMAZE_SERIESID" >> "$M2K_DB_LIST_TVMAZEID"
     fi
     return 0
   elif [[ ! -f "$dbdir/$TVDB_TITLE.Ename.txt" ]]; then
@@ -2990,7 +3022,7 @@ have_series_info(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   debugcont "TITLE='$TITLE'"
 
-  if grep -q "^$TITLE$" "$m2kdir/series_list.txt"; then
+  if grep -q "^$TITLE$" "$M2K_DB_LIST_TITLE"; then
     inform "We have existing info for: '$TITLE'"
     return 0
   else
@@ -3012,9 +3044,10 @@ identify_series(){
     ConfidenceReasoning="$ConfidenceReasoning Have existing series info;"
     ((++SeriesConfidenceRating))
     local sln
-    sln="$(grep -nix "$TITLE" "$m2kdir/series_list.txt" | grep -m1 -o '^[0-9]*')"
-    TVDB_SERIESID="$(sed -n "$sln"'p' "$m2kdir/seriesid_list.txt")"
-    declare -gr TVDB_TITLE TVDB_SERIESID
+    sln="$(grep -nix "$TITLE" "$M2K_DB_LIST_TITLE" | grep -m1 -o '^[0-9]*')"
+    TVDB_SERIESID="$(sed -n "$sln"'p' "$M2K_DB_LIST_TVDBID")"
+    TVMAZE_SERIESID="$(sed -n "$sln"'p' "$M2K_DB_LIST_TVMAZEID")"
+    declare -gr TVDB_TITLE TVDB_SERIESID TVMAZE_SERIESID
     return 0
   fi
 

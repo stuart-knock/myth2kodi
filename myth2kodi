@@ -4571,34 +4571,33 @@ generate_comskip(){
 #Create a series NFO file based on information we have for the current series
 generate_series_nfo(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
+  local dbdir="$m2kdir/$TVDB_TITLE"
   {
     printf '%s\n' '<?xml version="1.0" encoding="UTF-8" standalone="yes" ?>'
     printf '%s\n' '<tvshow>'
     printf '%b\n' "\t<title>$TVDB_TITLE</title>"
     if [[ -f "$dbdir/$TVDB_TITLE.series_overview.txt" ]]; then
-      printf '%b\n' "\t<plot>$(sed 's/\&/\&amp;/g' "$m2kdir/$TVDB_TITLE/$TVDB_TITLE.series_overview.txt")</plot>"
+      printf '%b\n' "\t<plot>$(sed 's/\&/\&amp;/g' "$dbdir/$TVDB_TITLE.series_overview.txt")</plot>"
     fi
     if [[ -f "$dbdir/$TVDB_TITLE.series_status.txt" ]]; then
-      printf '%b\n' "\t<status>$(<"$m2kdir/$TVDB_TITLE/$TVDB_TITLE.series_status.txt")</status>"
+      printf '%b\n' "\t<status>$(<"$dbdir/$TVDB_TITLE.series_status.txt")</status>"
     fi
     printf '%b\n' "\t<episodeguide>"
-  } > "$MoveDir/tvshow.nfo"
 
-  if [[ -n "$TVDB_SERIESID" ]]; then
-    local webaddrs #TODO: This needs to be updated... With new Token based system accessing the API won't work.
-    webaddrs="http://www.thetvdb.com/api/$APIkey/series/$TVDB_SERIESID/all/$Language.zip"
-    printf '%b\n' "\t\t<url cache=\"$TVDB_SERIESID.xml\">$webaddrs</url>" >> "$MoveDir/tvshow.nfo"
-  fi
+    if [[ -n "$TVDB_SERIESID" ]]; then
+      local webaddrs #TODO: This needs to be updated... With new Token based system accessing the API won't work.
+      webaddrs="http://www.thetvdb.com/api/$APIkey/series/$TVDB_SERIESID/all/$Language.zip"
+      printf '%b\n' "\t\t<url cache=\"$TVDB_SERIESID.xml\">$webaddrs</url>" >> "$MoveDir/tvshow.nfo"
+    fi
 
-  {
     printf '%b\n' "\t</episodeguide>"
     [[ -n "$TVDB_SERIESID" ]] && printf '%b\n' "\t<id>$TVDB_SERIESID</id>"
     printf '%b\n' "\t<dateadded>$(date --rfc-3339=seconds)</dateadded>"
     if [[ -f "$dbdir/$TVDB_TITLE.series_firstaired.txt" ]]; then
-      printf '%b\n' "\t<premiered>$(<"$m2kdir/$TVDB_TITLE/$TVDB_TITLE.series_firstaired.txt")</premiered>"
+      printf '%b\n' "\t<premiered>$(<"$dbdir/$TVDB_TITLE.series_firstaired.txt")</premiered>"
     fi
     printf '%s\n' '</tvshow>'
-  } >> "$MoveDir/tvshow.nfo"
+  } > "$MoveDir/tvshow.nfo"
   inform "Generated series NFO file: $MoveDir/tvshow.nfo"
   return 0
 } #generate_series_nfo()

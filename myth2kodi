@@ -4587,7 +4587,7 @@ generate_series_nfo(){
     if [[ -n "$TVDB_SERIESID" ]]; then
       local webaddrs #TODO: This needs to be updated... With new Token based system accessing the API won't work.
       webaddrs="http://www.thetvdb.com/api/$APIkey/series/$TVDB_SERIESID/all/$Language.zip"
-      printf '%b\n' "\t\t<url cache=\"$TVDB_SERIESID.xml\">$webaddrs</url>" >> "$MoveDir/tvshow.nfo"
+      printf '%b\n' "\t\t<url cache=\"$TVDB_SERIESID.xml\">$webaddrs</url>"
     fi
 
     printf '%b\n' "\t</episodeguide>"

@@ -4478,7 +4478,7 @@ make_show_dir(){
       [[ "$TRACKING" != 'Disabled' ]] && printf '%s\n' "$MoveDir" >> "$m2kdir/dir.tracking"
       mkdir "$MoveDir"
       chmod 775 "$MoveDir"
-      generate_series_nfo
+      [[ "$RECORDING_TYPE" != 'MV' ]] && generate_series_nfo
     fi
 
     #Make the Season folder if it is applicable and does not exist

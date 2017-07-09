@@ -673,11 +673,62 @@ exit_job(){
   ((LOGLEVEL>=13)) && env | err_pipe 'env:  '
   ((LOGLEVEL>=42)) && set | err_pipe 'set:  '
 
-  #Run any user job specified for this job type.
-  if [[ -f "$m2kdir/userjobs/$jobtype" ]]; then
-    inform "Processing user job: $m2kdir/userjobs/$jobtype"
-    source "$m2kdir/userjobs/$jobtype" 2>&1 | err_pipe "${FUNCNAME[0]}(): $jobtype: "
-  fi
+  #Define the ExitJob hierarchy, each exit type is a variable that points to its parent.
+  #shellcheck disable=SC2034
+  {
+  declare -r ExitJob=''
+    declare -r Success='ExitJob'
+        declare -r SuccessfulCommandLineSwitch='Success'
+        declare -r SuccessfulIgnore='Success'
+            declare -r titleIgnore='SuccessfulIgnore'
+            declare -r categoricIgnore='SuccessfulIgnore'
+            declare -r DuplicateAvoided='SuccessfulIgnore'
+                declare -r RecordingAlreadyProcessed='DuplicateAvoided'
+                declare -r FileAlreadyExists='DuplicateAvoided'
+        declare -r SuccessfulProcessing='Success'
+            declare -r LinkModeSuccessful='SuccessfulProcessing'
+            declare -r MoveModeSuccessful='SuccessfulProcessing'
+            declare -r CopyModeSuccessful='SuccessfulProcessing'
+            declare -r FailSafeModeComplete='SuccessfulProcessing'
+    declare -r Failed='ExitJob'
+        declare -r FailedCommandLineSwitch='Failed'
+        declare -r FailedProcessing='Failed'
+            declare -r BadCall='FailedProcessing'
+                declare -r InvalidCall='BadCall'
+                declare -r InputPathNotFile='BadCall'
+                declare -r FileIsNotRecording='BadCall'
+                declare -r UserSettingError='BadCall'
+            declare -r InsufficientInformation='FailedProcessing'
+                declare -r InsufficientInformationProvided='InsufficientInformation'
+                declare -r TheTVDBIsIncomplete='InsufficientInformation'
+                declare -r NameCouldNotBeAssigned='InsufficientInformation'
+            declare -r SystemFailure='FailedProcessing'
+                declare -r MythTVdatabaseFailure='SystemFailure'
+                declare -r PermissionError='SystemFailure'
+                declare -r ZeroLengthFile='SystemFailure'
+                declare -r FileOrPathDoesNotExist='SystemFailure'
+                declare -r MoveFailed='SystemFailure'
+                declare -r CopyFailed='SystemFailure'
+                declare -r RemoveFailed='SystemFailure'
+                declare -r LinkingFailed='SystemFailure'
+                declare -r NoTargetPathAvailable='SystemFailure'
+                declare -r NotFileOrDirectory='SystemFailure'
+        declare -r GenericUnspecifiedError='Failed'
+  }
+
+  #Run the most specific userjob that is defined for this EXIT_JOB_TYPE.
+  while [[ -n "$jobtype" ]]; do
+    debug "Checking for user job: '$m2kdir/userjobs/$jobtype'."
+    if [[ -f "$m2kdir/userjobs/$jobtype" ]]; then
+      inform "Processing user job: $m2kdir/userjobs/$jobtype"
+      source "$m2kdir/userjobs/$jobtype" 2>&1 | err_pipe "${FUNCNAME[0]}(): $jobtype: "
+      break
+    fi
+    debug "No user job: '$m2kdir/userjobs/$jobtype'."
+    jobtype="${!jobtype}"
+    [[ -z "$jobtype" ]] && debug 'There are no userjobs defined for this exit type.'
+  done
+
   exit "$exitstatus"
 } #exit_job()
 
@@ -701,7 +752,7 @@ m2k_init(){
   ((LOGLEVEL>=3)) && printf '%s\n' "Config complete." >> "$pre_logging_file"
 
   #What am I...
-  m2kVersion='myth2kodi Version 1.4.2x' ; declare -gr m2kVersion
+  m2kVersion='myth2kodi Version 1.4.2y' ; declare -gr m2kVersion
   m2kPlatform="$(uname)" ; declare -gr m2kPlatform
   ((LOGLEVEL>=3)) && printf '%s\n' "Running $m2kVersion on $m2kPlatform." >> "$pre_logging_file"
 

@@ -379,7 +379,7 @@ get_install_dir(){
       [[ -z "$yesorno" ]] && yesorno='y'
       if [[ "${yesorno,,}" = "y" ]]; then
         debug 'Trying to create install directory.'
-        mkdir -P "$custom_install_dir" 2>&1 | err_pipe "${FUNCNAME[0]}(): "
+        mkdir -p "$custom_install_dir" 2>&1 | err_pipe "${FUNCNAME[0]}(): "
         if [[ "${PIPESTATUS[0]}" != '0' ]]; then
           err "Could not create requested directory: $custom_install_dir"
           return 1
@@ -584,6 +584,10 @@ setup_working_dir(){
     [[ -f "$M2K_WORKING_DIRECTORY/myth2kodi.png" ]] || cp -p "${SCRIPT_PATH}/myth2kodi.png" "$M2K_WORKING_DIRECTORY" 2>&1 | err_pipe "${FUNCNAME[0]}(): "
     [[ "${PIPESTATUS[0]}" != 0 ]] && return 1
     [[ -f "$M2K_WORKING_DIRECTORY/myth2kodi_failed.png" ]] || cp -p "${SCRIPT_PATH}/myth2kodi_failed.png" "$M2K_WORKING_DIRECTORY" 2>&1 | err_pipe "${FUNCNAME[0]}(): "
+    [[ "${PIPESTATUS[0]}" != 0 ]] && return 1
+
+    # If userjobs directory does not already exist create it.
+    [[ -d "$M2K_WORKING_DIRECTORY/userjobs" ]] || mkdir -p "$M2K_WORKING_DIRECTORY/userjobs" 2>&1 | err_pipe "${FUNCNAME[0]}(): "
     [[ "${PIPESTATUS[0]}" != 0 ]] && return 1
   fi
   return 0

@@ -544,8 +544,6 @@ LOGTYPE='filestderr'
 #TODO: really need to review doover and undo usage...
 #TODO: REALLY NEED TO REVIEW sudo USE AND PERMISSIONS EXPECTATIONS WITHIN THE SCRIPT...
 
-#TODO: Review RequiresDoover and EpisodeConfidenceRating usage...
-
 #TODO: If we just prepend $binpath to $Librarian's path we could avoid all the
 #      explicit paths in our function calls... Though we may need to clean up before we finished...
 #          SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
@@ -752,7 +750,7 @@ m2k_init(){
   ((LOGLEVEL>=3)) && printf '%s\n' "Config complete." >> "$pre_logging_file"
 
   #What am I...
-  m2kVersion='myth2kodi Version 1.4.2y' ; declare -gr m2kVersion
+  m2kVersion='myth2kodi Version 1.4.2z' ; declare -gr m2kVersion
   m2kPlatform="$(uname)" ; declare -gr m2kPlatform
   ((LOGLEVEL>=3)) && printf '%s\n' "Running $m2kVersion on $m2kPlatform." >> "$pre_logging_file"
 
@@ -3045,7 +3043,7 @@ download_series_info(){
   if ((ProcessingSuccesful == 1)) ; then
     inform "LOCAL DATABASE UPDATED: $dbdir"
     #Add series-list and seriesid-list entries if we haven't already.
-    if ! grep -q "$TVDB_TITLE" "$M2K_DB_LIST_TITLE"; then
+    if ! grep -q "^$TVDB_TITLE$" "$M2K_DB_LIST_TITLE"; then
       printf '%s\n' "$TVDB_TITLE" >> "$M2K_DB_LIST_TITLE"
       printf '%s\n' "$TVDB_SERIESID" >> "$M2K_DB_LIST_TVDBID"
       printf '%s\n' "$TVMAZE_SERIESID" >> "$M2K_DB_LIST_TVMAZEID"
@@ -3112,10 +3110,10 @@ identify_series(){
     if download_series_identification; then
       ConfidenceReasoning="$ConfidenceReasoning Attempted Title match on Standard Logic:"
       if get_serieslinenumber_showname; then
+        ((++SeriesConfidenceRating))
         ConfidenceReasoning="$ConfidenceReasoning Successful;"
       else
-        warn "FAILED to get series line number with standard logic, requiring doover."
-        RequiresDoover=1
+        warn "FAILED to get series line number with standard logic."
         ((--SeriesConfidenceRating))
         ConfidenceReasoning="$ConfidenceReasoning Failed; Attempted Title match on Fuzzy Logic:"
         if get_serieslinenumber_showname_fuzzy; then
@@ -3166,6 +3164,7 @@ identify_episode(){
       ConfidenceReasoning="$ConfidenceReasoning Attempted SEASON and EPISODE match:"
       if set_absolute_episode_number_by_season_episode; then
         ConfidenceReasoning="$ConfidenceReasoning Successful;"
+        ((++EpisodeConfidenceRating))
         return 0
       else
         ((--EpisodeConfidenceRating))
@@ -3178,15 +3177,16 @@ identify_episode(){
       ConfidenceReasoning="$ConfidenceReasoning Attempted SUBTITLE exact match:"
       if set_absolute_episode_number_by_ename; then
         ConfidenceReasoning="$ConfidenceReasoning Successful;"
+        ((++EpisodeConfidenceRating))
         return 0
       else
-        ((--EpisodeConfidenceRating))
         ConfidenceReasoning="$ConfidenceReasoning Failed; Attempted SUBTITLE fuzzy match:"
         if set_absolute_episode_number_by_ename_fuzzy; then
+          #NOTE: for fuzzy matching, multi_match_check() determines whether a
+          #      match is reliable enough to increment EpisodeConfidenceRating.
           ConfidenceReasoning="$ConfidenceReasoning Successful;"
           return 0
         else
-          ((--EpisodeConfidenceRating))
           ConfidenceReasoning="$ConfidenceReasoning Failed;"
         fi
       fi
@@ -3195,12 +3195,7 @@ identify_episode(){
     #Try matching against ORIGINALAIRDATE -- NOTE: this is US specific.
     if [[ "$MATCH_ORIGINALAIRDATE" != 'Disabled' && -n "$ORIGINALAIRDATE" ]]; then
       ConfidenceReasoning="$ConfidenceReasoning Attempted match on ORIGINALAIRDATE:"
-      set_absolute_episode_number_by_airdate
-      local AirdateExitStatus="$?"
-      if [[ "$AirdateExitStatus" = '1' && -n "$SUBTITLE" ]]; then
-        if resolve_multiple_matches_airdate; then AirdateExitStatus=0; fi
-      fi
-      if [[ "$AirdateExitStatus" = '0' ]]; then
+      if set_absolute_episode_number_by_airdate; then
         ((++EpisodeConfidenceRating))
         ConfidenceReasoning="$ConfidenceReasoning Successful;"
         return 0
@@ -3214,10 +3209,11 @@ identify_episode(){
     if [[ "$MATCH_PLOT" = 'Enabled' && -n "$Plot" ]]; then
       ConfidenceReasoning="$ConfidenceReasoning Attempted Plot fuzzy match:"
       if get_absolute_episode_number_fuzzy_plot; then
+        #NOTE: for fuzzy matching, multi_match_check() determines whether a
+        #      match is reliable enough to increment EpisodeConfidenceRating.
         ConfidenceReasoning="$ConfidenceReasoning Successful;"
         return 0
       else
-        ((--EpisodeConfidenceRating))
         ConfidenceReasoning="$ConfidenceReasoning Failed;"
       fi
     fi
@@ -3225,6 +3221,7 @@ identify_episode(){
   else
     err 'Attempted episode match without TVDB_TITLE.'
   fi #[[ -n "$TVDB_TITLE" ]]
+  ((EpisodeConfidenceRating -= 4))
   return 1
 } #identify_episode()
 
@@ -3248,9 +3245,9 @@ validate_episode(){
   local aen_backup="$AbsoluteEpisodeNumber"
   local aen_sxxexx aen_ename aen_ename_fuzzy aen_originalairdate
   if set_absolute_episode_number_by_season_episode; then aen_sxxexx="$AbsoluteEpisodeNumber"; fi
-  if set_absolute_episode_number_by_ename; then aen_ename="$AbsoluteEpisodeNumber"; fi
-  if set_absolute_episode_number_by_ename_fuzzy; then aen_ename_fuzzy="$AbsoluteEpisodeNumber"; fi
-  if set_absolute_episode_number_by_airdate; then aen_originalairdate="$AbsoluteEpisodeNumber"; fi
+  if set_absolute_episode_number_by_ename;          then aen_ename="$AbsoluteEpisodeNumber"; fi
+  if set_absolute_episode_number_by_ename_fuzzy;    then aen_ename_fuzzy="$AbsoluteEpisodeNumber"; fi
+  if set_absolute_episode_number_by_airdate;        then aen_originalairdate="$AbsoluteEpisodeNumber"; fi
   debug 'Found:'
   debugcont "aen_sxxexx          = '$aen_sxxexx';"
   debugcont "aen_ename           = '$aen_ename';"
@@ -3264,10 +3261,10 @@ validate_episode(){
   done
   multi_match_check
   local mmc_status="$?"
-  [[ "$mmc_status" = '0' ]] && ((EpisodeConfidenceRating += ${#AENguess[@]}))
+  [[ "$mmc_status" = '0' ]] && ((EpisodeConfidenceRating += ${#AENguess[@]}-1))
   AbsoluteEpisodeNumber="$aen_backup"
   return "$mmc_status"
-}
+} #validate_episode()
 
 #Set the serieslinenumber by fuzzy logic matching the current TITLE
 #variable against show names returned by querying TheTVDB.
@@ -3302,53 +3299,6 @@ get_serieslinenumber_showname(){
   if ((serieslinenumber >= 1)); then return 0; else return 1; fi
 } #get_serieslinenumber_showname()
 
-#TODO: review, possibly remove...
-#Resolve multiple matches on the same airdate, the conflict is
-#resolved by matching the airdate by title.
-resolve_multiple_matches_airdate(){
-  debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
-  local NewShowBasename="$m2kdir/$TVDB_TITLE/$TVDB_TITLE"
-  #Cleanup from last instance match if required
-  ConfidenceReasoning="$ConfidenceReasoning Conflict; Multiple Airdates Detected- Parsed results; Attempted to resolve conflict with Standard Logic:"
-  test -f "$NewShowBasename.InstanceEnames.txt"            && rm "$NewShowBasename.InstanceEnames.txt"
-  test -f "$NewShowBasename.InstanceFAiredLineNumbers.txt" && rm "$NewShowBasename.InstanceFAiredLineNumbers.txt"
-  test -f "$NewShowBasename.InstanceLineNumbers.txt"       && rm "$NewShowBasename.InstanceLineNumbers.txt"
-  #Create a list of line numbers which match original airdate
-  grep -n "$ORIGINALAIRDATE" "$NewShowBasename.FAired.txt" | cut -d':' -f1 >> "$NewShowBasename.InstanceFAiredLineNumbers.txt"
-  #Loop through list and create instance matching files
-  while read -r line ; do
-    echo "$line" >>"$NewShowBasename.InstanceLineNumbers.txt"
-    sed -n "$line"'p' "$NewShowBasename.Ename.txt" >> "$NewShowBasename.InstanceEnames.txt"
-  done < "$NewShowBasename.InstanceFAiredLineNumbers.txt"
-
-  #get instance line number
-  IntermediateEpisodeNumber=$(grep -ni "$SUBTITLE" "$NewShowBasename.InstanceEnames.txt" | grep -m1 -o '^[0-9]*')
-  #translate instance line number to actual line number
-  if [[ -n "$IntermediateEpisodeNumber" ]]; then
-    AbsoluteEpisodeNumber=$(sed -n "$IntermediateEpisodeNumber"'p' "$NewShowBasename.InstanceLineNumbers.txt")
-  fi
-  if [[ -n "$AbsoluteEpisodeNumber" ]]; then
-    ConfidenceReasoning="$ConfidenceReasoning Successful;"
-    return 0
-  else
-    ConfidenceReasoning="$ConfidenceReasoning Failed; Attempted to resolve conflict with Fuzzy Logic:"
-    #get instance line number -- Some systems have an agrep that limits PATTERN to < 32 characters...
-    IntermediateEpisodeNumber=$(agrep -iByn "^${SUBTITLE:0:28}" "$NewShowBasename.InstanceEnames.txt" | grep -m1 -o '^[0-9]*')
-    #translate instance line number to actual line number
-    if [[ -n "$IntermediateEpisodeNumber" ]]; then
-      AbsoluteEpisodeNumber=$(sed -n "$IntermediateEpisodeNumber"'p' "$NewShowBasename.InstanceLineNumbers.txt")
-    fi
-    if [[ -n "$AbsoluteEpisodeNumber" ]]; then
-      ConfidenceReasoning="$ConfidenceReasoning Successful;"
-      return 0
-    else
-      ConfidenceReasoning="$ConfidenceReasoning Failed;"
-      return 1
-    fi
-  fi
-  return 1
-} #resolve_multiple_matches_airdate()
-
 #Sets the TVDB_SERIESID and TVDB_TITLE variables based on serieslinenumber.
 set_tvdb_seriesid_title_from_serieslinenumber(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
@@ -3382,7 +3332,7 @@ set_absolute_episode_number_by_airdate(){
     inform "Absolute Exx NR:$AbsoluteEpisodeNumber BASED ON AIRDATE:$ORIGINALAIRDATE"
     return 0
   fi
-  return 2
+  return 1
 } #set_absolute_episode_number_by_airdate()
 
 #Set the AbsoluteEpisodeNumber by comparing SEASON and EPISODE against the
@@ -3439,7 +3389,11 @@ set_absolute_episode_number_by_ename_fuzzy(){
   debugcont "TVDB_TITLE = '$TVDB_TITLE'"
   debugcont "SUBTITLE = '$SUBTITLE'"
 
-  [[ -z "$SUBTITLE" ]] && { warn "${FUNCNAME[0]}(): No SUBTITLE."; return 1; }
+  if [[ -z "$SUBTITLE" ]]; then
+    warn "${FUNCNAME[0]}(): No SUBTITLE."
+    ((--EpisodeConfidenceRating))
+    return 1
+  fi
 
   local subtitle subtitle_length
   if agrep --version &> /dev/null ; then #Hacky: works because, so far, the agrep that limits PATTERN length to < 32 also lacks a --version flag.
@@ -3486,7 +3440,11 @@ set_absolute_episode_number_by_ename_fuzzy(){
     fi
   done
   #Require a cost that is <= 1/3 the subtitle's length.
-  (( min_cost > (subtitle_length / 3) )) && { warn 'Fuzzy subtitle match too fuzzy.' ; return 1; }
+  if (( min_cost > (subtitle_length / 3) )); then
+    warn 'Fuzzy subtitle match too fuzzy.'
+    ((--EpisodeConfidenceRating))
+    return 1
+  fi
   #Check that multiple matches are actually the same episode.
   #NOTE: do not sort as we preferentially want the results of fuzzy_ename_0.
   multi_match_check
@@ -3509,6 +3467,7 @@ fuzzy_plot_match(){
     #This should only happen when TVDB_TITLE has no Plot info, so no point
     #continuing trying to match Plot.
     warn "${FUNCNAME[0]}(): No fuzzy match on Plot -- Possibly no Plot info for $TVDB_TITLE"
+    ((--EpisodeConfidenceRating))
     return 2
   fi
   #Extract our guessed AbsoluteEpisodeNumber
@@ -3526,6 +3485,7 @@ fuzzy_plot_match(){
   #If the cost is less than a 1/3 of characters in the plot we're trying to match
   #then consider that good enough and validate. #TODO: figure out the critical ratio here.
   (( cost[0] <= (PlotLength / 3) )) && { multi_match_check ; return "$?"; }
+  ((--EpisodeConfidenceRating))
   return 1
 } #fuzzy_plot_match()
 
@@ -3597,7 +3557,7 @@ chunked_fuzzy_plot_match(){
 
   #Need to be more conservative with the shorter(6) chunks we're now using, so,
   #require at least 2 GoodChunkGuesses:
-  (( ${#GoodChunkGuesses[@]} < 2 )) && return 1
+  (( ${#GoodChunkGuesses[@]} < 2 )) && { ((--EpisodeConfidenceRating)); return 1; }
 
   #If all ChunkGuess with ChunkCost < 10% are the same Absolute Episode Number
   AENguess=($(printf '%s\n' "${GoodChunkGuesses[@]}" | sort -n ))
@@ -3619,11 +3579,13 @@ multi_match_check(){
 
   if (( match_count == 0 )); then
     warn "${FUNCNAME[0]}(): Called with empty Absolute Episode Number guess."
+    ((--EpisodeConfidenceRating))
     return 1
   elif (( match_count == 1 )) ; then
     debug "Called with only one Absolute Episode Number guess."
     AbsoluteEpisodeNumber="${AENguess[0]}"
     inform "${FUNCNAME[0]}(): Identified AbsoluteEpisodeNumber: $AbsoluteEpisodeNumber using ${FUNCNAME[1]}()."
+    ((++EpisodeConfidenceRating))
     return 0
   elif (( match_count > 1 )); then
     debug "Multiple AbsoluteEpisodeNumber guesses matched plot, confirming they're the same episode before using."
@@ -3653,6 +3615,7 @@ multi_match_check(){
       #With multiple data sources we can get multiple AENs for the same episode, just take the first:
       AbsoluteEpisodeNumber=$(cut -f1 -d" " <<< "${AENguess[0]}")
       inform "${FUNCNAME[0]}(): Identified AbsoluteEpisodeNumber: $AbsoluteEpisodeNumber using ${FUNCNAME[1]}()."
+      ((++EpisodeConfidenceRating))
       return 0
     elif (( uniq_match_count > 1 )); then
       local -i uniqSxxExxcount
@@ -3679,6 +3642,8 @@ multi_match_check(){
         debug "aen_index='$aen_index'"
         AbsoluteEpisodeNumber=$(cut -f1 -d" " <<< "${AENguess[$aen_index]}")
         inform "${FUNCNAME[0]}(): Identified AbsoluteEpisodeNumber: $AbsoluteEpisodeNumber using ${FUNCNAME[1]}()."
+        #Bump episode confidence if match is greater than 85% consistent.
+        (( (match_count*100)/most_common_match_count <= 117 )) && ((++EpisodeConfidenceRating))
         return 0
       else
         debug "The AbsoluteEpisodeNumber guesses were different:"
@@ -3686,6 +3651,7 @@ multi_match_check(){
         for (( i = 0; i < match_count; i++ )) ; do
           debugcont "${i}: ${AENguess[i]} = '${SxxExxGuesses[i]}'"
         done
+        ((--EpisodeConfidenceRating))
         return 1
       fi #>=2/3
     fi #uniq_match_count
@@ -3696,6 +3662,7 @@ multi_match_check(){
   errcont "$( IFS=','; printf '%s' "There are ${#AENguess[@]} AENguesses: ${AENguess[*]}." )"
   errcont "Season number file:  '$m2kdir/$TVDB_TITLE/$TVDB_TITLE.S.txt'"
   errcont "Episode number file: '$m2kdir/$TVDB_TITLE/$TVDB_TITLE.E.txt'"
+  ((--EpisodeConfidenceRating))
   return 1
 } #multi_match_check()
 
@@ -3707,14 +3674,19 @@ get_absolute_episode_number_fuzzy_plot(){
   debugcont "Plot: '$Plot'"
   #TODO: Consider either keyword based match or stripping very common words (it, a, an, the, etc.) before current match as they just tend to add noise.
   #      This would require a cleansed plot file be generated for the series as well as cleansing the Plot variable...
-  [[ -z "$Plot" ]] && { err 'We do not have any Plot info.'; return 1; }
+  if [[ -z "$Plot" ]]; then
+    err 'We do not have any Plot info.'
+    ((--EpisodeConfidenceRating))
+    return 1
+  fi
 
   if [[ ! -f "$m2kdir/$TVDB_TITLE/$TVDB_TITLE.Plot.txt" ]]; then
     err "Myth2kodi's internal database contains no Plot file for '$TVDB_TITLE'."
     errcont "This probably means we failed to identify a TVDB_SERIESID. Either you need"
     errcont "to add a showTranslations entry, we've mistaken a Movie for an Episode,"
     errcont "or this is a one off showing like news or a sports event."
-   return 1
+    ((--EpisodeConfidenceRating))
+    return 1
   fi
 
   AbsoluteEpisodeNumber=''
@@ -3727,7 +3699,11 @@ get_absolute_episode_number_fuzzy_plot(){
   PlotLength=$(wc --chars <<< "$Plot")
   debugcont "PlotLength: '$PlotLength'"
   #If Plot length is short this really won't work well, so give up #TODO: figure out what length is genuinely too short...
-  ((PlotLength<42)) && warn "${FUNCNAME[0]}(): Plot is too short to attempt fuzzy guess." && return 1
+  if ((PlotLength<42)); then
+    warn "${FUNCNAME[0]}(): Plot is too short to attempt fuzzy guess."
+    ((--EpisodeConfidenceRating))
+    return 1
+  fi
 
   #If our agrep supports it, try a full Plot match.
   if agrep --version &> /dev/null ; then #Hacky: works because, so far, the agrep that limits PATTERN length to < 32 also lacks a --version flag.
@@ -6376,7 +6352,6 @@ recreate_comskip(){
 
 #The main myth2kodi function...
 main(){
-
   #Initial setup: override defaults with myth2kodi.conf; initialise logging system.
   if ! m2k_init; then return 1; fi
   #NOTE: m2k_init() exits directly for errors that come to early for exit_job() to run.
@@ -6415,10 +6390,6 @@ main(){
     inform "TargetPathIsInputPath=Enabled. Resetting paths, creating directories."
     set_target_dir_as_input_path_dir
   fi
-
-  # #TODO: Consider early abort for bad permissions or insufficient space here.
-  # #Determine write permissions and free space for Move and Working directories.
-  # if ! check_filesystem; then return 1; fi
 
   #Initial log entry for the processing of recording, regardless of LOGLEVEL.
   {
@@ -6465,9 +6436,13 @@ main(){
   #If we think it's an episode try and identify the series and episode.
   if [[ "$RECORDING_TYPE" = 'EP' ]]; then
     identify_series
+    if ((SeriesConfidenceRating < 0)); then
+      warn "Low series-confidence-rating ($SeriesConfidenceRating), requiring doover."
+      RequiresDoover=1
+    fi
     get_series_info
     if identify_episode; then
-      if ! validate_episode; then
+      if ((LOGLEVEL>=3)) && ! validate_episode; then
         warn 'Episode validation indicates inconsistent data, requiring doover.'
         RequiresDoover=1
       fi
@@ -6479,6 +6454,10 @@ main(){
       [[ -n "$TVDB_SUBTITLE" ]] && SUBTITLE="$TVDB_SUBTITLE"
       [[ -n "$TVDB_SEASON" ]]   && SEASON="$TVDB_SEASON"
       [[ -n "$TVDB_EPISODE" ]]  && EPISODE="$TVDB_EPISODE"
+    fi
+    if ((EpisodeConfidenceRating < 0)); then
+      warn "Low episode-confidence-rating ($EpisodeConfidenceRating), requiring doover."
+      RequiresDoover=1
     fi
     #Update confidence total.
     ((ConfidenceRating = EpisodeConfidenceRating + SeriesConfidenceRating))

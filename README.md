@@ -64,8 +64,6 @@ additional functionality see [USAGE.md](./doc/USAGE.md) or type:
   ├── <a href="./m2k_notify">m2k_notify</a> (Sends desktop notifications.) <br>
   ├── <a href="./bashlogging">bashlogging</a> (Provides a configurable logging mechanism.) <br>
   ├── <a href="./myth2kodi.conf">myth2kodi.conf</a> (A complete configuration template.) <br>
-  ├── <a href="./myth2kodi.png">myth2kodi.png</a> (The icon displayed with desktop notifications on successful processing.) <br>
-  ├── <a href="./myth2kodi_failed.png">myth2kodi_failed.png</a> (The icon displayed with desktop notifications on failed processing.) <br>
   ├── <a href="./showTranslations.SydFTA">showTranslations.SydFTA</a> (An example translation file for Sydney free-to-air guide data.) <br>
   ├── <a href="./guessepisodefromplot.py">guessepisodefromplot.py</a> (Possible future NLP addon.) <br>
   ├── <a href="./doc/">doc</a> (Documentation.) <br>
@@ -76,6 +74,9 @@ additional functionality see [USAGE.md](./doc/USAGE.md) or type:
       ├── <a href="./doc/key_differences_to_mythicalLibrarian.md">key_differences_to_mythicalLibrarian.md</a> (How is myth2kodi different from mythicalLibrarian?) <br>
       ├── <a href="./doc/create_a_dummy_system_for_testing.md">create_a_dummy_system_for_testing.md</a> (Rough guide to building a test system that mirrors your actual system.) <br>
       └── <a href="./doc/example_myth2kodi.conf">example_myth2kodi.conf</a> (A minimal example configuration file.) <br>
+  ├── <a href="./doc/">icons</a> (Icons.) <br>
+      ├── <a href="./myth2kodi.png">myth2kodi.png</a> (The icon displayed with desktop notifications on successful processing.) <br>
+      └── <a href="./myth2kodi_failed.png">myth2kodi_failed.png</a> (The icon displayed with desktop notifications on failed processing.) <br>
   ├── <a href="./doc/">tools</a> (Simple scripts that do something useful using myth2kodi.) <br>
       └── <a href="./tools/manual_process">manual_process</a> (Helps manually processing failed episode identification.) <br>
   └── <a href="./attic/">attic</a> (Old stuff I just haven't thrown away yet.) <br>

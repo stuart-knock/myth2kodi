@@ -41,7 +41,7 @@ As the user who will function as your media librarian, run:
     
     mkdir ~/.myth2kodi
     cp myth2kodi.conf ~/.myth2kodi
-    cp myth2kodi.png ~/.myth2kodi
-    cp myth2kodi_failed.png ~/.myth2kodi
+    cp icons/myth2kodi.png ~/.myth2kodi
+    cp icons/myth2kodi_failed.png ~/.myth2kodi
 
 For extra information on configuration, see [CONFIGURE.md](CONFIGURE.md).

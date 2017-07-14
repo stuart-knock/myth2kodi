@@ -581,9 +581,9 @@ setup_working_dir(){
     fi
   
     # Copy myth2kodi.png and myth2kodi_failed.png into place.
-    [[ -f "$M2K_WORKING_DIRECTORY/myth2kodi.png" ]] || cp -p "${SCRIPT_PATH}/myth2kodi.png" "$M2K_WORKING_DIRECTORY" 2>&1 | err_pipe "${FUNCNAME[0]}(): "
+    [[ -f "$M2K_WORKING_DIRECTORY/myth2kodi.png" ]] || cp -p "${SCRIPT_PATH}/icons/myth2kodi.png" "$M2K_WORKING_DIRECTORY" 2>&1 | err_pipe "${FUNCNAME[0]}(): "
     [[ "${PIPESTATUS[0]}" != 0 ]] && return 1
-    [[ -f "$M2K_WORKING_DIRECTORY/myth2kodi_failed.png" ]] || cp -p "${SCRIPT_PATH}/myth2kodi_failed.png" "$M2K_WORKING_DIRECTORY" 2>&1 | err_pipe "${FUNCNAME[0]}(): "
+    [[ -f "$M2K_WORKING_DIRECTORY/myth2kodi_failed.png" ]] || cp -p "${SCRIPT_PATH}/icons/myth2kodi_failed.png" "$M2K_WORKING_DIRECTORY" 2>&1 | err_pipe "${FUNCNAME[0]}(): "
     [[ "${PIPESTATUS[0]}" != 0 ]] && return 1
 
     # If userjobs directory does not already exist create it.

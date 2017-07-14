@@ -2844,6 +2844,15 @@ prune_series_list(){
   return 0
 } #prune_series_list()
 
+add_series_list_entry(){
+  #Add series-list and seriesid-list entries if we haven't already.
+  if ! grep -q "^$TVDB_TITLE$" "$M2K_DB_LIST_TITLE"; then
+    printf '%s\n' "$TVDB_TITLE" >> "$M2K_DB_LIST_TITLE"
+    printf '%s\n' "$TVDB_SERIESID" >> "$M2K_DB_LIST_TVDBID"
+    printf '%s\n' "$TVMAZE_SERIESID" >> "$M2K_DB_LIST_TVMAZEID"
+  fi
+}
+
 #Download series information from TheTVDB and tvmaze servers for the currently
 #matched series, then use that information to generate or update myth2kodi's
 #internal database-files for the series.
@@ -2905,6 +2914,7 @@ download_series_info(){
   if [[ -f "$dbdir/lastupdated.time" && -f "$dbdir/$TVDB_TITLE.series_lastupdated.txt" ]]; then
     if (( $(<"$dbdir/lastupdated.time") > $(<"$dbdir/$TVDB_TITLE.series_lastupdated.txt") )); then
       inform "TheTVDB series.lastUpdated for $TVDB_TITLE was before our last download."
+      printf '%s\n' "$(date +%s)" > "$dbdir/lastupdated.time" && chmod 644 "$dbdir/lastupdated.time"
       return 0
     fi
   fi
@@ -3047,12 +3057,6 @@ download_series_info(){
   #check if files were created and generate message
   if ((ProcessingSuccesful == 1)) ; then
     inform "LOCAL DATABASE UPDATED: $dbdir"
-    #Add series-list and seriesid-list entries if we haven't already.
-    if ! grep -q "^$TVDB_TITLE$" "$M2K_DB_LIST_TITLE"; then
-      printf '%s\n' "$TVDB_TITLE" >> "$M2K_DB_LIST_TITLE"
-      printf '%s\n' "$TVDB_SERIESID" >> "$M2K_DB_LIST_TVDBID"
-      printf '%s\n' "$TVMAZE_SERIESID" >> "$M2K_DB_LIST_TVMAZEID"
-    fi
     return 0
   elif [[ ! -f "$dbdir/$TVDB_TITLE.Ename.txt" ]]; then
     err "${FUNCNAME[0]}(): PERMISSION ERROR for $dbdir"
@@ -5985,6 +5989,8 @@ get_series_info(){
       fi
     fi
   fi
+  #Add series-list and seriesid-list entries if we haven't already.
+  add_series_list_entry
   return 0
 } #get_series_info()
 

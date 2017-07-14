@@ -990,7 +990,7 @@ parse_command_flags(){
         m2k_undo_rec "$M2KARG2"
         return $?
       else
-        err 'The argument to --undo must be "all" or a /path/to/recording/filename.ext. Called as:'
+        err 'Argument to --undo must be "all" or /path/to/filename.ext. Called as:'
         errcont "myth2kodi $M2KARG1 '$M2KARG2'"
         return 1
       fi
@@ -1210,6 +1210,11 @@ validate_args(){
     #Do not reprocess a recording we already processed, unless forced to.
     if [[ "$FORCE_PROCESS" != 'Enabled' ]]; then
       if ! pre_process_check "$M2KARG1"; then return 1; fi
+    fi
+
+    #Setting Season or Episode number without setting both is of no use.
+    if [[ ( -n "$M2KARG4" || -n "$M2KARG5" ) && ! ( -n "$M2KARG4" && -n "$M2KARG5" ) ]]; then
+      warn "Setting Season or Episode number but not both is of no use ('$M2KARG4', '$M2KARG5')."
     fi
 
   fi

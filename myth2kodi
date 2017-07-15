@@ -1888,7 +1888,7 @@ m2k_cleanse(){
     return 1
   fi
   find "$m2kdir" -maxdepth 1 -type f -name '*20[0-9][0-9]-[0-1][0-9]-[0-3][0-9]*' > "$cleanup_logs"
-  find "$m2kdir" -mindepth 2 -type f ! -path "*DailyReport*" -name '*20[0-9][0-9]-[0-1][0-9]-[0-3][0-9]*' > "$cleanup_m2k_db"
+  find "$m2kdir" -mindepth 2 -type f ! -path "*DailyReport*" -name '*20[0-9][0-9]-[0-1][0-9]-[0-3][0-9]*' > "$cleanup_m2k_db" #TODO: Probably better if we move series directories into something like $m2kdir/series-db/
   find "$m2kdir/DailyReport" -type f -name '*20[0-9][0-9]-[0-1][0-9]-[0-3][0-9]*' > "$cleanup_dailyreport"
 
   inform "Processing log clean-up file: $cleanup_logs"
@@ -1915,7 +1915,7 @@ m2k_cleanse(){
   rm -f "$M2K_TMPDIR/m2k_markupframes_"*
   rm -f "$M2K_TMPDIR/m2k_markupstart_"*
   rm -f "$M2K_TMPDIR/m2k_markupstop_"*
-  rm -f "$M2K_TMPDIR/m2k_zap2it_"*
+  rm -f "$M2K_TMPDIR/m2k_zap2it_"*  #TODO: no longer used, leave for a release or three after 1.5.0 so that it cleans up old files...
   rm -f "$M2K_TMPDIR/m2k_sorted_dir_tracking-"*
   rm -f "$M2K_TMPDIR/m2k_logfilelist-"*
   rm -f "$M2K_TMPDIR/m2k_templog-"*
@@ -2691,7 +2691,7 @@ download_series_identification(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   local tvdbshowname
   #Format Show TITLE for Sending to www.TheTVDB.com
-  tvdbshowname="$(sed 's/ /%20/g' <<< "$TITLE" | sed 's/&/%26/g')"
+  tvdbshowname="$(sed 's/ /%20/g' <<< "$TITLE" | sed 's/&/%26/g' | sed 's/:/%3A/g')"
   local curlGET series_query
   curlGET="curl -s -m '$Timeout' -X GET -H 'Authorization: Bearer $TVDB_TOKEN' -H 'Accept: application/json' -H 'Accept-Language: $Language'"
 
@@ -3551,7 +3551,7 @@ chunked_fuzzy_plot_match(){
     ((ChunkLengths[i] < min_chunk_length)) && continue
     max_error_count=$(( ChunkLengths[i] / inv_error_rate ))
     fuzzychunk=($(agrep -iBynsk -e "$chunk" "$m2kdir/$TVDB_TITLE/$TVDB_TITLE.Plot.txt"))
-    FuzzyChunks[i]="${fuzzychunk[0]}"
+    FuzzyChunks[i]="${fuzzychunk[0]}" #TODO: Accept multiple here rather than just taking the first... Taking the first sometimes leads to a preferentially matching a special.
     debugcont "FuzzyChunks[$i]='${FuzzyChunks[i]}'"
     ChunkGuesses[i]=$(cut -f1 -d":" <<< "${FuzzyChunks[i]}")
     debugcont "ChunkGuesses[$i]='${ChunkGuesses[i]}'"
@@ -4888,8 +4888,9 @@ naming_checks(){
   #finally exit if there is nowhere to write to.
   if ! set_move_location; then return 1; fi
 
+  #Only keep Alpha-numeric characters, space, parenthesis and the six chars & , . - : '
+  TITLE="$(sed -r "s/[^[:alnum:] &,.)(-:']//g" <<< "$TITLE")"
   #Only keep Alpha-numeric characters, space, parenthesis and the four chars & , . -
-  TITLE="$(sed -r 's/[^[:alnum:] &,.)(-]//g' <<< "$TITLE")"
   SUBTITLE="$(sed -r 's/[^[:alnum:] &,.)(-]//g' <<< "$SUBTITLE")"
 
   return 0
@@ -5176,8 +5177,8 @@ generaterss(){
       printf '%b\n' "\t\t\t<link>http://www.imdb.com/search/title?release_date=,$MOVIE_RELEASE_YEAR&amp;title=$TITLE&amp;title_type=feature</link>"
     else
       local tvdotcomshowname
-      tvdotcomshowname="${TITLE// /%20}"
-      printf '%b\n' "\t\t\t<link>http://www.tv.com/search.php?type=11&amp;stype=all&amp;tag=search%3Bfrontdoor&amp;qs=$tvdotcomshowname </link>"
+      tvdotcomshowname="$(sed 's/ /%20/g' <<< "$TITLE" | sed 's/&/%26/g' | sed 's/:/%3A/g')"
+      printf '%b\n' "\t\t\t<link>http://www.tv.com/search.php?type=11&amp;stype=all&amp;tag=search%3Bfrontdoor&amp;qs=$tvdotcomshowname </link>" #TODO: This tv.com API does not seem to exist any more...
     fi
     printf '%b\n' "\t\t\t<guid>sftp://$mythicalGUID</guid>"
     printf '%b\n' "\t\t\t<pubDate>$(date -R -d "$MDB_STARTTIME")</pubDate>"
@@ -6440,8 +6441,9 @@ main(){
   #Do not process files listed in categoricIgnore or titleIgnore, just exit.
   if ! process_ignore_lists; then return 1; fi
 
+  #Only keep Alpha-numeric characters, space, parenthesis and the six chars & , . - : '
+  TITLE="$(sed -r "s/[^[:alnum:] &,.)(-:']//g" <<< "$TITLE")"
   #Only keep Alpha-numeric characters, space, parenthesis and the four chars & , . -
-  TITLE="$(sed -r 's/[^[:alnum:] &,.)(-]//g' <<< "$TITLE")"
   SUBTITLE="$(sed -r 's/[^[:alnum:] &,.)(-]//g' <<< "$SUBTITLE")"
 
   #If we think it's an episode try and identify the series and episode.

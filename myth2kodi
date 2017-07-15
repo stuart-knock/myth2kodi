@@ -750,7 +750,7 @@ m2k_init(){
   ((LOGLEVEL>=3)) && printf '%s\n' "Config complete." >> "$pre_logging_file"
 
   #What am I...
-  m2kVersion='myth2kodi Version 1.5.0beta1' ; declare -gr m2kVersion
+  m2kVersion='myth2kodi Version 1.5.0-beta2' ; declare -gr m2kVersion
   m2kPlatform="$(uname)" ; declare -gr m2kPlatform
   ((LOGLEVEL>=3)) && printf '%s\n' "Running $m2kVersion on $m2kPlatform." >> "$pre_logging_file"
 
@@ -2358,6 +2358,9 @@ process_mythtvdb_schedulesdirect(){
   #Get barebones zap2it series id.
   Zap2itSeriesID=$(echo "$Zap2itSeriesID" | tr -d MVSHEP | sed 's/0*//' | sed 's/.\{4\}$//')
 
+  #Only keep Alpha-numeric characters, space and the four chars & , . -
+  Plot="$(sed -r 's/[^[:alnum:] &,.-]//g' <<< "$Plot")"
+
   return 0
 } #process_mythtvdb_schedulesdirect()
 
@@ -2697,7 +2700,7 @@ download_series_identification(){
 
   #Search TheTVDB and return an XML file with results
   inform "SEARCHING: www.TheTVDB.com for '$TITLE'"
-  series_query="$(eval "$curlGET 'https://api.thetvdb.com/search/series?name=$tvdbshowname'")"
+  series_query="$(eval "$curlGET \"https://api.thetvdb.com/search/series?name=$tvdbshowname\"")"
   #TODO: it is possible to search by zap2itID as well... so consider doing that too.
 
   if [[ -z "$series_query" ]]; then
@@ -2870,9 +2873,13 @@ download_series_info(){
   local curlGET="curl --silent -m '$Timeout' -X GET -H 'Authorization: Bearer $TVDB_TOKEN' -H 'Accept: application/json'"
   local series_data
   local page=1
-  local -i episode_count
+  local -i plot_count
+  local -i tvdb_episode_count
+  local -i tvdb_plot_count
+  local -i tvmaze_episode_count
+  local -i tvmaze_plot_count
 
-  #First, grab the information for the series.
+  #Grab information from TheTVDB for the series.
   debug "Accessing the series-level information from TheTVDB for '$TVDB_SERIESID'."
   series_data="$(eval "$curlGET 'https://api.thetvdb.com/series/$TVDB_SERIESID'")"
   jq -r . <<< "$series_data" > "${tvdb_series_json}.temp"
@@ -2892,18 +2899,16 @@ download_series_info(){
   if (( new_series_info == 1 )); then #NOTE: No-diff = 0; diff = 1; error = 2
     [[ -f "$tvdb_series_json" ]] && mv "$tvdb_series_json" "$dbdir/${TODAY}_${TVDB_TITLE}_series_info.json"
     mv "${tvdb_series_json}.temp" "$tvdb_series_json"
+    #Remove any garbage newline characters -- mainly a problem for "plot" fields.
+    sed --in-place -e 's/\\r/ /g' -e 's/\\n/ /g' "$tvdb_series_json"
     jq -r '.data.status'      "$tvdb_series_json" > "$dbdir/$TVDB_TITLE.series_status.txt"
     jq -r '.data.firstAired'  "$tvdb_series_json" > "$dbdir/$TVDB_TITLE.series_firstaired.txt"
     jq -r '.data.lastUpdated' "$tvdb_series_json" > "$dbdir/$TVDB_TITLE.series_lastupdated.txt"
     jq -r '.data.zap2itId'    "$tvdb_series_json" > "$dbdir/$TVDB_TITLE.series_zap2itid.txt"
-    {
-      jq -r '.data.overview'  "$tvdb_series_json"  \
-          | tr -d "\n"                             \
-          | sed -r 's/[^[:alnum:] &,.-]//g'        \
-          | sed -r 's/^null$//'                    \
-          | tr -s ' '
-      printf '\n'
-    } > "$dbdir/$TVDB_TITLE.series_overview.txt"
+    jq -r '.data.overview'  "$tvdb_series_json"  \
+        | sed -r 's/[^[:alnum:] &,.-]//g'        \
+        | sed -r 's/^null$//'                    \
+        | tr -s ' '  > "$dbdir/$TVDB_TITLE.series_overview.txt"
   elif (( new_series_info == 2 )); then
     err "An error occurred while diff-ing: '${tvdb_series_json}.temp' and '$tvdb_series_json'."
   elif (( new_series_info == 0 )); then
@@ -2934,7 +2939,7 @@ download_series_info(){
   while [[ "$page" != 'null' ]]; do
     debug "Accessing page '$page' of TheTVDB entry for '$TVDB_SERIESID'."
     series_data="$(eval "$curlGET 'https://api.thetvdb.com/series/$TVDB_SERIESID/episodes?page=$page'")"
-    jq -r '.data' <<< "$series_data" | sed 's/^\[/,/' | sed 's/]$//'  >> "${tvdb_episodes_json}.temp"
+    jq -r '.data' <<< "$series_data" | sed 's/^\[/,/' | sed 's/]$//' >> "${tvdb_episodes_json}.temp"
     if jq -e 'has("Error")' <<< "$series_data" > /dev/null; then
       err "${FUNCNAME[0]}(): An error was returned by TheTVDB."
       errcont "TVDB_SERIESID: '$TVDB_SERIESID'."
@@ -2961,13 +2966,6 @@ download_series_info(){
   fi
 
   #Download the episode information from tvmaze for TVDB_SERIESID.
-  if [[ -z "$TVMAZE_SERIESID" ]]; then
-    TVMAZE_SERIESID="$(curl -L -s -m"$Timeout" http://api.tvmaze.com/lookup/shows?thetvdb="$TVDB_SERIESID" | jq '.id')"
-    declare -gr TVMAZE_SERIESID
-    inform "Identified TVMAZE_SERIESID='$TVMAZE_SERIESID' for TVDB_SERIESID='$TVDB_SERIESID'."
-  else
-    debug "Using TVMAZE_SERIESID from local list."
-  fi
   if ((TVMAZE_SERIESID != 0)) ; then
     debug "Using TVMAZE_SERIESID: '$TVMAZE_SERIESID'"
     local tvmaze_episodes_site="http://api.tvmaze.com/shows/$TVMAZE_SERIESID/episodes"
@@ -2992,6 +2990,10 @@ download_series_info(){
 
   if ((new_info_tvdb == 1)) || ((new_info_tvmaze == 1)); then
     inform "Downloaded new information for '$TVDB_TITLE'"
+
+    #Remove any garbage newline characters -- mainly a problem for "plot" fields.
+    sed --in-place -e 's/\\r/ /g' -e 's/\\n/ /g' "$tvdb_episodes_json"
+
     #Parse new information into our local-db files.
     jq -r '.[] | .episodeName'        "$tvdb_episodes_json" > "$dbdir/$TVDB_TITLE.Ename.txt"
     jq -r '.[] | .airedSeason'        "$tvdb_episodes_json" > "$dbdir/$TVDB_TITLE.S.txt"
@@ -3001,41 +3003,53 @@ download_series_info(){
 
     [[ -f "$dbdir/$TVDB_TITLE.Plot.txt" ]] && rm -f "$dbdir/$TVDB_TITLE.Plot.txt"
 
-    episode_count="$(jq -r '.[] | .episodeName' "$tvdb_episodes_json" | wc -l)"
-    inform "Local-DB contains '$episode_count' entries from TheTVDB for '$TVDB_TITLE'."
-    for i in $(seq 0 $((episode_count-1))); do
-      {
-        jq -r ".[$i] | .overview" "$tvdb_episodes_json" \
-          | tr -d "\n"                                  \
-          | sed -r 's/[^[:alnum:] &,.-]//g'             \
-          | sed -r 's/^null$//'                         \
-          | tr -s ' '
-      printf '\n'
-      } >> "$dbdir/$TVDB_TITLE.Plot.txt"
-    done
+    tvdb_episode_count="$(jq -r '.[] | .episodeName' "$tvdb_episodes_json" | wc -l)"
+    inform "Local-DB contains '$tvdb_episode_count' entries from TheTVDB for '$TVDB_TITLE'."
+
+    #Extract the overview field and write it to a Plot.txt file, "null" entries
+    #become blank lines, keep only alpha-numeric characters and basic punctuation.
+    jq -r '.[] | .overview' "$tvdb_episodes_json"   \
+        | sed -r 's/[^[:alnum:] &,.-]//g'           \
+        | sed -r 's/^null$//'                       \
+        | tr -s ' ' > "$dbdir/$TVDB_TITLE.Plot.txt"
+
+    tvdb_plot_count="$(wc -l < "$dbdir/$TVDB_TITLE.Plot.txt")"
+    debug "Episode Count: $tvdb_episode_count; Plot Count: $tvdb_plot_count."
+    if ((tvdb_episode_count!=tvdb_plot_count)); then
+      err "Incompatible number of episodes parsing 'overview' field of '$tvdb_episodes_json'."
+      errcont "Episode Count: $tvdb_episode_count; 'Overview' Count: $tvdb_plot_count."
+    fi
 
     #If we also have a json file from tvmaze, then append that info
     if [[ -f "$tvmaze_episodes_json" ]]; then
+      #Remove any garbage newline characters -- mainly a problem for "plot" fields.
+      sed --in-place -e 's/\\r/ /g' -e 's/\\n/ /g' "$tvmaze_episodes_json"
+
       jq -r '.[] | .name'    "$tvmaze_episodes_json" >> "$dbdir/$TVDB_TITLE.Ename.txt"
       jq -r '.[] | .season'  "$tvmaze_episodes_json" >> "$dbdir/$TVDB_TITLE.S.txt"
       jq -r '.[] | .number'  "$tvmaze_episodes_json" >> "$dbdir/$TVDB_TITLE.E.txt"
       jq -r '.[] | .airdate' "$tvmaze_episodes_json" >> "$dbdir/$TVDB_TITLE.FAired.txt"
       jq -r '.[] | .id'      "$tvmaze_episodes_json" >> "$dbdir/$TVDB_TITLE.id.txt"
 
-      episode_count=$(jq -r '.[] | .name' "$tvmaze_episodes_json" | wc -l)
-      inform "Local-DB contains '$episode_count' entries from tvmaze for '$TVDB_TITLE'."
-      for i in $(seq 0 $((episode_count-1))); do
-        {
-          jq -r ".[$i] | .summary" "$tvmaze_episodes_json" \
-            | tr -d "\n"                                   \
-            | sed -r 's#</?p>##g'                          \
-            | sed -r 's/[^[:alnum:] &,.-]//g'              \
-            | sed -r 's/^null$//'                          \
-            | tr -s ' '
-          printf '\n'
-          } >> "$dbdir/$TVDB_TITLE.Plot.txt"
-      done
-    fi
+      tvmaze_episode_count="$(jq -r '.[] | .name' "$tvmaze_episodes_json" | wc -l)"
+      inform "Local-DB contains '$tvmaze_episode_count' entries from tvmaze for '$TVDB_TITLE'."
+
+      #Extract the summary field and write it to a Plot.txt file, "null" entries
+      #become blank lines, keep only alpha-numeric characters and basic punctuation.
+      jq -r '.[] | .summary' "$tvmaze_episodes_json"   \
+          | sed -r 's#</?p>##g'                        \
+          | sed -r 's/[^[:alnum:] &,.-]//g'            \
+          | sed -r 's/^null$//'                        \
+          | tr -s ' ' >> "$dbdir/$TVDB_TITLE.Plot.txt"
+
+      plot_count="$(wc -l < "$dbdir/$TVDB_TITLE.Plot.txt")"
+      tvmaze_plot_count="$((plot_count-tvdb_plot_count))"
+      debug "Episode Count: $tvmaze_episode_count; Plot Count: $tvmaze_plot_count."
+      if ((tvmaze_episode_count!=tvmaze_plot_count)); then
+        err "Incompatible number of episodes parsing 'overview' field of '$tvmaze_episodes_json'."
+        errcont "Episode Count: $tvmaze_episode_count; 'Overview' Count: $tvmaze_plot_count."
+      fi
+    fi #[[ -f "$tvmaze_episodes_json" ]]
 
     #Set permission 644 (rw-r--r--)
     chmod 644 "$dbdir/$TVDB_TITLE.Ename.txt"
@@ -3052,7 +3066,7 @@ download_series_info(){
   elif ((new_info_tvdb == 0)) && ((new_info_tvmaze == 0)); then
     inform "TheTVDB information for $TVDB_TITLE has not changed since last download."
     return 0
-  fi
+  fi #((new_info_tvdb == 1)) || ((new_info_tvmaze == 1))
 
   #check if files were created and generate message
   if ((ProcessingSuccesful == 1)) ; then
@@ -3143,6 +3157,10 @@ identify_series(){
       inform "Found: \"$TVDB_TITLE\" ID#: '$TVDB_SERIESID' with CONFIDENCE:'$SeriesConfidenceRating'"
       #In-case the match was fuzzy, take the title from TheTVDB.
       [[ -n "$TVDB_TITLE" ]] && TITLE="$TVDB_TITLE"
+      #Get the tvmaze series-id corresponding to the TVDB_SERIESID.
+      TVMAZE_SERIESID="$(curl -L -s -m"$Timeout" http://api.tvmaze.com/lookup/shows?thetvdb="$TVDB_SERIESID" | jq '.id')"
+      declare -gr TVMAZE_SERIESID
+      inform "Identified TVMAZE_SERIESID='$TVMAZE_SERIESID' for TVDB_SERIESID='$TVDB_SERIESID'."
       return 0
     else
       warn "TVDB_SERIESID could not be determined"
@@ -5989,9 +6007,9 @@ get_series_info(){
         return 1
       fi
     fi
+    #Add series-list and seriesid-list entries if we haven't already.
+    add_series_list_entry
   fi
-  #Add series-list and seriesid-list entries if we haven't already.
-  add_series_list_entry
   return 0
 } #get_series_info()
 

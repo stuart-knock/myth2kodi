@@ -2691,7 +2691,7 @@ download_series_identification(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   local tvdbshowname
   #Format Show TITLE for Sending to www.TheTVDB.com
-  tvdbshowname="$(sed 's/ /%20/g' <<< "$TITLE" | sed 's/&/%26/g' | sed 's/:/%3A/g')"
+  tvdbshowname="$(sed 's/ /%20/g' <<< "$TITLE" | sed 's/&/%26/g' | sed 's/:/%3A/g' | sed 's/,/%2C/g')"
   local curlGET series_query
   curlGET="curl -s -m '$Timeout' -X GET -H 'Authorization: Bearer $TVDB_TOKEN' -H 'Accept: application/json' -H 'Accept-Language: $Language'"
 
@@ -5177,7 +5177,7 @@ generaterss(){
       printf '%b\n' "\t\t\t<link>http://www.imdb.com/search/title?release_date=,$MOVIE_RELEASE_YEAR&amp;title=$TITLE&amp;title_type=feature</link>"
     else
       local tvdotcomshowname
-      tvdotcomshowname="$(sed 's/ /%20/g' <<< "$TITLE" | sed 's/&/%26/g' | sed 's/:/%3A/g')"
+      tvdotcomshowname="$(sed 's/ /%20/g' <<< "$TITLE" | sed 's/&/%26/g' | sed 's/:/%3A/g' | sed 's/,/%2C/g')"
       printf '%b\n' "\t\t\t<link>http://www.tv.com/search.php?type=11&amp;stype=all&amp;tag=search%3Bfrontdoor&amp;qs=$tvdotcomshowname </link>" #TODO: This tv.com API does not seem to exist any more...
     fi
     printf '%b\n' "\t\t\t<guid>sftp://$mythicalGUID</guid>"

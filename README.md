@@ -1,4 +1,4 @@
-<img align="right" src="myth2kodi.png" alt="myth2kodi icon" />
+<img align="right" src="icons/myth2kodi.png" alt="myth2kodi icon" />
 
 # myth2kodi
 *myth2kodi is a modified version of [mythicalLibrarian by Adam Outler](https://github.com/adamoutler/mythicallibrarian).*
@@ -20,13 +20,15 @@ For usage and command line options see: `myth2kodi --help`
 
 #### Dependencies
 **curl** -- downloads webpages and sends commands to Kodi;  
-**jq** -- parses json files, used for tvmaze data;  
+**jq** -- parses json files, used for TheTVDB and tvmaze data;  
 **agrep** -- provides fuzzy string matching;  
 **libnotify-bin** -- allows GNOME desktop notifications;  
 **mythbackend** -- Access the MythTV database.  
 
-#### Installation & Configuration
-The myth2kodi file should be placed in the users path, see the `binpath`
+#### Installation
+The `./install.sh` script is the easiest and recommended way to install
+myth2kodi. If you would prefer to do the installation manually, then
+the myth2kodi file should be placed in the users path, see the `binpath`
 variable in user settings (Default: `/usr/local/bin`). Some of the
 functionality of this script is provided in other files, these will also
 need to be placed in `binpath` along with this script. The three supporting
@@ -37,8 +39,18 @@ scripts to myth2kodi are:
                 A set of bash functions that provide the logging mechanism used
                 throughout myth2kodi.
 
+#### Configuration
+There are a large number of "user-settings" for myth2kodi. For most users
+the majority of them should be left with their default values. Placing a
+`myth2kodi.conf` file in myth2kodi's working directory is the recommended
+way to override default settings. In addition to reading [CONFIGURE.md](./doc/CONFIGURE.md),
+looking through the configuration [template file](./myth2kodi.conf) is a
+good way to get to know what options are available. The settings that you
+will almost certainly need to modify, as they are specific to your set-up,
+are tagged with `#<------THIS VALUE MUST BE SET-------`.
+
 #### Usage
-myth2kodi can be used as a MythTV user-job or from the commmand-line.
+myth2kodi can be used as a MythTV user-job or from the command-line.
 
 The MythTV user job should be called as follows:
 
@@ -65,7 +77,6 @@ additional functionality see [USAGE.md](./doc/USAGE.md) or type:
   ├── <a href="./bashlogging">bashlogging</a> (Provides a configurable logging mechanism.) <br>
   ├── <a href="./myth2kodi.conf">myth2kodi.conf</a> (A complete configuration template.) <br>
   ├── <a href="./showTranslations.SydFTA">showTranslations.SydFTA</a> (An example translation file for Sydney free-to-air guide data.) <br>
-  ├── <a href="./guessepisodefromplot.py">guessepisodefromplot.py</a> (Possible future NLP addon.) <br>
   ├── <a href="./doc/">doc</a> (Documentation.) <br>
       ├── <a href="./doc/OVERVIEW.md">OVERVIEW.md</a> (An overview of the myth2kodi documentation.) <br>
       ├── <a href="./doc/INSTALL.md">INSTALL.md</a> (A description of how to install myth2kodi.) <br>
@@ -74,10 +85,10 @@ additional functionality see [USAGE.md](./doc/USAGE.md) or type:
       ├── <a href="./doc/key_differences_to_mythicalLibrarian.md">key_differences_to_mythicalLibrarian.md</a> (How is myth2kodi different from mythicalLibrarian?) <br>
       ├── <a href="./doc/create_a_dummy_system_for_testing.md">create_a_dummy_system_for_testing.md</a> (Rough guide to building a test system that mirrors your actual system.) <br>
       └── <a href="./doc/example_myth2kodi.conf">example_myth2kodi.conf</a> (A minimal example configuration file.) <br>
-  ├── <a href="./doc/">icons</a> (Icons.) <br>
-      ├── <a href="./myth2kodi.png">myth2kodi.png</a> (The icon displayed with desktop notifications on successful processing.) <br>
-      └── <a href="./myth2kodi_failed.png">myth2kodi_failed.png</a> (The icon displayed with desktop notifications on failed processing.) <br>
-  ├── <a href="./doc/">tools</a> (Simple scripts that do something useful using myth2kodi.) <br>
+  ├── <a href="./icons/">icons</a> (Icons.) <br>
+      ├── <a href="./icons/myth2kodi.png">myth2kodi.png</a> (The icon displayed with desktop notifications on successful processing.) <br>
+      └── <a href="./icons/myth2kodi_failed.png">myth2kodi_failed.png</a> (The icon displayed with desktop notifications on failed processing.) <br>
+  ├── <a href="./tools/">tools</a> (Simple scripts that do something useful using myth2kodi.) <br>
       └── <a href="./tools/manual_process">manual_process</a> (Helps manually processing failed episode identification.) <br>
   └── <a href="./attic/">attic</a> (Old stuff I just haven't thrown away yet.) <br>
 </p>

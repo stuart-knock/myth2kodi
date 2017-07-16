@@ -8,8 +8,9 @@ the working directory. The latter (`myth2kodi.conf`) is preferred.
 you **must** make sure that the `m2kdir` parameter is configured correctly
 directly in the script, as this is used to find the `myth2kodi.conf` file.
 The default value of a `.myth2kodi` directory in the callers home directory
-should work fine as long as you don't intend to make significant 
+should work fine as long as you don't intend to make significant
 modifications of other defaults.
+**If you installed using the `install.sh` script then this will have been done for you.**
 
 It is essential that the following parameters are set correctly, as they
 are specific to your setup:  

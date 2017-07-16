@@ -17,7 +17,7 @@ episode number have been added. It now has the form:
 *librarian-notify-send* ==> **m2k_notify**  
 
 ### Removed:
-**mythicalSetup.sh**: *A nice feature that I've, so far, been too lazy to update and maintain.*
+**mythicalSetup.sh**: *A nice feature that I've, so far, been too lazy to update and maintain. The installation aspect has been replaced by install.sh*
 
 ## Changes to command flags
 ### Added:
@@ -47,7 +47,7 @@ episode number have been added. It now has the form:
 *--doMaintenance* ==> **--maintenance**
 
 ### Removed:
-**--update**: *A nice feature that I've, so far, been too lazy to update and maintain.*  
+**--update**: *This functionality is essentially replaced by the install.sh script.*  
 **-m**, **-s**, **-u**, **-d**: *All short forms have been removed. The version of
 mythicalLibrarian I started from already had duplicates of these that made things
 ambiguous. With the increased number of command flags the potential for confusion
@@ -71,7 +71,9 @@ only increased. So, it seemed safer, and easier, just to drop them.*
 **DAILYREPORT_LIFE**: *How long to persist daily report files in months.*  
 **LOGTYPE**: *Defines where to direct logging messages -- stderr, file, filestderr.*  
 **CREATE_RSS**: *Whether to create an RSS entry.*  
-**RSS_DIRECTORY**: *The directory to place the RSS file.*
+**RSS_DIRECTORY**: *The directory to place the RSS file.*  
+**ONLINE_LOOKUP**: *Whether to access remote data-sources for TV-series information.*  
+**SHOW_FILE_NAME_APPEND**: *Allows for a user specified string to be appended to the standard naming.*
 
 ### Renamed:
 *mythicalLibrarian* ==> **m2kdir**  
@@ -98,7 +100,9 @@ name for the archived log and compressing them.
 ## Internal myth2kodi databases
 The formatting and maintenance of myth2kodi's local TV-series information has
 been cleaned up. When possible, additional series information is also obtained
-from tvmaze, in addition to TheTVDB.
+from tvmaze, in addition to TheTVDB. **For myth2kodi versions >= 1.5.0, access
+to TheTVDB uses their v2 API -- this is particularly important as from the 1st
+of October 2017 the v1 API used by mythicalLibrarian will be switched off.**.
 
 ## User Jobs
 To add user jobs you do not need to edit the myth2kodi script, placing your job

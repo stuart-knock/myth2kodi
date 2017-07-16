@@ -102,7 +102,7 @@ The formatting and maintenance of myth2kodi's local TV-series information has
 been cleaned up. When possible, additional series information is also obtained
 from tvmaze, in addition to TheTVDB. **For myth2kodi versions >= 1.5.0, access
 to TheTVDB uses their v2 API -- this is particularly important as from the 1st
-of October 2017 the v1 API used by mythicalLibrarian will be switched off.**.
+of October 2017 the v1 API used by mythicalLibrarian will be switched off.**
 
 ## User Jobs
 To add user jobs you do not need to edit the myth2kodi script, placing your job

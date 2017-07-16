@@ -27,7 +27,7 @@ For usage and command line options see: `myth2kodi --help`
 
 #### Installation
 The `./install.sh` script is the easiest and recommended way to install
-myth2kodi. If you would prefer to do the installation manually, then
+myth2kodi. If you would prefer to do the installation manually, then,
 the myth2kodi file should be placed in the users path, see the `binpath`
 variable in user settings (Default: `/usr/local/bin`). Some of the
 functionality of this script is provided in other files, these will also
@@ -86,8 +86,8 @@ additional functionality see [USAGE.md](./doc/USAGE.md) or type:
       ├── <a href="./doc/create_a_dummy_system_for_testing.md">create_a_dummy_system_for_testing.md</a> (Rough guide to building a test system that mirrors your actual system.) <br>
       └── <a href="./doc/example_myth2kodi.conf">example_myth2kodi.conf</a> (A minimal example configuration file.) <br>
   ├── <a href="./icons/">icons</a> (Icons.) <br>
-      ├── <a href="./icons/myth2kodi.png">myth2kodi.png</a> (The icon displayed with desktop notifications on successful processing.) <br>
-      └── <a href="./icons/myth2kodi_failed.png">myth2kodi_failed.png</a> (The icon displayed with desktop notifications on failed processing.) <br>
+      ├── <a href="./icons/myth2kodi.png">myth2kodi.png</a> (The icon displayed with desktop notifications on successful processing.) <br>
+      └── <a href="./icons/myth2kodi_failed.png">myth2kodi_failed.png</a> (The icon displayed with desktop notifications on failed processing.) <br>
   ├── <a href="./tools/">tools</a> (Simple scripts that do something useful using myth2kodi.) <br>
       └── <a href="./tools/manual_process">manual_process</a> (Helps manually processing failed episode identification.) <br>
   └── <a href="./attic/">attic</a> (Old stuff I just haven't thrown away yet.) <br>

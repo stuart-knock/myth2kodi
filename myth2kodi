@@ -750,7 +750,7 @@ m2k_init(){
   ((LOGLEVEL>=3)) && printf '%s\n' "Config complete." >> "$pre_logging_file"
 
   #What am I...
-  m2kVersion='myth2kodi Version 1.5.0-beta2' ; declare -gr m2kVersion
+  m2kVersion='myth2kodi Version 1.5.0-beta6' ; declare -gr m2kVersion
   m2kPlatform="$(uname)" ; declare -gr m2kPlatform
   ((LOGLEVEL>=3)) && printf '%s\n' "Running $m2kVersion on $m2kPlatform." >> "$pre_logging_file"
 
@@ -1726,9 +1726,9 @@ m2k_maintenance(){
     counter=0
     while read -r line ; do
       (( ++counter ))
-      support_file="$(cut -d"'" -f2 <<< "$line")"
+      support_file="$(cut -d'"' -f2 <<< "$line")"
       debug "Support file (record $counter): ${support_file}"
-      main_file="$(cut -d"'" -f4 <<< "$line")"
+      main_file="$(cut -d'"' -f4 <<< "$line")"
       debug "Main file (record $counter): ${main_file}"
       if [[ -e "$main_file" ]]; then
         #If the main_file is actually the original MythTV recording file (it was
@@ -2373,6 +2373,16 @@ process_mythtvdb_sydfta(){
   process_mythtvdb_common
 
   #Current (2016-08) issue from 7flix: description in Subtitle field, all-caps cast in Plot...
+  #Strip the all-caps actor names that are still showing up in 7fix's plot field...
+  local actor_names
+  actor_names="$(grep -E --only-matching '^(([A-Z]{1,12}[[:space:]|\.|-]?){1,3}[[:space:]|,][[:space:]]?){1,20}' <<< "$Plot")"
+  if [[ -n "$actor_names" ]]; then
+    warn "${FUNCNAME[0]}(): Stripping actor names from plot."
+    debug "actor_names: '$actor_names'"
+    debug "Orig Plot: '$Plot'"
+    Plot="${Plot/$actor_names/}"
+    debug "New Plot: '$Plot'"
+  fi
   #Longest actual subtitle I've seen so far is 84 characters. Rather than assuming Plot field
   #is garbage, we'll append the SUBTITLE field to the Plot -- this will almost certainly
   #prevent full Plot fuzzy match from succeeding but chunked match should still match effectively.
@@ -2646,20 +2656,25 @@ get_tvdb_token(){
   ((LOGLEVEL > 3)) && debugcont "TVDB_TOKEN: '$TVDB_TOKEN'"
   local curlPOST curlGET
   local current_time
+  local token_last_updated=42 #A meaningless low number to start from...
   local token_json=''
 
   current_time="$(date +%s)"
+  #If we already have a token, then load it.
   if [[ -f "$m2kdir/tvdb_token.json" ]]; then
-    token_last_updated="$(jq -r '.updated' "$m2kdir/tvdb_token.json")"
-    debug "Token last updated: '$(date --date="@$token_last_updated")'"
-  else
-    debug 'We do not have an existing token.'
-    token_last_updated=42
+    if ! jq -e 'has("Error")' "$m2kdir/tvdb_token.json" > /dev/null; then
+      token_last_updated="$(jq -r '.updated' "$m2kdir/tvdb_token.json")"
+      #Load our current local token.
+      TVDB_TOKEN="$(jq -r '.token' "$m2kdir/tvdb_token.json")"
+      debug "Token last updated: '$(date --date="@$token_last_updated")'"
+    else
+      debug 'We do not have an existing token.'
+    fi
   fi
 
   #Tokens currently (2017-07-03) are supposed to last 24 hours and refreshing
   #a valid token with a GET is preferred over POSTing to login for a new one.
-  if (( (current_time - token_last_updated + 42)/3600 >= 24 )); then
+  if (( (current_time - token_last_updated)/3600 >= 24 )); then
     debug 'Doing full authentication to get a new token.'
     #Get a new token using our APIkey
     curlPOST="curl -s -m '$Timeout' -X POST --header 'Content-Type: application/json' -H 'Accept: application/json' -d"
@@ -2669,10 +2684,10 @@ get_tvdb_token(){
       err "${FUNCNAME[0]}(): An error was returned by TheTVDB when attempting to GET a new a token."
       return 1
     fi
-  elif (( (current_time - token_last_updated)/3600 > 16 )); then
+  elif (( (current_time - token_last_updated)/3600 > 18 )); then
     debug 'Getting refreshed token using our current one:'
-    ((LOGLEVEL > 3)) && debugcont "$TVDB_TOKEN"
-    #Get a refreshed token using our currently valid token (if current is older than 16 hours).
+    ((LOGLEVEL > 3)) && debugcont "TVDB_TOKEN: '$TVDB_TOKEN'"
+    #Get a refreshed token using our currently valid token (if current is older than 18 hours).
     curlGET="curl -s -m '$Timeout' -X GET --header 'Authorization: Bearer $TVDB_TOKEN' -H 'Accept: application/json'"
     token_json="$(eval "$curlGET 'https://api.thetvdb.com/refresh_token'")"
     if jq -e 'has("Error")' <<< "$token_json" > /dev/null; then
@@ -2694,8 +2709,6 @@ get_tvdb_token(){
     fi
   else
     debug 'Using existing token.'
-    #Load our local, currently valid, token.
-    TVDB_TOKEN="$(jq -r '.token' "$m2kdir/tvdb_token.json")"
   fi
   ((LOGLEVEL > 3)) && debug "TVDB_TOKEN: '$TVDB_TOKEN'."
   return 0
@@ -3549,17 +3562,19 @@ chunked_fuzzy_plot_match(){
   PlotWords=$(wc --words <<< "$Plot")
   local chunk=""
   local -i chunck_size=5
-  local -i chunk_overlap=2
-  local -i min_chunk_length=21 #Short chunks give false positives.
-  local -i inv_error_rate=4 #10=>10%; 9=>~11%; 8=>~12.5%; 7=>~14%; 6=>~16.6%; 5=>20%; 4=>25%; 3=>~33%.
+  local -i chunk_overlap=3
+  local -i min_chunk_length=23 #Short chunks give false positives.
+  local -i inv_error_rate=5 #10=>10%; 9=>~11%; 8=>~12.5%; 7=>~14%; 6=>~16.6%; 5=>20%; 4=>25%; 3=>~33%.
   local -i numchunks
   numchunks=$((PlotWords/(chunck_size-chunk_overlap)))
   local -i max_error_count=3 #Reset below specific per chunk.
   local -a fuzzychunk=()
-  local -a FuzzyChunks=()
+  #local -a FuzzyChunks=()
+  local -i good_chunk_count=0
   local -a ChunkGuesses=()
   local -a ChunkCosts=()
-  local -a ChunkLengths=()
+  # local -a ChunkLengths=()
+  local ChunkLength #ChunkWords
   local -a GoodChunkGuesses=()
   debug "Attempting chunked fuzzy match."
   debugcont "PlotWords='$PlotWords'"
@@ -3582,28 +3597,46 @@ chunked_fuzzy_plot_match(){
     #Some systems have an agrep that limits PATTERN to < 32 characters...
     [[ "$truncate" = 'true' ]] && chunk="${chunk:0:29}"
     debugcont "chunk='$chunk'"
-    ChunkLengths[i]=$(wc --chars <<< "$chunk")
-    debugcont "ChunkLengths[$i]='${ChunkLengths[i]}'"
+    ChunkLength=$(wc --chars <<< "$chunk")
+    debugcont "ChunkLength='${ChunkLength}'"
     #Short chunks give false positives, so don't try.
-    ((ChunkLengths[i] < min_chunk_length)) && continue
-    max_error_count=$(( ChunkLengths[i] / inv_error_rate ))
+    ((ChunkLength < min_chunk_length)) && continue
+    # ChunkWords=$(wc --words <<< "$chunk")
+    # debugcont "ChunkWords='${ChunkWords}'"
+    # #Short chunks give false positives, so don't try.
+    # ((ChunkWords < chunck_size)) && break #NOTE: Can't do this, truncated chunks may trigger it...
+    max_error_count=$(( ChunkLength / inv_error_rate ))
     fuzzychunk=($(agrep -iBynsk -e "$chunk" "$m2kdir/$TVDB_TITLE/$TVDB_TITLE.Plot.txt"))
-    FuzzyChunks[i]="${fuzzychunk[0]}" #TODO: Accept multiple here rather than just taking the first... Taking the first sometimes leads to a preferentially matching a special.
-    debugcont "FuzzyChunks[$i]='${FuzzyChunks[i]}'"
-    ChunkGuesses[i]=$(cut -f1 -d":" <<< "${FuzzyChunks[i]}")
-    debugcont "ChunkGuesses[$i]='${ChunkGuesses[i]}'"
-    ChunkCosts[i]=$(cut -f2 -d":" <<< "${FuzzyChunks[i]}")
-    debugcont "ChunkCosts[$i]='${ChunkCosts[i]}'"
+    #FuzzyChunks[i]="${fuzzychunk[0]}" #TODO: Accept multiple here rather than just taking the first... Taking the first sometimes leads to a preferentially matching a special.
+    #debugcont "FuzzyChunks[$i]='${FuzzyChunks[i]}'"
+    debugcont "$( IFS=','; printf '%s' "${FUNCNAME[0]}(): fuzzychunk ${#fuzzychunk[@]}: ${fuzzychunk[*]}." )"
+    #ChunkGuesses[i]=$(cut -f1 -d":" <<< "${FuzzyChunks[i]}")
+    ChunkGuesses=($(cut -f1 -d":" <<< "$(printf '%s\n' "${fuzzychunk[@]}")"))
+    #debugcont "ChunkGuesses[$i]='${ChunkGuesses[i]}'"
+    debugcont "$( IFS=','; printf '%s' "${FUNCNAME[0]}(): ChunkGuesses ${#ChunkGuesses[@]}: ${ChunkGuesses[*]}." )"
+    #ChunkCosts[i]=$(cut -f2 -d":" <<< "${FuzzyChunks[i]}")
+    ChunkCosts=($(cut -f2 -d":" <<< "$(printf '%s\n' "${fuzzychunk[@]}")"))
+    #debugcont "ChunkCosts[$i]='${ChunkCosts[i]}'"
+    debugcont "$( IFS=','; printf '%s' "${FUNCNAME[0]}(): ChunkCosts ${#ChunkCosts[@]}: ${ChunkCosts[*]}." )"
     #TODO: consider weighting matches ((ChunkLengths[i]-ChunkCosts[i])) and having multi_match_check take them into account.
-    ((ChunkCosts[i] <= max_error_count)) && GoodChunkGuesses[Counter]=${ChunkGuesses[i]} && ((++Counter))
+    #((ChunkCosts[i] <= max_error_count)) && GoodChunkGuesses[Counter]=${ChunkGuesses[i]} && ((++Counter))
+    #We only get multiple matches for multiple equal ChunkCosts, so they're all the same.
+    #Generic chunks can potentially match a lot of episodes at low cost, this adds noise that we don't want to count.
+    if ((ChunkCosts[0] <= max_error_count)) && ((${#ChunkGuesses[@]} <= 4)) ; then
+      ((++good_chunk_count))
+      for (( j = 0; j < ${#ChunkGuesses[@]}; j++ )) ; do
+        GoodChunkGuesses[Counter]=${ChunkGuesses[j]} && ((++Counter))
+      done
+    fi
     #Do not use the last chunk if it is just a subset of the second last.
     ((m>=PlotWords)) && break
   done
   debug "$( IFS=','; printf '%s' "${FUNCNAME[0]}(): GoodChunkGuesses ${#GoodChunkGuesses[@]}: ${GoodChunkGuesses[*]}." )"
 
-  #Need to be more conservative with the shorter(6) chunks we're now using, so,
-  #require at least 2 GoodChunkGuesses:
-  (( ${#GoodChunkGuesses[@]} < 2 )) && { ((--EpisodeConfidenceRating)); return 1; }
+  #Need to be more conservative with the shorter(5) chunks we're now using, so,
+  #require at least 2 chunks to have matches:
+  #(( ${#GoodChunkGuesses[@]} < 2 )) && { ((--EpisodeConfidenceRating)); return 1; }
+  (( good_chunk_count < 2 )) && { ((--EpisodeConfidenceRating)); return 1; }
 
   #If all ChunkGuess with ChunkCost < 10% are the same Absolute Episode Number
   AENguess=($(printf '%s\n' "${GoodChunkGuesses[@]}" | sort -n ))
@@ -3680,7 +3713,7 @@ multi_match_check(){
       debug "most_common_match_count='$most_common_match_count'"
       #Only accept the most common match if it represents >= 2/3 of the matches.
       #This means all matches if match_count < 3; 1 bad match for 3 <= match_count < 6.
-      if (( (match_count*100)/most_common_match_count <= 150 )); then
+      if (( (match_count*100)/most_common_match_count <= 150 )); then # 150=>2/3; 133=>3/4
         inform "Multiple matches, but $most_common_match_count out of $match_count are the same episode."
         for (( i = 0; i < match_count; i++ )) ; do
           [[ "${SxxExxGuesses[i]}" = "$most_common_match" ]] && { aen_index="$i"; break; }
@@ -3688,8 +3721,8 @@ multi_match_check(){
         debug "aen_index='$aen_index'"
         AbsoluteEpisodeNumber=$(cut -f1 -d" " <<< "${AENguess[$aen_index]}")
         inform "${FUNCNAME[0]}(): Identified AbsoluteEpisodeNumber: $AbsoluteEpisodeNumber using ${FUNCNAME[1]}()."
-        #Bump episode confidence if match is greater than 85% consistent.
-        (( (match_count*100)/most_common_match_count <= 117 )) && ((++EpisodeConfidenceRating))
+        #Bump episode confidence if match is greater than 80% consistent. 117=>85%; 125=>80%; 133~>75%.
+        (( (match_count*100)/most_common_match_count <= 133 )) && ((++EpisodeConfidenceRating))
         return 0
       else
         debug "The AbsoluteEpisodeNumber guesses were different:"
@@ -4670,7 +4703,7 @@ generate_episode_nfo(){
   } >> "$MoveDir/$ShowFileName.nfo"
 
   if [[ "$TRACKING" != 'Disabled' ]]; then
-    printf '%s\n' "'$MoveDir/$ShowFileName.nfo' '$MoveDir/$ShowFileName.$ORIGINAL_EXT'" >> "$m2kdir/created.tracking"
+    printf '%s\n' "\"$MoveDir/$ShowFileName.nfo\" \"$MoveDir/$ShowFileName.$ORIGINAL_EXT\"" >> "$m2kdir/created.tracking"
   fi
   inform "Generated episode NFO file: $MoveDir/$ShowFileName.nfo"
   return 0
@@ -4726,7 +4759,7 @@ success_postprocessing(){
     mv "$MARKUPFRAMES_TMP" "$MoveDir/$ShowFileName.txt" 2>&1 | err_pipe "${FUNCNAME[0]}(): "
     chmod 664 "$MoveDir/$ShowFileName.txt" 2>&1 | err_pipe "${FUNCNAME[0]}(): "
     if [[ "$TRACKING" != 'Disabled' ]]; then
-      printf '%s\n' "'$MoveDir/$ShowFileName.txt' '$MoveDir/$ShowFileName.$ORIGINAL_EXT'" >> "$m2kdir/created.tracking"
+      printf '%s\n' "\"$MoveDir/$ShowFileName.txt\" \"$MoveDir/$ShowFileName.$ORIGINAL_EXT\"" >> "$m2kdir/created.tracking"
     fi
   fi
 
@@ -5035,7 +5068,7 @@ link_mode_handling(){
   if [[ -L "$MoveDir/$ShowFileName.$ORIGINAL_EXT" ]]; then
     inform "Symlink created: $MoveDir/$ShowFileName.$ORIGINAL_EXT"
     if [[ "$TRACKING" != 'Disabled' ]]; then
-      printf '%s\n' "'$MoveDir/$ShowFileName.$ORIGINAL_EXT' '$RECORDING_PATH'" >> "$m2kdir/created.tracking"
+      printf '%s\n' "\"$MoveDir/$ShowFileName.$ORIGINAL_EXT\" \"$RECORDING_PATH\"" >> "$m2kdir/created.tracking"
     fi
 
     #Generate supporting files, add undo and doover entries, notify Kodi.

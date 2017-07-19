@@ -3555,9 +3555,9 @@ fuzzy_plot_match(){
 
 #Some agrep can't use a full Plot as a PATTERN. And sometimes full Plot matching
 #misses simply because the text is reordered or the middle is chopped out. In
-#these cases, something as simple as chopping up the Plot into 6 word blocks,
-#overlapping by 2-4, testing the agrep cost for each chunk, and then taking all
-#the chunks that match with a cost < ~10%. If all the matches are for the same
+#these cases, something as simple as chopping up the Plot into 5 word blocks,
+#overlapping by 3, testing the agrep cost for each chunk, and then taking all
+#the chunks that match with a cost < ~20%. If all the matches are for the same
 #episode, then we can be fairly confident that it's actually a matching Plot.
 chunked_fuzzy_plot_match(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
@@ -3574,12 +3574,10 @@ chunked_fuzzy_plot_match(){
   numchunks=$((PlotWords/(chunck_size-chunk_overlap)))
   local -i max_error_count=3 #Reset below specific per chunk.
   local -a fuzzychunk=()
-  #local -a FuzzyChunks=()
   local -i good_chunk_count=0
   local -a ChunkGuesses=()
   local -a ChunkCosts=()
-  # local -a ChunkLengths=()
-  local ChunkLength #ChunkWords
+  local ChunkLength
   local -a GoodChunkGuesses=()
   debug "Attempting chunked fuzzy match."
   debugcont "PlotWords='$PlotWords'"
@@ -3606,25 +3604,14 @@ chunked_fuzzy_plot_match(){
     debugcont "ChunkLength='${ChunkLength}'"
     #Short chunks give false positives, so don't try.
     ((ChunkLength < min_chunk_length)) && continue
-    # ChunkWords=$(wc --words <<< "$chunk")
-    # debugcont "ChunkWords='${ChunkWords}'"
-    # #Short chunks give false positives, so don't try.
-    # ((ChunkWords < chunck_size)) && break #NOTE: Can't do this, truncated chunks may trigger it...
     max_error_count=$(( ChunkLength / inv_error_rate ))
     fuzzychunk=($(agrep -iBynsk -e "$chunk" "$m2kdir/$TVDB_TITLE/$TVDB_TITLE.Plot.txt"))
-    #FuzzyChunks[i]="${fuzzychunk[0]}" #TODO: Accept multiple here rather than just taking the first... Taking the first sometimes leads to a preferentially matching a special.
-    #debugcont "FuzzyChunks[$i]='${FuzzyChunks[i]}'"
     debugcont "$( IFS=','; printf '%s' "${FUNCNAME[0]}(): fuzzychunk ${#fuzzychunk[@]}: ${fuzzychunk[*]}." )"
-    #ChunkGuesses[i]=$(cut -f1 -d":" <<< "${FuzzyChunks[i]}")
     ChunkGuesses=($(cut -f1 -d":" <<< "$(printf '%s\n' "${fuzzychunk[@]}")"))
-    #debugcont "ChunkGuesses[$i]='${ChunkGuesses[i]}'"
     debugcont "$( IFS=','; printf '%s' "${FUNCNAME[0]}(): ChunkGuesses ${#ChunkGuesses[@]}: ${ChunkGuesses[*]}." )"
-    #ChunkCosts[i]=$(cut -f2 -d":" <<< "${FuzzyChunks[i]}")
     ChunkCosts=($(cut -f2 -d":" <<< "$(printf '%s\n' "${fuzzychunk[@]}")"))
-    #debugcont "ChunkCosts[$i]='${ChunkCosts[i]}'"
     debugcont "$( IFS=','; printf '%s' "${FUNCNAME[0]}(): ChunkCosts ${#ChunkCosts[@]}: ${ChunkCosts[*]}." )"
-    #TODO: consider weighting matches ((ChunkLengths[i]-ChunkCosts[i])) and having multi_match_check take them into account.
-    #((ChunkCosts[i] <= max_error_count)) && GoodChunkGuesses[Counter]=${ChunkGuesses[i]} && ((++Counter))
+    #TODO: consider weighting matches ((ChunkLength-ChunkCosts[0])) and having multi_match_check take them into account.
     #We only get multiple matches for multiple equal ChunkCosts, so they're all the same.
     #Generic chunks can potentially match a lot of episodes at low cost, this adds noise that we don't want to count.
     if ((ChunkCosts[0] <= max_error_count)) && ((${#ChunkGuesses[@]} <= 4)) ; then
@@ -3640,7 +3627,6 @@ chunked_fuzzy_plot_match(){
 
   #Need to be more conservative with the shorter(5) chunks we're now using, so,
   #require at least 2 chunks to have matches:
-  #(( ${#GoodChunkGuesses[@]} < 2 )) && { ((--EpisodeConfidenceRating)); return 1; }
   (( good_chunk_count < 2 )) && { ((--EpisodeConfidenceRating)); return 1; }
 
   #If all ChunkGuess with ChunkCost < 10% are the same Absolute Episode Number

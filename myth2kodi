@@ -999,7 +999,11 @@ parse_command_flags(){
       debug "Recognised command line switch '--series-info'"
       #Example usage: myth2kodi --series-info "Black Books"
       TITLE="$M2KARG2"
-      ONLINE_LOOKUP='Enabled'
+      #If ONLINE_LOOKUP is Disabled in settings we will not have a token yet.
+      if [[ "$ONLINE_LOOKUP" != 'Enabled' ]]; then
+        ONLINE_LOOKUP='Enabled'
+        if ! get_tvdb_token; then return 1; fi
+      fi
       if ! identify_series; then return 1; fi
       #If a lastupdated.time file exists then remove it to force an update.
       local last_updated_file="$m2kdir/$TVDB_TITLE/lastupdated.time"

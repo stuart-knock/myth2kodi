@@ -2901,7 +2901,6 @@ download_series_info(){
   local -i new_series_info=0
   local -i new_info_tvdb=0
   local -i new_info_tvmaze=0
-  local -i ProcessingSuccesful=0
   local dbdir="$m2kdir/$TVDB_TITLE"
   local tvdb_series_json="$dbdir/${TVDB_TITLE}_series_info.json"
   local tvdb_episodes_json="$dbdir/${TVDB_TITLE}_tvdb.json"
@@ -3100,18 +3099,22 @@ download_series_info(){
     chmod 644 "$dbdir/$TVDB_TITLE.FAired.txt"
     chmod 644 "$dbdir/$TVDB_TITLE.id.txt"
     chmod 644 "$dbdir/$TVDB_TITLE.Plot.txt"
-    ProcessingSuccesful=1
 
+    #Check that all files were created and have content.
+    if [[ -s "$dbdir/$TVDB_TITLE.Ename.txt"  &&
+          -s "$dbdir/$TVDB_TITLE.S.txt"      &&
+          -s "$dbdir/$TVDB_TITLE.E.txt"      &&
+          -s "$dbdir/$TVDB_TITLE.FAired.txt" &&
+          -s "$dbdir/$TVDB_TITLE.id.txt"     &&
+          -s "$dbdir/$TVDB_TITLE.Plot.txt" ]]; then
+      inform "Local database updated: '$dbdir'."
+      return 0
+    else
+      err "${FUNCNAME[0]}(): Failed to update local database for '$dbdir'."
+      return 1
+    fi
   fi #((new_info_tvdb == 1)) || ((new_info_tvmaze == 1))
 
-  #check if files were created and generate message
-  if ((ProcessingSuccesful == 1)) ; then
-    inform "LOCAL DATABASE UPDATED: $dbdir"
-    return 0
-  elif [[ ! -f "$dbdir/$TVDB_TITLE.Ename.txt" ]]; then
-    err "${FUNCNAME[0]}(): PERMISSION ERROR for $dbdir"
-    return 1
-  fi
   err "${FUNCNAME[0]}(): UNEXPECTED ERROR."
   return 1
 } #download_series_info()

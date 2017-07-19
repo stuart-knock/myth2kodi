@@ -2763,7 +2763,7 @@ check_m2k_database_up_to_date(){
   #Return state = 1 means the local database should be updated from TheTVDB
   #Return state = 0 means the local database is up to date with TheTVDB
   local dbdir="$m2kdir/$TVDB_TITLE"
-  local tvdb_updates_list_file="$m2kdir/tvdb_updates_list.json"
+  local tvdb_updates_list_file="$dbdir/tvdb_updates_list.json"
   local -i next_update=0
   local -i current_time=0
 
@@ -2904,7 +2904,7 @@ download_series_info(){
   local tvmaze_episodes_json="$dbdir/${TVDB_TITLE}_tvmaze.json"
   local curlGET="curl --silent -m '$Timeout' -X GET -H 'Authorization: Bearer $TVDB_TOKEN' -H 'Accept: application/json'"
   local series_data
-  local page=1
+  local page=1  #Series episode data is returned paged.
   local -i plot_count
   local -i tvdb_episode_count
   local -i tvdb_plot_count
@@ -2916,14 +2916,14 @@ download_series_info(){
   series_data="$(eval "$curlGET 'https://api.thetvdb.com/series/$TVDB_SERIESID'")"
   jq -r . <<< "$series_data" > "${tvdb_series_json}.temp"
   if jq -e 'has("Error")' <<< "$series_data" > /dev/null; then
-    err "${FUNCNAME[0]}(): An error was returned by TheTVDB."
+    err "${FUNCNAME[0]}(): An error was returned by TheTVDB when accessing series-data."
     errcont "TVDB_SERIESID: '$TVDB_SERIESID'."
     return 1
   fi
 
   #Check the new info is actually new, if there was no old info then it must be new.
   if [[ -f "$tvdb_series_json" ]]; then
-    diff -q "${tvdb_series_json}.temp" "$tvdb_series_json" &> /dev/null
+    diff -q <(jq -cS . "${tvdb_series_json}.temp") <(jq -cS . "${tvdb_series_json}") &> /dev/null
     new_series_info="$?"
   else
     new_series_info=1
@@ -2986,7 +2986,7 @@ download_series_info(){
 
   #Check the new info is actually new, if there was no old info then it must be new.
   if [[ -f "$tvdb_episodes_json" ]]; then
-    diff -q "${tvdb_episodes_json}.temp" "$tvdb_episodes_json" &> /dev/null
+    diff -q <(jq -cS . "${tvdb_episodes_json}.temp") <(jq -cS . "${tvdb_episodes_json}") &> /dev/null
     new_info_tvdb="$?" #NOTE: No-diff = 0; diff = 1; error = 2
   else
     new_info_tvdb=1
@@ -3009,7 +3009,7 @@ download_series_info(){
 
   #Check the new info is actually new, if there was no old info then it must be new.
   if [[ -f "$tvmaze_episodes_json" ]]; then
-    diff -q "${tvmaze_episodes_json}.temp" "$tvmaze_episodes_json" &> /dev/null
+    diff -q <(jq -cS . "${tvmaze_episodes_json}.temp") <(jq -cS . "${tvmaze_episodes_json}") &> /dev/null
     new_info_tvmaze="$?" #NOTE: No-diff = 0; diff = 1; error = 2
   else
     new_info_tvmaze=1
@@ -3020,7 +3020,13 @@ download_series_info(){
     mv "${tvmaze_episodes_json}.temp" "$tvmaze_episodes_json"
   fi
 
-  if ((new_info_tvdb == 1)) || ((new_info_tvmaze == 1)); then
+  if ((new_info_tvdb == 2)) || ((new_info_tvmaze == 2)); then
+    err "${FUNCNAME[0]}(): Comparing new to old data returned an error for '$TVDB_TITLE'"
+    return 1
+  elif ((new_info_tvdb == 0)) && ((new_info_tvmaze == 0)); then
+    inform "TheTVDB information for $TVDB_TITLE has not changed since last download."
+    return 0
+  elif ((new_info_tvdb == 1)) || ((new_info_tvmaze == 1)); then
     inform "Downloaded new information for '$TVDB_TITLE'"
 
     #Remove any garbage newline characters -- mainly a problem for "plot" fields.
@@ -3092,12 +3098,6 @@ download_series_info(){
     chmod 644 "$dbdir/$TVDB_TITLE.Plot.txt"
     ProcessingSuccesful=1
 
-  elif ((new_info_tvdb == 2)) || ((new_info_tvmaze == 2)); then
-    err "${FUNCNAME[0]}(): UNEXPECTED ERROR comparing new to old information for '$TVDB_TITLE'"
-    return 1
-  elif ((new_info_tvdb == 0)) && ((new_info_tvmaze == 0)); then
-    inform "TheTVDB information for $TVDB_TITLE has not changed since last download."
-    return 0
   fi #((new_info_tvdb == 1)) || ((new_info_tvmaze == 1))
 
   #check if files were created and generate message
@@ -3108,6 +3108,7 @@ download_series_info(){
     err "${FUNCNAME[0]}(): PERMISSION ERROR for $dbdir"
     return 1
   fi
+  err "${FUNCNAME[0]}(): UNEXPECTED ERROR."
   return 1
 } #download_series_info()
 

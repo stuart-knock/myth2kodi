@@ -1727,7 +1727,7 @@ m2k_maintenance(){
   #Correct created.tracking for transition from version < 1.5 to >= 1.5
   if [[ "$(head -c 1 "$m2kdir/created.tracking")" = "'" ]]; then
     warn "Updating created.tracking format for myth2kodi >= v1.5.0"
-    sed --in-place s/\'/\"/g "$m2kdir/created.tracking"
+    sed -i.bak s/\'/\"/g "$m2kdir/created.tracking"
   fi
 
   #Check for comskip (.txt) and .nfo files listed in created.tracking and
@@ -2946,7 +2946,7 @@ download_series_info(){
     [[ -f "$tvdb_series_json" ]] && mv "$tvdb_series_json" "$dbdir/${TODAY}_${TVDB_TITLE}_series_info.json"
     mv "${tvdb_series_json}.temp" "$tvdb_series_json"
     #Remove any garbage newline characters -- mainly a problem for "plot" fields.
-    sed --in-place -e 's/\\r/ /g' -e 's/\\n/ /g' "$tvdb_series_json"
+    sed -i.bak -e 's/\\r/ /g' -e 's/\\n/ /g' "$tvdb_series_json"
     jq -r '.data.status'      "$tvdb_series_json" > "$dbdir/$TVDB_TITLE.series_status.txt"
     jq -r '.data.firstAired'  "$tvdb_series_json" > "$dbdir/$TVDB_TITLE.series_firstaired.txt"
     jq -r '.data.lastUpdated' "$tvdb_series_json" > "$dbdir/$TVDB_TITLE.series_lastupdated.txt"
@@ -3044,7 +3044,7 @@ download_series_info(){
     inform "Downloaded new information for '$TVDB_TITLE'"
 
     #Remove any garbage newline characters -- mainly a problem for "plot" fields.
-    sed --in-place -e 's/\\r/ /g' -e 's/\\n/ /g' "$tvdb_episodes_json"
+    sed -i.bak -e 's/\\r/ /g' -e 's/\\n/ /g' "$tvdb_episodes_json"
 
     #Parse new information into our local-db files.
     jq -r '.[] | .episodeName'        "$tvdb_episodes_json" > "$dbdir/$TVDB_TITLE.Ename.txt"
@@ -3075,7 +3075,7 @@ download_series_info(){
     #If we also have a json file from tvmaze, then append that info
     if [[ -f "$tvmaze_episodes_json" ]]; then
       #Remove any garbage newline characters -- mainly a problem for "plot" fields.
-      sed --in-place -e 's/\\r/ /g' -e 's/\\n/ /g' "$tvmaze_episodes_json"
+      sed -i.bak -e 's/\\r/ /g' -e 's/\\n/ /g' "$tvmaze_episodes_json"
 
       jq -r '.[] | .name'    "$tvmaze_episodes_json" >> "$dbdir/$TVDB_TITLE.Ename.txt"
       jq -r '.[] | .season'  "$tvmaze_episodes_json" >> "$dbdir/$TVDB_TITLE.S.txt"

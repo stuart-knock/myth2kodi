@@ -750,7 +750,7 @@ m2k_init(){
   ((LOGLEVEL>=3)) && printf '%s\n' "Config complete." >> "$pre_logging_file"
 
   #What am I...
-  m2kVersion='myth2kodi Version 1.5.0-beta6' ; declare -gr m2kVersion
+  m2kVersion='myth2kodi Version 1.5.0-beta7' ; declare -gr m2kVersion
   m2kPlatform="$(uname)" ; declare -gr m2kPlatform
   ((LOGLEVEL>=3)) && printf '%s\n' "Running $m2kVersion on $m2kPlatform." >> "$pre_logging_file"
 
@@ -1723,6 +1723,12 @@ m2k_maintenance(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   inform "PERFORMING MAINTENANCE ROUTINE..."
   local -i counter=0
+
+  #Correct created.tracking for transition from version < 1.5 to >= 1.5
+  if [[ "$(head -c 1 "$m2kdir/created.tracking")" = "'" ]]; then
+    warn "Updating created.tracking format for myth2kodi >= v1.5.0"
+    sed --in-place s/\'/\"/g "$m2kdir/created.tracking"
+  fi
 
   #Check for comskip (.txt) and .nfo files listed in created.tracking and
   #remove them if their associated "main" file (.mpg) is missing.

@@ -750,7 +750,7 @@ m2k_init(){
   ((LOGLEVEL>=3)) && printf '%s\n' "Config complete." >> "$pre_logging_file"
 
   #What am I...
-  m2kVersion='myth2kodi Version 1.5.0-beta7' ; declare -gr m2kVersion
+  m2kVersion='myth2kodi Version 1.5.0-beta8' ; declare -gr m2kVersion
   m2kPlatform="$(uname)" ; declare -gr m2kPlatform
   ((LOGLEVEL>=3)) && printf '%s\n' "Running $m2kVersion on $m2kPlatform." >> "$pre_logging_file"
 
@@ -4963,8 +4963,8 @@ naming_checks(){
   #finally exit if there is nowhere to write to.
   if ! set_move_location; then return 1; fi
 
-  #Only keep Alpha-numeric characters, space, parenthesis and the six chars & , . - : '
-  TITLE="$(sed -r "s/[^[:alnum:] &,.)(-:']//g" <<< "$TITLE")"
+  #Only keep Alpha-numeric characters, space, parenthesis and the six chars & , . : ' -
+  TITLE="$(sed -r "s/[^[:alnum:] &,.)(:'-]//g" <<< "$TITLE")"
   #Only keep Alpha-numeric characters, space, parenthesis and the four chars & , . -
   SUBTITLE="$(sed -r 's/[^[:alnum:] &,.)(-]//g' <<< "$SUBTITLE")"
 
@@ -6516,8 +6516,8 @@ main(){
   #Do not process files listed in categoricIgnore or titleIgnore, just exit.
   if ! process_ignore_lists; then return 1; fi
 
-  #Only keep Alpha-numeric characters, space, parenthesis and the six chars & , . - : '
-  TITLE="$(sed -r "s/[^[:alnum:] &,.)(-:']//g" <<< "$TITLE")"
+  #Only keep Alpha-numeric characters, space, parenthesis and the six chars & , . : ' -
+  TITLE="$(sed -r "s/[^[:alnum:] &,.)(:'-]//g" <<< "$TITLE")"
   #Only keep Alpha-numeric characters, space, parenthesis and the four chars & , . -
   SUBTITLE="$(sed -r 's/[^[:alnum:] &,.)(-]//g' <<< "$SUBTITLE")"
 

@@ -4730,14 +4730,19 @@ process_ignore_lists(){
 #The show title will be replaced by the one in the user created showTranslations file
 show_translation(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
+  debug "Checking for translations in: '$m2kdir/showTranslations'."
   if [[ -f "$m2kdir/showTranslations" && -n "$TITLE" ]]; then
     TITLE_TRANSLATION="$(grep "^$TITLE = " "$m2kdir/showTranslations" | sed "s/$TITLE = //g")"
     if [[ -n "$TITLE_TRANSLATION" ]]; then
       inform "USER TRANSLATION: '$TITLE' => '$TITLE_TRANSLATION'"
       TITLE="$TITLE_TRANSLATION"
     elif [[ -z "$TITLE_TRANSLATION" ]]; then
+      debug "No translation entry for '$TITLE'."
       TITLE_TRANSLATION='Inactive'
     fi
+  else
+    [[ -f "$m2kdir/showTranslations" ]] || debug 'No showTranslations file.'
+    [[ -n "$TITLE" ]] || debug 'No TITLE to translate.'
   fi
   return 0
 } #show_translation()

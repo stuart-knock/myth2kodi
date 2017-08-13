@@ -750,7 +750,7 @@ m2k_init(){
   ((LOGLEVEL>=3)) && printf '%s\n' "Config complete." >> "$pre_logging_file"
 
   #What am I...
-  m2kVersion='myth2kodi Version 1.5.0-beta6' ; declare -gr m2kVersion
+  m2kVersion='myth2kodi Version 1.5.0-beta8' ; declare -gr m2kVersion
   m2kPlatform="$(uname)" ; declare -gr m2kPlatform
   ((LOGLEVEL>=3)) && printf '%s\n' "Running $m2kVersion on $m2kPlatform." >> "$pre_logging_file"
 
@@ -853,6 +853,10 @@ m2k_init(){
   #A regex that should match MythTV's file naming, for the 21st century.
   RECPATTERN='[0-9]{4}_20[0-9]{2}[0-1][0-9][0-3][0-9][0-2][0-9][0-5][0-9]{3}\.'
   declare -gr RECPATTERN
+
+  # #A regex that will match our generated episode file naming.
+  # EPPATTERN=' S[0-9][0-9]E[0-9][0-9] (.*)'
+  # declare -gr EPPATTERN
 
   #Initialise confidence rating variables.
   declare -gi ConfidenceRating=0
@@ -1566,7 +1570,7 @@ find_file_link_pairs(){
       RECORDING_FILE_OWNER='MythTV'
       RECORDING_LINK_OWNER='myth2kodi'
       check_dirs=("$MoveDir" "$PrimaryMovieDir" "$PrimaryShowDir" "$AlternateMoveDir" "$AlternateMovieDir" "$AlternateShowDir")
-    else #elif [[ "$Database" = 'Enabled' ]]; then
+    else #elif [[ "$Database" = 'Enabled' ]]; then #&& "${RECORDING_FILE##*/}" =~ ^$EPPATTERN  #TODO: Missing movie pattern for this to work.
       #file_path is a moved file name, check if there is a link to file_path from a MDB_STORAGEGROUP Directory
       RECORDING_FILE_OWNER='myth2kodi'
       RECORDING_LINK_OWNER='MythTV'
@@ -1622,7 +1626,7 @@ set_recording_name(){
   else
     #In this case we need a full or relative path
     [[ -f "$file_name" ]] || { err "${FUNCNAME[0]}(): arg1 is not a file."; return 1; }
-    #if [[ "$Database" = 'Enabled' ]]; then
+    # if [[ "$Database" = 'Enabled' ]]; then #&& "${RECORDING_FILE##*/}" =~ ^$EPPATTERN  #TODO: Missing movie pattern for this to work.
     #Get the storage group directories defined in MythTV-DB
     if ! get_mythtvdb_storagegroups; then return 1; fi
     #Check if it's a moved file name that's still tracked by MythTV
@@ -1719,6 +1723,12 @@ m2k_maintenance(){
   debug "ENTERING: ${FUNCNAME[0]}() ; CALLED FROM: ${FUNCNAME[1]}()"
   inform "PERFORMING MAINTENANCE ROUTINE..."
   local -i counter=0
+
+  #Correct created.tracking for transition from version < 1.5 to >= 1.5
+  if [[ "$(head -c 1 "$m2kdir/created.tracking")" = "'" ]]; then
+    warn "Updating created.tracking format for myth2kodi >= v1.5.0"
+    sed -i.bak s/\'/\"/g "$m2kdir/created.tracking"
+  fi
 
   #Check for comskip (.txt) and .nfo files listed in created.tracking and
   #remove them if their associated "main" file (.mpg) is missing.
@@ -2387,6 +2397,7 @@ process_mythtvdb_sydfta(){
     Plot="${Plot/$actor_names/}"
     debug "New Plot: '$Plot'"
   fi
+  #NOTE: BrainDead s01e04 has a 136 character subtitle, but as it is an outlier, stick with 84.
   #Longest actual subtitle I've seen so far is 84 characters. Rather than assuming Plot field
   #is garbage, we'll append the SUBTITLE field to the Plot -- this will almost certainly
   #prevent full Plot fuzzy match from succeeding but chunked match should still match effectively.
@@ -2935,7 +2946,7 @@ download_series_info(){
     [[ -f "$tvdb_series_json" ]] && mv "$tvdb_series_json" "$dbdir/${TODAY}_${TVDB_TITLE}_series_info.json"
     mv "${tvdb_series_json}.temp" "$tvdb_series_json"
     #Remove any garbage newline characters -- mainly a problem for "plot" fields.
-    sed --in-place -e 's/\\r/ /g' -e 's/\\n/ /g' "$tvdb_series_json"
+    sed -i.bak -e 's/\\r/ /g' -e 's/\\n/ /g' "$tvdb_series_json"
     jq -r '.data.status'      "$tvdb_series_json" > "$dbdir/$TVDB_TITLE.series_status.txt"
     jq -r '.data.firstAired'  "$tvdb_series_json" > "$dbdir/$TVDB_TITLE.series_firstaired.txt"
     jq -r '.data.lastUpdated' "$tvdb_series_json" > "$dbdir/$TVDB_TITLE.series_lastupdated.txt"
@@ -3033,7 +3044,7 @@ download_series_info(){
     inform "Downloaded new information for '$TVDB_TITLE'"
 
     #Remove any garbage newline characters -- mainly a problem for "plot" fields.
-    sed --in-place -e 's/\\r/ /g' -e 's/\\n/ /g' "$tvdb_episodes_json"
+    sed -i.bak -e 's/\\r/ /g' -e 's/\\n/ /g' "$tvdb_episodes_json"
 
     #Parse new information into our local-db files.
     jq -r '.[] | .episodeName'        "$tvdb_episodes_json" > "$dbdir/$TVDB_TITLE.Ename.txt"
@@ -3064,7 +3075,7 @@ download_series_info(){
     #If we also have a json file from tvmaze, then append that info
     if [[ -f "$tvmaze_episodes_json" ]]; then
       #Remove any garbage newline characters -- mainly a problem for "plot" fields.
-      sed --in-place -e 's/\\r/ /g' -e 's/\\n/ /g' "$tvmaze_episodes_json"
+      sed -i.bak -e 's/\\r/ /g' -e 's/\\n/ /g' "$tvmaze_episodes_json"
 
       jq -r '.[] | .name'    "$tvmaze_episodes_json" >> "$dbdir/$TVDB_TITLE.Ename.txt"
       jq -r '.[] | .season'  "$tvmaze_episodes_json" >> "$dbdir/$TVDB_TITLE.S.txt"
@@ -4957,8 +4968,8 @@ naming_checks(){
   #finally exit if there is nowhere to write to.
   if ! set_move_location; then return 1; fi
 
-  #Only keep Alpha-numeric characters, space, parenthesis and the six chars & , . - : '
-  TITLE="$(sed -r "s/[^[:alnum:] &,.)(-:']//g" <<< "$TITLE")"
+  #Only keep Alpha-numeric characters, space, parenthesis and the six chars & , . : ' -
+  TITLE="$(sed -r "s/[^[:alnum:] &,.)(:'-]//g" <<< "$TITLE")"
   #Only keep Alpha-numeric characters, space, parenthesis and the four chars & , . -
   SUBTITLE="$(sed -r 's/[^[:alnum:] &,.)(-]//g' <<< "$SUBTITLE")"
 
@@ -6510,8 +6521,8 @@ main(){
   #Do not process files listed in categoricIgnore or titleIgnore, just exit.
   if ! process_ignore_lists; then return 1; fi
 
-  #Only keep Alpha-numeric characters, space, parenthesis and the six chars & , . - : '
-  TITLE="$(sed -r "s/[^[:alnum:] &,.)(-:']//g" <<< "$TITLE")"
+  #Only keep Alpha-numeric characters, space, parenthesis and the six chars & , . : ' -
+  TITLE="$(sed -r "s/[^[:alnum:] &,.)(:'-]//g" <<< "$TITLE")"
   #Only keep Alpha-numeric characters, space, parenthesis and the four chars & , . -
   SUBTITLE="$(sed -r 's/[^[:alnum:] &,.)(-]//g' <<< "$SUBTITLE")"
 

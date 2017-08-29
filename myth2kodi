@@ -2937,7 +2937,7 @@ download_series_info(){
 
   #Check the new info is actually new, if there was no old info then it must be new.
   if [[ -f "$tvdb_series_json" ]]; then
-    diff -q <(jq -cS . "${tvdb_series_json}.temp") <(jq -cS . "${tvdb_series_json}") &> /dev/null
+    diff -q <(jq -c -S . "${tvdb_series_json}.temp") <(jq -c -S . "${tvdb_series_json}") &> /dev/null
     new_series_info="$?"
   else
     new_series_info=1
@@ -3000,7 +3000,7 @@ download_series_info(){
 
   #Check the new info is actually new, if there was no old info then it must be new.
   if [[ -f "$tvdb_episodes_json" ]]; then
-    diff -q <(jq -cS . "${tvdb_episodes_json}.temp") <(jq -cS . "${tvdb_episodes_json}") &> /dev/null
+    diff -q <(jq -c -S . "${tvdb_episodes_json}.temp") <(jq -c -S . "${tvdb_episodes_json}") &> /dev/null
     new_info_tvdb="$?" #NOTE: No-diff = 0; diff = 1; error = 2
   else
     new_info_tvdb=1
@@ -3023,7 +3023,7 @@ download_series_info(){
 
   #Check the new info is actually new, if there was no old info then it must be new.
   if [[ -f "$tvmaze_episodes_json" ]]; then
-    diff -q <(jq -cS . "${tvmaze_episodes_json}.temp") <(jq -cS . "${tvmaze_episodes_json}") &> /dev/null
+    diff -q <(jq -c -S . "${tvmaze_episodes_json}.temp") <(jq -c -S . "${tvmaze_episodes_json}") &> /dev/null
     new_info_tvmaze="$?" #NOTE: No-diff = 0; diff = 1; error = 2
   else
     new_info_tvmaze=1

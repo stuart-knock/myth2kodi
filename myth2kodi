@@ -5141,6 +5141,7 @@ kodi_cleanup(){
       #Send VideoLibrary.Clean request to Kodi instances specified in user settings (KODIIPs).
       for KODIIP in "${KODIIPs[@]}" ; do
         inform "Sending VideoLibrary.Clean request to: ${KODIIP##*@}"
+        (( LOGLEVEL > 3 )) && debug "Kodi Access: '$KODIIP'"
         eval "$curlPOST $data http://$KODIIP/jsonrpc" > /dev/null 2>&1
       done
     else
@@ -5174,6 +5175,7 @@ kodi_newshow(){
              "id": "myth2kodi"}'\'
     for KODIIP in "${KODIIPs[@]}" ; do
       inform "Sending GUI.ShowNotification request to: ${KODIIP##*@}"
+      (( LOGLEVEL > 3 )) && debug "Kodi Access: '$KODIIP'"
       eval "$curlPOST $data http://$KODIIP/jsonrpc" > /dev/null 2>&1
       debug "SENT: GUI.ShowNotification for '$TITLE'"
     done
@@ -5187,6 +5189,7 @@ kodi_newshow(){
       data=\''{"jsonrpc": "2.0", "method": "VideoLibrary.Scan", "id": "myth2kodi"}'\'
       for KODIIP in "${KODIIPs[@]}" ; do
         inform "Sending VideoLibrary.Scan request to: ${KODIIP##*@}"
+        (( LOGLEVEL > 3 )) && debug "Kodi Access: '$KODIIP'"
         eval "$curlPOST $data http://$KODIIP/jsonrpc" > /dev/null 2>&1
         debug 'SENT: VideoLibrary.Scan request.'
       done
@@ -5664,6 +5667,7 @@ m2k_diagnostics(){
   inform "Performing KODI Notification tests..."
   for KODIIP in "${KODIIPs[@]}" ; do
     inform "SENDING REQUESTED COMMANDS TO: ${KODIIP##*@}"
+    (( LOGLEVEL > 3 )) && debug "Kodi Access: '$KODIIP'"
     #SEE: http://kodi.wiki/view/HOW-TO:Remotely_update_library and 'man curl'
     KODIresp=$( eval "$curlPOST $data http://$KODIIP/jsonrpc" 2>&1 )
     debugcont "RESPONSE: $KODIresp"
@@ -5679,6 +5683,7 @@ m2k_diagnostics(){
     else
       err "COMMUNICATIONS NOT ESTABLISHED: ${KODIIP##*@}"
       errcont "This may just mean that the Kodi instance is not running."
+      (( LOGLEVEL > 3 )) && debug "Kodi Access: '$KODIIP'"
       ((++KODI_COMM_FAILURES))
     fi
   done

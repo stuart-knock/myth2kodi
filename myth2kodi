@@ -1985,6 +1985,7 @@ get_mythtvdb_info_mysql(){
   MDB_EPISODE="$(        dbselect episode         | sed -n "2p")"
   MDB_CATEGORY="$(       dbselect category        | sed -n "2p")"
   MDB_ORIGINALAIRDATE="$(dbselect originalairdate | sed -n "2p")"
+  MDB_RECGROUP="$(       dbselect recgroup        | sed -n "2p")"
   MDB_STORAGEGROUP="$(   dbselect storagegroup    | sed -n "2p")"
   MDB_STARS="$(          dbselect stars           | sed -n "2p")"
   MDB_DESCRIPTION="$(    dbselect description     | sed -n "2p")"
@@ -2007,6 +2008,7 @@ get_mythtvdb_info_mysql(){
   declare -gr MDB_EPISODE         ; debugcont "MDB_EPISODE='$MDB_EPISODE'"
   declare -gr MDB_CATEGORY        ; debugcont "MDB_CATEGORY='$MDB_CATEGORY'"
   declare -gr MDB_ORIGINALAIRDATE ; debugcont "MDB_ORIGINALAIRDATE='$MDB_ORIGINALAIRDATE'"
+  declare -gr MDB_RECGROUP        ; debugcont "MDB_RECGROUP='$MDB_RECGROUP'"
   declare -gr MDB_STORAGEGROUP    ; debugcont "MDB_STORAGEGROUP='$MDB_STORAGEGROUP'"
   declare -gr MDB_STARS           ; debugcont "MDB_STARS='$MDB_STARS'"
   declare -gr MDB_DESCRIPTION     ; debugcont "MDB_DESCRIPTION='$MDB_DESCRIPTION'"
@@ -2072,7 +2074,7 @@ get_mythtvdb_info_pythonbindings(){
 
   #Declare the MythTV-DB variables we want access to outside of this function.
   local access_list
-  access_list='title|subtitle|season|episode|category|originalairdate|'
+  access_list='title|subtitle|season|episode|category|originalairdate|recgroup|'
   access_list="$access_list"'storagegroup|stars|description|seriesid|programid|'
   access_list="$access_list"'inetref|chanid|starttime|airdate|xmltvgrabber'
 
@@ -3915,7 +3917,8 @@ msg_operation_summary(){
     debugcont  "MDB_AIRDATE=$MDB_AIRDATE-"
     debugcont  "ORIGINALAIRDATE=$ORIGINALAIRDATE-"
     informcont "MDB_PROGRAMID=$MDB_PROGRAMID-"
-    debugcont "MDB_CHANID=$MDB_CHANID-"
+    debugcont  "MDB_CHANID=$MDB_CHANID-"
+    informcont "MDB_RECGROUP=$MDB_RECGROUP-"
     informcont "MDB_STORAGEGROUP=$MDB_STORAGEGROUP-"
     informcont "MDB_CATEGORY=$MDB_CATEGORY-"
     informcont "ProgramIDType=$ProgramIDType-"
@@ -4093,6 +4096,7 @@ msg_recording_info(){
   printf '%s\n' "  Airdate='$MDB_AIRDATE'"
   printf '%s\n' "  Originalairdate='$MDB_ORIGINALAIRDATE'"
   printf '%s\n' "  Category='$MDB_CATEGORY'"
+  printf '%s\n' "  Recordinggroup='$MDB_RECGROUP'"
   printf '%s\n' "  Storagegroup='$MDB_STORAGEGROUP'"
   printf '%s\n' "  Stars='$MDB_STARS'"
   printf '%s\n' "  Description=\"$MDB_DESCRIPTION\""

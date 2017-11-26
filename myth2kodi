@@ -309,6 +309,13 @@ TRACKING='Enabled'
 #Default: ''
 SHOW_FILE_NAME_APPEND=''
 
+# GROUP_BY_RECGROUP can be used to enable/disable grouping of processed
+# recordings by MythTV's recgroup property. When 'Enabled' the resulting target
+# path is of the form: "$MoveDir/<recgroup>/ShowName/Season ..."; as opposed to
+# the default('Disabled'): "$MoveDir/ShowName/Season ..."
+#Options: ['Enabled'|'Disabled'(DEFAULT)]
+GROUP_BY_RECGROUP='Disabled'
+
 #There are some checks in the script that prevent reprocessing a recording that
 #we have already processed. Enabling this option skips those checks.
 #Options: ['Enabled'|'Disabled'(DEFAULT)]
@@ -750,7 +757,7 @@ m2k_init(){
   ((LOGLEVEL>=3)) && printf '%s\n' "Config complete." >> "$pre_logging_file"
 
   #What am I...
-  m2kVersion='myth2kodi Version 1.5.1' ; declare -gr m2kVersion
+  m2kVersion='myth2kodi Version 1.5.1a' ; declare -gr m2kVersion
   m2kPlatform="$(uname)" ; declare -gr m2kPlatform
   ((LOGLEVEL>=3)) && printf '%s\n' "Running $m2kVersion on $m2kPlatform." >> "$pre_logging_file"
 
@@ -1112,7 +1119,7 @@ validate_settings(){
                          'KODIUpdate' 'MATCH_ORIGINALAIRDATE' 'MATCH_PLOT'         \
                          'MATCH_SEASON_EPISODE' 'MATCH_SUBTITLE' 'Notify'          \
                          'ONLINE_LOOKUP' 'ShowStopper' 'StorageGroupFallback'      \
-                         'SYMLINK' 'TargetPathIsInputPath' 'TRACKING' )
+                         'SYMLINK' 'TargetPathIsInputPath' 'TRACKING' 'GROUP_BY_RECGROUP' )
   msg="is expected to be set as either 'Enabled' or 'Disabled'."
   for var in "${switch_user_settings[@]}"; do
     [[ "${!var}" =~ ^(Enabled|Disabled)$ ]] || err "$var $msg"
@@ -4522,6 +4529,22 @@ set_move_location(){
     err "${FUNCNAME[0]}() CALLED FROM: ${FUNCNAME[1]}(): $NOTIFY_MSG"
     return 1
   fi
+
+  # Append recgroup from the MythTV-DB to our target directory, if requested.
+  if [[ "$GROUP_BY_RECGROUP" = 'Enabled' ]]; then
+    if [[ -n "$MDB_RECGROUP" ]]; then
+      MoveDir="$MoveDir/$MDB_RECGROUP"
+      if [[ ! -d "$MoveDir" ]]; then
+        inform "Creating recgroup directory: '$MoveDir'"
+        mkdir "$MoveDir"
+        chmod 775 "$MoveDir"
+        [[ "$TRACKING" != 'Disabled' ]] && printf '%s\n' "$MoveDir" >> "$m2kdir/dir.tracking"
+      fi
+    else
+      warn "GROUP_BY_RECGROUP='Enabled', but MythTV-DB recgroup is empty, using default target directory."
+    fi
+  fi
+
   return 0
 } #set_move_location()
 

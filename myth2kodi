@@ -224,8 +224,11 @@ SYMLINK='Enabled'
 #generic shows from episodes and movies. Options: ['Enabled'|'Disabled'(DEFAULT)]
 TargetPathIsInputPath='Disabled'
 
-#ShowStopper prevents generic shows and unrecognised episodes from being
-#processed. Options: ['Enabled'(DEFAULT)|'Disabled']
+#ShowStopper prevents generic shows from being processed. Generic shows are
+#those recordings that have not been identified as either a movie or an episode
+#of a tv-series (more specifically, continuing shows with entries in TheTVDB).
+#This typically means news or sporting events.
+#Options: ['Enabled'(DEFAULT)|'Disabled']
 ShowStopper='Enabled'
 
 #DIR_TRACKING_CLEANUP will check for and remove the folders created by myth2kodi

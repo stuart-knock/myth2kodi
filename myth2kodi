@@ -765,7 +765,7 @@ m2k_init(){
   ((LOGLEVEL>=3)) && printf '%s\n' "Config complete." >> "$pre_logging_file"
 
   #What am I...
-  m2kVersion='myth2kodi Version 1.5.1b' ; declare -gr m2kVersion
+  m2kVersion='myth2kodi Version 1.5.1c' ; declare -gr m2kVersion
   m2kPlatform="$(uname)" ; declare -gr m2kPlatform
   ((LOGLEVEL>=3)) && printf '%s\n' "Running $m2kVersion on $m2kPlatform." >> "$pre_logging_file"
 
@@ -2826,14 +2826,15 @@ check_m2k_database_up_to_date(){
   next_update=$((LastUpdatedTVDB + UpdateDatabase))
   current_time="$(date +%s)"
 
-  #Updated queries return a maximum of 1 week after fromTime.
-  if (( (current_time - LastUpdatedTVDB)/3600/24 >= 7 )); then
-    inform 'It has been over a week since the last update, so forcing update.'
-    return 1
-  fi
-
   if ((current_time > next_update)); then
     #It has been longer than UpdateDatabase since our last update.
+
+    #Updated queries return a maximum of 1 week after fromTime.
+    if (( (current_time - LastUpdatedTVDB)/3600/24 >= 7 )); then
+      inform 'It has been over a week since the last update, so forcing update.'
+      return 1
+    fi
+
     local updated_series updates_available list_last_updated
 
     #Find out when we last grabbed a list of recently updated series.

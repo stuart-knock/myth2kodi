@@ -321,6 +321,14 @@ GROUP_BY_RECGROUP='Disabled'
 #Options: ['Enabled'|'Disabled'(DEFAULT)]
 FORCE_PROCESS='Disabled'
 
+#The default version of agrep varies between distributions, with different
+#versions recognising different flags/options. While myth2kodi tries to use an
+#option set that works across as many variants as possible it can still have
+#difficulty with the default agrep of some distributions. If agrep produces
+#error messages when running myth2kodi, you can set an explicit path to a
+#different version of agrep using this user-setting. For example, tre-agrep
+#should work and is available as an alternative on most distributions.
+M2K_AGREP="$(command -v agrep)"
 
 ############################# Directory Settings #############################
 
@@ -757,7 +765,7 @@ m2k_init(){
   ((LOGLEVEL>=3)) && printf '%s\n' "Config complete." >> "$pre_logging_file"
 
   #What am I...
-  m2kVersion='myth2kodi Version 1.5.1a' ; declare -gr m2kVersion
+  m2kVersion='myth2kodi Version 1.5.1b' ; declare -gr m2kVersion
   m2kPlatform="$(uname)" ; declare -gr m2kPlatform
   ((LOGLEVEL>=3)) && printf '%s\n' "Running $m2kVersion on $m2kPlatform." >> "$pre_logging_file"
 
@@ -3361,7 +3369,7 @@ get_serieslinenumber_showname_fuzzy(){
   debugcont "TMP_SHN_FILE: '$TMP_SHN_FILE'"
   debugcont "serieslinenumber: '$serieslinenumber'"
   #Some systems (Ubuntu) have an agrep that limits PATTERN to < 32 characters...
-  serieslinenumber=$(agrep -iBynk "${TITLE:0:29}" "$TMP_SHN_FILE" | grep -m1 -o '^[0-9]*')
+  serieslinenumber=$($M2K_AGREP -iBynk "${TITLE:0:29}" "$TMP_SHN_FILE" | grep -m1 -o '^[0-9]*')
   #Correct for serieslinenumber = ""
   [[ -z "$serieslinenumber" ]] && serieslinenumber=0
 
@@ -3483,7 +3491,7 @@ set_absolute_episode_number_by_ename_fuzzy(){
   fi
 
   local subtitle subtitle_length
-  if agrep --version &> /dev/null ; then #Hacky: works because, so far, the agrep that limits PATTERN length to < 32 also lacks a --version flag.
+  if $M2K_AGREP --version &> /dev/null ; then #Hacky: works because, so far, the agrep that limits PATTERN length to < 32 also lacks a --version flag.
     subtitle="$SUBTITLE"
   else
     subtitle="${SUBTITLE:0:28}"
@@ -3501,12 +3509,12 @@ set_absolute_episode_number_by_ename_fuzzy(){
   declare -ga AENguess=()
   #To avoid "special" episodes of the form "Special: Related Episode Name" first
   #try and match the pattern from the start of the line.
-  fuzzy_ename_0=($(agrep -iByns "^${subtitle}" "$m2kdir/$TVDB_TITLE/$TVDB_TITLE.Ename.txt"))
+  fuzzy_ename_0=($($M2K_AGREP -iByns "^${subtitle}" "$m2kdir/$TVDB_TITLE/$TVDB_TITLE.Ename.txt"))
   #Then, because some shows (eg Gotham) use two part names like "Chapter Name: Episode Name" and
   #guide-data can contain just the "Episode Name" we match without binding to the front of the
   #line. And as the SUBTITLE can contain character with special meanings in regex, we match
   #as a string literal (-k).
-  fuzzy_ename_1=($(agrep -iBynsk "${subtitle}" "$m2kdir/$TVDB_TITLE/$TVDB_TITLE.Ename.txt"))
+  fuzzy_ename_1=($($M2K_AGREP -iBynsk "${subtitle}" "$m2kdir/$TVDB_TITLE/$TVDB_TITLE.Ename.txt"))
   fuzzy_ename=("${fuzzy_ename_0[@]}" "${fuzzy_ename_1[@]}")
   #Extract our guessed AbsoluteEpisodeNumbers
   all_cost_aen_guess=($(cut -f1 -d":" <<< "$(printf '%s\n' "${fuzzy_ename[@]}")"))
@@ -3549,7 +3557,7 @@ fuzzy_plot_match(){
   local -a FuzzyPlot=()
   local -a cost=()
   #Fuzzy guess at plot, prepended with: "AbsoluteEpisodeNumber:cost:"
-  FuzzyPlot=($(agrep -iBynsk "$Plot" "$m2kdir/$TVDB_TITLE/$TVDB_TITLE.Plot.txt"))
+  FuzzyPlot=($($M2K_AGREP -iBynsk "$Plot" "$m2kdir/$TVDB_TITLE/$TVDB_TITLE.Plot.txt"))
   if [[ -z "${FuzzyPlot[0]}" ]]; then
     #This should only happen when TVDB_TITLE has no Plot info, so no point
     #continuing trying to match Plot.
@@ -3609,7 +3617,7 @@ chunked_fuzzy_plot_match(){
   debugcont "min_chunk_length='$min_chunk_length'"
   debugcont "inv_error_rate='$inv_error_rate'"
   debugcont "numchunks='$numchunks'"
-  if ! agrep --version &> /dev/null ; then #Hacky: works because, so far, the agrep that limits PATTERN length to < 32 also lacks a --version flag.
+  if ! $M2K_AGREP --version &> /dev/null ; then #Hacky: works because, so far, the agrep that limits PATTERN length to < 32 also lacks a --version flag.
     local truncate='true'
   fi
   local -i Counter=0
@@ -3628,7 +3636,7 @@ chunked_fuzzy_plot_match(){
     #Short chunks give false positives, so don't try.
     ((ChunkLength < min_chunk_length)) && continue
     max_error_count=$(( ChunkLength / inv_error_rate ))
-    fuzzychunk=($(agrep -iBynsk -e "$chunk" "$m2kdir/$TVDB_TITLE/$TVDB_TITLE.Plot.txt"))
+    fuzzychunk=($($M2K_AGREP -iBynsk -e "$chunk" "$m2kdir/$TVDB_TITLE/$TVDB_TITLE.Plot.txt"))
     debugcont "$( IFS=','; printf '%s' "${FUNCNAME[0]}(): fuzzychunk ${#fuzzychunk[@]}: ${fuzzychunk[*]}." )"
     ChunkGuesses=($(cut -f1 -d":" <<< "$(printf '%s\n' "${fuzzychunk[@]}")"))
     debugcont "$( IFS=','; printf '%s' "${FUNCNAME[0]}(): ChunkGuesses ${#ChunkGuesses[@]}: ${ChunkGuesses[*]}." )"
@@ -3799,7 +3807,7 @@ get_absolute_episode_number_fuzzy_plot(){
   fi
 
   #If our agrep supports it, try a full Plot match.
-  if agrep --version &> /dev/null ; then #Hacky: works because, so far, the agrep that limits PATTERN length to < 32 also lacks a --version flag.
+  if $M2K_AGREP --version &> /dev/null ; then #Hacky: works because, so far, the agrep that limits PATTERN length to < 32 also lacks a --version flag.
     if ((PlotLength<=200)); then
       fuzzy_plot_match
       fuzzy_plot_return_status="$?"
@@ -5555,7 +5563,7 @@ m2k_diagnostics(){
 
   #Test if required packages are installed and accessible to caller.
   PKGPATH_CURL=$(command -v curl)             || PKGNAME_CURL='curl'
-  PKGPATH_AGREP=$(command -v agrep)           || PKGNAME_AGREP='agrep or tre-agrep'
+  PKGPATH_AGREP="$M2K_AGREP"                  || PKGNAME_AGREP='agrep or tre-agrep'
   PKGPATH_LIBNOTIFY=$(command -v notify-send) || PKGNAME_LIBNOTIFY='libnotify-bin'
   PKGPATH_JQ=$(command -v jq)                 || PKGNAME_JQ='jq'
   PKGPATH_REALPATH=$(command -v realpath)     || PKGNAME_REALPATH='coreutils or realpath'

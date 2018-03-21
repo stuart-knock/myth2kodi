@@ -76,6 +76,16 @@
 #  recording from MythTV's database -- MythTV can no longer track/control
 #  recordings processed in this mode, and myth2kodi cannot undo them.
 #
+#
+#Hardlinking:
+#  Hardlinking leaves the original file as-is and creates the kodi-friendly
+#  link as a hardlink instead of as a symlink. When using Kodis internal NFS
+#  client, the scrapper 'sees' the original mythtv file name, not the name of
+#  the symlink. If you can't mount your NFS share at the OS level, hardlinks
+#  get around this issue. Hardlinks cannot cross partitions/filesystems, so if
+#  you have more than one mythtv storage disk/partition, set
+#  TargetPathIsInputPath='Enabled' for reliability.
+#
 #Output-Files:
 #  myth2kodi will create several files in its working folder. This is a
 #  list of the files and their functions:
@@ -199,16 +209,17 @@ Librarian='mythtv'                           #<------THIS VALUE MUST BE SET-----
 
 ############################ Processing settings #############################
 
-# There are 3 modes for the processing of a recording:
+# There are 4 modes for the processing of a recording:
 #   'MOVE' -- Move the recording. And, by default: create a symlink at RECORDING_PATH;
 #   'LINK' -- Do not move, just create a symbolic 'LINK'; and
 #   'COPY' -- Copy the recording to the target location.
+#   'HARDLINK' -- Do not move, create a hard link.
 #NOTE: The 'COPY' mode is primarily meant for supporting the copying of MythTV
 #      recording files to removable media with nice human readable file names.
 #      It is not yet intended or tested as a mode for generating a local Kodi
 #      library. See, 'example_copy_to_removable_media_myth2kodi.conf' for an
 #      example of temporarily enabling 'COPY' mode for this purpose.
-#Options: ['MOVE'(DEFAULT)|'LINK'|'COPY']
+#Options: ['MOVE'(DEFAULT)|'LINK'|'COPY'|'HARDLINK']
 PROCESS_RECORDING_MODE='MOVE'
 
 #A modifier switch, relevant for PROCESS_RECORDING_MODE='MOVE'. With this
@@ -1137,7 +1148,7 @@ validate_settings(){
   done
 
   msg="PROCESS_RECORDING_MODE is expected to be set as one of ['MOVE'|'LINK'|'COPY']."
-  [[ "$PROCESS_RECORDING_MODE" =~ ^(MOVE|LINK|COPY)$ ]] || err "$msg"
+  [[ "$PROCESS_RECORDING_MODE" =~ ^(MOVE|LINK|COPY|HARDLINK)$ ]] || err "$msg"
 
   msg="DATABASE_ACCESS is expected to be set as either 'PythonBindings' or 'MySQL'."
   [[ "$DATABASE_ACCESS" =~ ^(PythonBindings|MySQL)$ ]] || err "$msg"
@@ -1227,7 +1238,7 @@ validate_args(){
     fi
 
     #Check that we have the necessary permissions for INPUT_PATH.
-    if [[ "$PROCESS_RECORDING_MODE" =~ ^('LINK'|'COPY')$ ]]; then
+    if [[ "$PROCESS_RECORDING_MODE" =~ ^('LINK'|'COPY'|'HARDLINK')$ ]]; then
       if ! check_path_permission "$M2KARG1" 'r'; then return 1; fi
     else
       if ! check_path_permission "$M2KARG1" 'rw'; then return 1; fi
@@ -4860,7 +4871,7 @@ add_doover(){
         printf '%s'    "test -f \"$MoveDir/$ShowFileName.$ORIGINAL_EXT\" &&"
         printf ' %s\n' "mv \"$MoveDir/$ShowFileName.$ORIGINAL_EXT\" '$RECORDING_PATH'"
       } >> "$m2kdir/doover.sh"
-    elif [[ "$PROCESS_RECORDING_MODE" = 'LINK' ]]; then
+    elif [[ "$PROCESS_RECORDING_MODE" = 'LINK' ]] || [[ "$PROCESS_RECORDING_MODE" = 'HARDLINK' ]]; then
       {
         #Write doover.sh line that removes a link to a recording:
         printf '%s'    "test -L \"$MoveDir/$ShowFileName.$ORIGINAL_EXT\" &&"
@@ -4910,7 +4921,7 @@ add_undo(){
       printf ' %s'   "mv \"$MoveDir/$ShowFileName.$ORIGINAL_EXT\" \"$RECORDING_PATH\" &&"
       printf ' %s\n' "echo moved \"$MoveDir/$ShowFileName.$ORIGINAL_EXT\" to \"$RECORDING_PATH\""
     } >> "$m2kdir/undo.sh"
-  elif [[ "$PROCESS_RECORDING_MODE" = 'LINK' ]]; then
+  elif [[ "$PROCESS_RECORDING_MODE" = 'LINK' ]] || [[ "$PROCESS_RECORDING_MODE" = 'HARDLINK' ]]; then
     {
       #Write undo.sh line that removes link:
       printf '%s'    "test -L \"$MoveDir/$ShowFileName.$ORIGINAL_EXT\" &&"
@@ -5134,6 +5145,34 @@ link_mode_handling(){
     return 1
   fi
 } #link_mode_handling()
+
+#Process a recording file in HARDLINK mode.
+hardlink_mode_handling(){
+  debug "Creating link in HARDLINK mode with CONFIDENCE:'$ConfidenceRating'"
+
+  ln "$RECORDING_PATH" "$MoveDir/$ShowFileName.$ORIGINAL_EXT"
+
+  #if file was created
+  if [[ -L "$MoveDir/$ShowFileName.$ORIGINAL_EXT" ]]; then
+    inform "Hardlink created: $MoveDir/$ShowFileName.$ORIGINAL_EXT"
+    if [[ "$TRACKING" != 'Disabled' ]]; then
+      printf '%s\n' "\"$MoveDir/$ShowFileName.$ORIGINAL_EXT\" \"$RECORDING_PATH\"" >> "$m2kdir/created.tracking"
+    fi
+
+    #Generate supporting files, add undo and doover entries, notify Kodi.
+    success_postprocessing
+
+    #We've successfully linked the recording -- notify then exit.
+    NOTIFY_MSG="$ShowFileName linked to $MoveDir"
+    EXIT_JOB_TYPE='LinkModeSuccessful'
+    return 0
+
+  #If link failure, send notification and fail
+  elif [[ ! -L "$MoveDir/$ShowFileName.$ORIGINAL_EXT" ]]; then
+    msg_symlink_not_created
+    return 1
+  fi
+} #hardlink_mode_handling()
 
 #Process a recording file in COPY mode.
 copy_mode_handling(){
@@ -6637,6 +6676,9 @@ main(){
   elif [[ "$PROCESS_RECORDING_MODE" = 'LINK' ]]; then
     #Create a symbolic-link to the recording file.
     if link_mode_handling; then return 0; else return 1; fi
+  elif [[ "$PROCESS_RECORDING_MODE" = 'HARDLINK' ]]; then
+    #Create a hard-link to the recording file.
+    if hardlink_mode_handling; then return 0; else return 1; fi
   elif [[ "$PROCESS_RECORDING_MODE" = 'COPY' ]]; then
     #Copy and rename the recording file.
     if copy_mode_handling; then return 0; else return 1; fi

@@ -5153,7 +5153,7 @@ hardlink_mode_handling(){
   ln "$RECORDING_PATH" "$MoveDir/$ShowFileName.$ORIGINAL_EXT"
 
   #if file was created
-  if [[ -L "$MoveDir/$ShowFileName.$ORIGINAL_EXT" ]]; then
+  if [[ -e "$MoveDir/$ShowFileName.$ORIGINAL_EXT" ]]; then
     inform "Hardlink created: $MoveDir/$ShowFileName.$ORIGINAL_EXT"
     if [[ "$TRACKING" != 'Disabled' ]]; then
       printf '%s\n' "\"$MoveDir/$ShowFileName.$ORIGINAL_EXT\" \"$RECORDING_PATH\"" >> "$m2kdir/created.tracking"
@@ -5168,7 +5168,7 @@ hardlink_mode_handling(){
     return 0
 
   #If link failure, send notification and fail
-  elif [[ ! -L "$MoveDir/$ShowFileName.$ORIGINAL_EXT" ]]; then
+elif [[ ! -e "$MoveDir/$ShowFileName.$ORIGINAL_EXT" ]]; then
     msg_symlink_not_created
     return 1
   fi

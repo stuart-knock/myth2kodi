@@ -869,7 +869,7 @@ m2k_init(){
   if ! validate_settings; then return 1; fi
 
   #A regex that should match MythTV's file naming, for the 21st century.
-  RECPATTERN='[0-9]{4}_20[0-9]{2}[0-1][0-9][0-3][0-9][0-2][0-9][0-5][0-9]{3}\.'
+  RECPATTERN='[0-9]{4,5}_20[0-9]{2}[0-1][0-9][0-3][0-9][0-2][0-9][0-5][0-9]{3}\.'
   declare -gr RECPATTERN
 
   # #A regex that will match our generated episode file naming.
